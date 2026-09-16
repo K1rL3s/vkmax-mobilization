@@ -1,14 +1,3 @@
-[project]
-name = "zheka"
-version = "0.0.1"
-description = "Трек «Умный город» в хакатоне по чат-ботам или мини-приложениям для мессенджера MAX"
-readme = "README.md"
-authors = [
-    { name = "Kirill Lesovoi", email = "kirill.lesovoi@mail.ru" },
-]
-requires-python = "3.12.14"
-dependencies = []
-
 [build-system]
 requires = ["uv_build==0.11.26"]
 build-backend = "uv_build"
@@ -16,3 +5,192 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 source-exclude = ["graphify-out"]
+
+[project]
+name = "zheka"
+version = "0.1.0"
+description = "Трек «Умный город» в хакатоне по чат-ботам или мини-приложениям для мессенджера MAX"
+readme = "README.md"
+authors = [
+    { name = "Kirill Lesovoi", email = "kirill.lesovoi@mail.ru" },
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "maxo[dishka,fastapi,magic-filter,redis]==0.9.0",
+    "environs==15.2.0",
+    "dishka==1.10.1",
+    #
+    "fastapi==0.141.1",
+    "pydantic==2.13.5",
+    "granian==2.8.3",
+    #
+    "sqlalchemy[asyncio]==2.0.53",
+    "psycopg[binary]==3.3.5",
+    "greenlet==3.5.6",
+    "alembic==1.20.0",
+    "alembic-postgresql-enum==1.10.0",
+    #
+    "taskiq==0.12.6",
+    "taskiq-redis==1.2.3",
+    "redis==8.1.0",
+]
+
+[dependency-groups]
+fast = [
+    "uvloop==0.22.1",
+]
+dev = [
+    "ruff==0.16.7",
+    "black==26.5.1",
+    "codespell==2.4.3",
+    "bandit==1.9.4",
+    "slotscheck==0.21.0",
+    "mypy==2.3.1",
+    "bump2version==1.0.1",
+]
+tests = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-asyncio==1.4.0",
+    "pytest-mock==3.15.1",
+    "httpx==0.28.1",
+    "testcontainers[postgres]==4.15.0",
+]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+files = [
+    "zheka",
+    "migrations",
+    "tests",
+]
+strict = true
+strict_bytes = true
+local_partial_types = true
+ignore_missing_imports = true
+warn_unreachable = true
+enable_error_code = [
+    "truthy-bool",
+    "truthy-iterable",
+    "redundant-expr",
+    "unused-awaitable",
+    "ignore-without-code",
+    "possibly-undefined",
+    "redundant-self",
+    "mutable-override",
+    "unimported-reveal",
+    "deprecated",
+]
+
+[tool.ruff]
+src = [
+    "zheka",
+    "migrations",
+    "tests",
+]
+fix = true
+line-length = 88
+indent-width = 4
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN401", # https://docs.astral.sh/ruff/rules/any-type/
+    "FBT", # https://docs.astral.sh/ruff/rules/#flake8-boolean-trap-fbt
+    "A001", # https://docs.astral.sh/ruff/rules/builtin-variable-shadowing/
+    "A002", # https://docs.astral.sh/ruff/rules/builtin-argument-shadowing/
+    "A003", # https://docs.astral.sh/ruff/rules/builtin-attribute-shadowing/
+    "A006", # https://docs.astral.sh/ruff/rules/builtin-lambda-argument-shadowing/
+    "CPY001", # https://docs.astral.sh/ruff/rules/missing-copyright-notice/
+    "EM", # https://docs.astral.sh/ruff/rules/#flake8-errmsg-em
+    "FIX", # https://docs.astral.sh/ruff/rules/#flake8-fixme-fix
+    "FA", # https://docs.astral.sh/ruff/rules/#flake8-future-annotations-fa
+    "ICN", # https://docs.astral.sh/ruff/rules/#flake8-import-conventions-icn
+    "LOG014", # https://docs.astral.sh/ruff/rules/exc-info-outside-except-handler/
+    "TD001", # https://docs.astral.sh/ruff/rules/invalid-todo-tag/
+    "TD002", # https://docs.astral.sh/ruff/rules/missing-todo-author/
+    "TD003", # https://docs.astral.sh/ruff/rules/missing-todo-link/
+    "TC001", # https://docs.astral.sh/ruff/rules/typing-only-first-party-import/
+    "TC002", # https://docs.astral.sh/ruff/rules/typing-only-third-party-import/
+    "TC003", # https://docs.astral.sh/ruff/rules/typing-only-standard-library-import/
+    "TC006", # https://docs.astral.sh/ruff/rules/runtime-cast-value/
+    "TC007", # https://docs.astral.sh/ruff/rules/unquoted-type-alias/
+    "C901", # https://docs.astral.sh/ruff/rules/complex-structure/
+    "COM812", # конфликтует с ruff format, запятые расставляет форматтер
+    "PERF203", # https://docs.astral.sh/ruff/rules/try-except-in-loop/
+    "DOC", # https://docs.astral.sh/ruff/rules/#pydoclint-doc
+    "D", # https://docs.astral.sh/ruff/rules/#pydocstyle-d
+    "PLR0904", # https://docs.astral.sh/ruff/rules/too-many-public-methods/
+    "PLR0911", # https://docs.astral.sh/ruff/rules/too-many-return-statements/
+    "PLR0912", # https://docs.astral.sh/ruff/rules/too-many-branches/
+    "PLR0913", # https://docs.astral.sh/ruff/rules/too-many-arguments/
+    "PLR0914", # https://docs.astral.sh/ruff/rules/too-many-locals/
+    "PLR0915", # https://docs.astral.sh/ruff/rules/too-many-statements/
+    "PLR0916", # https://docs.astral.sh/ruff/rules/too-many-boolean-expressions/
+    "PLR0917", # https://docs.astral.sh/ruff/rules/too-many-positional-arguments/
+    "PLR1702", # https://docs.astral.sh/ruff/rules/too-many-nested-blocks/
+    "PLR6301", # https://docs.astral.sh/ruff/rules/no-self-use/
+    "RUF001", # https://docs.astral.sh/ruff/rules/ambiguous-unicode-character-string/
+    "RUF002", # https://docs.astral.sh/ruff/rules/ambiguous-unicode-character-docstring/
+    "RUF003", # https://docs.astral.sh/ruff/rules/ambiguous-unicode-character-comment/
+    "TRY003", # https://docs.astral.sh/ruff/rules/raise-vanilla-args/
+    "TRY300", # https://docs.astral.sh/ruff/rules/try-consider-else/
+    "N818", # https://docs.astral.sh/ruff/rules/error-suffix-on-exception-name/
+    "S311", # https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage/
+    "UP046", # https://docs.astral.sh/ruff/rules/non-pep695-generic-class/
+    "DTZ007", # https://docs.astral.sh/ruff/rules/call-datetime-strptime-without-zone/
+    "FAST003", # https://docs.astral.sh/ruff/rules/fast-api-unused-path-parameter/
+]
+
+[tool.ruff.lint.isort]
+known-local-folder = ["zheka"]
+case-sensitive = true
+combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLR2004", "D", "A005"]
+"zheka/infra/database/repos/*.py" = ["E711", "E712"]
+"zheka/infra/database/models/*.py" = ["E711", "N805"]
+"migrations/**/*.py" = ["ARG001", "E501", "INP001", "N999"]
+"zheka/bot/middlewares/*.py" = ["ARG002"]
+"zheka/broker/middlewares.py" = ["ARG002"]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+include = 'zheka/.*\.py$|migrations/.*\.py$|tests/.*\.py$'
+
+[tool.codespell]
+ignore-words-list = "dependant,selectin,ba"
+
+[tool.bandit]
+skips = ["B311"]
+
+[tool.slotscheck]
+strict-imports = true
+exclude-modules = "^zheka\\.api\\.asgi$"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+filterwarnings = [
+    "error",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+    "ignore::DeprecationWarning",
+]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+core = "sysmon"

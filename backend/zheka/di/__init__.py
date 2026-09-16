@@ -1,0 +1,38 @@
+from typing import Any
+
+from dishka import AsyncContainer, Provider, make_async_container
+from dishka.integrations.fastapi import FastapiProvider
+from dishka.integrations.taskiq import TaskiqProvider
+from maxo.integrations.dishka import MaxoProvider
+
+from zheka.config import Config
+from zheka.di.broker import BrokerProvider
+from zheka.di.config import ConfigProvider
+from zheka.di.core.services import ServicesProvider
+from zheka.di.database.repos import ReposProvider
+from zheka.di.database.session import DbProvider
+from zheka.di.max_bot import MaxBotProvider
+
+
+def make_container(
+    *extra_providers: Provider,
+    config: Config,
+    **kwargs: Any,
+) -> AsyncContainer:
+    context: dict[type[Any], Any] = kwargs.pop("context", {})
+    context[Config] = config
+
+    return make_async_container(
+        FastapiProvider(),
+        TaskiqProvider(),
+        MaxoProvider(),
+        ConfigProvider(),
+        DbProvider(),
+        ReposProvider(),
+        ServicesProvider(),
+        MaxBotProvider(),
+        BrokerProvider(),
+        *extra_providers,
+        context=context,
+        **kwargs,
+    )

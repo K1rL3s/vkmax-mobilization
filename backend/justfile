@@ -1,0 +1,89 @@
+# Cross-platform shell configuration
+# Use PowerShell on Windows (higher precedence than shell setting)
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+# Use sh on Unix-like systems
+set shell := ["sh", "-c"]
+
+package := "zheka"
+sources := "zheka migrations tests"
+slots_args := ""
+bandit_args := ""
+test_args := ""
+
+default:
+    @just --list
+
+sync:
+    uv sync --all-groups
+
+lock:
+    uv lock
+
+upgrade:
+    uv lock --upgrade
+
+format:
+    uv run ruff format .
+
+ruff:
+    uv run ruff check --fix .
+
+codespell:
+    uv run codespell {{sources}}
+
+[unix]
+slots:
+    PYTHONPATH=. uv run slotscheck {{slots_args}} -m {{package}}
+
+[windows]
+slots:
+    $env:PYTHONPATH="."; uv run slotscheck {{slots_args}} -m {{package}}
+
+bandit:
+    uv run bandit -c pyproject.toml {{bandit_args}} {{package}} -r
+
+mypy:
+    uv run mypy
+
+lint:
+    just ruff
+    just codespell
+    just slots
+    just bandit
+
+check:
+    uv run ruff check --no-fix .
+    uv run ruff format --check .
+    just codespell
+    just slots
+    just bandit
+    just mypy
+
+test:
+    uv run pytest --cov {{package}} {{test_args}}
+
+tests:
+    just test
+
+all:
+    just lint
+    just mypy
+    just test
+
+api:
+    uv run python -m zheka.api
+
+worker:
+    uv run taskiq worker zheka.broker.broker:main --workers=1 --no-configure-logging
+
+scheduler:
+    uv run python -m zheka.broker.scheduler
+
+migrate:
+    uv run alembic upgrade head
+
+downgrade:
+    uv run alembic downgrade -1
+
+migration message:
+    uv run alembic revision --autogenerate -m "{{message}}"

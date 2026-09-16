@@ -1,0 +1,102 @@
+x-image: &image
+  image: zheka:local
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+
+x-common: &common
+  restart: unless-stopped
+  env_file: .env
+
+x-after-migrations: &after-migrations
+  depends_on:
+    migrations:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+
+x-app-env: &app-env
+  API_HOST: 0.0.0.0
+  API_PORT: 7001
+  POSTGRES_HOST: database
+  POSTGRES_PORT: 5432
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+
+
+services:
+  api:
+    <<: [ *image, *common, *after-migrations ]
+    container_name: zheka-api
+    environment:
+      <<: *app-env
+    ports:
+      - "${API_PORT:-7001}:7001"
+    command: [ "python", "-m", "zheka.api" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:7001/api/healthcheck')\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  worker:
+    <<: [ *image, *common, *after-migrations ]
+    container_name: zheka-worker
+    environment:
+      <<: *app-env
+    command: [ "taskiq", "worker", "zheka.broker.broker:main", "--workers=1", "--no-configure-logging" ]
+
+  scheduler:
+    <<: [ *image, *common, *after-migrations ]
+    container_name: zheka-scheduler
+    environment:
+      <<: *app-env
+    command: [ "python", "-m", "zheka.broker.scheduler" ]
+
+  migrations:
+    <<: [ *image, *common ]
+    container_name: zheka-migrations
+    environment:
+      <<: *app-env
+    command: [ "alembic", "upgrade", "head" ]
+    restart: "no"
+    depends_on:
+      database:
+        condition: service_healthy
+
+  database:
+    container_name: zheka-db
+    image: postgres:16.9-alpine3.22
+    restart: unless-stopped
+    volumes:
+      - zheka-postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: "/var/lib/postgresql/data/pgdata"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis:
+    container_name: zheka-redis
+    image: redis:7.4.3-alpine3.21
+    restart: unless-stopped
+    volumes:
+      - zheka-redis:/data
+    command: "redis-server --requirepass ${REDIS_PASSWORD} --loglevel warning --save 60 1"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  zheka-postgres:
+  zheka-redis:
