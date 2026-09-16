@@ -1,0 +1,57 @@
+.Tile {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.medium {
+  width: 40px;
+  height: 40px;
+}
+
+.large {
+  width: 44px;
+  height: 44px;
+}
+
+.xlarge {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+}
+
+.neutral {
+  background-color: var(--controls-inactive);
+  color: var(--icon-primary);
+}
+
+.card {
+  background-color: var(--background-card);
+  color: var(--icon-themed);
+}
+
+.secondary {
+  background-color: var(--background-secondary);
+  color: var(--icon-themed);
+}
+
+.themed {
+  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+  color: var(--icon-themed);
+}
+
+.positive {
+  background-color: color-mix(in srgb, var(--icon-positive) 12%, transparent);
+  color: var(--icon-positive);
+}
+
+.promo {
+  background-color: color-mix(
+    in srgb,
+    var(--promo-text-step-1) 12%,
+    transparent
+  );
+  color: var(--promo-text-step-1);
+}

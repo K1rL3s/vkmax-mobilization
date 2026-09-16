@@ -6,7 +6,7 @@ import { queryClient } from "@/shared/api/query-client";
 
 export const Providers = ({ children }: PropsWithChildren) => {
   return (
-    <UIProvider>
+    <UIProvider resetBody>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </UIProvider>
   );
