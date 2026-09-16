@@ -51,5 +51,5 @@ class ZhekaType(metaclass=_ZhekaTypeMetaClass):
     __slots__ = ()
 
 
-class ZhekaMutableType(metaclass=_ZhekaMutableTypeMetaClass, frozen=False):
+class ZhekaMutableType(metaclass=_ZhekaMutableTypeMetaClass, frozen=False, slots=False):
     __slots__ = ()

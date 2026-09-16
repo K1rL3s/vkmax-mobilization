@@ -1,19 +1,19 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, ColumnElement, DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import BigInteger, Column, ColumnElement, DateTime, func
 
 
 def fresh_timestamp() -> ColumnElement[datetime]:
     return func.timezone("UTC", func.now())
 
 
-class IdMixin:
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+def id_column() -> Column[int]:
+    return Column("id", BigInteger, primary_key=True, autoincrement=True)
 
 
-class CreatedAtMixin:
-    created_at: Mapped[datetime] = mapped_column(
+def created_at_column() -> Column[datetime]:
+    return Column(
+        "created_at",
         DateTime(timezone=True),
         default=fresh_timestamp(),
         server_default=fresh_timestamp(),
@@ -21,8 +21,9 @@ class CreatedAtMixin:
     )
 
 
-class UpdatedAtMixin:
-    updated_at: Mapped[datetime] = mapped_column(
+def updated_at_column() -> Column[datetime]:
+    return Column(
+        "updated_at",
         DateTime(timezone=True),
         default=fresh_timestamp(),
         onupdate=fresh_timestamp(),

@@ -2,12 +2,13 @@ import asyncio
 import sys
 from logging.config import fileConfig
 
+import alembic_postgresql_enum  # noqa: F401
 from alembic import context
 from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from zheka.config import load_config
-from zheka.infra.database.models import BaseAlchemyModel
+from zheka.infra.database.tables import metadata
 
 config = context.config
 config.set_main_option(
@@ -18,7 +19,7 @@ config.set_main_option(
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = BaseAlchemyModel.metadata
+target_metadata = metadata
 
 
 def run_migrations_offline() -> None:
