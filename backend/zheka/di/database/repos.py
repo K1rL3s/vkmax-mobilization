@@ -1,5 +1,12 @@
-from dishka import BaseScope, Provider, Scope
+from dishka import BaseScope, Provider, Scope, provide_all
+
+from zheka.infra.database.repos.events import EventsRepo
+from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.residents import ResidentsRepo
+from zheka.infra.database.repos.users import UsersRepo
 
 
 class ReposProvider(Provider):
     scope: BaseScope | None = Scope.REQUEST
+
+    repos = provide_all(UsersRepo, ResidentsRepo, OrgsRepo, EventsRepo)

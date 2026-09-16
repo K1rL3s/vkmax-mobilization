@@ -17,9 +17,11 @@ Package `zheka`, Python 3.12, all code async.
 | `zheka/bot/` | maxo dispatcher, webhook engine, handlers, middlewares. |
 | `zheka/broker/` | taskiq broker, scheduler, background tasks. |
 | `zheka/base.py` | `ZhekaType` / `ZhekaMutableType`, the dataclass metaclass. |
+| `zheka/core/models/` | Domain entities on `ZhekaMutableType`, no SQLAlchemy import. |
 | `zheka/core/` | Domain models, services, errors, enums, event names. |
 | `zheka/di/` | Dishka container and providers. |
-| `zheka/infra/database/` | SQLAlchemy base, mixins, repositories. |
+| `zheka/infra/database/tables/` | `Table` objects and the `map_imperatively` calls binding them to `core/models/`. |
+| `zheka/infra/database/` | Repositories; `models/` re-exports the mapped entities for them. |
 | `zheka/infra/max/` | Outgoing MAX calls and the platform rate limits. |
 | `zheka/logger/` | Formatters, context columns, `setup_logger`. |
 | `migrations/` | Linear Alembic history. |
@@ -51,13 +53,19 @@ slotscheck + bandit + mypy strict. Keep it green.
   product default is silent.
 - Event names are `EventType` members in `zheka/core/enums/events.py`. Never write
   the string at the call site.
+- `EventsService.record` writes its event on a savepoint, so it also flushes
+  whatever else is pending on the caller's session at that point. Call it
+  after the business action's own flush, not in the middle of building it.
 - Any plain data class inherits `ZhekaType` from `zheka/base.py` instead of
   carrying its own `@dataclass` decorator. The metaclass applies
   `dataclass(frozen=True, slots=True, kw_only=True)`; `ZhekaMutableType` is
   the mutable variant, a single class opts out with
   `class Foo(ZhekaType, frozen=False)`, and a class that declares its own
   `__slots__` is left alone. Pydantic stays in `api/schemas/` - that is
-  serialization, not domain data.
+  serialization, not domain data. An entity in `core/models/` subclasses
+  `ZhekaMutableType` instead of `ZhekaType`, because a class mapped with
+  `map_imperatively` cannot be frozen or slotted (SQLAlchemy needs to set
+  `_sa_instance_state` and hold a weakref to the instance).
 - Domain errors are axes off `ZhekaError` in `zheka/core/errors.py`.
   `api/errors.py` maps them to statuses in the `exception_handlers`
   comprehension; add an axis to that tuple, not a new handler.
@@ -81,3 +89,17 @@ slotscheck + bandit + mypy strict. Keep it green.
   process does not run alembic, so three containers never race on it.
 - Env var names follow the family canon: `POSTGRES_*`, `REDIS_DB`,
   `LOG_LEVEL`, `LOG_FORMAT`, `API_HOST` / `API_PORT` / `API_WORKERS`.
+- Alembic revision messages, and therefore revision file names, are English:
+  `just migration "initial schema"`. The Russian-only rule covers user-facing
+  strings, not the migration history.
+- Column order in `infra/database/tables/` is argument order in `Table(...)`.
+  Most tables start with `id_column(), created_at_column()[,
+  updated_at_column()]` from `tables/_columns.py`; a table whose primary key
+  is a natural column instead (`chats.chat_id`, `org_invites`/`flat_invites`
+  `.code`, `org_settings.org_id`) starts with that column instead.
+- Cross-organization isolation has exactly one tool: `scoped_to_org` in
+  `infra/database/repos/scopes.py`. A repo method that takes a `house_id`,
+  `flat_id` or `org_id` straight from a path parameter checks no ownership of
+  its own, so the caller scopes the query or the route leaks across
+  organizations. A foreign id answers `EntityNotFound` (404), never
+  `NotEnoughRights` (403) - a 403 confirms the id exists.

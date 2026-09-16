@@ -14,7 +14,10 @@ class MaxBotProvider(Provider):
 
     max_sender = provide(MaxSender)
 
-    @provide
+    # override=True: maxo's own MaxoProvider declares Bot via from_context,
+    # expecting the app to inject a ready instance - we build ours from the
+    # token instead, so ours is the real provider and that one is unused
+    @provide(override=True)
     async def bot(self, config: MaxConfig) -> AsyncIterable[Bot]:
         bot = Bot(
             token=config.token,

@@ -1,0 +1,134 @@
+import os
+import secrets
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from pathlib import Path
+
+import pytest
+import pytest_asyncio
+from alembic import command
+from alembic.config import Config as AlembicConfig
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from testcontainers.postgres import PostgresContainer
+
+from zheka.base import ZhekaType
+from zheka.core.enums import OrgRole, ResidentRole
+from zheka.core.ids import FlatId, HouseId, MaxUserId, OrgId, UserId
+from zheka.infra.database.models import (
+    Flat,
+    House,
+    OrgMember,
+    Organization,
+    Resident,
+    User,
+)
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+
+# load_config() (используемый migrations/env.py) требует эти переменные,
+# а тестам не нужен ни настоящий бот, ни редис
+os.environ.setdefault("MAX_TOKEN", "test-token")
+os.environ.setdefault("REDIS_HOST", "127.0.0.1")
+
+
+@pytest.fixture(scope="session")
+def database_url() -> Generator[str]:
+    with PostgresContainer("postgres:16.9-alpine3.22", driver="psycopg") as postgres:
+        os.environ["POSTGRES_HOST"] = postgres.get_container_host_ip()
+        os.environ["POSTGRES_PORT"] = str(postgres.get_exposed_port(5432))
+        os.environ["POSTGRES_USER"] = postgres.username
+        os.environ["POSTGRES_PASSWORD"] = postgres.password
+        os.environ["POSTGRES_DB"] = postgres.dbname
+
+        alembic_cfg = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+        command.upgrade(alembic_cfg, "head")
+
+        yield postgres.get_connection_url()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def engine(database_url: str) -> AsyncGenerator[AsyncEngine]:
+    engine = create_async_engine(database_url)
+    yield engine
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
+    async with engine.connect() as conn:
+        transaction = await conn.begin()
+        async with AsyncSession(
+            bind=conn,
+            join_transaction_mode="create_savepoint",
+        ) as db_session:
+            yield db_session
+        await transaction.rollback()
+
+
+class OrgHouseFlatUser(ZhekaType):
+    org_id: OrgId
+    house_id: HouseId
+    flat_id: FlatId
+    user_id: UserId
+
+
+@pytest_asyncio.fixture
+async def make_org_house_flat_user(
+    session: AsyncSession,
+) -> Callable[..., Awaitable[OrgHouseFlatUser]]:
+    async def _make(
+        *,
+        org_role: OrgRole | None = None,
+        resident_role: ResidentRole | None = None,
+    ) -> OrgHouseFlatUser:
+        unique = secrets.token_hex(4)
+        org = Organization(
+            name=f"УК {unique}",
+            inn=secrets.token_hex(6),
+            phone="+70000000000",
+            address="Тестовая область, Тестоград, Тестовая, 1",
+        )
+        session.add(org)
+        await session.flush()
+
+        house = House(
+            org_id=org.id,
+            region="Тестовая область",
+            city="Тестоград",
+            street="Тестовая",
+            building="1",
+            cadastral_no=secrets.token_hex(8),
+            chat_binding_code=secrets.token_hex(4),
+        )
+        session.add(house)
+        await session.flush()
+
+        flat = Flat(house_id=house.id, number="1")
+        session.add(flat)
+        await session.flush()
+
+        user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Тест Тестов")
+        session.add(user)
+        await session.flush()
+
+        if org_role is not None:
+            session.add(OrgMember(org_id=org.id, user_id=user.id, role=org_role))
+        if resident_role is not None:
+            session.add(
+                Resident(
+                    user_id=user.id,
+                    house_id=house.id,
+                    flat_id=flat.id,
+                    role=resident_role,
+                ),
+            )
+        await session.flush()
+
+        return OrgHouseFlatUser(
+            org_id=OrgId(org.id),
+            house_id=HouseId(house.id),
+            flat_id=FlatId(flat.id),
+            user_id=UserId(user.id),
+        )
+
+    return _make

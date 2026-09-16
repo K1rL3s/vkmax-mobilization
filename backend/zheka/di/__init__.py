@@ -1,6 +1,6 @@
 from typing import Any
 
-from dishka import AsyncContainer, Provider, make_async_container
+from dishka import STRICT_VALIDATION, AsyncContainer, Provider, make_async_container
 from dishka.integrations.fastapi import FastapiProvider
 from dishka.integrations.taskiq import TaskiqProvider
 from maxo.integrations.dishka import MaxoProvider
@@ -34,5 +34,6 @@ def make_container(
         BrokerProvider(),
         *extra_providers,
         context=context,
+        validation_settings=STRICT_VALIDATION,
         **kwargs,
     )
