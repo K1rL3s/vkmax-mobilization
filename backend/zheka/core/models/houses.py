@@ -22,7 +22,7 @@ class House(ZhekaMutableType):
     cadastral_no: str
     built_year: int | None = None
     floors: int | None = None
-    area: Decimal | None = None
+    area: int | None = None  # 1/100 square metre
     entrances: int = 1
     lat: Decimal | None = None
     lon: Decimal | None = None
@@ -36,5 +36,5 @@ class Flat(ZhekaMutableType):
     house_id: HouseId
     number: str
     entrance: int | None = None
-    area: Decimal | None = None
+    area: int | None = None  # 1/100 square metre
     account_no: str | None = None

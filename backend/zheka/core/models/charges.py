@@ -1,5 +1,4 @@
 from datetime import date, datetime
-from decimal import Decimal
 from typing import Any, cast
 
 from zheka.base import ZhekaMutableType
@@ -15,7 +14,7 @@ class Tariff(ZhekaMutableType):
     id: TariffId = _UNSET_TARIFF_ID
     house_id: HouseId
     service: ServiceType
-    value: Decimal
+    value: int  # 1/10000 rouble per unit
     unit: str
     valid_from: date
     document_url: str | None = None
@@ -27,6 +26,6 @@ class Charge(ZhekaMutableType):
     flat_id: FlatId
     period: date
     lines: Any
-    total: Decimal
+    total: int  # kopeck
     is_closed: bool = True
     paid_at: datetime | None = None

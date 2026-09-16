@@ -27,7 +27,7 @@ houses_table = Table(
     Column("cadastral_no", String, nullable=False),
     Column("built_year", Integer, nullable=True),
     Column("floors", Integer, nullable=True),
-    Column("area", Numeric(10, 2), nullable=True),
+    Column("area", Integer, nullable=True),
     Column("entrances", Integer, default=1, server_default="1", nullable=False),
     Column("lat", Numeric(9, 6), nullable=True),
     Column("lon", Numeric(9, 6), nullable=True),
@@ -44,7 +44,7 @@ flats_table = Table(
     Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
     Column("number", String(16), nullable=False),
     Column("entrance", Integer, nullable=True),
-    Column("area", Numeric(10, 2), nullable=True),
+    Column("area", Integer, nullable=True),
     Column("account_no", String(32), nullable=True),
     UniqueConstraint("house_id", "number"),
 )

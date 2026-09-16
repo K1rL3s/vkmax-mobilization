@@ -103,3 +103,20 @@ slotscheck + bandit + mypy strict. Keep it green.
   its own, so the caller scopes the query or the route leaks across
   organizations. A foreign id answers `EntityNotFound` (404), never
   `NotEnoughRights` (403) - a 403 confirms the id exists.
+- Every fractional quantity is a scaled integer. No `Decimal` and no `float`
+  in charge, consumption or quorum math - the scale is part of the unit, the
+  arithmetic is integer, and rounding happens exactly once, explicitly:
+
+  | Quantity | Python | Column | Unit |
+  |---|---|---|---|
+  | money | `int` | `BigInteger` | kopeck, 1/100 rouble |
+  | tariff rate | `int` | `BigInteger` | 1/10000 rouble per unit |
+  | area | `int` | `Integer` | 1/100 square metre |
+  | volume, meter reading | `int` | JSON number | 1/1000 cubic metre, kWh on the same scale |
+  | percent | `int` | - | 1/100 of a percent, so 50% is `5000` |
+
+  Latitude and longitude are the one exception and stay `Numeric(9, 6)`: they
+  feed a distance formula, where a scaled integer only gets in the way.
+  A scaled field never carries a unit suffix in its name. The unit lives in the
+  Russian `Field(description=...)` in `api/schemas/`, which puts it in OpenAPI,
+  and in a one-word comment on the entity field.

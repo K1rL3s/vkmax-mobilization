@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: aa8214787834
+Revision ID: 5ed50c1d5b57
 Revises:
-Create Date: 2026-09-16 20:22:58.914790
+Create Date: 2026-09-17 01:23:54.095513
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "aa8214787834"
+revision: str = "5ed50c1d5b57"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -188,7 +188,7 @@ def upgrade() -> None:
         sa.Column("cadastral_no", sa.String(), nullable=False),
         sa.Column("built_year", sa.Integer(), nullable=True),
         sa.Column("floors", sa.Integer(), nullable=True),
-        sa.Column("area", sa.Numeric(precision=10, scale=2), nullable=True),
+        sa.Column("area", sa.Integer(), nullable=True),
         sa.Column("entrances", sa.Integer(), server_default="1", nullable=False),
         sa.Column("lat", sa.Numeric(precision=9, scale=6), nullable=True),
         sa.Column("lon", sa.Numeric(precision=9, scale=6), nullable=True),
@@ -240,13 +240,13 @@ def upgrade() -> None:
     )
     op.create_table(
         "org_invites",
+        sa.Column("code", sa.String(length=16), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("timezone('UTC', now())"),
             nullable=False,
         ),
-        sa.Column("code", sa.String(length=16), nullable=False),
         sa.Column("org_id", sa.BigInteger(), nullable=False),
         sa.Column(
             "role",
@@ -311,13 +311,13 @@ def upgrade() -> None:
     )
     op.create_table(
         "org_settings",
+        sa.Column("org_id", sa.BigInteger(), nullable=False),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("timezone('UTC', now())"),
             nullable=False,
         ),
-        sa.Column("org_id", sa.BigInteger(), nullable=False),
         sa.Column(
             "meter_window_day_from", sa.Integer(), server_default="15", nullable=False
         ),
@@ -387,13 +387,13 @@ def upgrade() -> None:
     )
     op.create_table(
         "chats",
+        sa.Column("chat_id", sa.BigInteger(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("timezone('UTC', now())"),
             nullable=False,
         ),
-        sa.Column("chat_id", sa.BigInteger(), nullable=False),
         sa.Column("house_id", sa.BigInteger(), nullable=True),
         sa.Column("title", sa.String(), nullable=True),
         sa.Column("bound_by", sa.BigInteger(), nullable=True),
@@ -441,7 +441,7 @@ def upgrade() -> None:
         sa.Column("house_id", sa.BigInteger(), nullable=False),
         sa.Column("number", sa.String(length=16), nullable=False),
         sa.Column("entrance", sa.Integer(), nullable=True),
-        sa.Column("area", sa.Numeric(precision=10, scale=2), nullable=True),
+        sa.Column("area", sa.Integer(), nullable=True),
         sa.Column("account_no", sa.String(length=32), nullable=True),
         sa.ForeignKeyConstraint(
             ["house_id"], ["houses.id"], name=op.f("fk_flats_house_id_houses")
@@ -545,7 +545,7 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
-        sa.Column("value", sa.Numeric(precision=12, scale=4), nullable=False),
+        sa.Column("value", sa.BigInteger(), nullable=False),
         sa.Column("unit", sa.String(length=16), nullable=False),
         sa.Column("valid_from", sa.Date(), nullable=False),
         sa.Column("document_url", sa.String(), nullable=True),
@@ -585,7 +585,7 @@ def upgrade() -> None:
         sa.Column("flat_id", sa.BigInteger(), nullable=False),
         sa.Column("period", sa.Date(), nullable=False),
         sa.Column("lines", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("total", sa.Numeric(precision=12, scale=2), nullable=False),
+        sa.Column("total", sa.BigInteger(), nullable=False),
         sa.Column(
             "is_closed", sa.Boolean(), server_default=sa.text("true"), nullable=False
         ),
@@ -598,13 +598,13 @@ def upgrade() -> None:
     )
     op.create_table(
         "flat_invites",
+        sa.Column("code", sa.String(length=16), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("timezone('UTC', now())"),
             nullable=False,
         ),
-        sa.Column("code", sa.String(length=16), nullable=False),
         sa.Column("flat_id", sa.BigInteger(), nullable=False),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),

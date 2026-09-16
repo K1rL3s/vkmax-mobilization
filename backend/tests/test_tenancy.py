@@ -148,8 +148,9 @@ async def test_events_service_record_serializes_decimal_payload(
 ) -> None:
     events_service = EventsService(EventsRepo(session))
 
-    # Decimal/datetime попадают в payload из Task 9/12/19 и не сериализуются
-    # напрямую в JSON - record() должен превратить их в строку, а не упасть
+    # payload может получить Decimal/datetime из значений, которые вызывающий
+    # код не приводит к JSON заранее - record() должен превратить их в строку,
+    # а не упасть
     await events_service.record(EventType.MINIAPP_OPEN, amount=Decimal("10.00"))
 
     # сессия должна остаться пригодной для обычной работы
