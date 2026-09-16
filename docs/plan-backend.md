@@ -9,9 +9,10 @@
 ## Границы ответственности
 
 - **Поток A**: инфраструктура, вебхук, бот, уведомления и рассылки, домовые
-  чаты, мультитенантность и авторизация, деплой, Docker, события.
-- **Поток B**: дома и квартиры, заявки, счетчики, собрания, объявления,
-  админка УК, эндпоинты аналитики, демо-доступ.
+  чаты, диалог исполнителя, мультитенантность и авторизация, деплой, Docker,
+  события.
+- **Поток B**: дома и квартиры, заявки, счетчики, собрания, прием и доступ,
+  начисления, объявления, админка УК, эндпоинты аналитики, демо-доступ.
 
 Общее правило: контракт API фиксируется схемами Pydantic на второй день, до
 написания логики. Фронтенд идет по сгенерированному OpenAPI и заглушкам и
@@ -34,21 +35,37 @@
 - Отправка сообщений идет через один хелпер, который берет уровень
   уведомления из настроек жителя. Дефолт продукта - без звука, дефолт API -
   со звуком, поэтому `notify=false` передается явно.
+- Склейка заявок считается на записи, а не агрегатом на чтении: группа
+  ищется до сохранения, иначе жителю нечего показать вместо кнопки создания.
+- «Готово» от исполнителя не закрывает заявку. Закрывает житель или таймаут
+  48 часов задачей планировщика, иначе статус снова производит одна сторона.
+- Карточка исполнителя и сетка слотов доступа живут в одном отредактированном
+  сообщении. У сообщения с клавиатурой нет срока редактирования, так что
+  новые сообщения на каждое нажатие не нужны.
+- Разбор начисления - формула над строками `charges.lines`. Ей нужна история
+  тарифа, поэтому у `tariffs` есть `valid_from` и старые строки не
+  перетираются.
+- Картинку QR рисует браузер по диплинку, документ по заявке - печатная
+  страница фронта. Серверного рендера картинок и PDF в проекте нет.
 
 ## Схема данных
 
 Ядро:
 
 - `organizations` - id, name, inn, license_no, created_at
-- `org_members` - org_id, user_id, role (`creator` / `admin` / `employee`)
+- `org_members` - org_id, user_id, role (`creator` / `admin` / `employee` /
+  `executor`)
 - `org_invites` - code, org_id, role, expires_at, max_activations,
   activations_used, created_by
+- `flat_invites` - code, flat_id, created_by, expires_at, max_activations,
+  activations_used
 - `houses` - id, org_id (nullable), регион/город/улица/дом, кадастр, год,
-  этажность, площадь, lat, lon
-- `flats` - id, house_id, number, account_no
+  этажность, площадь, число подъездов, lat, lon
+- `flats` - id, house_id, number, entrance, area, account_no
 - `users` - max_user_id, name, consent_version, consent_at
-- `residents` - user_id, house_id, flat_id (nullable), verified_at,
-  verified_by, status (`active` / `blocked`), block_reason
+- `residents` - user_id, house_id, flat_id (nullable), role (`owner` /
+  `tenant`), can_see_charges, can_vote, verified_at, verified_by, status
+  (`active` / `blocked`), block_reason
 - `notification_settings` - user_id, category, level (`sound` / `silent` /
   `off`)
 - `events` - id, user_id, type, payload (JSONB), created_at
@@ -56,9 +73,12 @@
 Заявки:
 
 - `requests` - id, house_id, flat_id, author_user_id, category, description,
-  status, parent_request_id, rating, feedback, created_at, accepted_at,
-  done_at, is_staff_author
-- `request_photos` - request_id, path
+  status, parent_request_id, group_id, channel (`miniapp` / `bot` / `chat` /
+  `phone`), caller_name, caller_phone, executor_user_id, rating, feedback,
+  created_at, accepted_at, done_at, reviewed_at, is_staff_author
+- `request_groups` - id, house_id, category, window_started_at, status
+- `request_photos` - request_id, path, kind (`issue` / `result`)
+- `request_status_log` - request_id, from, to, by_user_id, by_role, at
 
 Счетчики:
 
@@ -69,7 +89,7 @@
   photo_paths, ocr_used, ocr_accepted, is_below_previous, submitted_at,
   submitted_by
 - `meter_windows` - org_id, day_from, day_to
-- `tariffs` - house_id, service, value, unit
+- `tariffs` - house_id, service, value, unit, valid_from
 - `charges` - flat_id, period, lines (JSONB), total, is_closed
 
 Остальное:
@@ -78,18 +98,29 @@
 - `announcements` - org_id, house_ids, text, channels (чат / лс), created_by
 - `chats` - chat_id, house_id, bound_by, bot_is_admin, bound_at
 - `demand_signals` - house_id, user_id
+- `reception_windows` - org_id, weekday, time_from, time_to, slot_minutes
+- `appointments` - org_id, user_id, request_id (nullable), starts_at, status
+- `access_requests` - id, org_id, house_id, reason, date, created_by
+- `access_slots` - access_request_id, starts_at, capacity
+- `access_targets` - access_request_id, flat_id, slot_id (nullable),
+  responded_at
 
 ## Роли
 
-Внутри организации три роли. `creator` может все и не может быть исключен.
-`admin` управляет домами, приглашает только сотрудников, не может исключать
-других админов. `employee` работает с заявками, объявлениями и счетчиками,
-настройки организации только читает.
+Внутри организации четыре роли. `creator` может все и не может быть
+исключен. `admin` управляет домами, приглашает только сотрудников, не может
+исключать других админов. `employee` работает с заявками, объявлениями и
+счетчиками, настройки организации только читает. `executor` видит только
+назначенные ему заявки и только в диалоге с ботом, мини-апп ему не нужен.
 
 Роли не исключают роль жителя. У аккаунта набор ролей, свитчер в профиле
 показывает и дома, где человек житель, и организации, где он сотрудник.
 
-Приглашение - диплинк с кодом, у кода есть срок жизни и лимит активаций.
+Житель квартиры - собственник или арендатор. Арендатор не видит начислений и
+не голосует в опросах, в остальном это обычный житель квартиры.
+
+Приглашение - диплинк с кодом, у кода есть срок жизни и лимит активаций. Такой
+же код собственник выдает на свою квартиру, чтобы завести туда арендатора.
 
 ## По дням
 
@@ -127,6 +158,9 @@
   `house_linked`
 - согласие на обработку ПД: чекбокс до выбора дома, запись `consent_version`
   и даты, статичная страница политики
+- четвертый путь к дому: подъездный QR, в диплинке дом и подъезд, онбординг
+  схлопывается до одного согласия
+- `source` в событиях различает QR, домовой чат и прямой запуск
 
 Поток B:
 
@@ -140,6 +174,12 @@
   счетчики закрыты плашкой, кнопка спроса пишет `demand_signals`
 - API заявок: создание, список, статусы, оценка, повторная заявка со
   ссылкой на родителя
+- склейка коллективных заявок: при создании поиск группы по дому, категории и
+  окну, ответ «пожаловались N соседей» и присоединение вместо дубля, порог и
+  окно в настройках организации
+- подъездные коды на карточке дома, печатную форму рисует фронт
+- инвайт арендатору: код на квартиру от подтвержденного собственника,
+  активация заводит жителя с флагами «не видит начисления, не голосует»
 
 ### Дни 6-8: роль УК, уведомления, домовые чаты
 
@@ -155,6 +195,12 @@
 - проверка прав бота по кнопке через `GET /chats/{chatId}/members/me`,
   перепроверка при любой неудачной отправке в чат
 - приветствие в чат с кнопкой-диплинком
+- диалог исполнителя: карточка назначенной заявки с адресом, категорией и фото
+  жителя, кнопки «принял» / «выехал» / «готово», каждое нажатие редактирует ту
+  же карточку, «готово» требует фото результата
+- приемка жителем: два фото рядом, кнопки «принять» и «сделано плохо», вторая
+  создает повторную заявку с `parent_request_id`
+- закрытие по таймауту 48 часов задачей планировщика
 
 Поток B:
 
@@ -165,6 +211,13 @@
   обязательная причина, уведомление жителю; председателя заблокировать
   нельзя
 - назначение председателя из верифицированных жителей дома
+- роль `executor` в инвайтах, назначение заявки исполнителю в админке
+- группа в админке как одна заявка: число квартир, раскрывающийся список
+  авторов, смена статуса на всю группу, уведомления всем участникам
+- заявка по звонку: сотрудник выбирает квартиру и жителя или заполняет
+  свободную запись о звонившем, `channel = phone`, тот же конвейер статусов;
+  писать первым бот не может, сотрудник перезванивает сам
+- журнал смен статуса пишется на каждом переходе
 
 ### Дни 9-10: собрания, квартира, счетчики
 
@@ -173,6 +226,9 @@
 - напоминания об опросах и об окне подачи показаний, не более двух за окно,
   не приходят тому, кто уже сдал
 - предупреждение об истечении поверки за месяц
+- напоминание о записи на прием вечером накануне
+- рассылка окон доступа: одно сообщение на подтвержденные квартиры с кнопками
+  слотов, выбор редактирует то же сообщение
 
 Поток B:
 
@@ -191,6 +247,18 @@
 - резкий рост расхода - предложение создать заявку с предзаполненной
   категорией
 - просроченная поверка закрывает подачу
+- прием: часы и длина слота в настройках организации, запись жителя с
+  привязкой своей заявки, вкладка «Прием» со списком на сегодня
+- обратный сбор доступа: заявка на список квартир с датой и слотами, сетка
+  «квартиры на слоты», счетчик ответивших
+- прогноз кворума: результат опроса в квартирах и в процентах площади, линия
+  50%, в площадь идут только подтвержденные, неподтвержденные отдельной
+  строкой, инициатору список непроголосовавших квартир по подъездам; кто как
+  проголосовал, не отдается никогда
+- разбор квитанции: дельта к прошлому периоду построчно, каждая строка делится
+  на тарифный и расходный эффект, появившиеся и исчезнувшие строки отдельно,
+  кнопка «оспорить начисление» создает заявку с расчетом и фото счетчиков за
+  период
 
 ### Дни 11-12: аналитика, LLM, полировка
 
@@ -210,6 +278,11 @@
   неподключенных домов с числом ожидающих
 - LLM-классификация заявки через Yandex AI Studio, кнопки как fallback при
   любой ошибке, события `llm_suggested` и `llm_accepted`
+- таблица по исполнителям: закрыто, медиана времени, оценка, доля повторных;
+  доля закрытых по таймауту идет в обезличенный бенчмарк
+- разрез заявок по каналу, цифра против телефона
+- экспорт заявки в акт: печатная страница с таймлайном, фото, ответами УК и
+  оценкой, с пометкой, что документ юридической силы не имеет
 
 ### Дни 13-14: сдача
 
@@ -226,20 +299,28 @@
 `bot_start(source)`, `miniapp_open(source, tab)`, `house_search(method)`,
 `house_linked(method)`, `house_left`, `flat_verification_requested(method)`,
 `flat_verified(by)`, `flat_verification_revoked(reason_code)`,
-`request_created(category, has_photo, is_repeat, llm_suggested,
-llm_accepted)`, `request_status_changed(from, to, by_role)`,
+`request_created(category, channel, has_photo, is_repeat, llm_suggested,
+llm_accepted)`, `request_joined(group_size)`, `request_group_formed(category,
+size)`, `request_assigned`, `executor_status_changed(to)`,
+`request_reviewed(accepted)`, `request_auto_closed`, `request_exported`,
+`request_status_changed(from, to, by_role)`,
 `request_rated(score, has_comment)`, `reading_submitted(meter_type,
 ocr_used, ocr_accepted, is_below_previous, out_of_window)`,
 `reading_reminder_sent`, `poll_created(by_role)`, `poll_voted`,
 `announcement_sent(channel, houses_count)`, `announcement_click`,
 `chat_bound(by_role)`, `chat_admin_granted`,
 `notification_settings_changed(category, level)`, `demand_signal(house_id)`,
-`staff_invited(role)`, `org_registered`, `bot_muted`, `bot_unmuted`,
-`bot_stopped`.
+`staff_invited(role)`, `flat_invite_created`, `flat_invite_activated`,
+`appointment_booked(has_request)`, `appointment_reminder_sent`,
+`access_request_sent(flats_count)`, `access_slot_picked`,
+`charge_breakdown_opened`, `charge_disputed`, `org_registered`, `bot_muted`,
+`bot_unmuted`, `bot_stopped`.
 
 `source` пишется и в `bot_start`, и в `miniapp_open` - без этого не доказать,
-что домовые чаты приводят пользователей. `by_role` в смене статуса отличает
-действие УК от системного.
+что домовые чаты приводят пользователей и что подъездный QR работает.
+`by_role` в смене статуса отличает действие УК от системного. `channel` в
+`request_created` отличает заявку по звонку от цифровых, без него доля заявок
+с прозрачным статусом считается по выжившим.
 
 ## Ограничения платформы, которые нельзя забыть
 
@@ -249,3 +330,5 @@ ocr_used, ocr_accepted, is_below_previous, out_of_window)`,
 - до 12 вложений в сообщении, `file` не комбинируется с изображениями
 - редактирование своего сообщения в диалоге: с клавиатурой бессрочно, без
   нее только в течение 7 дней
+- бот не пишет первым тому, кто его не запускал: у заявки по звонку нет
+  обратного канала, кроме телефона
