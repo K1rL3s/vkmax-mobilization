@@ -10,6 +10,8 @@
 Планы работ по ролям: [plan-backend.md](plan-backend.md),
 [plan-frontend.md](plan-frontend.md), [plan-analytics.md](plan-analytics.md).
 
+Киллер-фичи: [features.md](features.md). Отложенное: [maybe-features.md](maybe-features.md).
+
 ## Проблема и обоснование
 
 Житель МКД при бытовой проблеме (протечка, лифт, мусор) не знает, кто отвечает
