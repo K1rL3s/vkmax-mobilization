@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "preview": "vite preview",
+    "pre-commit": "pnpm lint && pnpm format && tsc -b",
     "api": "npx openapi-typescript ./src/shared/api/schema/main.yaml -o ./src/shared/api/schema/generated.ts",
     "tunnel": "node ./scripts/tunnel.ts"
   },
@@ -21,7 +22,8 @@
     "openapi-typescript": "^7.13.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

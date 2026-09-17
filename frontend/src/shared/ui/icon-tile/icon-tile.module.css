@@ -47,6 +47,11 @@
   color: var(--icon-positive);
 }
 
+.negative {
+  background-color: color-mix(in srgb, var(--icon-negative) 12%, transparent);
+  color: var(--icon-negative);
+}
+
 .promo {
   background-color: color-mix(
     in srgb,

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# eslint-plugin-project-structure
+projectStructure.cache.json

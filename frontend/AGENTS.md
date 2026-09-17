@@ -14,11 +14,14 @@ pnpm build             # tsc -b && vite build (type-check, then build)
 pnpm lint              # eslint .
 pnpm format            # prettier --write .
 pnpm preview           # preview a production build
+pnpm pre-commit        # lint, format, type-check — run before every commit
 pnpm api               # regenerate src/shared/api/schema/generated.ts from schema/main.yaml
 pnpm tunnel            # reverse SSH tunnel: expose the local dev server on the test host
 ```
 
 There is no test runner configured in this package.
+
+`pnpm pre-commit` is the gate to run before committing: `eslint .`, then `prettier --write .`, then `tsc -b`. Despite the name, nothing runs it automatically — no hook manager is installed, so it is a command you type. Two things to know about it: the type-check must stay `tsc -b`, because `tsconfig.json` is a solution file (`"files": []` plus project references) and a bare `tsc` silently checks nothing and exits 0; and `prettier --write .` formats the whole repository, including the generated `schema/generated.ts` and the vendored docs under `.agents/`, so expect unrelated files in the diff until a `.prettierignore` exists.
 
 `scripts/tunnel.ts` (run via `pnpm tunnel`, executed directly by Node's TypeScript stripping) opens a reverse SSH tunnel forwarding the local dev server to a port on the remote host, so the mini-app can be opened from MAX for testing. Copy `.env.local.example` to `.env.local` (gitignored via `*.local`) and fill in the `DEV_TUNNEL_*` values before the first run — nothing host-specific is hardcoded. Precedence for every setting is CLI flag → environment (shell wins over `.env.local`, which wins over `.env`) → default; `--dry-run` prints the resulting `ssh` command, `pnpm tunnel --help` lists each flag with its variable. These `DEV_*` variables are read only by the script (no `VITE_` prefix), never reach the client bundle, and must not be added to `shared/env.d.ts`. The dev server accepts any Host header (`server.allowedHosts: true` in `vite.config.ts`), so the tunnelled public hostname works without further configuration.
 
@@ -40,7 +43,8 @@ src/
 The only place that knows about every feature. **Nothing may import from `app`.**
 
 - `main.tsx` — mounts `Router`.
-- `router.tsx` — the `react-router-dom` v7 route tree; wires paths from `shared/model/routes.ts` to lazily-imported page modules.
+- `router.tsx` — the `react-router-dom` v7 route tree; wires paths from `shared/model/routes.ts` to lazily-imported page modules. Cross-cutting chrome lives in layout routes, not in pages: one renders the `TabBar` under the root tab screens, and `PushedScreen` turns on the MAX header back button for everything opened on top of a root (its `fallback` is where back goes when the screen was opened with no history behind it). A screen never wires the back button itself — it is placed under the right layout instead.
+- `protected-loader.ts` — the access rule. `protectedLoader` sits on the pathless route that wraps every in-app screen and redirects to `Routes.OUTSIDE_MAX` when the app was not opened from MAX (`isInsideMax`); `outsideMaxLoader` bounces the other way, so a MAX user can never get stuck on the stub. It is deliberately inert in dev builds (`import.meta.env.DEV`) — otherwise `pnpm dev` in a browser would redirect on every route and local work would be impossible.
 - `providers.tsx` — wraps the tree in `MaxUI` (`@maxhub/max-ui`) and `QueryClientProvider`.
 - `app.tsx` — the root layout (`<Outlet />`).
 
@@ -80,6 +84,7 @@ features/
   onboarding/    onboarding.page.tsx + css, house-select.page.tsx +
                  css, houses.mock.ts                                  3 units
   tab-bar/       tab-bar.tsx + css, index.ts                          2 units
+  outside-max/   outside-max.page.tsx + css                            1 unit
 ```
 
 ### `src/shared/` — infrastructure
@@ -88,7 +93,7 @@ features/
 
 - `shared/api/` — `instance.ts` is the typed API client (`openapi-fetch` as `fetchClient`, wrapped by `openapi-react-query` as `rqClient`); `query-client.ts` holds the `QueryClient`. `schema/main.yaml` is the hand-maintained OpenAPI spec; `schema/generated.ts` is produced from it by `pnpm api` — never edit it by hand, and regenerate after the spec or the backend changes.
 - `shared/model/` — `routes.ts` is the single source of truth for route paths (`Routes.HOME`, …); never hardcode a path string. `config.ts` reads build-time env into `CONFIG`.
-- `shared/lib/` — technical utilities; currently `css.ts` (`cn`).
+- `shared/lib/` — technical utilities: `css.ts` (`cn`) and `max/`, the MAX Bridge module — a typed `window.WebApp`, launch data (`useMaxLaunch`, `useMaxUser`, and `getInitData` for the auth header), and the header back button (`useBackButton`, `useBackNavigation`). The bridge itself is the CDN script loaded in `index.html`; outside MAX every value degrades to `null` and the back button is a no-op, so the app stays runnable in a plain browser.
 - `shared/ui/` — the kit on top of `@maxhub/max-ui`: `card/`, `icon/`, `icon-tile/`.
 - `shared/env.d.ts` — declares `ImportMetaEnv`; add every new `VITE_*` var here alongside `config.ts`.
 
@@ -131,4 +136,5 @@ Three rules are deliberately **not** automated, because they need a view of a wh
 - A module that is imported from outside has an `index.ts` barrel — that barrel is its public API and the only thing outsiders may import. No consumer, no barrel.
 - CSS Modules only, colocated as `<name>.module.css` (`camelCase` locals, scoped names — see `vite.config.ts`). Block classes are `PascalCase` (`styles.TabBar`); variant classes are lowercase so they can be looked up dynamically (`styles[tone]`). No global stylesheets beyond what `@maxhub/max-ui` ships.
 - Path alias `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`). Within a module import relatively; across modules use `@/`.
+- Untrusted input — anything coming from the MAX Bridge, a URL, or storage — is parsed with `zod` at the boundary it enters, and the app-facing type is inferred from the schema (`z.infer`) so the shape and its validation cannot drift apart. Our own API is the exception: it is typed by the generated OpenAPI schema.
 - UI comes from `@maxhub/max-ui` (MAX's design system) — prefer its primitives (`Button`, `Container`, `Flex`, `Panel`, `Typography`, …) over hand-rolled ones.

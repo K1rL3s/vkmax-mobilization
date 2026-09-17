@@ -1,8 +1,9 @@
 export const Routes = {
-  ONBOARDING: "/onboarding",
+  WELCOME: "/",
   ONBOARDING_HOUSE: "/onboarding/house",
-  HOME: "/",
+  HOME: "/home",
   REQUESTS: "/requests",
   MEETINGS: "/meetings",
   PROFILE: "/profile",
+  OUTSIDE_MAX: "/outside-max",
 } as const;

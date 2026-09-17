@@ -16,11 +16,7 @@ import {
   searchOutlineIcon,
 } from "@/shared/ui/icon";
 
-import {
-  formatHouseAddress,
-  searchHouses,
-  type House,
-} from "./houses.mock";
+import { formatHouseAddress, searchHouses, type House } from "./houses.mock";
 
 import styles from "./house-select.module.css";
 
