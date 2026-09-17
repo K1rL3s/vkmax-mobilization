@@ -10,7 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.conftest import OrgHouseFlatUser
 
 from zheka.core.enums import EventSource, OrgRole, ResidentRole
-from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService
@@ -160,6 +165,95 @@ async def _add_house(
     session.add(house)
     await session.flush()
     return HouseId(house.id)
+
+
+async def _add_address(
+    session: AsyncSession,
+    org_id: OrgId,
+    city: str,
+    street: str,
+    building: str,
+) -> HouseId:
+    house = House(
+        org_id=org_id,
+        region="Республика Татарстан",
+        city=city,
+        street=street,
+        building=building,
+        cadastral_no=secrets.token_hex(8),
+        chat_binding_code=secrets.token_hex(4),
+    )
+    session.add(house)
+    await session.flush()
+    return HouseId(house.id)
+
+
+async def test_search_by_query_ignores_word_order_and_case(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    # в макете одно поле поиска: адрес житель набирает как придется, и города
+    # в строке может не быть вовсе
+    fixture = await make_org_house_flat_user()
+    wanted = await _add_address(session, fixture.org_id, "Казань", "Баумана", "12")
+    await _add_address(session, fixture.org_id, "Казань", "Кремлевская", "12")
+    await _add_address(session, fixture.org_id, "Москва", "Баумана", "3")
+    service = _make_service(session)
+
+    for query in ("Баумана 12", "12 баумана", "  БАУМАНА   12 ", "казань баумана 12"):
+        found, total = await service.search(
+            fixture.user_id,
+            None,
+            None,
+            None,
+            query,
+            20,
+            0,
+        )
+        assert [item.house.id for item in found] == [wanted], query
+        assert total == 1
+
+
+async def test_search_by_city_keeps_working(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    wanted = await _add_address(session, fixture.org_id, "Казань", "Баумана", "12")
+    await _add_address(session, fixture.org_id, "Москва", "Баумана", "12")
+
+    found, total = await _make_service(session).search(
+        fixture.user_id,
+        "Казань",
+        "Баумана",
+        "12",
+        None,
+        20,
+        0,
+    )
+
+    assert [item.house.id for item in found] == [wanted]
+    assert total == 1
+
+
+@pytest.mark.parametrize("blank", [None, "", "   "])
+async def test_search_without_city_and_query_is_refused(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    blank: str | None,
+) -> None:
+    fixture = await make_org_house_flat_user()
+
+    with pytest.raises(InvalidRequest):
+        await _make_service(session).search(
+            fixture.user_id,
+            blank,
+            None,
+            None,
+            blank,
+            20,
+            0,
+        )
 
 
 async def test_nearby_measures_longitude_in_metres_not_in_degrees(

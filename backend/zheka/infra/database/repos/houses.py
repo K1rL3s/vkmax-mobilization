@@ -40,17 +40,31 @@ class HousesRepo(BaseAlchemyRepo):
 
     async def search(
         self,
-        city: str,
+        city: str | None,
         street: str | None,
         building: str | None,
+        query: str | None,
         limit: int,
         offset: int,
     ) -> tuple[Sequence[House], int]:
-        stmt = select(House).where(houses_table.c.city == city)
+        stmt = select(House)
+        if city is not None:
+            stmt = stmt.where(houses_table.c.city == city)
         if street is not None:
             stmt = stmt.where(houses_table.c.street == street)
         if building is not None:
             stmt = stmt.where(houses_table.c.building.ilike(f"{building}%"))
+        if query is not None:
+            # каждое слово ищется по всему адресу отдельным условием, поэтому
+            # «Баумана 12» и «12 Баумана» дают одну и ту же выдачу
+            address = func.concat_ws(
+                " ",
+                houses_table.c.city,
+                houses_table.c.street,
+                houses_table.c.building,
+            )
+            for word in query.split():
+                stmt = stmt.where(address.ilike(f"%{word}%"))
 
         total = await self._count(stmt)
         page_stmt = (

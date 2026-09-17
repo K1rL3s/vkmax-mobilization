@@ -49,7 +49,8 @@ async def list_streets(
 async def search_houses(
     current_account: RequireConsentDep,
     houses_service: FromDishka[HousesService],
-    city: str,
+    q: str | None = None,
+    city: str | None = None,
     street: str | None = None,
     building: str | None = None,
     limit: Limit = 20,
@@ -60,6 +61,7 @@ async def search_houses(
         city,
         street,
         building,
+        q,
         limit,
         offset,
     )

@@ -5,7 +5,12 @@ from decimal import Decimal
 
 from zheka.base import ZhekaType
 from zheka.core.enums import EventSource, EventType, ResidentRole
-from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat, House, Organization, Resident, User
 from zheka.core.services.events import EventsService
@@ -20,6 +25,13 @@ from zheka.infra.database.repos.users import UsersRepo
 NEARBY_METERS_PER_DEGREE = 111_320
 
 CONSENT_REQUIRED = "Сначала примите согласие на обработку персональных данных"
+SEARCH_NEEDS_ADDRESS = "Укажите адрес или город"
+
+
+def stated(value: str | None) -> str | None:
+    # строка из пробелов приходит от пустого поля формы и означает то же,
+    # что и отсутствие параметра
+    return None if value is None or not value.strip() else value.strip()
 
 
 def is_connected(house: House, org: Organization | None) -> bool:
@@ -116,19 +128,38 @@ class HousesService:
     async def search(
         self,
         user_id: UserId,
-        city: str,
+        city: str | None,
         street: str | None,
         building: str | None,
+        query: str | None,
         limit: int,
         offset: int,
     ) -> tuple[list[HouseFound], int]:
-        houses, total = await self._houses.search(city, street, building, limit, offset)
+        city, street, building, query = (
+            stated(city),
+            stated(street),
+            stated(building),
+            stated(query),
+        )
+        # без города и без строки поиска запрос перебрал бы весь справочник
+        if city is None and query is None:
+            raise InvalidRequest(SEARCH_NEEDS_ADDRESS)
+
+        houses, total = await self._houses.search(
+            city,
+            street,
+            building,
+            query,
+            limit,
+            offset,
+        )
         await self._events.record(
             EventType.HOUSE_SEARCH,
             user_id=user_id,
-            method="picker",
+            method="picker" if query is None else "query",
             city=city,
             street=street,
+            query=query,
         )
         return await self._with_orgs(houses), total
 
