@@ -26,6 +26,15 @@ x-app-env: &app-env
 
 
 services:
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://${DOMAIN:-localhost}:${API_PORT}
+    ports:
+      - "${WEB_PORT:-3000}:80"
+
   api:
     <<: [ *image, *common, *after-migrations ]
     container_name: zheka-api

@@ -1,0 +1,125 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 16px 24px;
+  background-color: var(--background-surface);
+
+  h2 {
+    margin: 0;
+  }
+
+  .Row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .Text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .Chevron {
+    /* в SVG из макета уже заложена прозрачность 28% */
+    color: var(--text-primary);
+  }
+
+  .HouseCard,
+  .CardLink {
+    position: relative;
+    overflow: hidden;
+    padding: 12px;
+    border-radius: 16px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .HouseCard {
+    background-color: color-mix(
+      in srgb,
+      var(--button-primary) 10%,
+      transparent
+    );
+  }
+
+  .CardLink {
+    background-color: var(--background-card);
+  }
+
+  .PhoneIcon {
+    color: var(--icon-themed);
+  }
+
+  .Section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .SectionAction {
+    color: var(--text-themed);
+  }
+
+  .RequestText {
+    gap: 4px;
+  }
+
+  .StatusPill {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+    color: var(--text-themed);
+  }
+
+  .Deadline {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+  }
+
+  .ProgressTrack {
+    overflow: hidden;
+    height: 4px;
+    border-radius: 2px;
+    background-color: var(--controls-inactive);
+  }
+
+  .ProgressFill {
+    height: 100%;
+    border-radius: 2px;
+    background-color: var(--icon-positive);
+  }
+
+  .NewsPanel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .NewsIconAlert {
+    color: var(--icon-negative);
+  }
+
+  .NewsIconAnnouncement {
+    color: var(--icon-themed);
+  }
+}

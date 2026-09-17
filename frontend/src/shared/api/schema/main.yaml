@@ -1,0 +1,5 @@
+openapi: 3.0.0
+info:
+  title: Zheka api
+  description: svo
+  version: 6.7.0

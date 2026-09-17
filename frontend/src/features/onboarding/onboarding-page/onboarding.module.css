@@ -1,0 +1,17 @@
+.Page {
+  flex: 1;
+
+  .Content {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 24px;
+  }
+
+  .Hero {
+    text-align: center;
+
+    h1 {
+      margin: 0;
+    }
+  }
+}

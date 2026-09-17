@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "react-hooks-best-practices": {
+      "source": "siberiacancode/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-hooks-best-practices/SKILL.md",
+      "computedHash": "ba38b519221f42e702dfcf4460750f7cc355b59f3cdab9705b8a7c514a7fcaea"
+    },
+    "reactuse": {
+      "source": "siberiacancode/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/reactuse/SKILL.md",
+      "computedHash": "5bd80dbb03674c74fe8b3cc207b910d9bcc737cb382ad9fb8c92b2ea8247a789"
+    },
+    "web-design-guidelines": {
+      "source": "siberiacancode/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "d46d4ed19c649e8b77a98648bb3a1f1b404678c56fa69e2362fe5c65bc3adcac"
+    }
+  }
+}

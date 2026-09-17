@@ -1,0 +1,62 @@
+---
+name: useActiveElement
+category: Elements
+usage: low
+---
+
+# useActiveElement
+
+Tracks the currently focused element.
+
+## Usage
+
+```ts
+import { useActiveElement } from "@siberiacancode/reactuse";
+
+const activeElement = useActiveElement<HTMLDivElement>();
+// or
+const activeElement = useActiveElement(ref);
+```
+
+## Example
+
+```tsx
+const activeElement = useActiveElement<HTMLDivElement>();
+
+return (
+  <>
+    <div ref={activeElement.ref}>
+      <input data-id="name" placeholder="Name" />
+      <input data-id="email" placeholder="Email" />
+    </div>
+    <p>
+      Active element: {activeElement.value?.getAttribute("data-id") ?? "none"}
+    </p>
+  </>
+);
+```
+
+## Type Declarations
+
+```ts
+import type { HookTarget } from "@siberiacancode/reactuse";
+import type { StateRef } from "@siberiacancode/reactuse";
+
+export interface UseActiveElementReturn<
+  ActiveElement extends HTMLElement = HTMLElement
+> {
+  value: ActiveElement | null;
+}
+export interface UseActiveElement {
+  (): UseActiveElementReturn<HTMLElement>;
+  <Target extends Element, ActiveElement extends HTMLElement = HTMLElement>(
+    target?: never
+  ): {
+    ref: StateRef<Target>;
+  } & UseActiveElementReturn<ActiveElement>;
+  <ActiveElement extends HTMLElement = HTMLElement>(
+    target: HookTarget
+  ): UseActiveElementReturn<ActiveElement>;
+}
+export declare const useActiveElement: UseActiveElement;
+```
