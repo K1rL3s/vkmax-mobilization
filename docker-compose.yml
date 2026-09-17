@@ -33,11 +33,29 @@ services:
       <<: *app-env
     volumes:
       - ./backend/content:/data/files
-    ports:
-      - "${API_PORT:-7001}:7001"
     command: [ "python", "-m", "zheka.api" ]
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:7001/api/healthcheck')\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  nginx:
+    container_name: zheka-nginx
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost/api/healthcheck" ]
       interval: 10s
       timeout: 5s
       retries: 5
