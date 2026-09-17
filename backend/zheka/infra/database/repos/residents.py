@@ -13,46 +13,45 @@ from zheka.infra.database.tables.residents import residents_table
 
 class ResidentsRepo(BaseAlchemyRepo):
     async def list_for_user(self, user_id: UserId) -> Sequence[Resident]:
-        result = await self._session.execute(
-            select(Resident).where(residents_table.c.user_id == user_id),
-        )
+        stmt = select(Resident).where(residents_table.c.user_id == user_id)
+        result = await self._session.execute(stmt)
         return result.scalars().all()
 
     async def get(self, resident_id: ResidentId) -> Resident | None:
-        return await self._session.get(Resident, resident_id)
+        stmt = select(Resident).where(residents_table.c.id == resident_id)
+        # аннотация обязательна: Resident отображен императивно, и scalar()
+        # для такой сущности возвращает Any
+        resident: Resident | None = await self._session.scalar(stmt)
+        return resident
 
     async def get_for_house(
         self,
         user_id: UserId,
         house_id: HouseId,
     ) -> Resident | None:
-        result = await self._session.execute(
-            select(Resident).where(
-                residents_table.c.user_id == user_id,
-                residents_table.c.house_id == house_id,
-            ),
+        stmt = select(Resident).where(
+            residents_table.c.user_id == user_id,
+            residents_table.c.house_id == house_id,
         )
+        result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list_for_house(self, house_id: HouseId) -> Sequence[Resident]:
-        result = await self._session.execute(
-            select(Resident).where(residents_table.c.house_id == house_id),
-        )
+        stmt = select(Resident).where(residents_table.c.house_id == house_id)
+        result = await self._session.execute(stmt)
         return result.scalars().all()
 
     async def list_verified_for_house(self, house_id: HouseId) -> Sequence[Resident]:
-        result = await self._session.execute(
-            select(Resident).where(
-                residents_table.c.house_id == house_id,
-                residents_table.c.verified_at.is_not(None),
-            ),
+        stmt = select(Resident).where(
+            residents_table.c.house_id == house_id,
+            residents_table.c.verified_at.is_not(None),
         )
+        result = await self._session.execute(stmt)
         return result.scalars().all()
 
     async def list_for_flat(self, flat_id: FlatId) -> Sequence[Resident]:
-        result = await self._session.execute(
-            select(Resident).where(residents_table.c.flat_id == flat_id),
-        )
+        stmt = select(Resident).where(residents_table.c.flat_id == flat_id)
+        result = await self._session.execute(stmt)
         return result.scalars().all()
 
     async def add_or_get(

@@ -39,12 +39,15 @@ class UsersRepo(BaseAlchemyRepo):
         return result.scalar_one()
 
     async def get_by_id(self, user_id: UserId) -> User | None:
-        return await self._session.get(User, user_id)
+        stmt = select(User).where(users_table.c.id == user_id)
+        # аннотация обязательна: User отображен императивно, и scalar()
+        # для такой сущности возвращает Any
+        user: User | None = await self._session.scalar(stmt)
+        return user
 
     async def get_by_max_id(self, max_user_id: MaxUserId) -> User | None:
-        result = await self._session.execute(
-            select(User).where(users_table.c.max_user_id == max_user_id),
-        )
+        stmt = select(User).where(users_table.c.max_user_id == max_user_id)
+        result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def set_consent(self, user_id: UserId, version: str) -> None:

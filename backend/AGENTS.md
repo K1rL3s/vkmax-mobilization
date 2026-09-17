@@ -129,3 +129,11 @@ review finding.
   developer picks the change up by recreating the local database. This covers
   corrections only - all 32 tables already exist, so it should be rare. Once
   something is deployed, this rule dies and every change is a new revision.
+- A repository builds a statement into a named `stmt` and executes it on the
+  next line - never inline, and never modified again at the call site
+  (`stmt = stmt.order_by(...)` first, then `execute(stmt)`). This holds for
+  `select`, `update`, `delete`, `insert` and for `.scalar()` / `.scalars()`
+  alike, and it keeps a repo method readable top to bottom instead of buried
+  inside a call's parentheses. `self._session.get(Model, id)` is not used
+  either, for the same reason: the query stays visible as a `stmt`, at the
+  cost of skipping the identity-map short circuit `get()` gives for free.

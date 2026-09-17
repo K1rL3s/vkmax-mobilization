@@ -7,49 +7,55 @@ from zheka.infra.database.models import OrgMember, OrgSettings, Organization
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.organizations import (
     org_members_table,
+    org_settings_table,
     organizations_table,
 )
 
 
 class OrgsRepo(BaseAlchemyRepo):
     async def get(self, org_id: OrgId) -> Organization | None:
-        return await self._session.get(Organization, org_id)
+        stmt = select(Organization).where(organizations_table.c.id == org_id)
+        # аннотация обязательна: Organization отображен императивно, и scalar()
+        # для такой сущности возвращает Any
+        org: Organization | None = await self._session.scalar(stmt)
+        return org
 
     async def get_by_inn(self, inn: str) -> Organization | None:
-        result = await self._session.execute(
-            select(Organization).where(organizations_table.c.inn == inn),
-        )
+        stmt = select(Organization).where(organizations_table.c.inn == inn)
+        result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_by_license(self, license_no: str) -> Organization | None:
-        result = await self._session.execute(
-            select(Organization).where(organizations_table.c.license_no == license_no),
+        stmt = select(Organization).where(
+            organizations_table.c.license_no == license_no
         )
+        result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list_members(self, org_id: OrgId) -> Sequence[OrgMember]:
-        result = await self._session.execute(
-            select(OrgMember).where(org_members_table.c.org_id == org_id),
-        )
+        stmt = select(OrgMember).where(org_members_table.c.org_id == org_id)
+        result = await self._session.execute(stmt)
         return result.scalars().all()
 
     async def get_member(self, org_id: OrgId, user_id: UserId) -> OrgMember | None:
-        result = await self._session.execute(
-            select(OrgMember).where(
-                org_members_table.c.org_id == org_id,
-                org_members_table.c.user_id == user_id,
-            ),
+        stmt = select(OrgMember).where(
+            org_members_table.c.org_id == org_id,
+            org_members_table.c.user_id == user_id,
         )
+        result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def list_for_user(self, user_id: UserId) -> Sequence[OrgMember]:
-        result = await self._session.execute(
-            select(OrgMember).where(org_members_table.c.user_id == user_id),
-        )
+        stmt = select(OrgMember).where(org_members_table.c.user_id == user_id)
+        result = await self._session.execute(stmt)
         return result.scalars().all()
 
     async def get_settings(self, org_id: OrgId) -> OrgSettings | None:
-        return await self._session.get(OrgSettings, org_id)
+        stmt = select(OrgSettings).where(org_settings_table.c.org_id == org_id)
+        # аннотация обязательна: OrgSettings отображен императивно, и scalar()
+        # для такой сущности возвращает Any
+        settings: OrgSettings | None = await self._session.scalar(stmt)
+        return settings
 
     async def list_by_ids(self, org_ids: Collection[OrgId]) -> Sequence[Organization]:
         if not org_ids:
