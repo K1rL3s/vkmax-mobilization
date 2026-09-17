@@ -27,8 +27,14 @@ class House(ZhekaMutableType):
     lat: Decimal | None = None
     lon: Decimal | None = None
     chat_binding_code: str
+    # программа капремонта и список работ, форма - в HouseOverhaul
     overhaul: Any = field(default_factory=dict)
+    # имена файлов из upload_file, ссылку на каждое выдает FilesService.sign
     documents: Any = field(default_factory=list)
+
+    @property
+    def address(self) -> str:
+        return f"{self.city}, {self.street}, {self.building}"
 
 
 class Flat(ZhekaMutableType):

@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from sqlalchemy import select
 
@@ -50,3 +50,10 @@ class OrgsRepo(BaseAlchemyRepo):
 
     async def get_settings(self, org_id: OrgId) -> OrgSettings | None:
         return await self._session.get(OrgSettings, org_id)
+
+    async def list_by_ids(self, org_ids: Collection[OrgId]) -> Sequence[Organization]:
+        if not org_ids:
+            return []
+        stmt = select(Organization).where(organizations_table.c.id.in_(org_ids))
+        result = await self._session.execute(stmt)
+        return result.scalars().all()

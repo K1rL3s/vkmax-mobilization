@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Self
 
 from pydantic import Field
 
@@ -6,6 +7,8 @@ from zheka.api.schemas.base import BaseSchema
 from zheka.api.schemas.files import FileRef
 from zheka.core.enums import EventSource, ResidentRole, ResidentStatus
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
+from zheka.core.models import Flat, Organization
+from zheka.core.services.houses import HouseCardData, HouseFound, ResidencyView
 
 
 class CityItem(BaseSchema):
@@ -22,6 +25,18 @@ class OrgContacts(BaseSchema):
     reception_note: str | None = None
     is_demo: bool = False
 
+    @classmethod
+    def of(cls, org: Organization) -> Self:
+        return cls(
+            id=OrgId(org.id),
+            name=org.name,
+            phone=org.phone,
+            address=org.address,
+            license_no=org.license_no,
+            reception_note=org.reception_note,
+            is_demo=org.is_demo,
+        )
+
 
 class HouseListItem(BaseSchema):
     id: HouseId
@@ -33,6 +48,20 @@ class HouseListItem(BaseSchema):
     org_name: str | None = None
     # заполняется только в поиске по геопозиции
     distance_m: int | None = None
+
+    @classmethod
+    def of(cls, found: HouseFound) -> Self:
+        house = found.house
+        return cls(
+            id=HouseId(house.id),
+            address=house.address,
+            city=house.city,
+            street=house.street,
+            building=house.building,
+            is_connected=found.is_connected,
+            org_name=None if found.org is None else found.org.name,
+            distance_m=found.distance_m,
+        )
 
 
 class ResidencySummary(BaseSchema):
@@ -48,6 +77,24 @@ class ResidencySummary(BaseSchema):
     is_connected: bool
     flat_id: FlatId | None = None
     flat_number: str | None = None
+
+    @classmethod
+    def of(cls, view: ResidencyView) -> Self:
+        resident = view.resident
+        return cls(
+            resident_id=ResidentId(resident.id),
+            house_id=HouseId(resident.house_id),
+            address=view.house.address,
+            role=resident.role,
+            status=resident.status,
+            verified=resident.verified_at is not None,
+            is_chairman=resident.is_chairman,
+            can_see_charges=resident.can_see_charges,
+            can_vote=resident.can_vote,
+            is_connected=view.is_connected,
+            flat_id=None if view.flat is None else FlatId(view.flat.id),
+            flat_number=None if view.flat is None else view.flat.number,
+        )
 
 
 class OverhaulWork(BaseSchema):
@@ -72,6 +119,9 @@ class HouseCard(BaseSchema):
     entrances: int
     is_connected: bool
     demand_count: int
+    # нажимал ли кнопку спроса сам текущий житель: сигнал идемпотентен,
+    # и без этого флага фронт рисует кнопку ненажатой
+    demand_sent: bool
     built_year: int | None = None
     floors: int | None = None
     area: int | None = Field(
@@ -87,6 +137,40 @@ class HouseCard(BaseSchema):
     overhaul: HouseOverhaul | None = None
     documents: list[FileRef]
 
+    @classmethod
+    def of(cls, card: HouseCardData, documents: list[FileRef]) -> Self:
+        house = card.house
+        residency = card.residency
+        is_chairman = residency is not None and residency.resident.is_chairman
+        return cls(
+            id=HouseId(house.id),
+            address=house.address,
+            region=house.region,
+            city=house.city,
+            street=house.street,
+            building=house.building,
+            cadastral_no=house.cadastral_no,
+            entrances=house.entrances,
+            is_connected=card.is_connected,
+            demand_count=card.demand_count,
+            demand_sent=card.demand_sent,
+            built_year=house.built_year,
+            floors=house.floors,
+            area=house.area,
+            lat=None if house.lat is None else float(house.lat),
+            lon=None if house.lon is None else float(house.lon),
+            org=None if card.org is None else OrgContacts.of(card.org),
+            my_residency=(
+                None if residency is None else ResidencySummary.of(residency)
+            ),
+            chat_binding_code=house.chat_binding_code if is_chairman else None,
+            chat_bound=card.is_chat_bound,
+            overhaul=(
+                HouseOverhaul.model_validate(house.overhaul) if house.overhaul else None
+            ),
+            documents=documents,
+        )
+
 
 class FlatListItem(BaseSchema):
     id: FlatId
@@ -96,6 +180,16 @@ class FlatListItem(BaseSchema):
         default=None, description="Площадь в сотых долях квадратного метра"
     )
     is_taken: bool = False
+
+    @classmethod
+    def of(cls, flat: Flat, is_taken: bool) -> Self:
+        return cls(
+            id=FlatId(flat.id),
+            number=flat.number,
+            entrance=flat.entrance,
+            area=flat.area,
+            is_taken=is_taken,
+        )
 
 
 class LinkHouseRequest(BaseSchema):

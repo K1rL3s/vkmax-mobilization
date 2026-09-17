@@ -53,7 +53,14 @@ poll_votes_table = Table(
     Column("poll_id", BigInteger, ForeignKey("polls.id"), nullable=False),
     Column("option_id", BigInteger, ForeignKey("poll_options.id"), nullable=False),
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
-    Column("resident_id", BigInteger, ForeignKey("residents.id"), nullable=False),
+    # житель может отвязаться от дома, а голос остается: он считается по
+    # user_id и flat_id, и история собрания не переписывается задним числом
+    Column(
+        "resident_id",
+        BigInteger,
+        ForeignKey("residents.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True),
     Column("counted_by_area", Boolean, nullable=False),
     UniqueConstraint("poll_id", "user_id"),

@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: 5ed50c1d5b57
+Revision ID: 4b58e840b7d9
 Revises:
-Create Date: 2026-09-17 01:23:54.095513
+Create Date: 2026-09-17 02:41:41.973978
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "5ed50c1d5b57"
+revision: str = "4b58e840b7d9"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -950,7 +950,7 @@ def upgrade() -> None:
         sa.Column("poll_id", sa.BigInteger(), nullable=False),
         sa.Column("option_id", sa.BigInteger(), nullable=False),
         sa.Column("user_id", sa.BigInteger(), nullable=False),
-        sa.Column("resident_id", sa.BigInteger(), nullable=False),
+        sa.Column("resident_id", sa.BigInteger(), nullable=True),
         sa.Column("flat_id", sa.BigInteger(), nullable=True),
         sa.Column("counted_by_area", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(
@@ -968,6 +968,7 @@ def upgrade() -> None:
             ["resident_id"],
             ["residents.id"],
             name=op.f("fk_poll_votes_resident_id_residents"),
+            ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["user_id"], ["users.id"], name=op.f("fk_poll_votes_user_id_users")

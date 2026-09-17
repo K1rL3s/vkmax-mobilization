@@ -48,6 +48,6 @@ class PollVote(ZhekaMutableType):
     poll_id: PollId
     option_id: PollOptionId
     user_id: UserId
-    resident_id: ResidentId
+    resident_id: ResidentId | None = None
     flat_id: FlatId | None = None
     counted_by_area: bool

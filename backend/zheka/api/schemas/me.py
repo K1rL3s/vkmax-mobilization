@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
 from zheka.api.schemas.base import BaseSchema
 from zheka.api.schemas.houses import ResidencySummary
@@ -10,7 +10,8 @@ from zheka.core.enums import (
     NotificationCategory,
     NotificationLevel,
 )
-from zheka.core.ids import AnnouncementId, UserId
+from zheka.core.ids import AnnouncementId, OrgId, UserId
+from zheka.core.services.profile import MeView
 
 
 class MeResponse(BaseSchema):
@@ -21,6 +22,28 @@ class MeResponse(BaseSchema):
     residencies: list[ResidencySummary]
     orgs: list[OrgMembership]
     is_demo: bool
+
+    @classmethod
+    def of(cls, view: MeView) -> Self:
+        return cls(
+            user_id=UserId(view.user.id),
+            name=view.user.name,
+            consent_at=view.user.consent_at,
+            consent_version=view.user.consent_version,
+            residencies=[
+                ResidencySummary.of(residency) for residency in view.residencies
+            ],
+            orgs=[
+                OrgMembership(
+                    org_id=OrgId(membership.org.id),
+                    name=membership.org.name,
+                    role=membership.member.role,
+                    is_demo=membership.org.is_demo,
+                )
+                for membership in view.orgs
+            ],
+            is_demo=view.is_demo,
+        )
 
 
 class ConsentRequest(BaseSchema):
