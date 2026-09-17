@@ -429,9 +429,15 @@ class FlatsService:
             raise InvalidState("Код приглашения истек или отозван")
 
     def _ensure_not_moving(self, resident: Resident, flat_id: FlatId) -> None:
-        # переезд внутри дома оформляет УК: иначе житель уводил бы себя из
-        # подтвержденной квартиры в любую другую
-        if resident.flat_id is not None and resident.flat_id != flat_id:
+        # переезд из подтвержденной квартиры оформляет УК: иначе житель уводил
+        # бы себя из нее в любую другую. До подтверждения защищать нечего, а
+        # запрет запирал бы жителя в квартире, номер которой он набрал с
+        # опечаткой
+        if (
+            resident.verified_at is not None
+            and resident.flat_id is not None
+            and resident.flat_id != flat_id
+        ):
             raise InvalidState(MOVED_OUT)
 
     async def _flat_and_house(self, flat_id: FlatId) -> tuple[Flat, House]:

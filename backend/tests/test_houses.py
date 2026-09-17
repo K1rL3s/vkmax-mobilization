@@ -300,7 +300,57 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     assert far_id in {item.house.id for item in far}
 
 
-async def test_link_with_another_flat_refuses_to_move_the_residency(
+async def test_link_moves_an_unverified_residency_to_another_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    # квартиру житель выбирает на первом же экране: опечатка в номере не
+    # должна запирать его в чужой квартире навсегда
+    fixture = await make_org_house_flat_user()
+    await _consent(session, fixture)
+    other_flat = Flat(house_id=fixture.house_id, number="2")
+    session.add(other_flat)
+    await session.flush()
+    service = _make_service(session)
+
+    first = await service.link(
+        fixture.user_id,
+        fixture.house_id,
+        fixture.flat_id,
+        None,
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+    moved = await service.link(
+        fixture.user_id,
+        fixture.house_id,
+        FlatId(other_flat.id),
+        None,
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+
+    assert moved.resident.id == first.resident.id
+    assert moved.resident.flat_id == other_flat.id
+    assert await _count_residencies(session, fixture.user_id) == 1
+
+    # и номером незаведенной квартиры тоже: житель мог ошибиться домом
+    by_number = await service.link(
+        fixture.user_id,
+        fixture.house_id,
+        None,
+        "77",
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+    assert by_number.resident.flat_id is None
+    assert by_number.resident.flat_number == "77"
+
+
+async def test_link_refuses_to_move_a_verified_residency(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
@@ -320,6 +370,8 @@ async def test_link_with_another_flat_refuses_to_move_the_residency(
         EventSource.MINIAPP,
         None,
     )
+    first.resident.verified_at = datetime.now(UTC)
+    await session.flush()
 
     with pytest.raises(InvalidState):
         await service.link(
@@ -327,6 +379,16 @@ async def test_link_with_another_flat_refuses_to_move_the_residency(
             fixture.house_id,
             FlatId(other_flat.id),
             None,
+            ResidentRole.OWNER,
+            EventSource.MINIAPP,
+            None,
+        )
+    with pytest.raises(InvalidState):
+        await service.link(
+            fixture.user_id,
+            fixture.house_id,
+            None,
+            "77",
             ResidentRole.OWNER,
             EventSource.MINIAPP,
             None,
@@ -342,6 +404,7 @@ async def test_link_with_another_flat_refuses_to_move_the_residency(
         None,
     )
     assert again.resident.id == first.resident.id
+    assert again.resident.flat_id == fixture.flat_id
 
 
 async def test_link_gives_a_flat_to_a_residency_that_had_none(

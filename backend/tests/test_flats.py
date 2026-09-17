@@ -186,6 +186,23 @@ async def test_verify_refuses_a_move_to_another_flat(
         await _make_service(session).verify(own.user_id, other_flat, ACCOUNT)
 
 
+async def test_verify_moves_an_unverified_residency_to_the_confirmed_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    # квартиру житель выбрал при привязке и мог ошибиться: пока подтверждения
+    # нет, защищать нечего
+    own = await make_org_house_flat_user()
+    other_flat = await _add_flat(session, own.house_id, "2", ACCOUNT)
+    resident = await _add_resident(session, own.user_id, own.house_id, own.flat_id)
+
+    result = await _make_service(session).verify(own.user_id, other_flat, ACCOUNT)
+
+    assert result.verified is True
+    assert resident.flat_id == other_flat
+    assert resident.verified_at is not None
+
+
 async def test_verify_refuses_a_tenant(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,

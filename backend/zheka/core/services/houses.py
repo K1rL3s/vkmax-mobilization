@@ -27,7 +27,7 @@ NEARBY_METERS_PER_DEGREE = 111_320
 CONSENT_REQUIRED = "Сначала примите согласие на обработку персональных данных"
 SEARCH_NEEDS_ADDRESS = "Укажите адрес или город"
 FLAT_ID_AND_NUMBER = "Укажите либо квартиру из списка, либо ее номер"
-FLAT_CHANGE_REFUSED = "Квартира меняется через подтверждение, а не повторной привязкой"
+FLAT_CHANGE_REFUSED = "Квартира уже подтверждена, переезд оформляет УК"
 
 
 def stated(value: str | None) -> str | None:
@@ -340,9 +340,10 @@ class HousesService:
         flat_id: FlatId | None,
         flat_number: str | None,
     ) -> None:
-        # переселить жителя повторной привязкой нельзя: квартиру меняет
-        # подтверждение
-        if existing is None or existing.flat_id is None:
+        # квартиру житель выбирает на первом же экране, до всякого
+        # подтверждения, поэтому до него повторная привязка ее и меняет.
+        # Из подтвержденной квартиры жителя уводит только УК
+        if existing is None or existing.flat_id is None or existing.verified_at is None:
             return
         if flat_number is not None or (
             flat_id is not None and flat_id != existing.flat_id
