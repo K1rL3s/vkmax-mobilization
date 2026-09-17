@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "format": "prettier --write .",
+    "lint": "eslint ./src",
+    "format": "prettier --write ./src",
     "preview": "vite preview",
     "pre-commit": "pnpm lint && pnpm format && tsc -b",
     "api": "npx openapi-typescript ./src/shared/api/schema/main.yaml -o ./src/shared/api/schema/generated.ts",
@@ -23,6 +23,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4",
+    "react-use": "^17.6.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
