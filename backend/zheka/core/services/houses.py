@@ -313,12 +313,21 @@ class HousesService:
 
     async def flats(
         self,
+        user_id: UserId,
         house_id: HouseId,
         query: str | None,
         entrance: int | None,
         limit: int,
         offset: int,
     ) -> tuple[Sequence[Flat], int, set[FlatId]]:
+        # is_taken показывает, в каких квартирах дома уже есть наши
+        # пользователи, поэтому список квартир закрыт жителями этого дома.
+        # Зависимость маршрута проверяет то же самое раньше, но сервис зовут
+        # и мимо нее, а чужой дом отвечает 404, а не 403
+        resident = await self._residents.get_for_house(user_id, house_id)
+        if resident is None:
+            raise EntityNotFound("Дом не найден")
+
         flats, total = await self._houses.list_flats(
             house_id,
             query,
