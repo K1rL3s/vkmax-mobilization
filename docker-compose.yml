@@ -27,13 +27,13 @@ x-app-env: &app-env
 
 services:
   web:
+    container_name: zheka-web
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://${DOMAIN:-localhost}:${API_PORT}
-    ports:
-      - "${WEB_PORT:-3000}:80"
+        VITE_API_URL: /api
 
   api:
     <<: [ *image, *common, *after-migrations ]
@@ -57,12 +57,13 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      web:
+        condition: service_started
     ports:
       - "${NGINX_PORT:-80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./frontend/dist:/usr/share/nginx/html:ro
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost/api/healthcheck" ]
       interval: 10s
