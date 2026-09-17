@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import { cn } from "@/shared/helpers/cn";
+import { cn } from "@/shared/lib/css";
 
 import styles from "./icon.module.css";
 
@@ -11,7 +11,7 @@ type IconProps = {
 };
 
 /**
- * Рисует SVG из shared/assets/icons маской, поэтому цвет иконки задаётся
+ * Рисует SVG из соседних файлов маской, поэтому цвет иконки задаётся
  * через `color` родителя и следует теме MAX UI.
  */
 export const Icon = ({ src, size = 24, className }: IconProps) => {

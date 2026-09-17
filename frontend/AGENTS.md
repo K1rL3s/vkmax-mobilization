@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+The working agreement for this repository — for coding agents and for people. `CLAUDE.md` is a symlink to this file.
 
 ## Project
 
@@ -26,23 +26,109 @@ To run a single lint check on one file: `pnpm eslint <path>`. There's no equival
 
 ## Architecture
 
-Feature-Sliced Design-style layout under `src/`:
+The project follows **Evolution Design, ED small** (https://github.com/evo-community/evolution-design). Its central idea: a folder is an architectural boundary, not a pile of files. Three layers live under `src/`:
 
-- `src/app/` — composition root. `main.tsx` mounts `Router`; `router.tsx` builds the `react-router-dom` v7 router and wires routes to lazily-imported page modules (lazy route modules export a `Component`, e.g. `onboarding.page.tsx` exports `export const Component = OnboardingPage`). `providers.tsx` wraps the tree in `MaxUI` (from `@maxhub/max-ui`) and `QueryClientProvider`. `app.tsx` is the router-level layout (`<Outlet />`).
-- `src/features/<feature>/` — one directory per feature (currently `onboarding`), each with an `index.ts` barrel and a `<feature>-page/` holding the page component + CSS module.
-- `src/shared/` — cross-feature code:
-  - `shared/model/routes.ts` — the single source of truth for route paths (`Routes.ONBOARDING`, etc.) — reference this instead of hardcoding path strings.
-  - `shared/model/config.ts` — reads build-time env into `CONFIG` (currently just `CONFIG.API_URL` from `import.meta.env.VITE_API_URL`).
-  - `shared/api/instance.ts` — the typed API client: `openapi-fetch` (`fetchClient`) wrapped by `openapi-react-query` (`rqClient`), typed from `ApiPaths`.
-  - `shared/api/schema/main.yaml` — the OpenAPI spec (hand-maintained). `shared/api/schema/generated.ts` is generated from it via `pnpm api` — never edit `generated.ts` by hand, and regenerate it after changing `main.yaml` or after the backend's API changes.
-  - `shared/env.d.ts` — declares the `ImportMetaEnv` shape; add new `VITE_*` vars here when adding them to `config.ts`.
+```
+src/
+  app/        composition root — knows every feature
+  features/   business features — everything the product is made of
+  shared/     infrastructure — the last resort
+```
 
-New features should follow the same shape: a directory under `src/features/`, a barrel `index.ts`, and page/component files colocated with their `.module.css`.
+### `src/app/` — composition root
 
-**Layering rule (dependencies only point downward):** `app` → `features` → `shared`. A lower layer must never import from a layer above it — `shared` cannot reach into `features` or `app`, and one feature cannot reach into another feature's internals. `shared` changes rarely and is depended on everywhere, so it must stay stable and feature-agnostic. `features` change constantly (per-feature work), so nothing else should build a hard dependency on a specific feature's internals — if a feature needs something from a sibling feature, import only that sibling's public API (its `index.ts` barrel), never its internal files.
+The only place that knows about every feature. **Nothing may import from `app`.**
+
+- `main.tsx` — mounts `Router`.
+- `router.tsx` — the `react-router-dom` v7 route tree; wires paths from `shared/model/routes.ts` to lazily-imported page modules.
+- `providers.tsx` — wraps the tree in `MaxUI` (`@maxhub/max-ui`) and `QueryClientProvider`.
+- `app.tsx` — the root layout (`<Outlet />`).
+
+### `src/features/<feature>/` — business features
+
+A feature is **a piece of product value**, named the way the product is discussed: `onboarding`, `home`, `tab-bar`. It is not a technical bucket (`components`, `hooks`, `utils`) and not an FSD-style use-case slice. The test: could a non-developer name it?
+
+Every feature owns everything it needs — pages, components, state, mocks, styles. When something outside needs the feature, it gets an `index.ts` barrel and is imported as `@/features/<feature>`, never by a deep path. A feature with no external consumer has no barrel: an empty `index.ts` is worse than none, and re-exporting a page from one would pull it out of its lazy chunk.
+
+A feature grows through ED's evolution stages, and no further than it currently needs:
+
+**Flat while it fits.** A feature is a flat folder — files side by side, no subfolders — until it holds **more than 6 units**. Up to six, flat is the correct shape; don't create folders "for later".
+
+A unit is one thing you can name, not one file on disk: a component and its colocated `.module.css` count as **one** unit, as does a page with its stylesheet. Otherwise CSS Modules would halve the threshold and force grouping at three components.
+
+**Grouped past six.** When a folder outgrows six units, its contents move into the agreed groups — and only these:
+
+| group     | what belongs in it                                           |
+| --------- | ------------------------------------------------------------ |
+| `ui/`     | components, presentation, styles                             |
+| `model/`  | state and data flow: stores, react-query hooks, mocks        |
+| `domain/` | pure business rules and types — no React, no I/O, no network |
+| `lib/`    | technical helpers used only inside this feature              |
+| `api/`    | this feature's requests and contracts                        |
+
+A group only organizes files; a module is an abstraction with a public API. A group holding one unit is noise — the threshold applies to each folder on its own, so a feature can be grouped while a sibling stays flat.
+
+**Pages are the exception.** `<name>.page.tsx` and its CSS module stay in the feature root even after the feature is grouped. A page is the feature's entry point, it is what the router deep-imports, and `react-router` dictates its shape (`export const Component`), so it does not move into `ui/`.
+
+**Sub-features.** A feature that outgrew its groups splits into nested features underneath itself, each with its own `index.ts`, recursively following the same rules. The parent composes them and re-exports what the outside world needs.
+
+Where the features stand today — all three flat, well inside the threshold:
+
+```
+features/
+  home/          home.page.tsx + css, home.mock.ts                    2 units
+  onboarding/    onboarding.page.tsx + css, house-select.page.tsx +
+                 css, houses.mock.ts                                  3 units
+  tab-bar/       tab-bar.tsx + css, index.ts                          2 units
+```
+
+### `src/shared/` — infrastructure
+
+`shared` is the **last resort**: code lands here only when it is genuinely feature-agnostic and needed in more than one place. It uses the same group vocabulary as a feature:
+
+- `shared/api/` — `instance.ts` is the typed API client (`openapi-fetch` as `fetchClient`, wrapped by `openapi-react-query` as `rqClient`); `query-client.ts` holds the `QueryClient`. `schema/main.yaml` is the hand-maintained OpenAPI spec; `schema/generated.ts` is produced from it by `pnpm api` — never edit it by hand, and regenerate after the spec or the backend changes.
+- `shared/model/` — `routes.ts` is the single source of truth for route paths (`Routes.HOME`, …); never hardcode a path string. `config.ts` reads build-time env into `CONFIG`.
+- `shared/lib/` — technical utilities; currently `css.ts` (`cn`).
+- `shared/ui/` — the kit on top of `@maxhub/max-ui`: `card/`, `icon/`, `icon-tile/`.
+- `shared/env.d.ts` — declares `ImportMetaEnv`; add every new `VITE_*` var here alongside `config.ts`.
+
+There is no `assets` segment, by design: static files live next to the component that uses them. The icon SVGs sit in `shared/ui/icon/` and are exported from its barrel together with `Icon`, so a consumer writes a single import:
+
+```ts
+import { Icon, navHomeIcon } from "@/shared/ui/icon";
+```
+
+### Dependency rules
+
+Dependencies point **downward only: `app` → `features` → `shared`.**
+
+- Nothing imports from `app`.
+- `shared` never reaches into `features` or `app`. It changes rarely and is depended on everywhere, so it must stay stable and product-agnostic.
+- Feature → sibling feature is allowed in ED small, but only through the sibling's `index.ts`, never its internals — and keep it rare. Every such import is a signal; by the third one the code probably belongs in `shared` (or in a `services` layer worth introducing).
+- Inside a feature the same direction holds: `ui` → `model` → `domain`. `domain` is the bottom — pure, testable, importing nothing from above it. `lib` is available to everything in the feature.
+
+**One documented exception.** `router.tsx` imports page modules by deep path (`@/features/home/home.page`) instead of through a barrel, because react-router's `lazy()` requires a module that exports `Component` and each page must stay in its own chunk. Routing is the composition root's job, so this stays as it is — everything else goes through barrels.
+
+### Where does this code go?
+
+1. Used by one feature → inside that feature.
+2. Used by a second feature → import that feature's barrel, or duplicate. Don't generalize on the second use.
+3. Used by a third, and free of product specifics → `shared`.
+4. Product-specific but genuinely shared → a candidate for a `services` layer; discuss before adding one.
+
+### Enforcement
+
+Most of the rules above are checked by `pnpm lint` — `eslint-plugin-project-structure`, wired up in `eslint.config.js` with two config files:
+
+- `eslint/folder-structure.ts` (`project-structure/folder-structure`) — which folders and filenames may exist under `src/`. Groups are restricted to `ui|model|domain|lib|api`, names are kebab-case, files must be one of `index.ts`, `*.page.tsx`, `*.mock.ts`, `*.tsx`, `*.ts`, `*.module.css`, `*.svg`, `*.yaml`. Any nested sub-feature or module folder must contain an `index.ts`, which is what stops `helpers/`-style junk folders from appearing. It lints CSS, SVG and YAML too, not just TypeScript.
+- `eslint/independent-modules.ts` (`project-structure/independent-modules`) — the layer direction. `shared` may import only `shared`; a feature may import `shared`, its own subtree (via the `{family_3}` reference, so no config change is needed when a feature is added), and a sibling feature's top-level `index.ts`; `app` may import feature barrels plus `*.page.tsx` for the `lazy()` exception.
+
+Three rules are deliberately **not** automated, because they need a view of a whole folder or file rather than one import: the six-unit flat threshold, "no barrel without a consumer", and "`*.page.tsx` exports `Component`". Watch for those in review.
 
 ## Conventions
 
-- CSS Modules only, with `camelCase` locals and scoped class names (see `vite.config.ts`); no global stylesheets beyond what `@maxhub/max-ui` ships.
-- Path alias `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`).
-- UI components come from `@maxhub/max-ui` (MAX's design system) — prefer its primitives (`Button`, `Container`, `Flex`, `Panel`, `Typography`, ...) over hand-rolled ones.
+- Files and folders are `kebab-case`. Pages are `<name>.page.tsx` and end with `export const Component = <Name>Page` so the router can lazy-load them. Mocks are `<name>.mock.ts` inside `model/`.
+- A module that is imported from outside has an `index.ts` barrel — that barrel is its public API and the only thing outsiders may import. No consumer, no barrel.
+- CSS Modules only, colocated as `<name>.module.css` (`camelCase` locals, scoped names — see `vite.config.ts`). Block classes are `PascalCase` (`styles.TabBar`); variant classes are lowercase so they can be looked up dynamically (`styles[tone]`). No global stylesheets beyond what `@maxhub/max-ui` ships.
+- Path alias `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`). Within a module import relatively; across modules use `@/`.
+- UI comes from `@maxhub/max-ui` (MAX's design system) — prefer its primitives (`Button`, `Container`, `Flex`, `Panel`, `Typography`, …) over hand-rolled ones.

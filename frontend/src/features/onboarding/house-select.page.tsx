@@ -8,19 +8,19 @@ import {
 } from "@maxhub/max-ui";
 import { useNavigate } from "react-router-dom";
 
+import { Routes } from "@/shared/model/routes";
 import {
   geoPinIcon,
   houseOutlineIcon,
+  Icon,
   searchOutlineIcon,
-} from "@/shared/assets/icons";
-import { Routes } from "@/shared/model/routes";
-import { Icon } from "@/shared/ui/icon";
+} from "@/shared/ui/icon";
 
 import {
   formatHouseAddress,
   searchHouses,
   type House,
-} from "../model/houses.mock";
+} from "./houses.mock";
 
 import styles from "./house-select.module.css";
 

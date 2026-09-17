@@ -1,8 +1,8 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
-import { buildingIcon } from "@/shared/assets/icons";
 import { Routes } from "@/shared/model/routes";
+import { buildingIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
 import styles from "./onboarding.module.css";

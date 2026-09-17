@@ -7,24 +7,24 @@ import {
 } from "@maxhub/max-ui";
 import { Link, useNavigate } from "react-router-dom";
 
+import { cn } from "@/shared/lib/css";
+import { Routes } from "@/shared/model/routes";
+import { Card } from "@/shared/ui/card";
 import {
   alertIcon,
   buildingIcon,
   chevronSmallIcon,
   homeIcon,
+  Icon,
   megaphoneIcon,
   meterIcon,
   phoneIcon,
   pollIcon,
   wrenchIcon,
-} from "@/shared/assets/icons";
-import { cn } from "@/shared/helpers/cn";
-import { Routes } from "@/shared/model/routes";
-import { Card } from "@/shared/ui/card";
-import { Icon } from "@/shared/ui/icon";
+} from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
-import { HOME_MOCK, type NewsKind } from "../model/home.mock";
+import { HOME_MOCK, type NewsKind } from "./home.mock";
 
 import styles from "./home.module.css";
 

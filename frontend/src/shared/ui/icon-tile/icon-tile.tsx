@@ -1,4 +1,4 @@
-import { cn } from "@/shared/helpers/cn";
+import { cn } from "@/shared/lib/css";
 import { Icon } from "@/shared/ui/icon";
 
 import styles from "./icon-tile.module.css";

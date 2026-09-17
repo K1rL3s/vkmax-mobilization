@@ -1,21 +1,8 @@
-.Layout {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  background-color: var(--background-surface);
-}
-
-.Content {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-
 .TabBar {
   position: sticky;
   bottom: 0;
   display: flex;
-  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  padding: 8px 0 8px;
   border-top: 1px solid var(--divider-primary);
   background-color: var(--background-primary);
 }

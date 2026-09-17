@@ -1,7 +1,7 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Outlet, RouterProvider } from "react-router-dom";
 import { App } from "./app";
 import { Providers } from "./providers";
-import { TabBarLayout } from "./layouts/tab-bar-layout";
+import { TabBar } from "@/features/tab-bar";
 import { Routes } from "@/shared/model/routes";
 
 const router = createBrowserRouter([
@@ -15,19 +15,24 @@ const router = createBrowserRouter([
       {
         path: Routes.ONBOARDING,
         lazy: () =>
-          import("@/features/onboarding/onboarding-page/onboarding.page"),
+          import("@/features/onboarding/onboarding.page"),
       },
       {
         path: Routes.ONBOARDING_HOUSE,
         lazy: () =>
-          import("@/features/onboarding/house-select-page/house-select.page"),
+          import("@/features/onboarding/house-select.page"),
       },
       {
-        element: <TabBarLayout />,
+        element: (
+          <>
+            <Outlet />
+            <TabBar />
+          </>
+        ),
         children: [
           {
             path: Routes.HOME,
-            lazy: () => import("@/features/home/home-page/home.page"),
+            lazy: () => import("@/features/home/home.page"),
           },
         ],
       },

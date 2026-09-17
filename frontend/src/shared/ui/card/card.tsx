@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { cn } from "@/shared/helpers/cn";
+import { cn } from "@/shared/lib/css";
 
 import styles from "./card.module.css";
 
