@@ -5,10 +5,10 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import OrgRole
-from zheka.core.ids import OrgId, UserId
-from zheka.infra.database.models import OrgInvite
+from zheka.core.ids import FlatId, OrgId, UserId
+from zheka.infra.database.models import FlatInvite, OrgInvite
 from zheka.infra.database.repos.base import BaseAlchemyRepo
-from zheka.infra.database.tables.invites import org_invites_table
+from zheka.infra.database.tables.invites import flat_invites_table, org_invites_table
 
 
 class InvitesRepo(BaseAlchemyRepo):
@@ -75,5 +75,67 @@ class InvitesRepo(BaseAlchemyRepo):
         return result.scalar_one_or_none()
 
     async def revoke(self, invite: OrgInvite, at: datetime) -> None:
+        invite.revoked_at = at
+        await self._session.flush()
+
+    async def create_flat(
+        self,
+        code: str,
+        flat_id: FlatId,
+        expires_at: datetime,
+        max_activations: int,
+        created_by: UserId,
+    ) -> FlatInvite | None:
+        # None означает, что код уже занят: вызывающий берет следующий
+        stmt = (
+            pg_insert(FlatInvite)
+            .values(
+                code=code,
+                flat_id=flat_id,
+                expires_at=expires_at,
+                max_activations=max_activations,
+                created_by=created_by,
+            )
+            .on_conflict_do_nothing(index_elements=[flat_invites_table.c.code])
+            .returning(FlatInvite)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_flat(self, code: str) -> FlatInvite | None:
+        stmt = select(FlatInvite).where(flat_invites_table.c.code == code)
+        # аннотация обязательна: FlatInvite отображен императивно, и scalar()
+        # для такой сущности возвращает Any
+        invite: FlatInvite | None = await self._session.scalar(stmt)
+        return invite
+
+    async def list_for_flat(self, flat_id: FlatId) -> Sequence[FlatInvite]:
+        stmt = (
+            select(FlatInvite)
+            .where(flat_invites_table.c.flat_id == flat_id)
+            .order_by(flat_invites_table.c.created_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def consume_flat(self, code: str) -> FlatInvite | None:
+        # проверка и инкремент одним UPDATE: два параллельных запроса на
+        # последнюю активацию иначе прошли бы лимит оба
+        stmt = (
+            update(FlatInvite)
+            .where(
+                flat_invites_table.c.code == code,
+                flat_invites_table.c.revoked_at.is_(None),
+                flat_invites_table.c.expires_at > func.now(),
+                flat_invites_table.c.activations_used
+                < flat_invites_table.c.max_activations,
+            )
+            .values(activations_used=flat_invites_table.c.activations_used + 1)
+            .returning(FlatInvite)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def revoke_flat(self, invite: FlatInvite, at: datetime) -> None:
         invite.revoked_at = at
         await self._session.flush()

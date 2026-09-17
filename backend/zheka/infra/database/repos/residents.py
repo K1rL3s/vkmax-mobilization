@@ -1,4 +1,5 @@
 from collections.abc import Collection, Sequence
+from datetime import datetime
 
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -221,4 +222,18 @@ class ResidentsRepo(BaseAlchemyRepo):
         resident.verified_at = None
         resident.verified_by = None
         resident.is_chairman = False
+        await self._session.flush()
+
+    async def set_verified(
+        self,
+        resident: Resident,
+        flat_id: FlatId,
+        at: datetime,
+        by: UserId | None,
+    ) -> None:
+        # подтверждение и есть привязка к квартире: у жителя, пришедшего по
+        # диплинку домового чата, flat_id до этого момента пустой
+        resident.flat_id = flat_id
+        resident.verified_at = at
+        resident.verified_by = by
         await self._session.flush()

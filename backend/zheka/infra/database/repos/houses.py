@@ -4,17 +4,14 @@ from decimal import Decimal
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from zheka.core.enums import RequestStatus, VerificationStatus
+from zheka.core.enums import RequestStatus
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.infra.database.models import DemandSignal, Flat, House
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
 from zheka.infra.database.tables.requests import requests_table
-from zheka.infra.database.tables.residents import (
-    demand_signals_table,
-    flat_verification_requests_table,
-)
+from zheka.infra.database.tables.residents import demand_signals_table
 
 
 class HousesRepo(BaseAlchemyRepo):
@@ -276,19 +273,6 @@ class HousesRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return {HouseId(house_id): title for house_id, title in result.tuples().all()}
-
-    async def count_pending_verifications(self, house_id: HouseId) -> int:
-        flat_ids = select(flats_table.c.id).where(flats_table.c.house_id == house_id)
-        stmt = (
-            select(func.count())
-            .select_from(flat_verification_requests_table)
-            .where(
-                flat_verification_requests_table.c.flat_id.in_(flat_ids),
-                flat_verification_requests_table.c.status == VerificationStatus.PENDING,
-            )
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one()
 
     async def set_binding_code(self, house: House, code: str) -> None:
         house.chat_binding_code = code

@@ -1,6 +1,7 @@
 from dishka import BaseScope, Provider, Scope, provide_all
 
 from zheka.infra.database.repos.events import EventsRepo
+from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -18,4 +19,5 @@ class ReposProvider(Provider):
         OrgsRepo,
         EventsRepo,
         InvitesRepo,
+        FlatsRepo,
     )

@@ -3,11 +3,13 @@ from dishka import BaseScope, Provider, Scope, provide
 from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.flats import FlatsService
 from zheka.core.services.houses import HousesService
 from zheka.core.services.moderation import ModerationService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.profile import ProfileService
 from zheka.infra.database.repos.events import EventsRepo
+from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -33,6 +35,7 @@ class ServicesProvider(Provider):
         residents_repo: ResidentsRepo,
         orgs_repo: OrgsRepo,
         users_repo: UsersRepo,
+        flats_repo: FlatsRepo,
         events_service: EventsService,
     ) -> HousesService:
         return HousesService(
@@ -40,6 +43,7 @@ class ServicesProvider(Provider):
             residents_repo,
             orgs_repo,
             users_repo,
+            flats_repo,
             events_service,
         )
 
@@ -84,5 +88,26 @@ class ServicesProvider(Provider):
             residents_repo,
             users_repo,
             houses_repo,
+            events_service,
+        )
+
+    @provide
+    def flats_service(
+        self,
+        flats_repo: FlatsRepo,
+        houses_repo: HousesRepo,
+        residents_repo: ResidentsRepo,
+        invites_repo: InvitesRepo,
+        users_repo: UsersRepo,
+        orgs_repo: OrgsRepo,
+        events_service: EventsService,
+    ) -> FlatsService:
+        return FlatsService(
+            flats_repo,
+            houses_repo,
+            residents_repo,
+            invites_repo,
+            users_repo,
+            orgs_repo,
             events_service,
         )

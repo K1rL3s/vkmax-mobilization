@@ -8,9 +8,10 @@ from fastapi import Depends, Header
 from zheka.api.dependencies.current_account import CurrentAccountDep
 from zheka.base import ZhekaType
 from zheka.core.enums import ResidentRole, ResidentStatus
-from zheka.core.errors import NotEnoughRights
+from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, ResidentId, UserId
 from zheka.infra.database.models import Resident
+from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
 
@@ -110,5 +111,34 @@ async def residency_for_flat(
     return _to_residency(resident)
 
 
+@inject
+async def residency_for_flat_house(
+    *,
+    flat_id: FlatId,
+    current_account: CurrentAccountDep,
+    residents_repo: FromDishka[ResidentsRepo],
+    houses_repo: FromDishka[HousesRepo],
+) -> CurrentResidency:
+    # подтверждение квартиры и есть тот момент, когда residents.flat_id
+    # проставляется, поэтому доступ сюда дает дом квартиры, а не сама
+    # квартира: иначе житель, пришедший по диплинку дома, не дошел бы никогда.
+    # Чужая квартира отвечает 404, а не 403 - 403 подтвердил бы, что такой
+    # flat_id существует
+    flat = await houses_repo.get_flat(flat_id)
+    if flat is None:
+        raise EntityNotFound("Квартира не найдена")
+    resident = await residents_repo.get_for_house(
+        current_account.user_id,
+        HouseId(flat.house_id),
+    )
+    if resident is None:
+        raise EntityNotFound("Квартира не найдена")
+    return _to_residency(resident)
+
+
 ResidencyForHouseDep = Annotated[CurrentResidency, Depends(residency_for)]
 ResidencyForFlatDep = Annotated[CurrentResidency, Depends(residency_for_flat)]
+ResidencyForFlatHouseDep = Annotated[
+    CurrentResidency,
+    Depends(residency_for_flat_house),
+]

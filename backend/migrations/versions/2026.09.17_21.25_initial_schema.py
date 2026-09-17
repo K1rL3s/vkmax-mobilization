@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: 4b58e840b7d9
+Revision ID: a72af32936f4
 Revises:
-Create Date: 2026-09-17 02:41:41.973978
+Create Date: 2026-09-17 21:25:35.330746
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "4b58e840b7d9"
+revision: str = "a72af32936f4"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -631,6 +631,7 @@ def upgrade() -> None:
         sa.Column("flat_id", sa.BigInteger(), nullable=False),
         sa.Column("user_id", sa.BigInteger(), nullable=False),
         sa.Column("account_no", sa.String(), nullable=False),
+        sa.Column("comment", sa.String(), nullable=True),
         sa.Column(
             "status",
             postgresql.ENUM(
@@ -644,6 +645,7 @@ def upgrade() -> None:
         ),
         sa.Column("decided_by", sa.BigInteger(), nullable=True),
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("reason", sa.String(), nullable=True),
         sa.ForeignKeyConstraint(
             ["decided_by"],
             ["users.id"],
@@ -660,6 +662,13 @@ def upgrade() -> None:
             name=op.f("fk_flat_verification_requests_user_id_users"),
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_flat_verification_requests")),
+    )
+    op.create_index(
+        op.f("ix_flat_verification_requests_user_id"),
+        "flat_verification_requests",
+        ["user_id", "flat_id"],
+        unique=True,
+        postgresql_where=sa.text("status = 'pending'"),
     )
     op.create_table(
         "meters",
@@ -1125,6 +1134,11 @@ def downgrade() -> None:
     op.drop_table("requests")
     op.drop_table("poll_options")
     op.drop_table("meters")
+    op.drop_index(
+        op.f("ix_flat_verification_requests_user_id"),
+        table_name="flat_verification_requests",
+        postgresql_where=sa.text("status = 'pending'"),
+    )
     op.drop_table("flat_verification_requests")
     op.drop_table("flat_invites")
     op.drop_table("charges")

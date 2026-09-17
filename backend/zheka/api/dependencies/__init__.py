@@ -12,6 +12,7 @@ from zheka.api.dependencies.current_residency import (
     CurrentResidency,
     CurrentResidencyDep,
     ResidencyForFlatDep,
+    ResidencyForFlatHouseDep,
     ResidencyForHouseDep,
 )
 from zheka.api.dependencies.current_user import CurrentUser, CurrentUserDep
@@ -28,5 +29,6 @@ __all__ = (
     "CurrentUserDep",
     "RequireConsentDep",
     "ResidencyForFlatDep",
+    "ResidencyForFlatHouseDep",
     "ResidencyForHouseDep",
 )

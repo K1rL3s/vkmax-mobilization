@@ -17,17 +17,12 @@ from zheka.core.models import OrgInvite, OrgMember, OrgSettings, Organization, U
 from zheka.core.services.access import can_invite, can_remove_member, higher_role
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseFound, is_connected
+from zheka.core.services.invites import issue_invite
 from zheka.core.services.profile import OrgMembershipView
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.users import UsersRepo
-
-# org_invites.code - это String(16), token_urlsafe(8) дает 11 символов
-INVITE_CODE_LENGTH = 11
-# столкновение кодов почти невероятно, но повторная генерация дешевле,
-# чем 500 на уникальном индексе
-INVITE_CODE_ATTEMPTS = 5
 
 MIN_METER_WINDOW_DAY = 1
 # 28-е число есть в любом месяце, включая февраль невисокосного года
@@ -260,20 +255,16 @@ class OrgsService:
             raise InvalidRequest("Число активаций - больше нуля")
 
         expires_at = datetime.now(UTC) + timedelta(hours=expires_in_hours)
-        for _ in range(INVITE_CODE_ATTEMPTS):
-            invite = await self._invites.create(
-                code=secrets.token_urlsafe(8)[:INVITE_CODE_LENGTH],
+        invite = await issue_invite(
+            lambda code: self._invites.create(
+                code=code,
                 org_id=org_id,
                 role=role,
                 expires_at=expires_at,
                 max_activations=max_activations,
                 created_by=user_id,
-            )
-            if invite is not None:
-                break
-        else:
-            raise InvalidState("Не удалось выдать код, попробуйте еще раз")
-
+            ),
+        )
         await self._events.record(
             EventType.STAFF_INVITED,
             user_id=user_id,

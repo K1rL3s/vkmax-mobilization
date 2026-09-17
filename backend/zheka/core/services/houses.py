@@ -9,6 +9,7 @@ from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat, House, Organization, Resident, User
 from zheka.core.services.events import EventsService
+from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -79,7 +80,7 @@ class AdminHouseCardData(ZhekaType):
 
 
 class HousesService:
-    __slots__ = ("_events", "_houses", "_orgs", "_residents", "_users")
+    __slots__ = ("_events", "_flats", "_houses", "_orgs", "_residents", "_users")
 
     def __init__(
         self,
@@ -87,12 +88,14 @@ class HousesService:
         residents_repo: ResidentsRepo,
         orgs_repo: OrgsRepo,
         users_repo: UsersRepo,
+        flats_repo: FlatsRepo,
         events_service: EventsService,
     ) -> None:
         self._houses = houses_repo
         self._residents = residents_repo
         self._orgs = orgs_repo
         self._users = users_repo
+        self._flats = flats_repo
         self._events = events_service
 
     async def cities(
@@ -382,7 +385,7 @@ class HousesService:
             flats_count=counts.get(house_id, 0),
             residents_count=residents.get(house_id, 0),
             verified_residents_count=await self._residents.count_verified(house_id),
-            pending_verifications=await self._houses.count_pending_verifications(
+            pending_verifications=await self._flats.count_pending_verifications(
                 house_id,
             ),
             open_requests=open_requests.get(house_id, 0),

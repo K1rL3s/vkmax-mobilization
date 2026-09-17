@@ -16,6 +16,7 @@ from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService
 from zheka.infra.database.models import Flat, House
 from zheka.infra.database.repos.events import EventsRepo
+from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -29,6 +30,7 @@ def _make_service(session: AsyncSession) -> HousesService:
         ResidentsRepo(session),
         OrgsRepo(session),
         UsersRepo(session),
+        FlatsRepo(session),
         EventsService(EventsRepo(session)),
     )
 

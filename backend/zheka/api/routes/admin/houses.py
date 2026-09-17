@@ -23,6 +23,7 @@ from zheka.api.schemas.houses import (
 from zheka.core.deeplinks import entrance_qr_payload, house_payload
 from zheka.core.enums import VerificationStatus
 from zheka.core.ids import HouseId, ResidentId, VerificationRequestId
+from zheka.core.services.flats import FlatsService
 from zheka.core.services.houses import HousesService
 from zheka.core.services.moderation import ModerationService
 
@@ -175,12 +176,23 @@ async def set_chairman(
 @router.get("/admin/verification-requests", summary="Запросы подтверждения квартир")
 async def list_verification_requests(
     current_org: AdminOrgDep,
+    flats_service: FromDishka[FlatsService],
     status: VerificationStatus | None = None,
     house_id: HouseId | None = None,
     limit: Limit = 50,
     offset: Offset = 0,
 ) -> Page[VerificationRequestItem]:
-    raise NotImplementedError("ещё не реализовано")
+    views, total = await flats_service.verification_requests(
+        current_org.org_id,
+        status,
+        house_id,
+        limit,
+        offset,
+    )
+    return Page(
+        items=[VerificationRequestItem.of(view) for view in views],
+        total=total,
+    )
 
 
 @router.post(
@@ -190,8 +202,14 @@ async def list_verification_requests(
 async def approve_verification_request(
     verification_id: VerificationRequestId,
     current_org: AdminOrgDep,
+    flats_service: FromDishka[FlatsService],
 ) -> VerificationRequestItem:
-    raise NotImplementedError("ещё не реализовано")
+    view = await flats_service.approve_verification(
+        current_org.org_id,
+        verification_id,
+        current_org.user_id,
+    )
+    return VerificationRequestItem.of(view)
 
 
 @router.post(
@@ -201,6 +219,13 @@ async def approve_verification_request(
 async def reject_verification_request(
     verification_id: VerificationRequestId,
     current_org: AdminOrgDep,
+    flats_service: FromDishka[FlatsService],
     body: RejectVerificationRequest,
 ) -> VerificationRequestItem:
-    raise NotImplementedError("ещё не реализовано")
+    view = await flats_service.reject_verification(
+        current_org.org_id,
+        verification_id,
+        current_org.user_id,
+        body.reason,
+    )
+    return VerificationRequestItem.of(view)
