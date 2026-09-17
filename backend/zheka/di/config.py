@@ -1,6 +1,14 @@
 from dishka import BaseScope, Provider, Scope, from_context, provide
 
-from zheka.config import ApiConfig, Config, DbConfig, LogConfig, MaxConfig, RedisConfig
+from zheka.config import (
+    ApiConfig,
+    Config,
+    DbConfig,
+    FilesConfig,
+    LogConfig,
+    MaxConfig,
+    RedisConfig,
+)
 
 
 class ConfigProvider(Provider):
@@ -27,3 +35,7 @@ class ConfigProvider(Provider):
     @provide
     def max(self, config: Config) -> MaxConfig:
         return config.max
+
+    @provide
+    def files(self, config: Config) -> FilesConfig:
+        return config.files

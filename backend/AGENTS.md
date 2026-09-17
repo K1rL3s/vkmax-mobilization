@@ -35,6 +35,9 @@ Everything goes through `just` (see `justfile`): `format`, `ruff`, `codespell`,
 
 `just check` is the gate: ruff (no-fix) + ruff format --check + codespell +
 slotscheck + bandit + mypy strict. Keep it green.
+`slotscheck`'s scanned-class count varies between runs on an unchanged tree,
+so it is not evidence of anything and does not belong in a report or a
+review finding.
 
 ## Invariants
 
@@ -119,4 +122,10 @@ slotscheck + bandit + mypy strict. Keep it green.
   feed a distance formula, where a scaled integer only gets in the way.
   A scaled field never carries a unit suffix in its name. The unit lives in the
   Russian `Field(description=...)` in `api/schemas/`, which puts it in OpenAPI,
-  and in a one-word comment on the entity field.
+  and in a short comment on the entity field.
+- There is no production database yet, so a correction to the existing schema
+  regenerates the initial migration instead of stacking a corrective revision
+  on top of it. The history stays one file until the first deploy, and a
+  developer picks the change up by recreating the local database. This covers
+  corrections only - all 32 tables already exist, so it should be rare. Once
+  something is deployed, this rule dies and every change is a new revision.

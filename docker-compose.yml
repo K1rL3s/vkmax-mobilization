@@ -22,6 +22,7 @@ x-app-env: &app-env
   POSTGRES_PORT: 5432
   REDIS_HOST: redis
   REDIS_PORT: 6379
+  FILES_DIR: /data/files
 
 
 services:
@@ -30,6 +31,8 @@ services:
     container_name: zheka-api
     environment:
       <<: *app-env
+    volumes:
+      - ./backend/content:/data/files
     ports:
       - "${API_PORT:-7001}:7001"
     command: [ "python", "-m", "zheka.api" ]
@@ -45,6 +48,8 @@ services:
     container_name: zheka-worker
     environment:
       <<: *app-env
+    volumes:
+      - ./backend/content:/data/files
     command: [ "taskiq", "worker", "zheka.broker.broker:main", "--workers=1", "--no-configure-logging" ]
 
   scheduler:

@@ -1,5 +1,6 @@
 import os
 import secrets
+import tempfile
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from zheka.config import (
     BotMode,
     Config,
     DbConfig,
+    FilesConfig,
     LogConfig,
     LogFormat,
     MaxConfig,
@@ -167,5 +169,9 @@ def make_config() -> Config:
             webhook_url=None,
             secret_token=None,
             miniapp_url="https://example.com",
+        ),
+        files=FilesConfig(
+            dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"),
+            max_size_mb=10,
         ),
     )

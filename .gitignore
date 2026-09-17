@@ -224,3 +224,7 @@ graphify-out
 
 # Superpowers scratch
 .superpowers/
+
+# Загруженные фото, отдаются с bind mount, в git не идут
+backend/content/*
+!backend/content/.gitkeep

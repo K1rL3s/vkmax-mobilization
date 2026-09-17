@@ -68,12 +68,18 @@ class MaxConfig(ZhekaType):
     miniapp_url: str
 
 
+class FilesConfig(ZhekaType):
+    dir: str
+    max_size_mb: int
+
+
 class Config(ZhekaType):
     log: LogConfig
     api: ApiConfig
     db: DbConfig
     redis: RedisConfig
     max: MaxConfig
+    files: FilesConfig
 
 
 def load_config(env_path: str | None = None) -> Config:
@@ -86,6 +92,7 @@ def load_config(env_path: str | None = None) -> Config:
         db=_load_db(env),
         redis=_load_redis(env),
         max=_load_max(env),
+        files=_load_files(env),
     )
     if config.max.mode is BotMode.WEBHOOK and not config.max.webhook_url:
         raise ValueError("MAX_WEBHOOK_URL обязателен при MAX_BOT_MODE=webhook")
@@ -138,4 +145,12 @@ def _load_max(env: Env) -> MaxConfig:
             webhook_url=env.str("WEBHOOK_URL", None),
             secret_token=env.str("SECRET_TOKEN", None),
             miniapp_url=env.str("MINIAPP_URL", ""),
+        )
+
+
+def _load_files(env: Env) -> FilesConfig:
+    with env.prefixed("FILES_"):
+        return FilesConfig(
+            dir=env.str("DIR", "/data/files"),
+            max_size_mb=env.int("MAX_SIZE_MB", 10),
         )
