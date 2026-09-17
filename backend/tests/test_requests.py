@@ -30,6 +30,7 @@ from zheka.core.errors import (
 from zheka.core.ids import FlatId, HouseId, MaxUserId, RequestGroupId, RequestId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import (
     MAX_PHOTOS,
     RequestDraft,
@@ -71,6 +72,7 @@ def _make_service(session: AsyncSession) -> RequestsService:
         UsersRepo(session),
         OrgsRepo(session),
         FilesService(make_config().files, "test-token"),
+        GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         EventsService(EventsRepo(session)),
     )
 

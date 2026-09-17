@@ -38,6 +38,12 @@ from zheka.core.models import (
 )
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.request_groups import (
+    GroupingRules,
+    GroupingService,
+    SimilarRequests,
+    rules_of,
+)
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -104,6 +110,7 @@ class RequestsService:
     __slots__ = (
         "_events",
         "_files",
+        "_grouping",
         "_houses",
         "_orgs",
         "_requests",
@@ -119,6 +126,7 @@ class RequestsService:
         users_repo: UsersRepo,
         orgs_repo: OrgsRepo,
         files_service: FilesService,
+        grouping_service: GroupingService,
         events_service: EventsService,
     ) -> None:
         self._requests = requests_repo
@@ -127,6 +135,7 @@ class RequestsService:
         self._users = users_repo
         self._orgs = orgs_repo
         self._files = files_service
+        self._grouping = grouping_service
         self._events = events_service
 
     async def create(
@@ -156,6 +165,7 @@ class RequestsService:
         )
         await self._add_photos(request, photos, user_id)
         await self._open(request, user_id)
+        await self._group(request, house, group_id)
         await self._events.record(
             EventType.REQUEST_CREATED,
             user_id=user_id,
@@ -167,7 +177,7 @@ class RequestsService:
             llm_suggested=draft.llm_suggested,
             llm_accepted=draft.llm_accepted,
         )
-        return await self._card(request, house, flat)
+        return await self._built_card(request, house, flat)
 
     async def repeat(
         self,
@@ -216,7 +226,7 @@ class RequestsService:
             is_repeat=True,
             parent_request_id=RequestId(parent.id),
         )
-        return await self._card(request, house, flat)
+        return await self._built_card(request, house, flat)
 
     async def rate(
         self,
@@ -250,7 +260,7 @@ class RequestsService:
             if request.flat_id is None
             else await self._houses.get_flat(FlatId(request.flat_id))
         )
-        return await self._card(request, house, flat)
+        return await self._built_card(request, house, flat)
 
     async def list_mine(
         self,
@@ -311,53 +321,50 @@ class RequestsService:
         ]
         return rows, total
 
-    async def _card(
+    async def similar(
+        self,
+        user_id: UserId,
+        house_id: HouseId,
+        category: RequestCategory,
+    ) -> SimilarRequests:
+        resident = await self._active_resident(user_id, house_id)
+        return await self._grouping.similar(
+            house_id,
+            category,
+            await self._rules(await self._get_house(house_id)),
+            datetime.now(UTC),
+            None if resident.flat_id is None else FlatId(resident.flat_id),
+            user_id,
+        )
+
+    async def _group(
+        self,
+        request: Request,
+        house: House,
+        joined_group_id: RequestGroupId | None,
+    ) -> None:
+        # житель, нажавший «присоединиться», уже в группе - искать нечего
+        if joined_group_id is not None:
+            await self._grouping.joined(request, joined_group_id)
+            return
+        await self._grouping.attach(
+            request,
+            await self._rules(house),
+            datetime.now(UTC),
+        )
+
+    async def _rules(self, house: House) -> GroupingRules:
+        if house.org_id is None:
+            return rules_of(None)
+        return rules_of(await self._orgs.get_settings(OrgId(house.org_id)))
+
+    async def _built_card(
         self,
         request: Request,
         house: House,
         flat: Flat | None,
     ) -> RequestCardData:
-        request_id = RequestId(request.id)
-        photos = await self._requests.list_photos(request_id)
-        messages = await self._requests.list_messages(request_id)
-        authors = await self._users_by_id(
-            [UserId(message.author_user_id) for message in messages],
-        )
-        group_sizes = await self._requests.count_by_group(
-            [] if request.group_id is None else [RequestGroupId(request.group_id)],
-        )
-        executor = (
-            None
-            if request.executor_user_id is None
-            else await self._users.get_by_id(UserId(request.executor_user_id))
-        )
-        return RequestCardData(
-            request=request,
-            house=house,
-            flat=flat,
-            issue_photos=[
-                photo for photo in photos if photo.kind is RequestPhotoKind.ISSUE
-            ],
-            result_photos=[
-                photo for photo in photos if photo.kind is RequestPhotoKind.RESULT
-            ],
-            timeline=await self._requests.list_log(request_id),
-            messages=[
-                RequestMessageView(
-                    message=message,
-                    author=authors.get(message.author_user_id),
-                )
-                for message in messages
-            ],
-            group_size=(
-                0
-                if request.group_id is None
-                else group_sizes.get(RequestGroupId(request.group_id), 0)
-            ),
-            executor=executor,
-            can_review=request.status is RequestStatus.ON_REVIEW,
-            can_rate=request.status is RequestStatus.DONE and request.rating is None,
-        )
+        return await build_card(self._requests, self._users, request, house, flat)
 
     async def _open(self, request: Request, user_id: UserId) -> None:
         # статус NEW - такая же запись в журнале, как и любая следующая:
@@ -469,6 +476,61 @@ class RequestsService:
         return {
             UserId(user.id): user for user in await self._users.list_by_ids(user_ids)
         }
+
+
+async def build_card(
+    requests_repo: RequestsRepo,
+    users_repo: UsersRepo,
+    request: Request,
+    house: House,
+    flat: Flat | None,
+) -> RequestCardData:
+    # карточку собирают обе стороны: кабинет жителя и кабинет УК. Отличаются
+    # они правами на входе, а не содержимым заявки
+    request_id = RequestId(request.id)
+    photos = await requests_repo.list_photos(request_id)
+    messages = await requests_repo.list_messages(request_id)
+    authors = {
+        UserId(user.id): user
+        for user in await users_repo.list_by_ids(
+            [UserId(message.author_user_id) for message in messages],
+        )
+    }
+    group_sizes = await requests_repo.count_by_group(
+        [] if request.group_id is None else [RequestGroupId(request.group_id)],
+    )
+    executor = (
+        None
+        if request.executor_user_id is None
+        else await users_repo.get_by_id(UserId(request.executor_user_id))
+    )
+    return RequestCardData(
+        request=request,
+        house=house,
+        flat=flat,
+        issue_photos=[
+            photo for photo in photos if photo.kind is RequestPhotoKind.ISSUE
+        ],
+        result_photos=[
+            photo for photo in photos if photo.kind is RequestPhotoKind.RESULT
+        ],
+        timeline=await requests_repo.list_log(request_id),
+        messages=[
+            RequestMessageView(
+                message=message,
+                author=authors.get(UserId(message.author_user_id)),
+            )
+            for message in messages
+        ],
+        group_size=(
+            0
+            if request.group_id is None
+            else group_sizes.get(RequestGroupId(request.group_id), 0)
+        ),
+        executor=executor,
+        can_review=request.status is RequestStatus.ON_REVIEW,
+        can_rate=request.status is RequestStatus.DONE and request.rating is None,
+    )
 
 
 def _stated(text: str) -> str:

@@ -70,9 +70,15 @@ async def list_my_requests(
 @router.get("/requests/similar", summary="Соседи уже жаловались")
 async def find_similar_requests(
     residency: CurrentResidencyDep,
+    requests_service: FromDishka[RequestsService],
     category: RequestCategory,
 ) -> SimilarRequestsResponse:
-    raise NotImplementedError("ещё не реализовано")
+    similar = await requests_service.similar(
+        residency.user_id,
+        residency.house_id,
+        category,
+    )
+    return SimilarRequestsResponse.of(similar)
 
 
 @router.post("/requests", summary="Новая заявка")

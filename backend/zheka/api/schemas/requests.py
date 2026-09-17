@@ -16,6 +16,13 @@ from zheka.core.enums import (
 )
 from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
 from zheka.core.models import Request, RequestStatusLog
+from zheka.core.services.admin_requests import (
+    AdminRequestCardData,
+    AdminRequestRow,
+    ExecutorView,
+    RequestGroupCardData,
+)
+from zheka.core.services.request_groups import SimilarRequests
 from zheka.core.services.requests import (
     RequestCardData,
     RequestMessageView,
@@ -196,6 +203,17 @@ class SimilarRequestsResponse(BaseSchema):
     group_id: RequestGroupId | None = None
     window_started_at: datetime | None = None
 
+    @classmethod
+    def of(cls, similar: SimilarRequests) -> Self:
+        return cls(
+            category=similar.category,
+            neighbours_count=similar.flats_count,
+            # присоединиться можно к собранной группе, а не к россыпи жалоб
+            can_join=similar.group_id is not None,
+            group_id=similar.group_id,
+            window_started_at=similar.window_started_at,
+        )
+
 
 class RateRequestRequest(BaseSchema):
     rating: int = Field(ge=MIN_RATING, le=MAX_RATING)
@@ -227,6 +245,34 @@ class AdminRequestListItem(RequestListItem):
     caller_name: str | None = None
     caller_phone: str | None = None
 
+    @classmethod
+    def of_admin(cls, row: AdminRequestRow) -> Self:
+        request = row.request
+        return cls(
+            id=RequestId(request.id),
+            created_at=request.created_at,
+            category=request.category,
+            category_label=CATEGORY_RULES[request.category].label,
+            description=request.description,
+            status=request.status,
+            channel=request.channel,
+            has_photos=row.has_photos,
+            group_size=row.group_size,
+            flat_number=None if row.flat is None else row.flat.number,
+            group_id=(
+                None if request.group_id is None else RequestGroupId(request.group_id)
+            ),
+            executor_name=None if row.executor is None else row.executor.name,
+            rating=request.rating,
+            deadline_at=deadline_of(request),
+            house_id=HouseId(request.house_id),
+            address=row.house.address,
+            is_staff_author=request.is_staff_author,
+            author_name=None if row.author is None else row.author.name,
+            caller_name=request.caller_name,
+            caller_phone=request.caller_phone,
+        )
+
 
 class AdminRequestCard(RequestCard):
     is_staff_author: bool
@@ -234,6 +280,28 @@ class AdminRequestCard(RequestCard):
     caller_name: str | None = None
     caller_phone: str | None = None
     executor_user_id: UserId | None = None
+
+    @classmethod
+    def of_admin(
+        cls,
+        data: AdminRequestCardData,
+        photos: list[FileRef],
+        result_photos: list[FileRef],
+    ) -> Self:
+        base = RequestCard.of(data.card, photos, result_photos)
+        request = data.card.request
+        return cls(
+            **base.model_dump(),
+            is_staff_author=request.is_staff_author,
+            author_name=None if data.author is None else data.author.name,
+            caller_name=request.caller_name,
+            caller_phone=request.caller_phone,
+            executor_user_id=(
+                None
+                if request.executor_user_id is None
+                else UserId(request.executor_user_id)
+            ),
+        )
 
 
 class ChangeRequestStatusRequest(BaseSchema):
@@ -269,6 +337,21 @@ class RequestGroupCard(BaseSchema):
     flats_count: int
     requests: list[AdminRequestListItem]
 
+    @classmethod
+    def of(cls, data: RequestGroupCardData) -> Self:
+        group = data.group
+        return cls(
+            id=RequestGroupId(group.id),
+            house_id=HouseId(group.house_id),
+            address=data.house.address,
+            category=group.category,
+            category_label=CATEGORY_RULES[group.category].label,
+            status=group.status,
+            window_started_at=group.window_started_at,
+            flats_count=data.flats_count,
+            requests=[AdminRequestListItem.of_admin(row) for row in data.rows],
+        )
+
 
 class ChangeGroupStatusRequest(BaseSchema):
     status: RequestStatus
@@ -280,3 +363,12 @@ class ExecutorItem(BaseSchema):
     name: str
     username: str | None
     active_requests: int
+
+    @classmethod
+    def of(cls, view: ExecutorView) -> Self:
+        return cls(
+            user_id=UserId(view.user.id),
+            name=view.user.name,
+            username=view.user.username,
+            active_requests=view.active_requests,
+        )

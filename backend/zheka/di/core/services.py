@@ -1,6 +1,7 @@
 from dishka import BaseScope, Provider, Scope, provide
 
 from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
+from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
@@ -8,6 +9,7 @@ from zheka.core.services.houses import HousesService
 from zheka.core.services.moderation import ModerationService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.profile import ProfileService
+from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -115,6 +117,14 @@ class ServicesProvider(Provider):
         )
 
     @provide
+    def grouping_service(
+        self,
+        requests_repo: RequestsRepo,
+        events_service: EventsService,
+    ) -> GroupingService:
+        return GroupingService(requests_repo, events_service)
+
+    @provide
     def requests_service(
         self,
         requests_repo: RequestsRepo,
@@ -123,6 +133,7 @@ class ServicesProvider(Provider):
         users_repo: UsersRepo,
         orgs_repo: OrgsRepo,
         files_service: FilesService,
+        grouping_service: GroupingService,
         events_service: EventsService,
     ) -> RequestsService:
         return RequestsService(
@@ -132,5 +143,25 @@ class ServicesProvider(Provider):
             users_repo,
             orgs_repo,
             files_service,
+            grouping_service,
+            events_service,
+        )
+
+    @provide
+    def admin_requests_service(
+        self,
+        requests_repo: RequestsRepo,
+        houses_repo: HousesRepo,
+        users_repo: UsersRepo,
+        orgs_repo: OrgsRepo,
+        grouping_service: GroupingService,
+        events_service: EventsService,
+    ) -> AdminRequestsService:
+        return AdminRequestsService(
+            requests_repo,
+            houses_repo,
+            users_repo,
+            orgs_repo,
+            grouping_service,
             events_service,
         )
