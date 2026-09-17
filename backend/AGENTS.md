@@ -5,7 +5,7 @@
 ## What this is
 
 Backend of "Жэка Коммуналкин", the MAX messenger hackathon entry for the
-"Умный город" track. FastAPI on granian serves the mini-app API and, in the
+"Умный город" track. FastAPI on gunicorn serves the mini-app API and, in the
 same process, the maxo webhook. Background work runs on taskiq over Redis.
 Package `zheka`, Python 3.12, all code async.
 
@@ -85,13 +85,32 @@ review finding.
 - `zheka/api/asgi.py` builds the app at import time and therefore needs a real
   environment. It is excluded from slotscheck for that reason; import
   `app_factory` from `zheka.api.app` if you need the app without an env.
+- The api process is started by the `gunicorn` CLI and never from Python:
+  `gunicorn -c gunicorn.conf.py zheka.api.asgi:app`. The worker is gunicorn's
+  own ASGI worker (gunicorn 26), so uvicorn is not in the tree at all; it picks
+  uvloop up by itself when the `fast` group is installed.
+- `gunicorn.conf.py` is the server's own config, read by the master before the
+  application is importable, so it imports nothing from `zheka` and repeats the
+  one value it needs (`polling`) as a literal. It owns `bind` (`API_HOST` /
+  `API_PORT`, defaulting to the `0.0.0.0:7001` that nginx and the healthcheck
+  expect) and `workers`, so `ApiConfig` carries `cors` and nothing else.
+- The worker count is not configurable and there is no `API_WORKERS`: an async
+  worker saturates one CPU, so `gunicorn.conf.py` takes one worker per logical
+  CPU - `sched_getaffinity`, falling back to `cpu_count`, both of which count
+  hardware threads rather than physical cores, and neither of which sees a
+  cgroup cpu quota. `MAX_BOT_MODE=polling` overrides that to exactly one.
+- `--preload` stays off. Every worker imports `zheka.api.asgi` in its own
+  process and builds its own dispatcher, container and connections; preloading
+  would fork them out of the master and break both.
 - `BOT_MODE=polling` runs long polling from the api lifespan, so local work
-  needs neither a domain nor a certificate. `BOT_MODE=webhook` is production
-  and requires `MAX_WEBHOOK_URL` on 443 with a real certificate.
+  needs neither a domain nor a certificate. The lifespan runs per worker, which
+  is why polling pins the worker count to one - two workers mean two pollers on
+  one bot. `BOT_MODE=webhook` is production and requires `MAX_WEBHOOK_URL` on
+  443 with a real certificate.
 - Migrations are applied by the `migrations` compose service only. The api
   process does not run alembic, so three containers never race on it.
 - Env var names follow the family canon: `POSTGRES_*`, `REDIS_DB`,
-  `LOG_LEVEL`, `LOG_FORMAT`, `API_HOST` / `API_PORT` / `API_WORKERS`.
+  `LOG_LEVEL`, `LOG_FORMAT`, `API_HOST` / `API_PORT`.
 - Alembic revision messages, and therefore revision file names, are English:
   `just migration "initial schema"`. The Russian-only rule covers user-facing
   strings, not the migration history.

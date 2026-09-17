@@ -156,7 +156,7 @@ _DUMMY_MAX_TOKEN = "test-token"  # noqa: S105
 def make_config() -> Config:
     return Config(
         log=LogConfig(level="INFO", format=LogFormat.JSON),
-        api=ApiConfig(host="127.0.0.1", port=8000, workers=1, cors=()),
+        api=ApiConfig(cors=()),
         db=DbConfig(
             host="localhost",
             port=5432,

@@ -47,5 +47,6 @@ FROM base AS runtime
 COPY --from=build /venv /venv
 
 COPY ./alembic.ini ./alembic.ini
+COPY ./gunicorn.conf.py ./gunicorn.conf.py
 COPY ./migrations ./migrations
 COPY ./zheka ./zheka

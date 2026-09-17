@@ -22,9 +22,6 @@ class LogConfig(ZhekaType):
 
 
 class ApiConfig(ZhekaType):
-    host: str
-    port: int
-    workers: int
     cors: tuple[str, ...]
 
 
@@ -113,13 +110,9 @@ def _load_log(env: Env) -> LogConfig:
 
 
 def _load_api(env: Env) -> ApiConfig:
+    # адрес, порт и число воркеров читает gunicorn из своих флагов, не приложение
     with env.prefixed("API_"):
-        return ApiConfig(
-            host=env.str("HOST", "0.0.0.0"),  # noqa: S104 # nosec B104
-            port=env.int("PORT", 7001),
-            workers=env.int("WORKERS", 1),
-            cors=tuple(env.list("CORS", [])),
-        )
+        return ApiConfig(cors=tuple(env.list("CORS", [])))
 
 
 def _load_db(env: Env) -> DbConfig:
