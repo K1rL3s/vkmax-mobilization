@@ -139,6 +139,16 @@ class HousesRepo(BaseAlchemyRepo):
         flat: Flat | None = await self._session.scalar(stmt)
         return flat
 
+    async def get_flat_by_number(self, house_id: HouseId, number: str) -> Flat | None:
+        # номер житель набирает руками, поэтому регистр «12А» и «12а» к делу
+        # не относится
+        stmt = select(Flat).where(
+            flats_table.c.house_id == house_id,
+            func.lower(flats_table.c.number) == number.lower(),
+        )
+        flat: Flat | None = await self._session.scalar(stmt)
+        return flat
+
     async def list_flats_by_ids(self, flat_ids: Collection[FlatId]) -> Sequence[Flat]:
         if not flat_ids:
             return []

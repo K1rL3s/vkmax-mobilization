@@ -407,6 +407,7 @@ class FlatsService:
             user_id,
             house_id,
             flat_id,
+            None,
             ResidentRole.TENANT,
         )
         await self._residents.set_verified(

@@ -63,6 +63,7 @@ class ResidentsRepo(BaseAlchemyRepo):
         user_id: UserId,
         house_id: HouseId,
         flat_id: FlatId | None,
+        flat_number: str | None,
         role: ResidentRole,
     ) -> tuple[Resident, bool]:
         # идемпотентность привязки держит уникальный индекс (user_id, house_id),
@@ -75,6 +76,7 @@ class ResidentsRepo(BaseAlchemyRepo):
                 user_id=user_id,
                 house_id=house_id,
                 flat_id=flat_id,
+                flat_number=flat_number,
                 role=role,
                 # арендатор не видит начислений и не голосует
                 can_see_charges=is_owner,
@@ -96,10 +98,15 @@ class ResidentsRepo(BaseAlchemyRepo):
         existing = await self.get_for_house(user_id, house_id)
         if existing is None:
             raise EntityNotFound("Житель не найден")
-        # квартиру получает житель, у которого ее еще нет: диплинк из домового
-        # чата привязывает к дому, не зная квартиры, и она выбирается потом
-        if existing.flat_id is None and flat_id is not None:
+        # квартира из повторной привязки перебивает прежнюю, право на это
+        # проверяет вызывающий: диплинк из домового чата вообще приходит без
+        # квартиры, и она выбирается уже потом
+        if flat_id is not None:
             existing.flat_id = flat_id
+            existing.flat_number = None
+        elif flat_number is not None:
+            existing.flat_id = None
+            existing.flat_number = flat_number
         # повторная привязка не молчит о роли: иначе тот, кто однажды вошел
         # арендатором, навсегда остался бы без начислений и голоса
         existing.role = role
@@ -234,6 +241,7 @@ class ResidentsRepo(BaseAlchemyRepo):
         # подтверждение и есть привязка к квартире: у жителя, пришедшего по
         # диплинку домового чата, flat_id до этого момента пустой
         resident.flat_id = flat_id
+        resident.flat_number = None
         resident.verified_at = at
         resident.verified_by = by
         await self._session.flush()

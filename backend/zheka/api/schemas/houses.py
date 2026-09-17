@@ -100,7 +100,9 @@ class ResidencySummary(BaseSchema):
             can_vote=resident.can_vote,
             is_connected=view.is_connected,
             flat_id=None if view.flat is None else FlatId(view.flat.id),
-            flat_number=None if view.flat is None else view.flat.number,
+            flat_number=(
+                resident.flat_number if view.flat is None else view.flat.number
+            ),
         )
 
 
@@ -201,6 +203,9 @@ class FlatListItem(BaseSchema):
 
 class LinkHouseRequest(BaseSchema):
     flat_id: FlatId | None = None
+    # номер квартиры, которой может не быть в справочнике дома;
+    # взаимоисключающий с flat_id
+    flat_number: str | None = None
     role: ResidentRole = ResidentRole.OWNER
     account_no: str | None = None
     entrance: int | None = None
@@ -321,7 +326,9 @@ class HouseResidentItem(BaseSchema):
             verified=resident.verified_at is not None,
             is_chairman=resident.is_chairman,
             flat_id=None if view.flat is None else FlatId(view.flat.id),
-            flat_number=None if view.flat is None else view.flat.number,
+            flat_number=(
+                resident.flat_number if view.flat is None else view.flat.number
+            ),
             block_reason=resident.block_reason,
         )
 

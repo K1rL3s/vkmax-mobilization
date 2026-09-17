@@ -26,6 +26,7 @@ residents_table = Table(
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True),
+    Column("flat_number", String(16), nullable=True),
     Column("role", pg_enum(ResidentRole, "resident_role"), nullable=False),
     Column(
         "can_see_charges",

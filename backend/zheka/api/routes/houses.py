@@ -115,6 +115,7 @@ async def link_house(
         current_account.user_id,
         house_id,
         body.flat_id,
+        body.flat_number,
         body.role,
         body.source,
         body.entrance,

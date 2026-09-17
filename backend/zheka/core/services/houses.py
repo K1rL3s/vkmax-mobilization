@@ -26,6 +26,8 @@ NEARBY_METERS_PER_DEGREE = 111_320
 
 CONSENT_REQUIRED = "Сначала примите согласие на обработку персональных данных"
 SEARCH_NEEDS_ADDRESS = "Укажите адрес или город"
+FLAT_ID_AND_NUMBER = "Укажите либо квартиру из списка, либо ее номер"
+FLAT_CHANGE_REFUSED = "Квартира меняется через подтверждение, а не повторной привязкой"
 
 
 def stated(value: str | None) -> str | None:
@@ -224,10 +226,15 @@ class HousesService:
         user_id: UserId,
         house_id: HouseId,
         flat_id: FlatId | None,
+        flat_number: str | None,
         role: ResidentRole,
         source: EventSource,
         entrance: int | None,
     ) -> ResidencyView:
+        number = stated(flat_number)
+        if flat_id is not None and number is not None:
+            raise InvalidRequest(FLAT_ID_AND_NUMBER)
+
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise EntityNotFound("Пользователь не найден")
@@ -240,25 +247,21 @@ class HousesService:
             flat = await self._houses.get_flat(flat_id)
             if flat is None or flat.house_id != house_id:
                 raise EntityNotFound("Квартира не найдена")
+        if number is not None:
+            # номер уже заведенной квартиры превращается в привязку к ней,
+            # иначе у дома завелся бы второй житель той же квартиры без flat_id
+            known = await self._houses.get_flat_by_number(house_id, number)
+            if known is not None:
+                flat_id, number = FlatId(known.id), None
 
-        # решение до записи: молча проигнорировать чужой flat_id нельзя, а
-        # переселить жителя повторной привязкой тем более - квартиру меняет
-        # подтверждение. Квартира, которой у жителя еще не было, проставляется
         existing = await self._residents.get_for_house(user_id, house_id)
-        if (
-            existing is not None
-            and existing.flat_id is not None
-            and flat_id is not None
-            and existing.flat_id != flat_id
-        ):
-            raise InvalidState(
-                "Квартира меняется через подтверждение, а не повторной привязкой",
-            )
+        self._ensure_can_take_flat(existing, flat_id, number)
 
         resident, created = await self._residents.add_or_get(
             user_id,
             house_id,
             flat_id,
+            number,
             role,
         )
         if created:
@@ -267,6 +270,7 @@ class HousesService:
                 user_id=user_id,
                 house_id=house_id,
                 flat_id=flat_id,
+                flat_number=number,
                 source=source.value,
                 entrance=entrance,
             )
@@ -329,6 +333,21 @@ class HousesService:
             if resident.flat_id is not None
         }
         return flats, total, taken
+
+    def _ensure_can_take_flat(
+        self,
+        existing: Resident | None,
+        flat_id: FlatId | None,
+        flat_number: str | None,
+    ) -> None:
+        # переселить жителя повторной привязкой нельзя: квартиру меняет
+        # подтверждение
+        if existing is None or existing.flat_id is None:
+            return
+        if flat_number is not None or (
+            flat_id is not None and flat_id != existing.flat_id
+        ):
+            raise InvalidState(FLAT_CHANGE_REFUSED)
 
     async def _get_house(self, house_id: HouseId) -> House:
         house = await self._houses.get(house_id)
