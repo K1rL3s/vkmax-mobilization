@@ -228,3 +228,6 @@ graphify-out
 # Загруженные фото, отдаются с bind mount, в git не идут
 backend/content/*
 !backend/content/.gitkeep
+
+# Фронтовые зависимости
+node_modules/
