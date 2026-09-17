@@ -24,7 +24,7 @@ class CurrentOrg(ZhekaType):
 def resolve_org(
     memberships: Sequence[OrgMember],
     user_id: UserId,
-    org_id_header: int | None,
+    org_id_header: OrgId | None,
 ) -> CurrentOrg:
     if not memberships:
         raise NotEnoughRights("Вы не сотрудник ни одной организации")
@@ -53,7 +53,7 @@ async def get_current_org(
     *,
     current_account: CurrentAccountDep,
     orgs_repo: FromDishka[OrgsRepo],
-    org_id_header: Annotated[int | None, Header(alias="X-Org-Id")] = None,
+    org_id_header: Annotated[OrgId | None, Header(alias="X-Org-Id")] = None,
 ) -> CurrentOrg:
     memberships = await orgs_repo.list_for_user(current_account.user_id)
     return resolve_org(memberships, current_account.user_id, org_id_header)

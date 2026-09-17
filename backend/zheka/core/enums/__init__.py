@@ -1,3 +1,4 @@
+from zheka.core.enums.analytics import MetricUnit
 from zheka.core.enums.announcements import AnnouncementChannel
 from zheka.core.enums.appointments import AppointmentStatus
 from zheka.core.enums.events import EventSource, EventType
@@ -29,6 +30,7 @@ __all__ = (
     "EventSource",
     "EventType",
     "MeterType",
+    "MetricUnit",
     "NotificationCategory",
     "NotificationLevel",
     "OrgRole",

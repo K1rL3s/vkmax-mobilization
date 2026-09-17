@@ -77,7 +77,7 @@ def test_resolve_org_rejects_org_without_membership() -> None:
     membership = OrgMember(org_id=OrgId(1), user_id=UserId(1), role=OrgRole.ADMIN)
 
     with pytest.raises(NotEnoughRights):
-        resolve_org([membership], UserId(1), org_id_header=2)
+        resolve_org([membership], UserId(1), org_id_header=OrgId(2))
 
 
 def test_resolve_org_infers_single_membership() -> None:

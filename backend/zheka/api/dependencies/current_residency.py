@@ -44,7 +44,7 @@ def _to_residency(resident: Resident) -> CurrentResidency:
 
 def resolve_residency(
     residencies: Sequence[Resident],
-    house_id_header: int | None,
+    house_id_header: HouseId | None,
 ) -> CurrentResidency:
     if not residencies:
         raise NotEnoughRights("Вы не житель ни одного дома")
@@ -71,7 +71,7 @@ async def get_current_residency(
     *,
     current_account: CurrentAccountDep,
     residents_repo: FromDishka[ResidentsRepo],
-    house_id_header: Annotated[int | None, Header(alias="X-House-Id")] = None,
+    house_id_header: Annotated[HouseId | None, Header(alias="X-House-Id")] = None,
 ) -> CurrentResidency:
     residencies = await residents_repo.list_for_user(current_account.user_id)
     return resolve_residency(residencies, house_id_header)
@@ -83,14 +83,11 @@ CurrentResidencyDep = Annotated[CurrentResidency, Depends(get_current_residency)
 @inject
 async def residency_for(
     *,
-    house_id: int,
+    house_id: HouseId,
     current_account: CurrentAccountDep,
     residents_repo: FromDishka[ResidentsRepo],
 ) -> CurrentResidency:
-    resident = await residents_repo.get_for_house(
-        current_account.user_id,
-        HouseId(house_id),
-    )
+    resident = await residents_repo.get_for_house(current_account.user_id, house_id)
     if resident is None:
         raise NotEnoughRights("Вы не житель этого дома")
     return _to_residency(resident)
@@ -99,11 +96,11 @@ async def residency_for(
 @inject
 async def residency_for_flat(
     *,
-    flat_id: int,
+    flat_id: FlatId,
     current_account: CurrentAccountDep,
     residents_repo: FromDishka[ResidentsRepo],
 ) -> CurrentResidency:
-    residents = await residents_repo.list_for_flat(FlatId(flat_id))
+    residents = await residents_repo.list_for_flat(flat_id)
     resident = next(
         (r for r in residents if r.user_id == current_account.user_id),
         None,
@@ -111,3 +108,7 @@ async def residency_for_flat(
     if resident is None:
         raise NotEnoughRights("Вы не житель этой квартиры")
     return _to_residency(resident)
+
+
+ResidencyForHouseDep = Annotated[CurrentResidency, Depends(residency_for)]
+ResidencyForFlatDep = Annotated[CurrentResidency, Depends(residency_for_flat)]

@@ -112,3 +112,20 @@ exception_handlers: dict[Any, Any] = {
     StarletteHTTPException: http_handler,
     Exception: unknown_handler,
 }
+
+
+# один и тот же конверт на всех маршрутах, иначе ApiError не попадает
+# в OpenAPI и фронт не может сгенерировать тип ошибки. "default" закрывает
+# автоматический 422: валидация отвечает 400 тем же конвертом
+ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    code: {"model": ApiError[BaseError], "description": description}
+    for code, description in (
+        (status.HTTP_400_BAD_REQUEST, "Некорректный запрос"),
+        (status.HTTP_401_UNAUTHORIZED, "Требуется авторизация"),
+        (status.HTTP_403_FORBIDDEN, "Недостаточно прав"),
+        (status.HTTP_404_NOT_FOUND, "Сущность не найдена"),
+        (status.HTTP_409_CONFLICT, "Конфликт состояния"),
+        (status.HTTP_500_INTERNAL_SERVER_ERROR, "Внутренняя ошибка сервера"),
+        ("default", "Любая другая ошибка, конверт тот же"),
+    )
+}

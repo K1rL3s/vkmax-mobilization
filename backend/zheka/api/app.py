@@ -13,9 +13,31 @@ from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
 from maxo.routing.utils import collect_used_updates
 
 from zheka.__meta__ import API_PREFIX, __version__
-from zheka.api.errors import exception_handlers
+from zheka.api.errors import ERROR_RESPONSES, exception_handlers
 from zheka.api.middlewares import request_logging_middleware, trace_id_middleware
-from zheka.api.routes import healthcheck_router
+from zheka.api.routes import (
+    admin_analytics_router,
+    admin_announcements_router,
+    admin_houses_router,
+    admin_meters_router,
+    admin_orgs_router,
+    admin_polls_router,
+    admin_reception_router,
+    admin_requests_router,
+    announcements_router,
+    charges_router,
+    demo_router,
+    files_router,
+    flats_router,
+    healthcheck_router,
+    houses_router,
+    me_router,
+    meters_router,
+    orgs_router,
+    polls_router,
+    reception_router,
+    requests_router,
+)
 from zheka.bot import make_dispatcher, make_engine
 from zheka.config import BotMode, Config, load_config
 from zheka.di import make_container
@@ -40,6 +62,86 @@ def app_factory(config: Config | None = None) -> FastAPI:
                 "name": "Healthcheck",
                 "description": "Проверка связи с базой, без авторизации",
             },
+            {
+                "name": "Профиль",
+                "description": "Аккаунт, согласие на обработку ПД и уведомления",
+            },
+            {
+                "name": "Дома",
+                "description": "Поиск дома, привязка жителя, карточка дома",
+            },
+            {
+                "name": "Квартиры",
+                "description": "Карточка квартиры, подтверждение, приглашения",
+            },
+            {
+                "name": "Заявки",
+                "description": "Заявки жителя, групповые заявки, приемка работ",
+            },
+            {
+                "name": "Счетчики",
+                "description": "Счетчики квартиры и подача показаний",
+            },
+            {
+                "name": "Начисления",
+                "description": "Тарифы, квитанции, разбор начисления, демо-оплата",
+            },
+            {
+                "name": "Опросы",
+                "description": "Опросы дома, голосование, прогноз кворума",
+            },
+            {
+                "name": "Объявления",
+                "description": "Объявления УК для жителя",
+            },
+            {
+                "name": "Прием и доступ",
+                "description": "Запись на прием и слоты доступа в квартиру",
+            },
+            {
+                "name": "Файлы",
+                "description": "Загрузка фото и отдача файлов с проверкой прав",
+            },
+            {
+                "name": "Организации",
+                "description": "Регистрация УК и коды сотрудников",
+            },
+            {
+                "name": "Демо",
+                "description": "Демо-доступ жителя и сотрудника",
+            },
+            {
+                "name": "Админка: организация",
+                "description": "Карточка УК, настройки, сотрудники, приглашения",
+            },
+            {
+                "name": "Админка: дома",
+                "description": "Дома организации, жители, подтверждения квартир",
+            },
+            {
+                "name": "Админка: заявки",
+                "description": "Входящие заявки, статусы, исполнители, группы",
+            },
+            {
+                "name": "Админка: счетчики",
+                "description": "Показания по дому",
+            },
+            {
+                "name": "Админка: объявления",
+                "description": "Объявления организации по домам и каналам",
+            },
+            {
+                "name": "Админка: опросы",
+                "description": "Опросы организации",
+            },
+            {
+                "name": "Админка: прием и доступ",
+                "description": "Часы приема, записи, обратный сбор доступа",
+            },
+            {
+                "name": "Админка: аналитика",
+                "description": "Дашборд, сезон показаний, исполнители, бенчмарк",
+            },
         ],
         openapi_url=f"{API_PREFIX}/openapi.json",
         docs_url=f"{API_PREFIX}/docs",
@@ -50,7 +152,32 @@ def app_factory(config: Config | None = None) -> FastAPI:
         lifespan=_lifespan(config, dp, container),
     )
 
-    app.include_router(healthcheck_router, prefix=API_PREFIX)
+    for router in (
+        healthcheck_router,
+        me_router,
+        houses_router,
+        flats_router,
+        requests_router,
+        meters_router,
+        charges_router,
+        polls_router,
+        announcements_router,
+        reception_router,
+        orgs_router,
+        demo_router,
+        admin_orgs_router,
+        admin_houses_router,
+        admin_requests_router,
+        admin_meters_router,
+        admin_announcements_router,
+        admin_polls_router,
+        admin_reception_router,
+        admin_analytics_router,
+    ):
+        app.include_router(router, prefix=API_PREFIX, responses=ERROR_RESPONSES)
+
+    # пути файлов зафиксированы целиком, nginx разводит /api/ и /files/ сам
+    app.include_router(files_router, responses=ERROR_RESPONSES)
 
     app.middleware("http")(request_logging_middleware)
     app.middleware("http")(trace_id_middleware)

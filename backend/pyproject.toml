@@ -33,6 +33,7 @@ dependencies = [
     "taskiq==0.12.6",
     "taskiq-redis==1.2.3",
     "redis==8.1.0",
+    "python-multipart==0.0.20",
 ]
 
 [dependency-groups]

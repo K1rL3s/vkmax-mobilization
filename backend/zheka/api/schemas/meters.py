@@ -1,0 +1,81 @@
+from datetime import date, datetime
+
+from pydantic import Field
+
+from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.files import PHOTOS_DESCRIPTION, FileRef
+from zheka.core.enums import MeterType, RequestCategory, TariffZone
+from zheka.core.ids import FlatId, MeterId, ReadingId
+
+_READING = "Показание в тысячных долях единицы измерения"
+_CONSUMPTION = "Расход в тысячных долях единицы измерения"
+
+
+class MeterItem(BaseSchema):
+    id: MeterId
+    flat_id: FlatId
+    type: MeterType
+    tariff_zones: int
+    serial: str
+    can_submit: bool
+    verification_expired: bool
+    next_verification_date: date | None = None
+    last_period: date | None = None
+    last_values: dict[TariffZone, int] | None = Field(
+        default=None,
+        description=_READING,
+    )
+
+
+class ReadingPeriodItem(BaseSchema):
+    period: date
+    is_open: bool
+    is_submitted: bool
+    # почему период закрыт, если закрыт
+    reason: str | None = None
+
+
+class ReadingItem(BaseSchema):
+    id: ReadingId
+    meter_id: MeterId
+    period: date
+    values: dict[TariffZone, int] = Field(description=_READING)
+    consumption: dict[TariffZone, int] = Field(description=_CONSUMPTION)
+    photos: list[FileRef]
+    is_below_previous: bool
+    ocr_used: bool
+    submitted_at: datetime
+    amount: int | None = Field(default=None, description="Сумма в копейках")
+
+
+class SubmitReadingRequest(BaseSchema):
+    period: date
+    values: dict[TariffZone, int] = Field(description=_READING)
+    photos: list[str] = Field(default_factory=list, description=PHOTOS_DESCRIPTION)
+    ocr_used: bool = False
+    ocr_accepted: bool = False
+
+
+class SubmitReadingResponse(BaseSchema):
+    reading: ReadingItem
+    house_average: int | None = Field(default=None, description=_CONSUMPTION)
+    warning: str | None = None
+    # резкий рост расхода предлагает завести заявку
+    suggested_category: RequestCategory | None = None
+
+
+class AdminReadingItem(BaseSchema):
+    id: ReadingId
+    meter_id: MeterId
+    meter_type: MeterType
+    serial: str
+    flat_id: FlatId
+    flat_number: str
+    period: date
+    values: dict[TariffZone, int] = Field(description=_READING)
+    consumption: dict[TariffZone, int] = Field(description=_CONSUMPTION)
+    photos: list[FileRef]
+    is_below_previous: bool
+    ocr_used: bool
+    submitted_at: datetime
+    submitted_by_name: str

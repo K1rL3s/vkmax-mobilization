@@ -11,6 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from testcontainers.postgres import PostgresContainer
 
 from zheka.base import ZhekaType
+from zheka.config import (
+    ApiConfig,
+    BotMode,
+    Config,
+    DbConfig,
+    LogConfig,
+    LogFormat,
+    MaxConfig,
+    RedisConfig,
+)
 from zheka.core.enums import OrgRole, ResidentRole
 from zheka.core.ids import FlatId, HouseId, MaxUserId, OrgId, UserId
 from zheka.infra.database.models import (
@@ -132,3 +142,30 @@ async def make_org_house_flat_user(
         )
 
     return _make
+
+
+# dummy config values, no real credentials or network calls involved
+_DUMMY_DB_PASSWORD = "p"  # noqa: S105
+_DUMMY_MAX_TOKEN = "test-token"  # noqa: S105
+
+
+def make_config() -> Config:
+    return Config(
+        log=LogConfig(level="INFO", format=LogFormat.JSON),
+        api=ApiConfig(host="127.0.0.1", port=8000, workers=1, cors=()),
+        db=DbConfig(
+            host="localhost",
+            port=5432,
+            user="u",
+            password=_DUMMY_DB_PASSWORD,
+            name="d",
+        ),
+        redis=RedisConfig(host="localhost", port=6379, password=None, db=0),
+        max=MaxConfig(
+            token=_DUMMY_MAX_TOKEN,
+            mode=BotMode.POLLING,
+            webhook_url=None,
+            secret_token=None,
+            miniapp_url="https://example.com",
+        ),
+    )
