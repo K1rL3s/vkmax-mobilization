@@ -11,17 +11,17 @@ Frontend for "Жека Коммуналкин" — a mini-app for the MAX messen
 ```
 pnpm dev              # vite dev server
 pnpm build             # tsc -b && vite build (type-check, then build)
-pnpm lint              # eslint .
-pnpm format            # prettier --write .
+pnpm lint              # eslint ./src
+pnpm format            # prettier --write ./src
 pnpm preview           # preview a production build
 pnpm pre-commit        # lint, format, type-check — run before every commit
-pnpm api               # regenerate src/shared/api/schema/generated.ts from schema/main.yaml
+pnpm api               # regenerate src/shared/api/schema/generated.ts from the running backend
 pnpm tunnel            # reverse SSH tunnel: expose the local dev server on the test host
 ```
 
 There is no test runner configured in this package.
 
-`pnpm pre-commit` is the gate to run before committing: `eslint .`, then `prettier --write .`, then `tsc -b`. Despite the name, nothing runs it automatically — no hook manager is installed, so it is a command you type. Two things to know about it: the type-check must stay `tsc -b`, because `tsconfig.json` is a solution file (`"files": []` plus project references) and a bare `tsc` silently checks nothing and exits 0; and `prettier --write .` formats the whole repository, including the generated `schema/generated.ts` and the vendored docs under `.agents/`, so expect unrelated files in the diff until a `.prettierignore` exists.
+`pnpm pre-commit` is the gate to run before committing: `eslint ./src`, then `prettier --write ./src`, then `tsc -b`. Despite the name, nothing runs it automatically — no hook manager is installed, so it is a command you type. Two things to know about it: the type-check must stay `tsc -b`, because `tsconfig.json` is a solution file (`"files": []` plus project references) and a bare `tsc` silently checks nothing and exits 0; and both `eslint` and `prettier` are pointed at `src` rather than the repository root, so the vendored docs under `.agents/` and the config files at the top level stay out of the diff. There is no `.prettierignore`: the generated `schema/generated.ts` is formatted like every other file, which is why `format` runs after codegen — `openapi-typescript` indents with four spaces and prettier rewrites that to two.
 
 `scripts/tunnel.ts` (run via `pnpm tunnel`, executed directly by Node's TypeScript stripping) opens a reverse SSH tunnel forwarding the local dev server to a port on the remote host, so the mini-app can be opened from MAX for testing. Copy `.env.local.example` to `.env.local` (gitignored via `*.local`) and fill in the `DEV_TUNNEL_*` values before the first run — nothing host-specific is hardcoded. Precedence for every setting is CLI flag → environment (shell wins over `.env.local`, which wins over `.env`) → default; `--dry-run` prints the resulting `ssh` command, `pnpm tunnel --help` lists each flag with its variable. These `DEV_*` variables are read only by the script (no `VITE_` prefix), never reach the client bundle, and must not be added to `shared/env.d.ts`. The dev server accepts any Host header (`server.allowedHosts: true` in `vite.config.ts`), so the tunnelled public hostname works without further configuration.
 
@@ -91,7 +91,7 @@ features/
 
 `shared` is the **last resort**: code lands here only when it is genuinely feature-agnostic and needed in more than one place. It uses the same group vocabulary as a feature:
 
-- `shared/api/` — `instance.ts` is the typed API client (`openapi-fetch` as `fetchClient`, wrapped by `openapi-react-query` as `rqClient`); `query-client.ts` holds the `QueryClient`. `schema/main.yaml` is the hand-maintained OpenAPI spec; `schema/generated.ts` is produced from it by `pnpm api` — never edit it by hand, and regenerate after the spec or the backend changes.
+- `shared/api/` — `instance.ts` is the typed API client (`openapi-fetch` as `fetchClient`, wrapped by `openapi-react-query` as `rqClient`); `query-client.ts` holds the `QueryClient`. `schema/generated.ts` is written by `pnpm api`, which points `openapi-typescript` straight at the running backend (`http://localhost/api/openapi.json`) — the tool fetches the URL itself, so no copy of the spec is kept in the repository and the backend has to be up to regenerate. Never edit the file by hand. It is committed even though it is generated, because the Docker build runs `pnpm build` with no backend in reach; `.gitattributes` marks it `linguist-generated` so review collapses it.
 - `shared/model/` — `routes.ts` is the single source of truth for route paths (`Routes.HOME`, …); never hardcode a path string. `config.ts` reads build-time env into `CONFIG`.
 - `shared/lib/` — technical utilities: `css.ts` (`cn`) and `max/`, the MAX Bridge module — a typed `window.WebApp`, launch data (`useMaxLaunch`, `useMaxUser`, and `getInitData` for the auth header), and the header back button (`useBackButton`, `useBackNavigation`). The bridge itself is the CDN script loaded in `index.html`; outside MAX every value degrades to `null` and the back button is a no-op, so the app stays runnable in a plain browser.
 - `shared/ui/` — the kit on top of `@maxhub/max-ui`: `card/`, `icon/`, `icon-tile/`.
