@@ -15,9 +15,12 @@ pnpm lint              # eslint .
 pnpm format            # prettier --write .
 pnpm preview           # preview a production build
 pnpm api               # regenerate src/shared/api/schema/generated.ts from schema/main.yaml
+pnpm tunnel            # reverse SSH tunnel: expose the local dev server on the test host
 ```
 
 There is no test runner configured in this package.
+
+`scripts/tunnel.ts` (run via `pnpm tunnel`, executed directly by Node's TypeScript stripping) opens a reverse SSH tunnel forwarding the local dev server to a port on the remote host, so the mini-app can be opened from MAX for testing. Copy `.env.local.example` to `.env.local` (gitignored via `*.local`) and fill in the `DEV_TUNNEL_*` values before the first run — nothing host-specific is hardcoded. Precedence for every setting is CLI flag → environment (shell wins over `.env.local`, which wins over `.env`) → default; `--dry-run` prints the resulting `ssh` command, `pnpm tunnel --help` lists each flag with its variable. These `DEV_*` variables are read only by the script (no `VITE_` prefix), never reach the client bundle, and must not be added to `shared/env.d.ts`. The dev server accepts any Host header (`server.allowedHosts: true` in `vite.config.ts`), so the tunnelled public hostname works without further configuration.
 
 To run a single lint check on one file: `pnpm eslint <path>`. There's no equivalent narrowing for `tsc -b` (project-reference build); run `pnpm build` for full type-checking.
 
