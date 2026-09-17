@@ -9,6 +9,7 @@ from zheka.core.enums.polls import PollStatus
 from zheka.core.enums.requests import (
     CATEGORY_RULES,
     CategoryRule,
+    RequestActorRole,
     RequestCategory,
     RequestChannel,
     RequestGroupStatus,
@@ -35,6 +36,7 @@ __all__ = (
     "NotificationLevel",
     "OrgRole",
     "PollStatus",
+    "RequestActorRole",
     "RequestCategory",
     "RequestChannel",
     "RequestGroupStatus",

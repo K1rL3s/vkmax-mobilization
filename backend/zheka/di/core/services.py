@@ -8,11 +8,13 @@ from zheka.core.services.houses import HousesService
 from zheka.core.services.moderation import ModerationService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.profile import ProfileService
+from zheka.core.services.requests import RequestsService
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
@@ -109,5 +111,26 @@ class ServicesProvider(Provider):
             invites_repo,
             users_repo,
             orgs_repo,
+            events_service,
+        )
+
+    @provide
+    def requests_service(
+        self,
+        requests_repo: RequestsRepo,
+        houses_repo: HousesRepo,
+        residents_repo: ResidentsRepo,
+        users_repo: UsersRepo,
+        orgs_repo: OrgsRepo,
+        files_service: FilesService,
+        events_service: EventsService,
+    ) -> RequestsService:
+        return RequestsService(
+            requests_repo,
+            houses_repo,
+            residents_repo,
+            users_repo,
+            orgs_repo,
+            files_service,
             events_service,
         )

@@ -1,10 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Self
 
 from pydantic import Field
 
 from zheka.api.schemas.base import BaseSchema
 from zheka.api.schemas.files import PHOTOS_DESCRIPTION, FileRef
 from zheka.core.enums import (
+    CATEGORY_RULES,
+    CategoryRule,
     RequestCategory,
     RequestChannel,
     RequestGroupStatus,
@@ -12,9 +15,18 @@ from zheka.core.enums import (
     ResponsibilityZone,
 )
 from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
+from zheka.core.models import Request, RequestStatusLog
+from zheka.core.services.requests import (
+    RequestCardData,
+    RequestMessageView,
+    RequestRow,
+)
 
 MIN_RATING = 1
 MAX_RATING = 5
+
+
+UNKNOWN_AUTHOR = "Пользователь"
 
 
 class RequestCategoryItem(BaseSchema):
@@ -22,6 +34,22 @@ class RequestCategoryItem(BaseSchema):
     label: str
     zone: ResponsibilityZone
     normative_hours: int
+
+    @classmethod
+    def of(cls, category: RequestCategory, rule: CategoryRule) -> Self:
+        return cls(
+            category=category,
+            label=rule.label,
+            zone=rule.zone,
+            normative_hours=rule.normative_hours,
+        )
+
+
+def deadline_of(request: Request) -> datetime:
+    # норматив реакции по категории, от момента подачи: фронт красит просрочку
+    # сам, поэтому отдается срок, а не флаг
+    hours = CATEGORY_RULES[request.category].normative_hours
+    return request.created_at + timedelta(hours=hours)
 
 
 class RequestListItem(BaseSchema):
@@ -40,6 +68,28 @@ class RequestListItem(BaseSchema):
     rating: int | None = Field(default=None, description="Оценка жителя от 1 до 5")
     deadline_at: datetime | None = None
 
+    @classmethod
+    def of_row(cls, row: RequestRow) -> Self:
+        request = row.request
+        return cls(
+            id=RequestId(request.id),
+            created_at=request.created_at,
+            category=request.category,
+            category_label=CATEGORY_RULES[request.category].label,
+            description=request.description,
+            status=request.status,
+            channel=request.channel,
+            has_photos=row.has_photos,
+            group_size=row.group_size,
+            flat_number=None if row.flat is None else row.flat.number,
+            group_id=(
+                None if request.group_id is None else RequestGroupId(request.group_id)
+            ),
+            executor_name=None if row.executor is None else row.executor.name,
+            rating=request.rating,
+            deadline_at=deadline_of(request),
+        )
+
 
 class RequestMessageItem(BaseSchema):
     created_at: datetime
@@ -47,12 +97,30 @@ class RequestMessageItem(BaseSchema):
     author_name: str
     text: str
 
+    @classmethod
+    def of(cls, view: RequestMessageView) -> Self:
+        return cls(
+            created_at=view.message.created_at,
+            author_role=view.message.author_role,
+            author_name=UNKNOWN_AUTHOR if view.author is None else view.author.name,
+            text=view.message.text,
+        )
+
 
 class RequestStatusLogItem(BaseSchema):
     at: datetime
     to_status: RequestStatus
     by_role: str
     from_status: RequestStatus | None = None
+
+    @classmethod
+    def of(cls, log: RequestStatusLog) -> Self:
+        return cls(
+            at=log.at,
+            to_status=log.to_status,
+            by_role=log.by_role,
+            from_status=log.from_status,
+        )
 
 
 class RequestCard(RequestListItem):
@@ -67,6 +135,48 @@ class RequestCard(RequestListItem):
     feedback: str | None = None
     parent_request_id: RequestId | None = None
     flat_id: FlatId | None = None
+
+    @classmethod
+    def of(
+        cls,
+        card: RequestCardData,
+        photos: list[FileRef],
+        result_photos: list[FileRef],
+    ) -> Self:
+        request = card.request
+        return cls(
+            id=RequestId(request.id),
+            created_at=request.created_at,
+            category=request.category,
+            category_label=CATEGORY_RULES[request.category].label,
+            description=request.description,
+            status=request.status,
+            channel=request.channel,
+            has_photos=bool(photos),
+            group_size=card.group_size,
+            flat_number=None if card.flat is None else card.flat.number,
+            group_id=(
+                None if request.group_id is None else RequestGroupId(request.group_id)
+            ),
+            executor_name=None if card.executor is None else card.executor.name,
+            rating=request.rating,
+            deadline_at=deadline_of(request),
+            house_id=HouseId(request.house_id),
+            address=card.house.address,
+            photos=photos,
+            result_photos=result_photos,
+            messages=[RequestMessageItem.of(view) for view in card.messages],
+            timeline=[RequestStatusLogItem.of(log) for log in card.timeline],
+            can_review=card.can_review,
+            can_rate=card.can_rate,
+            feedback=request.feedback,
+            parent_request_id=(
+                None
+                if request.parent_request_id is None
+                else RequestId(request.parent_request_id)
+            ),
+            flat_id=None if request.flat_id is None else FlatId(request.flat_id),
+        )
 
 
 class CreateRequestRequest(BaseSchema):
