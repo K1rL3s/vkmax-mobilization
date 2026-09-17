@@ -1,7 +1,8 @@
 from collections.abc import Collection, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from zheka.core.enums import OrgRole
 from zheka.core.ids import OrgId, UserId
 from zheka.infra.database.models import OrgMember, OrgSettings, Organization
 from zheka.infra.database.repos.base import BaseAlchemyRepo
@@ -63,3 +64,38 @@ class OrgsRepo(BaseAlchemyRepo):
         stmt = select(Organization).where(organizations_table.c.id.in_(org_ids))
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+    async def count_members(self, org_id: OrgId) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(org_members_table)
+            .where(org_members_table.c.org_id == org_id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+    async def add_member(
+        self,
+        org_id: OrgId,
+        user_id: UserId,
+        role: OrgRole,
+    ) -> OrgMember:
+        member = OrgMember(org_id=org_id, user_id=user_id, role=role)
+        self._session.add(member)
+        await self._session.flush()
+        return member
+
+    async def set_member_role(self, member: OrgMember, role: OrgRole) -> OrgMember:
+        member.role = role
+        await self._session.flush()
+        return member
+
+    async def remove_member(self, member: OrgMember) -> None:
+        await self._session.delete(member)
+        await self._session.flush()
+
+    async def add_settings(self, org_id: OrgId) -> OrgSettings:
+        settings = OrgSettings(org_id=org_id)
+        self._session.add(settings)
+        await self._session.flush()
+        return settings

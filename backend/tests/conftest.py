@@ -17,6 +17,7 @@ from zheka.config import (
     BotMode,
     Config,
     DbConfig,
+    DeeplinksConfig,
     FilesConfig,
     LogConfig,
     LogFormat,
@@ -40,6 +41,7 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 # а тестам не нужен ни настоящий бот, ни редис
 os.environ.setdefault("MAX_TOKEN", "test-token")
 os.environ.setdefault("REDIS_HOST", "127.0.0.1")
+os.environ.setdefault("DEEPLINK_ORG_REGISTER", "test-register-code")
 
 
 @pytest.fixture(scope="session")
@@ -174,4 +176,5 @@ def make_config() -> Config:
             dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"),
             max_size_mb=10,
         ),
+        deeplinks=DeeplinksConfig(org_register="test-register-code"),
     )

@@ -8,7 +8,14 @@ from zheka.api.schemas.files import FileRef
 from zheka.core.enums import EventSource, ResidentRole, ResidentStatus
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat, Organization
-from zheka.core.services.houses import HouseCardData, HouseFound, ResidencyView
+from zheka.core.services.houses import (
+    AdminHouseCardData,
+    AdminHouseRow,
+    HouseCardData,
+    HouseFound,
+    HouseResidentView,
+    ResidencyView,
+)
 
 
 class CityItem(BaseSchema):
@@ -214,6 +221,18 @@ class AdminHouseListItem(BaseSchema):
     open_requests: int
     chat_bound: bool
 
+    @classmethod
+    def of(cls, row: AdminHouseRow) -> Self:
+        return cls(
+            id=HouseId(row.house.id),
+            address=row.house.address,
+            entrances=row.house.entrances,
+            flats_count=row.flats_count,
+            residents_count=row.residents_count,
+            open_requests=row.open_requests,
+            chat_bound=row.chat_bound,
+        )
+
 
 class EntranceQr(BaseSchema):
     entrance: int
@@ -248,6 +267,33 @@ class AdminHouseCard(BaseSchema):
     chairman_name: str | None = None
     chat_title: str | None = None
 
+    @classmethod
+    def of(cls, card: AdminHouseCardData, entrance_qrs: list[EntranceQr]) -> Self:
+        house = card.house
+        return cls(
+            id=HouseId(house.id),
+            address=house.address,
+            region=house.region,
+            city=house.city,
+            street=house.street,
+            building=house.building,
+            cadastral_no=house.cadastral_no,
+            entrances=house.entrances,
+            flats_count=card.flats_count,
+            residents_count=card.residents_count,
+            verified_residents_count=card.verified_residents_count,
+            pending_verifications=card.pending_verifications,
+            open_requests=card.open_requests,
+            chat_bound=card.chat_bound,
+            chat_binding_code=house.chat_binding_code,
+            entrance_qrs=entrance_qrs,
+            built_year=house.built_year,
+            floors=house.floors,
+            area=house.area,
+            chairman_name=card.chairman_name,
+            chat_title=card.chat_title,
+        )
+
 
 class HouseResidentItem(BaseSchema):
     resident_id: ResidentId
@@ -261,6 +307,23 @@ class HouseResidentItem(BaseSchema):
     flat_id: FlatId | None = None
     flat_number: str | None = None
     block_reason: str | None = None
+
+    @classmethod
+    def of(cls, view: HouseResidentView) -> Self:
+        resident = view.resident
+        return cls(
+            resident_id=ResidentId(resident.id),
+            user_id=UserId(resident.user_id),
+            created_at=resident.created_at,
+            name=view.user.name,
+            role=resident.role,
+            status=resident.status,
+            verified=resident.verified_at is not None,
+            is_chairman=resident.is_chairman,
+            flat_id=None if view.flat is None else FlatId(view.flat.id),
+            flat_number=None if view.flat is None else view.flat.number,
+            block_reason=resident.block_reason,
+        )
 
 
 class BlockResidentRequest(BaseSchema):

@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser
 
-from zheka.core.enums import EventSource, ResidentRole
-from zheka.core.errors import InvalidState, NotEnoughRights
+from zheka.core.enums import EventSource, OrgRole, ResidentRole
+from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService
@@ -274,3 +274,44 @@ async def test_link_gives_a_flat_to_a_residency_that_had_none(
     assert second.resident.id == first.resident.id
     assert second.resident.flat_id == fixture.flat_id
     assert second.flat is not None
+
+
+async def test_admin_house_surface(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(
+        org_role=OrgRole.CREATOR,
+        resident_role=ResidentRole.OWNER,
+    )
+    other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    houses_service = _make_service(session)
+
+    rows, total = await houses_service.org_houses(own.org_id, None, 50, 0)
+    assert total == 1
+    assert rows[0].flats_count == 1
+    assert rows[0].residents_count == 1
+    assert rows[0].open_requests == 0
+    assert rows[0].chat_bound is False
+
+    card = await houses_service.admin_card(own.org_id, own.house_id)
+    assert card.verified_residents_count == 0
+    assert card.pending_verifications == 0
+    assert card.chairman_name is None
+
+    residents, total = await houses_service.house_residents(
+        own.org_id,
+        own.house_id,
+        "Тест",
+        50,
+        0,
+    )
+    assert total == 1
+    assert residents[0].flat is not None
+
+    old_code = card.house.chat_binding_code
+    house = await houses_service.rotate_binding_code(own.org_id, own.house_id)
+    assert house.chat_binding_code != old_code
+
+    with pytest.raises(EntityNotFound):
+        await houses_service.admin_card(own.org_id, other.house_id)

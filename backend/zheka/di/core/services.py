@@ -1,12 +1,15 @@
 from dishka import BaseScope, Provider, Scope, provide
 
-from zheka.config import FilesConfig, MaxConfig
+from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.houses import HousesService
+from zheka.core.services.moderation import ModerationService
+from zheka.core.services.orgs import OrgsService
 from zheka.core.services.profile import ProfileService
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
+from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -49,3 +52,37 @@ class ServicesProvider(Provider):
         orgs_repo: OrgsRepo,
     ) -> ProfileService:
         return ProfileService(users_repo, residents_repo, houses_repo, orgs_repo)
+
+    @provide
+    def orgs_service(
+        self,
+        orgs_repo: OrgsRepo,
+        invites_repo: InvitesRepo,
+        houses_repo: HousesRepo,
+        users_repo: UsersRepo,
+        events_service: EventsService,
+        deeplinks: DeeplinksConfig,
+    ) -> OrgsService:
+        return OrgsService(
+            orgs_repo,
+            invites_repo,
+            houses_repo,
+            users_repo,
+            events_service,
+            deeplinks,
+        )
+
+    @provide
+    def moderation_service(
+        self,
+        residents_repo: ResidentsRepo,
+        users_repo: UsersRepo,
+        houses_repo: HousesRepo,
+        events_service: EventsService,
+    ) -> ModerationService:
+        return ModerationService(
+            residents_repo,
+            users_repo,
+            houses_repo,
+            events_service,
+        )
