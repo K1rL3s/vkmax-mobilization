@@ -12,52 +12,13 @@
     padding: 16px;
   }
 
-  .Autocomplete {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .SearchRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .SearchInput {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .SearchIcon {
-    /* в SVG из макета уже заложена прозрачность 28% */
-    color: var(--text-primary);
-  }
-
-  .GeoIcon {
-    color: var(--icon-themed);
-  }
-
-  .Suggestions {
-    overflow: hidden;
-    border: 1px solid var(--divider-primary);
-    border-radius: 16px;
-    background-color: var(--background-card);
-  }
-
-  .SuggestionIcon {
-    color: var(--icon-primary);
-  }
-
-  .Match {
-    font-weight: 500;
-  }
-
-  .Empty {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 12px;
+  .TextButton {
+    margin-top: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text-accent, var(--button-primary));
+    cursor: pointer;
   }
 
   .Footer {

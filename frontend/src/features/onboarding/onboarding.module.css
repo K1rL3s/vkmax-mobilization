@@ -7,6 +7,27 @@
     padding: 0 24px;
   }
 
+  .Footer {
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .Consent {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    background-color: var(--background-secondary);
+    text-align: left;
+  }
+
+  .Policy {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-accent, var(--button-primary));
+    text-decoration: none;
+  }
+
   .Hero {
     text-align: center;
 
