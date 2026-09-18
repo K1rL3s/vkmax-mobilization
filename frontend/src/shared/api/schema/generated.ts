@@ -2791,6 +2791,8 @@ export interface components {
     LinkHouseRequest: {
       /** Flat Id */
       flat_id?: number | null;
+      /** Flat Number */
+      flat_number?: string | null;
       /** @default owner */
       role: components["schemas"]["ResidentRole"];
       /** Account No */
@@ -3053,9 +3055,15 @@ export interface components {
     OrgRole: "creator" | "admin" | "employee" | "executor";
     /** OrgSettingsResponse */
     OrgSettingsResponse: {
-      /** Meter Window Day From */
+      /**
+       * Meter Window Day From
+       * @description День месяца, 1-28
+       */
       meter_window_day_from: number;
-      /** Meter Window Day To */
+      /**
+       * Meter Window Day To
+       * @description День месяца, 1-28
+       */
       meter_window_day_to: number;
       /** Meter Window Always Open */
       meter_window_always_open: boolean;
@@ -3423,6 +3431,11 @@ export interface components {
     };
     /** RegisterOrgRequest */
     RegisterOrgRequest: {
+      /**
+       * Deeplink Code
+       * @description Скрытый код из диплинка регистрации
+       */
+      deeplink_code: string;
       /** Inn */
       inn: string;
       /** License No */
@@ -3433,8 +3446,6 @@ export interface components {
       phone: string;
       /** Address */
       address: string;
-      /** House Ids */
-      house_ids: number[];
     };
     /** RejectVerificationRequest */
     RejectVerificationRequest: {
@@ -3879,6 +3890,10 @@ export interface components {
       /** Account No */
       account_no: string;
       status: components["schemas"]["VerificationStatus"];
+      /** Comment */
+      comment?: string | null;
+      /** Reason */
+      reason?: string | null;
     };
     /**
      * VerificationStatus
@@ -4611,8 +4626,9 @@ export interface operations {
   };
   search_houses: {
     parameters: {
-      query: {
-        city: string;
+      query?: {
+        q?: string | null;
+        city?: string | null;
         street?: string | null;
         building?: string | null;
         /** @description Размер страницы */
