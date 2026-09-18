@@ -8,10 +8,15 @@ from fastapi import Depends, Header
 from zheka.api.dependencies.current_account import CurrentAccountDep
 from zheka.base import ZhekaType
 from zheka.core.enums import ResidentRole, ResidentStatus
-from zheka.core.errors import NotEnoughRights
+from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, ResidentId, UserId
 from zheka.infra.database.models import Resident
+from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
+
+BLOCKED = "УК закрыла вам доступ к этому дому"
+FLAT_NOT_FOUND = "Квартира не найдена"
+HOUSE_NOT_FOUND = "Дом не найден"
 
 
 class CurrentResidency(ZhekaType):
@@ -42,6 +47,24 @@ def _to_residency(resident: Resident) -> CurrentResidency:
     )
 
 
+def blocked_detail(reason: str | None) -> str:
+    # причина из residents.block_reason: отказ без нее не подсказывает жителю,
+    # к кому идти и что исправлять
+    return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
+
+
+def residency_of(resident: Resident | None, not_found: str) -> CurrentResidency:
+    # чужой дом и чужая квартира отвечают 404, потому что 403 подтвердил бы,
+    # что такой id есть. Заблокированный житель - обратный случай: он и так
+    # знает, что дом существует, его оттуда выселила УК, и молчаливый 404
+    # вместо прямого отказа был бы худшим ответом
+    if resident is None:
+        raise EntityNotFound(not_found)
+    if resident.status is ResidentStatus.BLOCKED:
+        raise NotEnoughRights(blocked_detail(resident.block_reason))
+    return _to_residency(resident)
+
+
 def resolve_residency(
     residencies: Sequence[Resident],
     house_id_header: HouseId | None,
@@ -63,7 +86,7 @@ def resolve_residency(
         if found is None:
             raise NotEnoughRights("Нет доступа к этому дому")
         resident = found
-    return _to_residency(resident)
+    return residency_of(resident, HOUSE_NOT_FOUND)
 
 
 @inject
@@ -88,9 +111,7 @@ async def residency_for(
     residents_repo: FromDishka[ResidentsRepo],
 ) -> CurrentResidency:
     resident = await residents_repo.get_for_house(current_account.user_id, house_id)
-    if resident is None:
-        raise NotEnoughRights("Вы не житель этого дома")
-    return _to_residency(resident)
+    return residency_of(resident, HOUSE_NOT_FOUND)
 
 
 @inject
@@ -105,10 +126,33 @@ async def residency_for_flat(
         (r for r in residents if r.user_id == current_account.user_id),
         None,
     )
-    if resident is None:
-        raise NotEnoughRights("Вы не житель этой квартиры")
-    return _to_residency(resident)
+    return residency_of(resident, FLAT_NOT_FOUND)
+
+
+@inject
+async def residency_for_flat_house(
+    *,
+    flat_id: FlatId,
+    current_account: CurrentAccountDep,
+    residents_repo: FromDishka[ResidentsRepo],
+    houses_repo: FromDishka[HousesRepo],
+) -> CurrentResidency:
+    # подтверждение квартиры и есть тот момент, когда residents.flat_id
+    # проставляется, поэтому доступ сюда дает дом квартиры, а не сама
+    # квартира: иначе житель, пришедший по диплинку дома, не дошел бы никогда
+    flat = await houses_repo.get_flat(flat_id)
+    if flat is None:
+        raise EntityNotFound(FLAT_NOT_FOUND)
+    resident = await residents_repo.get_for_house(
+        current_account.user_id,
+        HouseId(flat.house_id),
+    )
+    return residency_of(resident, FLAT_NOT_FOUND)
 
 
 ResidencyForHouseDep = Annotated[CurrentResidency, Depends(residency_for)]
 ResidencyForFlatDep = Annotated[CurrentResidency, Depends(residency_for_flat)]
+ResidencyForFlatHouseDep = Annotated[
+    CurrentResidency,
+    Depends(residency_for_flat_house),
+]

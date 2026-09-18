@@ -24,6 +24,8 @@ class Resident(ZhekaMutableType):
     user_id: UserId
     house_id: HouseId
     flat_id: FlatId | None = None
+    # номер квартиры, которой еще нет в доме: УК заводит квартиры не везде
+    flat_number: str | None = None
     role: ResidentRole
     can_see_charges: bool = True
     can_vote: bool = True
@@ -40,9 +42,12 @@ class VerificationRequest(ZhekaMutableType):
     flat_id: FlatId
     user_id: UserId
     account_no: str
+    # пояснение жителя к запросу и причина отказа УК: оба видны в админке
+    comment: str | None = None
     status: VerificationStatus
     decided_by: UserId | None = None
     decided_at: datetime | None = None
+    reason: str | None = None
 
 
 class DemandSignal(ZhekaMutableType):

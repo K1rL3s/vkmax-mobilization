@@ -4,6 +4,10 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 # Use sh on Unix-like systems
 set shell := ["sh", "-c"]
 
+# .env лежит в корне репозитория, рядом с docker-compose.yml
+set dotenv-load := true
+set dotenv-filename := "../.env"
+
 package := "zheka"
 sources := "zheka migrations tests"
 slots_args := ""
@@ -71,7 +75,7 @@ all:
     just test
 
 api:
-    uv run python -m zheka.api
+    uv run gunicorn -c gunicorn.conf.py zheka.api.asgi:app
 
 worker:
     uv run taskiq worker zheka.broker.broker:main --workers=1 --no-configure-logging

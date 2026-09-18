@@ -38,6 +38,8 @@ class EventType(StrEnum):
 
     ORG_REGISTERED = "org_registered"
     STAFF_INVITED = "staff_invited"
+    RESIDENT_BLOCKED = "resident_blocked"
+    RESIDENT_UNBLOCKED = "resident_unblocked"
 
     LLM_SUGGESTED = "llm_suggested"
     LLM_ACCEPTED = "llm_accepted"

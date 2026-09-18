@@ -18,7 +18,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import HouseId, MaxUserId, OrgId, RequestId, UserId
-from zheka.core.services.access import can_remove_member
+from zheka.core.services.access import can_invite, can_remove_member
 from zheka.core.services.events import EventsService
 from zheka.infra.database.models import Event, OrgMember, Request, User
 from zheka.infra.database.repos.events import EventsRepo
@@ -179,3 +179,23 @@ def test_can_remove_member(
     expected: bool,
 ) -> None:
     assert can_remove_member(actor_role, target_role) is expected
+
+
+@pytest.mark.parametrize(
+    ("actor_role", "target_role", "expected"),
+    [
+        (OrgRole.CREATOR, OrgRole.CREATOR, False),
+        (OrgRole.CREATOR, OrgRole.ADMIN, True),
+        (OrgRole.ADMIN, OrgRole.ADMIN, False),
+        (OrgRole.ADMIN, OrgRole.EMPLOYEE, True),
+        (OrgRole.ADMIN, OrgRole.EXECUTOR, True),
+        (OrgRole.EMPLOYEE, OrgRole.EXECUTOR, False),
+        (OrgRole.EXECUTOR, OrgRole.EXECUTOR, False),
+    ],
+)
+def test_can_invite(
+    actor_role: OrgRole,
+    target_role: OrgRole,
+    expected: bool,
+) -> None:
+    assert can_invite(actor_role, target_role) is expected

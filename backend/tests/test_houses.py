@@ -9,13 +9,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser
 
-from zheka.core.enums import EventSource, ResidentRole
-from zheka.core.errors import InvalidState, NotEnoughRights
+from zheka.api.schemas.houses import ResidencySummary
+from zheka.core.enums import EventSource, OrgRole, ResidentRole
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService
 from zheka.infra.database.models import Flat, House
 from zheka.infra.database.repos.events import EventsRepo
+from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -29,6 +36,7 @@ def _make_service(session: AsyncSession) -> HousesService:
         ResidentsRepo(session),
         OrgsRepo(session),
         UsersRepo(session),
+        FlatsRepo(session),
         EventsService(EventsRepo(session)),
     )
 
@@ -69,6 +77,7 @@ async def test_link_refuses_without_consent(
             fixture.user_id,
             fixture.house_id,
             None,
+            None,
             ResidentRole.OWNER,
             EventSource.MINIAPP,
             None,
@@ -89,6 +98,7 @@ async def test_link_twice_returns_the_same_residency(
         fixture.user_id,
         fixture.house_id,
         fixture.flat_id,
+        None,
         ResidentRole.TENANT,
         EventSource.MINIAPP,
         None,
@@ -100,6 +110,7 @@ async def test_link_twice_returns_the_same_residency(
         fixture.user_id,
         fixture.house_id,
         fixture.flat_id,
+        None,
         ResidentRole.OWNER,
         EventSource.QR,
         None,
@@ -160,6 +171,95 @@ async def _add_house(
     return HouseId(house.id)
 
 
+async def _add_address(
+    session: AsyncSession,
+    org_id: OrgId,
+    city: str,
+    street: str,
+    building: str,
+) -> HouseId:
+    house = House(
+        org_id=org_id,
+        region="Республика Татарстан",
+        city=city,
+        street=street,
+        building=building,
+        cadastral_no=secrets.token_hex(8),
+        chat_binding_code=secrets.token_hex(4),
+    )
+    session.add(house)
+    await session.flush()
+    return HouseId(house.id)
+
+
+async def test_search_by_query_ignores_word_order_and_case(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    # в макете одно поле поиска: адрес житель набирает как придется, и города
+    # в строке может не быть вовсе
+    fixture = await make_org_house_flat_user()
+    wanted = await _add_address(session, fixture.org_id, "Казань", "Баумана", "12")
+    await _add_address(session, fixture.org_id, "Казань", "Кремлевская", "12")
+    await _add_address(session, fixture.org_id, "Москва", "Баумана", "3")
+    service = _make_service(session)
+
+    for query in ("Баумана 12", "12 баумана", "  БАУМАНА   12 ", "казань баумана 12"):
+        found, total = await service.search(
+            fixture.user_id,
+            None,
+            None,
+            None,
+            query,
+            20,
+            0,
+        )
+        assert [item.house.id for item in found] == [wanted], query
+        assert total == 1
+
+
+async def test_search_by_city_keeps_working(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    wanted = await _add_address(session, fixture.org_id, "Казань", "Баумана", "12")
+    await _add_address(session, fixture.org_id, "Москва", "Баумана", "12")
+
+    found, total = await _make_service(session).search(
+        fixture.user_id,
+        "Казань",
+        "Баумана",
+        "12",
+        None,
+        20,
+        0,
+    )
+
+    assert [item.house.id for item in found] == [wanted]
+    assert total == 1
+
+
+@pytest.mark.parametrize("blank", [None, "", "   "])
+async def test_search_without_city_and_query_is_refused(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    blank: str | None,
+) -> None:
+    fixture = await make_org_house_flat_user()
+
+    with pytest.raises(InvalidRequest):
+        await _make_service(session).search(
+            fixture.user_id,
+            blank,
+            None,
+            None,
+            blank,
+            20,
+            0,
+        )
+
+
 async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
@@ -200,7 +300,57 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     assert far_id in {item.house.id for item in far}
 
 
-async def test_link_with_another_flat_refuses_to_move_the_residency(
+async def test_link_moves_an_unverified_residency_to_another_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    # квартиру житель выбирает на первом же экране: опечатка в номере не
+    # должна запирать его в чужой квартире навсегда
+    fixture = await make_org_house_flat_user()
+    await _consent(session, fixture)
+    other_flat = Flat(house_id=fixture.house_id, number="2")
+    session.add(other_flat)
+    await session.flush()
+    service = _make_service(session)
+
+    first = await service.link(
+        fixture.user_id,
+        fixture.house_id,
+        fixture.flat_id,
+        None,
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+    moved = await service.link(
+        fixture.user_id,
+        fixture.house_id,
+        FlatId(other_flat.id),
+        None,
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+
+    assert moved.resident.id == first.resident.id
+    assert moved.resident.flat_id == other_flat.id
+    assert await _count_residencies(session, fixture.user_id) == 1
+
+    # и номером незаведенной квартиры тоже: житель мог ошибиться домом
+    by_number = await service.link(
+        fixture.user_id,
+        fixture.house_id,
+        None,
+        "77",
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+    assert by_number.resident.flat_id is None
+    assert by_number.resident.flat_number == "77"
+
+
+async def test_link_refuses_to_move_a_verified_residency(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
@@ -215,16 +365,30 @@ async def test_link_with_another_flat_refuses_to_move_the_residency(
         fixture.user_id,
         fixture.house_id,
         fixture.flat_id,
+        None,
         ResidentRole.OWNER,
         EventSource.MINIAPP,
         None,
     )
+    first.resident.verified_at = datetime.now(UTC)
+    await session.flush()
 
     with pytest.raises(InvalidState):
         await service.link(
             fixture.user_id,
             fixture.house_id,
             FlatId(other_flat.id),
+            None,
+            ResidentRole.OWNER,
+            EventSource.MINIAPP,
+            None,
+        )
+    with pytest.raises(InvalidState):
+        await service.link(
+            fixture.user_id,
+            fixture.house_id,
+            None,
+            "77",
             ResidentRole.OWNER,
             EventSource.MINIAPP,
             None,
@@ -234,11 +398,13 @@ async def test_link_with_another_flat_refuses_to_move_the_residency(
         fixture.user_id,
         fixture.house_id,
         fixture.flat_id,
+        None,
         ResidentRole.OWNER,
         EventSource.MINIAPP,
         None,
     )
     assert again.resident.id == first.resident.id
+    assert again.resident.flat_id == fixture.flat_id
 
 
 async def test_link_gives_a_flat_to_a_residency_that_had_none(
@@ -256,6 +422,7 @@ async def test_link_gives_a_flat_to_a_residency_that_had_none(
         fixture.user_id,
         fixture.house_id,
         None,
+        None,
         ResidentRole.OWNER,
         EventSource.CHAT,
         None,
@@ -266,6 +433,7 @@ async def test_link_gives_a_flat_to_a_residency_that_had_none(
         fixture.user_id,
         fixture.house_id,
         fixture.flat_id,
+        None,
         ResidentRole.OWNER,
         EventSource.MINIAPP,
         None,
@@ -274,3 +442,153 @@ async def test_link_gives_a_flat_to_a_residency_that_had_none(
     assert second.resident.id == first.resident.id
     assert second.resident.flat_id == fixture.flat_id
     assert second.flat is not None
+
+
+async def test_link_by_the_number_of_a_known_flat_takes_that_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    # квартира с таким номером в доме уже заведена, и второй такой же без
+    # flat_id заводить нельзя
+    fixture = await make_org_house_flat_user()
+    await _consent(session, fixture)
+
+    view = await _make_service(session).link(
+        fixture.user_id,
+        fixture.house_id,
+        None,
+        " 1 ",
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+
+    assert view.resident.flat_id == fixture.flat_id
+    assert view.resident.flat_number is None
+    summary = ResidencySummary.of(view)
+    assert (summary.flat_id, summary.flat_number) == (fixture.flat_id, "1")
+
+
+async def test_link_by_an_unknown_number_keeps_the_number_without_a_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    # квартиры с лицевыми счетами есть только у демо-дома, а жителю любого
+    # другого нужно пройти онбординг до конца
+    fixture = await make_org_house_flat_user()
+    await _consent(session, fixture)
+
+    view = await _make_service(session).link(
+        fixture.user_id,
+        fixture.house_id,
+        None,
+        "77",
+        ResidentRole.OWNER,
+        EventSource.MINIAPP,
+        None,
+    )
+
+    assert view.resident.flat_id is None
+    assert view.flat is None
+    summary = ResidencySummary.of(view)
+    assert (summary.flat_id, summary.flat_number) == (None, "77")
+
+
+async def test_link_refuses_a_flat_id_together_with_a_number(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    await _consent(session, fixture)
+
+    with pytest.raises(InvalidRequest):
+        await _make_service(session).link(
+            fixture.user_id,
+            fixture.house_id,
+            fixture.flat_id,
+            "1",
+            ResidentRole.OWNER,
+            EventSource.MINIAPP,
+            None,
+        )
+
+    assert await _count_residencies(session, fixture.user_id) == 0
+
+
+async def test_admin_house_surface(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(
+        org_role=OrgRole.CREATOR,
+        resident_role=ResidentRole.OWNER,
+    )
+    other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    houses_service = _make_service(session)
+
+    rows, total = await houses_service.org_houses(own.org_id, None, 50, 0)
+    assert total == 1
+    assert rows[0].flats_count == 1
+    assert rows[0].residents_count == 1
+    assert rows[0].open_requests == 0
+    assert rows[0].chat_bound is False
+
+    card = await houses_service.admin_card(own.org_id, own.house_id)
+    assert card.verified_residents_count == 0
+    assert card.pending_verifications == 0
+    assert card.chairman_name is None
+
+    residents, total = await houses_service.house_residents(
+        own.org_id,
+        own.house_id,
+        "Тест",
+        50,
+        0,
+    )
+    assert total == 1
+    assert residents[0].flat is not None
+
+    old_code = card.house.chat_binding_code
+    house = await houses_service.rotate_binding_code(own.org_id, own.house_id)
+    assert house.chat_binding_code != old_code
+
+    with pytest.raises(EntityNotFound):
+        await houses_service.admin_card(own.org_id, other.house_id)
+
+
+async def test_flats_are_hidden_from_a_stranger(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    stranger = await make_org_house_flat_user()
+    service = _make_service(session)
+
+    # is_taken выдает, в каких квартирах дома есть наши пользователи, поэтому
+    # список закрыт жителями дома, а чужой дом отвечает 404, а не 403
+    with pytest.raises(EntityNotFound):
+        await service.flats(stranger.user_id, own.house_id, None, None, 50, 0)
+
+
+async def test_flats_are_listed_to_a_resident_of_the_house(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    free_flat = Flat(house_id=own.house_id, number="2")
+    session.add(free_flat)
+    await session.flush()
+    service = _make_service(session)
+
+    flats, total, taken = await service.flats(
+        own.user_id,
+        own.house_id,
+        None,
+        None,
+        50,
+        0,
+    )
+
+    assert total == 2
+    assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
+    assert taken == {own.flat_id}

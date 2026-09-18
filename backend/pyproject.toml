@@ -22,7 +22,7 @@ dependencies = [
     #
     "fastapi==0.141.1",
     "pydantic==2.13.5",
-    "granian==2.8.3",
+    "gunicorn==26.2.0",
     #
     "sqlalchemy[asyncio]==2.0.53",
     "psycopg[binary]==3.3.5",

@@ -13,6 +13,15 @@ class RequestStatus(StrEnum):
     DONE = "done"
 
 
+class RequestActorRole(StrEnum):
+    # кто двинул статус: пишется в request_status_log.by_role строкой,
+    # своего типа в базе у нее нет
+    RESIDENT = "resident"
+    STAFF = "staff"
+    EXECUTOR = "executor"
+    SYSTEM = "system"
+
+
 class RequestChannel(StrEnum):
     MINIAPP = "miniapp"
     BOT = "bot"

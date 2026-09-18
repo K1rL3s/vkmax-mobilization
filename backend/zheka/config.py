@@ -22,9 +22,6 @@ class LogConfig(ZhekaType):
 
 
 class ApiConfig(ZhekaType):
-    host: str
-    port: int
-    workers: int
     cors: tuple[str, ...]
 
 
@@ -73,6 +70,10 @@ class FilesConfig(ZhekaType):
     max_size_mb: int
 
 
+class DeeplinksConfig(ZhekaType):
+    org_register: str
+
+
 class Config(ZhekaType):
     log: LogConfig
     api: ApiConfig
@@ -80,6 +81,7 @@ class Config(ZhekaType):
     redis: RedisConfig
     max: MaxConfig
     files: FilesConfig
+    deeplinks: DeeplinksConfig
 
 
 def load_config(env_path: str | None = None) -> Config:
@@ -93,6 +95,7 @@ def load_config(env_path: str | None = None) -> Config:
         redis=_load_redis(env),
         max=_load_max(env),
         files=_load_files(env),
+        deeplinks=_load_deeplinks(env),
     )
     if config.max.mode is BotMode.WEBHOOK and not config.max.webhook_url:
         raise ValueError("MAX_WEBHOOK_URL обязателен при MAX_BOT_MODE=webhook")
@@ -107,13 +110,9 @@ def _load_log(env: Env) -> LogConfig:
 
 
 def _load_api(env: Env) -> ApiConfig:
+    # адрес, порт и число воркеров читает gunicorn из своих флагов, не приложение
     with env.prefixed("API_"):
-        return ApiConfig(
-            host=env.str("HOST", "0.0.0.0"),  # noqa: S104 # nosec B104
-            port=env.int("PORT", 7001),
-            workers=env.int("WORKERS", 1),
-            cors=tuple(env.list("CORS", [])),
-        )
+        return ApiConfig(cors=tuple(env.list("CORS", [])))
 
 
 def _load_db(env: Env) -> DbConfig:
@@ -154,3 +153,15 @@ def _load_files(env: Env) -> FilesConfig:
             dir=env.str("DIR", "/data/files"),
             max_size_mb=env.int("MAX_SIZE_MB", 10),
         )
+
+
+def _load_deeplinks(env: Env) -> DeeplinksConfig:
+    with env.prefixed("DEEPLINK_"):
+        # у кода регистрации нет значения по умолчанию: пустой секрет, который
+        # молча работает, хуже ошибки на старте
+        org_register = env.str("ORG_REGISTER")
+    # сравнение с кодом идет через secrets.compare_digest, а он на не-ASCII
+    # бросает TypeError - то есть 500 на первом же запросе вместо ошибки старта
+    if not org_register.isascii():
+        raise ValueError("DEEPLINK_ORG_REGISTER должен состоять только из ASCII")
+    return DeeplinksConfig(org_register=org_register)

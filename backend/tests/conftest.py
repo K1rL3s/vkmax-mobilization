@@ -1,9 +1,11 @@
 import os
 import secrets
 import tempfile
+import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from pathlib import Path
 
+import psycopg
 import pytest
 import pytest_asyncio
 from alembic import command
@@ -17,6 +19,7 @@ from zheka.config import (
     BotMode,
     Config,
     DbConfig,
+    DeeplinksConfig,
     FilesConfig,
     LogConfig,
     LogFormat,
@@ -40,6 +43,29 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 # а тестам не нужен ни настоящий бот, ни редис
 os.environ.setdefault("MAX_TOKEN", "test-token")
 os.environ.setdefault("REDIS_HOST", "127.0.0.1")
+os.environ.setdefault("DEEPLINK_ORG_REGISTER", "test-register-code")
+
+
+# initdb поднимает временный сервер и печатает в лог то же самое
+# "database system is ready to accept connections", по которому testcontainers
+# отпускает контейнер, - к этому моменту порт снаружи еще закрыт. Ждем сами,
+# иначе alembic ловит connection refused примерно в каждом третьем прогоне
+POSTGRES_READY_TIMEOUT = 30.0
+
+
+def wait_for_postgres(url: str, timeout: float = POSTGRES_READY_TIMEOUT) -> None:
+    deadline = time.monotonic() + timeout
+    dsn = url.replace("postgresql+psycopg://", "postgresql://")
+    while True:
+        try:
+            with psycopg.connect(dsn, connect_timeout=2) as connection:
+                connection.execute("SELECT 1")
+        except psycopg.OperationalError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.2)
+        else:
+            return
 
 
 @pytest.fixture(scope="session")
@@ -50,6 +76,8 @@ def database_url() -> Generator[str]:
         os.environ["POSTGRES_USER"] = postgres.username
         os.environ["POSTGRES_PASSWORD"] = postgres.password
         os.environ["POSTGRES_DB"] = postgres.dbname
+
+        wait_for_postgres(postgres.get_connection_url())
 
         alembic_cfg = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
         alembic_cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
@@ -154,7 +182,7 @@ _DUMMY_MAX_TOKEN = "test-token"  # noqa: S105
 def make_config() -> Config:
     return Config(
         log=LogConfig(level="INFO", format=LogFormat.JSON),
-        api=ApiConfig(host="127.0.0.1", port=8000, workers=1, cors=()),
+        api=ApiConfig(cors=()),
         db=DbConfig(
             host="localhost",
             port=5432,
@@ -174,4 +202,5 @@ def make_config() -> Config:
             dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"),
             max_size_mb=10,
         ),
+        deeplinks=DeeplinksConfig(org_register="test-register-code"),
     )

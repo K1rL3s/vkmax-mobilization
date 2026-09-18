@@ -4,6 +4,7 @@ from zheka.config import (
     ApiConfig,
     Config,
     DbConfig,
+    DeeplinksConfig,
     FilesConfig,
     LogConfig,
     MaxConfig,
@@ -39,3 +40,7 @@ class ConfigProvider(Provider):
     @provide
     def files(self, config: Config) -> FilesConfig:
         return config.files
+
+    @provide
+    def deeplinks(self, config: Config) -> DeeplinksConfig:
+        return config.deeplinks

@@ -42,7 +42,7 @@ services:
       <<: *app-env
     volumes:
       - ./backend/content:/data/files
-    command: [ "python", "-m", "zheka.api" ]
+    command: [ "gunicorn", "-c", "gunicorn.conf.py", "zheka.api.asgi:app" ]
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:7001/api/healthcheck')\"" ]
       interval: 10s

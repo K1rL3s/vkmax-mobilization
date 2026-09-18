@@ -10944,6 +10944,9 @@ export interface operations {
         category?: components["schemas"]["RequestCategory"] | null;
         channel?: components["schemas"]["RequestChannel"] | null;
         house_id?: number | null;
+        executor_user_id?: number | null;
+        overdue?: boolean;
+        grouped?: boolean;
         /** @description Размер страницы */
         limit?: number;
         /** @description Сдвиг от начала списка */

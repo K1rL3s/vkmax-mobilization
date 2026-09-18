@@ -1,15 +1,16 @@
 from collections.abc import Collection, Sequence
 from decimal import Decimal
-from typing import Any
 
-from sqlalchemy import Select, exists, func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from zheka.core.enums import RequestStatus
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.infra.database.models import DemandSignal, Flat, House
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
+from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import demand_signals_table
 
 
@@ -39,17 +40,31 @@ class HousesRepo(BaseAlchemyRepo):
 
     async def search(
         self,
-        city: str,
+        city: str | None,
         street: str | None,
         building: str | None,
+        query: str | None,
         limit: int,
         offset: int,
     ) -> tuple[Sequence[House], int]:
-        stmt = select(House).where(houses_table.c.city == city)
+        stmt = select(House)
+        if city is not None:
+            stmt = stmt.where(houses_table.c.city == city)
         if street is not None:
             stmt = stmt.where(houses_table.c.street == street)
         if building is not None:
             stmt = stmt.where(houses_table.c.building.ilike(f"{building}%"))
+        if query is not None:
+            # каждое слово ищется по всему адресу отдельным условием, поэтому
+            # «Баумана 12» и «12 Баумана» дают одну и ту же выдачу
+            address = func.concat_ws(
+                " ",
+                houses_table.c.city,
+                houses_table.c.street,
+                houses_table.c.building,
+            )
+            for word in query.split():
+                stmt = stmt.where(address.ilike(f"%{word}%"))
 
         total = await self._count(stmt)
         page_stmt = (
@@ -124,6 +139,16 @@ class HousesRepo(BaseAlchemyRepo):
         flat: Flat | None = await self._session.scalar(stmt)
         return flat
 
+    async def get_flat_by_number(self, house_id: HouseId, number: str) -> Flat | None:
+        # номер житель набирает руками, поэтому регистр «12А» и «12а» к делу
+        # не относится
+        stmt = select(Flat).where(
+            flats_table.c.house_id == house_id,
+            func.lower(flats_table.c.number) == number.lower(),
+        )
+        flat: Flat | None = await self._session.scalar(stmt)
+        return flat
+
     async def list_flats_by_ids(self, flat_ids: Collection[FlatId]) -> Sequence[Flat]:
         if not flat_ids:
             return []
@@ -194,7 +219,85 @@ class HousesRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
-    async def _count(self, stmt: Select[Any]) -> int:
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        result = await self._session.execute(count_stmt)
-        return result.scalar_one()
+    async def get_for_org(self, house_id: HouseId, org_id: OrgId) -> House | None:
+        stmt = select(House).where(
+            houses_table.c.id == house_id,
+            houses_table.c.org_id == org_id,
+        )
+        house: House | None = await self._session.scalar(stmt)
+        return house
+
+    async def search_for_org(
+        self,
+        org_id: OrgId,
+        query: str | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[Sequence[House], int]:
+        stmt = select(House).where(houses_table.c.org_id == org_id)
+        if query is not None:
+            stmt = stmt.where(
+                or_(
+                    houses_table.c.street.ilike(f"%{query}%"),
+                    houses_table.c.building.ilike(f"{query}%"),
+                ),
+            )
+
+        total = await self._count(stmt)
+        page_stmt = (
+            stmt.order_by(houses_table.c.street, houses_table.c.building)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self._session.execute(page_stmt)
+        return result.scalars().all(), total
+
+    async def count_flats_by_house(
+        self,
+        house_ids: Collection[HouseId],
+    ) -> dict[HouseId, int]:
+        if not house_ids:
+            return {}
+        stmt = (
+            select(flats_table.c.house_id, func.count())
+            .where(flats_table.c.house_id.in_(house_ids))
+            .group_by(flats_table.c.house_id)
+        )
+        result = await self._session.execute(stmt)
+        return {HouseId(house_id): count for house_id, count in result.tuples().all()}
+
+    async def count_open_requests_by_house(
+        self,
+        house_ids: Collection[HouseId],
+    ) -> dict[HouseId, int]:
+        # заявки живут в блоке 9, здесь нужен только счетчик на карточку дома
+        if not house_ids:
+            return {}
+        stmt = (
+            select(requests_table.c.house_id, func.count())
+            .where(
+                requests_table.c.house_id.in_(house_ids),
+                requests_table.c.status != RequestStatus.DONE,
+            )
+            .group_by(requests_table.c.house_id)
+        )
+        result = await self._session.execute(stmt)
+        return {HouseId(house_id): count for house_id, count in result.tuples().all()}
+
+    async def bound_chat_titles(
+        self,
+        house_ids: Collection[HouseId],
+    ) -> dict[HouseId, str | None]:
+        # ключ словаря и есть признак привязки: название чата может быть пустым
+        if not house_ids:
+            return {}
+        stmt = select(chats_table.c.house_id, chats_table.c.title).where(
+            chats_table.c.house_id.in_(house_ids),
+            chats_table.c.bound_at.is_not(None),
+        )
+        result = await self._session.execute(stmt)
+        return {HouseId(house_id): title for house_id, title in result.tuples().all()}
+
+    async def set_binding_code(self, house: House, code: str) -> None:
+        house.chat_binding_code = code
+        await self._session.flush()

@@ -1,0 +1,163 @@
+from collections.abc import Sequence
+from datetime import datetime, timedelta
+
+from zheka.base import ZhekaType
+from zheka.core.enums import EventType, RequestCategory
+from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
+from zheka.core.models import OrgSettings, Request
+from zheka.core.services.events import EventsService
+from zheka.infra.database.repos.requests import RequestsRepo
+
+# дом без подключенной УК и УК без строки настроек считаются по умолчанию
+DEFAULT_GROUP_THRESHOLD = 3
+DEFAULT_GROUP_WINDOW_HOURS = 24
+
+
+class GroupingRules(ZhekaType):
+    threshold: int
+    window_hours: int
+
+
+class SimilarRequests(ZhekaType):
+    category: RequestCategory
+    flats_count: int
+    group_id: RequestGroupId | None
+    window_started_at: datetime | None
+
+
+def rules_of(settings: OrgSettings | None) -> GroupingRules:
+    if settings is None:
+        return GroupingRules(
+            threshold=DEFAULT_GROUP_THRESHOLD,
+            window_hours=DEFAULT_GROUP_WINDOW_HOURS,
+        )
+    return GroupingRules(
+        threshold=settings.group_threshold,
+        window_hours=settings.group_window_hours,
+    )
+
+
+def group_window_start(now: datetime, hours: int) -> datetime:
+    return now - timedelta(hours=hours)
+
+
+def should_form_group(open_flat_count: int, threshold: int) -> bool:
+    return open_flat_count >= threshold
+
+
+def complaint_sources(requests: Sequence[Request]) -> set[tuple[str, int]]:
+    # склейка считает жалобщиков, а не заявки: три жалобы из одной квартиры -
+    # это одна протечка. Квартира важнее автора, потому что жильцы одной
+    # квартиры жалуются на одно и то же; заявка про общее имущество квартиры
+    # не имеет вовсе, и тогда жалобщик - сам житель. У заявки по звонку нет
+    # ни того, ни другого, и в счет она не идет
+    sources: set[tuple[str, int]] = set()
+    for request in requests:
+        if request.flat_id is not None:
+            sources.add(("flat", request.flat_id))
+        elif request.author_user_id is not None:
+            sources.add(("user", request.author_user_id))
+    return sources
+
+
+class GroupingService:
+    __slots__ = ("_events", "_requests")
+
+    def __init__(
+        self,
+        requests_repo: RequestsRepo,
+        events_service: EventsService,
+    ) -> None:
+        self._requests = requests_repo
+        self._events = events_service
+
+    async def attach(
+        self,
+        request: Request,
+        rules: GroupingRules,
+        now: datetime,
+    ) -> RequestGroupId | None:
+        # склейка считается на записи, до того как житель увидит заявку:
+        # иначе вместо кнопки «присоединиться» ему нечего показать
+        since = group_window_start(now, rules.window_hours)
+        house_id = HouseId(request.house_id)
+        group = await self._requests.find_open_group(house_id, request.category, since)
+        if group is not None:
+            group_id = RequestGroupId(group.id)
+            await self._requests.attach_to_group([request], group_id)
+            await self._joined(request, group_id)
+            return group_id
+
+        open_requests = await self._requests.list_open_in_window(
+            house_id,
+            request.category,
+            since,
+        )
+        sources = complaint_sources(open_requests)
+        if not should_form_group(len(sources), rules.threshold):
+            return None
+
+        # окно группы начинается с самой ранней из собранных заявок, а не
+        # с «сейчас»: иначе следующая жалоба посчитает окно заново
+        oldest = min(item.created_at for item in open_requests)
+        group = await self._requests.create_group(house_id, request.category, oldest)
+        group_id = RequestGroupId(group.id)
+        await self._requests.attach_to_group(open_requests, group_id)
+        await self._events.record(
+            EventType.REQUEST_GROUP_FORMED,
+            user_id=request.author_user_id,
+            house_id=house_id,
+            category=request.category.value,
+            size=len(open_requests),
+        )
+        return group_id
+
+    async def joined(self, request: Request, group_id: RequestGroupId) -> None:
+        await self._joined(request, group_id)
+
+    async def similar(
+        self,
+        house_id: HouseId,
+        category: RequestCategory,
+        rules: GroupingRules,
+        now: datetime,
+        exclude_flat_id: FlatId | None = None,
+        exclude_user_id: UserId | None = None,
+    ) -> SimilarRequests:
+        # тот же набор, что считает склейка, но ничего не пишет
+        since = group_window_start(now, rules.window_hours)
+        group = await self._requests.find_open_group(house_id, category, since)
+        open_requests = await self._requests.list_open_in_window(
+            house_id,
+            category,
+            since,
+        )
+        # «пожаловались N соседей» - соседей, а не считая себя
+        sources = complaint_sources(open_requests) - {
+            ("flat", exclude_flat_id),
+            ("user", exclude_user_id),
+        }
+        return SimilarRequests(
+            category=category,
+            flats_count=len(sources),
+            group_id=None if group is None else RequestGroupId(group.id),
+            window_started_at=(
+                group.window_started_at
+                if group is not None
+                else (
+                    min(item.created_at for item in open_requests)
+                    if open_requests
+                    else None
+                )
+            ),
+        )
+
+    async def _joined(self, request: Request, group_id: RequestGroupId) -> None:
+        sizes = await self._requests.count_by_group([group_id])
+        await self._events.record(
+            EventType.REQUEST_JOINED,
+            user_id=request.author_user_id,
+            request_id=RequestId(request.id),
+            group_id=group_id,
+            group_size=sizes.get(group_id, 0),
+        )
