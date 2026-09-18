@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate, type To } from "react-router-dom";
-import { useLatest } from "react-use";
+import { useLatest } from "@siberiacancode/reactuse";
 
 import { pushBackHandler } from "./back-button";
 
@@ -12,7 +12,7 @@ export const useBackButton = (
   onClick: () => void,
   { enabled = true }: UseBackButtonOptions = {},
 ) => {
-  const handler = useLatest(onClick);
+  const { ref: handler } = useLatest(onClick);
 
   useEffect(() => {
     if (!enabled) {

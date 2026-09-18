@@ -17,15 +17,24 @@ pnpm preview           # preview a production build
 pnpm pre-commit        # lint, format, type-check — run before every commit
 pnpm api               # regenerate src/shared/api/schema/generated.ts from the running backend
 pnpm tunnel            # reverse SSH tunnel: expose the local dev server on the test host
+pnpm mock              # mock-config-server on :31299, the stand-in backend
 ```
 
 There is no test runner configured in this package.
 
 `pnpm pre-commit` is the gate to run before committing: `eslint ./src`, then `prettier --write ./src`, then `tsc -b`. Despite the name, nothing runs it automatically — no hook manager is installed, so it is a command you type. Two things to know about it: the type-check must stay `tsc -b`, because `tsconfig.json` is a solution file (`"files": []` plus project references) and a bare `tsc` silently checks nothing and exits 0; and both `eslint` and `prettier` are pointed at `src` rather than the repository root, so the vendored docs under `.agents/` and the config files at the top level stay out of the diff. There is no `.prettierignore`: the generated `schema/generated.ts` is formatted like every other file, which is why `format` runs after codegen — `openapi-typescript` indents with four spaces and prettier rewrites that to two.
 
-`scripts/tunnel.ts` (run via `pnpm tunnel`, executed directly by Node's TypeScript stripping) opens a reverse SSH tunnel forwarding the local dev server to a port on the remote host, so the mini-app can be opened from MAX for testing. Copy `.env.local.example` to `.env.local` (gitignored via `*.local`) and fill in the `DEV_TUNNEL_*` values before the first run — nothing host-specific is hardcoded. Precedence for every setting is CLI flag → environment (shell wins over `.env.local`, which wins over `.env`) → default; `--dry-run` prints the resulting `ssh` command, `pnpm tunnel --help` lists each flag with its variable. These `DEV_*` variables are read only by the script (no `VITE_` prefix), never reach the client bundle, and must not be added to `shared/env.d.ts`. The dev server accepts any Host header (`server.allowedHosts: true` in `vite.config.ts`), so the tunnelled public hostname works without further configuration.
+`scripts/tunnel.ts` (run via `pnpm tunnel`, executed directly by Node's TypeScript stripping) opens a reverse SSH tunnel forwarding the local dev server to a port on the remote host, so the mini-app can be opened from MAX for testing. Copy `.env.local.example` to `.env.local` (gitignored via `*.local`) and fill in the `DEV_TUNNEL_*` values before the first run — nothing host-specific is hardcoded. Precedence for every setting is CLI flag → environment (shell wins over `.env.local`, which wins over `.env`) → default; `--dry-run` prints the resulting `ssh` command, `pnpm tunnel --help` lists each flag with its variable. These `DEV_*` variables are read only by the script (no `VITE_` prefix), never reach the client bundle, and must not be added to `shared/env.d.ts`. `DEV_API_TARGET` follows the same rule but is read by `vite.config.ts` instead — see the mock server below. The dev server accepts any Host header (`server.allowedHosts: true` in `vite.config.ts`), so the tunnelled public hostname works without further configuration.
 
 To run a single lint check on one file: `pnpm eslint <path>`. There's no equivalent narrowing for `tsc -b` (project-reference build); run `pnpm build` for full type-checking.
+
+### Mock server
+
+`pnpm mock` starts [`mock-config-server`](https://github.com/siberiacancode/mock-config-server) on port 31299 — a real HTTP server standing in for the backend, not a layer of fake data inside the app. Requests keep going through `openapi-fetch`, react-query and the `WebAppData` header exactly as they will against the real backend, which is the point: switching over must not surface any difference.
+
+`mock-server.config.ts` at the package root is the entry point (esbuild bundles it, so plain relative imports work but the `@/` alias does not); the handlers live in `src/shared/api/mocks/`. Every response is typed with `components["schemas"][...]` from the generated contract, and the config file is inside `tsconfig.app.json`'s `include`, so a mock that drifts from the contract fails `tsc -b`. The mock holds its state in memory: accepting the consent changes what `/me` returns, linking a house adds a residency. A request without the `WebAppData` header gets a 401 with the real error envelope.
+
+Which backend the app talks to is decided by the dev server, not the client: `VITE_API_URL` stays empty (the contract's own paths already start with `/api`, so a `/api` prefix here would produce `/api/api/...`) and `server.proxy["/api"]` forwards to `DEV_API_TARGET` — `http://localhost` for the real backend behind nginx, `http://localhost:31299` for the mock. An absolute mock URL would not work through `pnpm tunnel`, where the mini-app runs on a phone and `localhost` is the phone itself.
 
 ## Architecture
 
@@ -80,12 +89,18 @@ Where the features stand today — all three flat, well inside the threshold:
 
 ```
 features/
-  home/          home.page.tsx + css, home.mock.ts                    2 units
-  onboarding/    onboarding.page.tsx + css, house-select.page.tsx +
-                 css, houses.mock.ts                                  3 units
+  home/          home.page.tsx + css, demand-card.tsx, home.mock.ts   3 units
+  onboarding/    three pages + css in the root, hooks and types
+                 grouped in model/                        3 + 6 units
+  error/         error.page.tsx + css                                  1 unit
   tab-bar/       tab-bar.tsx + css, index.ts                          2 units
   outside-max/   outside-max.page.tsx + css                            1 unit
 ```
+
+`onboarding/model/` is the first place the grouping rule bit: the feature holds a
+page per screen plus a hook per job — house search, flat search, linking, the
+view model composing them, and the consent hook — which is past six units in one
+folder.
 
 ### `src/shared/` — infrastructure
 
@@ -138,5 +153,5 @@ Three rules are deliberately **not** automated, because they need a view of a wh
 - Path alias `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`). Within a module import relatively; across modules use `@/`.
 - Untrusted input — anything coming from the MAX Bridge, a URL, or storage — is parsed with `zod` at the boundary it enters, and the app-facing type is inferred from the schema (`z.infer`) so the shape and its validation cannot drift apart. Our own API is the exception: it is typed by the generated OpenAPI schema.
 - UI comes from `@maxhub/max-ui` (MAX's design system) — prefer its primitives (`Button`, `Container`, `Flex`, `Panel`, `Typography`, …) over hand-rolled ones.
-- Generic React hooks come from `react-use` — the same rule as the UI kit: reach for the library before hand-rolling, and add a hook to `shared/lib` only when `react-use` has no equivalent. It is infrastructure like `react` itself, so every layer may import it directly (`independent-modules` constrains our own folders, not external packages) and it is never wrapped in a `shared` barrel. Import from the package root — `import { useDebounce } from "react-use"` — and never from a deep `react-use/lib/*` path: `lib/` is the CommonJS build, while the root resolves to `esm/` and the package declares `sideEffects: false`, so unused hooks and their heavy transitive dependencies (`nano-css`, `resize-observer-polyfill`, `js-cookie`) are tree-shaken out of the production bundle.
-- One exception to that rule: `useLocalStorage`, `useSessionStorage` and `useCookie` return whatever `JSON.parse` produced, typed by the generic you passed rather than by anything checked at runtime. That is precisely the untrusted input the `zod` rule above covers, so validate the value at the call site instead of trusting the type parameter.
+- Generic React hooks come from [`@siberiacancode/reactuse`](https://siberiacancode.github.io/reactuse/) — the same rule as the UI kit: reach for the library before hand-rolling, and add a hook to `shared/lib` only when the library has no equivalent. It is infrastructure like `react` itself, so every layer may import it directly (`independent-modules` constrains our own folders, not external packages) and it is never wrapped in a `shared` barrel. Import from the package root: `import { useDebounceValue } from "@siberiacancode/reactuse"`. The vendored reference lives in `.agents/skills/reactuse/` — check the hook list there before writing a hook by hand.
+- One exception to that rule: storage hooks (`useLocalStorage`, `useSessionStorage`, `useCookie`) return whatever `JSON.parse` produced, typed by the generic you passed rather than by anything checked at runtime. That is precisely the untrusted input the `zod` rule above covers, so validate the value at the call site instead of trusting the type parameter.
