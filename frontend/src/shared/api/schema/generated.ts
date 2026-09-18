@@ -3689,6 +3689,9 @@ export interface components {
       flat_id?: number | null;
       /** Flat Number */
       flat_number?: string | null;
+      verification_status?: components["schemas"]["VerificationStatus"] | null;
+      /** Verification Reject Reason */
+      verification_reject_reason?: string | null;
     };
     /**
      * ResidentRole
