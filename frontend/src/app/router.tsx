@@ -13,6 +13,7 @@ import { onboardedLoader, welcomeLoader } from "./session-loader";
 import { TabBar } from "@/features/tab-bar";
 import { useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
+import { LoadingState } from "@/shared/ui/state";
 
 const PushedPage = ({ fallback }: { fallback: To }) => {
   useBackNavigation(fallback);
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
       {
         loader: protectedLoader,
         errorElement: <ErrorPage />,
+        hydrateFallbackElement: <LoadingState fill />,
         children: [
           {
             path: Routes.WELCOME,
