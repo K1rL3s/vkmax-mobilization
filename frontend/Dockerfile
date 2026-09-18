@@ -1,5 +1,5 @@
 FROM ghcr.io/pnpm/pnpm:11 AS base
-RUN pnpm runtime set node 24 -g
+RUN pnpm_config_store_dir=/pnpm/runtime-store pnpm runtime set node 24 -g
 COPY . /app
 WORKDIR /app
 
