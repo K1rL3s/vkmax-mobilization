@@ -5,7 +5,12 @@ from pydantic import Field
 
 from zheka.api.schemas.base import BaseSchema
 from zheka.api.schemas.files import FileRef
-from zheka.core.enums import EventSource, ResidentRole, ResidentStatus
+from zheka.core.enums import (
+    EventSource,
+    ResidentRole,
+    ResidentStatus,
+    VerificationStatus,
+)
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat, Organization
 from zheka.core.services.houses import (
@@ -84,6 +89,8 @@ class ResidencySummary(BaseSchema):
     is_connected: bool
     flat_id: FlatId | None = None
     flat_number: str | None = None
+    verification_status: VerificationStatus | None = None
+    verification_reject_reason: str | None = None
 
     @classmethod
     def of(cls, view: ResidencyView) -> Self:
@@ -103,6 +110,8 @@ class ResidencySummary(BaseSchema):
             flat_number=(
                 resident.flat_number if view.flat is None else view.flat.number
             ),
+            verification_status=view.verification_status,
+            verification_reject_reason=view.verification_reject_reason,
         )
 
 

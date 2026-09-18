@@ -1,5 +1,6 @@
 import secrets
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import pytest
@@ -16,19 +17,32 @@ from zheka.api.dependencies.current_residency import (
     residency_for_flat_house,
     resolve_residency,
 )
-from zheka.core.enums import ResidentRole, ResidentStatus
+from zheka.api.schemas.houses import ResidencySummary
+from zheka.core.enums import ResidentRole, ResidentStatus, VerificationStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import HouseId, MaxUserId, UserId
+from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
 from zheka.core.services.profile import ProfileService
 from zheka.infra.database.models import Resident
+from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 BLOCK_REASON = "Задолженность по коммунальным услугам"
+REJECT_REASON = "Лицевой счет принадлежит другой квартире"
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
+
+
+def _profile_service(session: AsyncSession) -> ProfileService:
+    return ProfileService(
+        UsersRepo(session),
+        ResidentsRepo(session),
+        HousesRepo(session),
+        OrgsRepo(session),
+        FlatsRepo(session),
+    )
 
 
 def _original(dependency: Any) -> Callable[..., Awaitable[CurrentResidency]]:
@@ -216,12 +230,7 @@ async def test_get_me_still_lists_a_blocked_house(
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _block(session, own.user_id, own.house_id)
-    profile_service = ProfileService(
-        UsersRepo(session),
-        ResidentsRepo(session),
-        HousesRepo(session),
-        OrgsRepo(session),
-    )
+    profile_service = _profile_service(session)
 
     # свитчер - единственный экран, который заблокированный обязан видеть:
     # иначе приложение пустое и без объяснения
@@ -230,3 +239,153 @@ async def test_get_me_still_lists_a_blocked_house(
     assert [residency.house.id for residency in view.residencies] == [own.house_id]
     assert view.residencies[0].resident.status is ResidentStatus.BLOCKED
     assert view.residencies[0].resident.block_reason == BLOCK_REASON
+
+
+async def _request_verification(
+    session: AsyncSession,
+    user_id: UserId,
+    flat_id: FlatId,
+    status: VerificationStatus = VerificationStatus.PENDING,
+    reason: str | None = None,
+) -> None:
+    flats_repo = FlatsRepo(session)
+    request = await flats_repo.add_verification_request(flat_id, user_id, "ЛС-1", None)
+    assert request is not None
+    if status is not VerificationStatus.PENDING:
+        await flats_repo.decide_verification_request(
+            request,
+            status,
+            user_id,
+            datetime.now(UTC),
+            reason,
+        )
+
+
+async def test_get_me_leaves_the_verification_status_empty_without_a_request(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+
+    view = await _profile_service(session).me(own.user_id)
+
+    summary = ResidencySummary.of(view.residencies[0])
+    assert summary.verification_status is None
+    assert summary.verification_reject_reason is None
+
+
+async def test_get_me_carries_the_pending_verification_status(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    await _request_verification(session, own.user_id, own.flat_id)
+
+    view = await _profile_service(session).me(own.user_id)
+
+    summary = ResidencySummary.of(view.residencies[0])
+    assert summary.verification_status is VerificationStatus.PENDING
+    assert summary.verification_reject_reason is None
+
+
+async def test_get_me_carries_the_reject_reason(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    await _request_verification(
+        session,
+        own.user_id,
+        own.flat_id,
+        VerificationStatus.REJECTED,
+        REJECT_REASON,
+    )
+
+    view = await _profile_service(session).me(own.user_id)
+
+    summary = ResidencySummary.of(view.residencies[0])
+    assert summary.verification_status is VerificationStatus.REJECTED
+    assert summary.verification_reject_reason == REJECT_REASON
+
+
+async def test_get_me_hides_the_note_of_an_approved_request(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    await _request_verification(
+        session,
+        own.user_id,
+        own.flat_id,
+        VerificationStatus.APPROVED,
+        "Проверено по реестру",
+    )
+
+    view = await _profile_service(session).me(own.user_id)
+
+    summary = ResidencySummary.of(view.residencies[0])
+    assert summary.verification_status is VerificationStatus.APPROVED
+    assert summary.verification_reject_reason is None
+
+
+async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    session.add(
+        Resident(
+            user_id=own.user_id,
+            house_id=own.house_id,
+            role=ResidentRole.OWNER,
+            flat_number="12",
+        ),
+    )
+    await session.flush()
+    # запрос по свободному номеру квартиры завести не за что: карточки нет
+    await _request_verification(session, own.user_id, own.flat_id)
+
+    view = await _profile_service(session).me(own.user_id)
+
+    summary = ResidencySummary.of(view.residencies[0])
+    assert summary.flat_id is None
+    assert summary.verification_status is None
+    assert summary.verification_reject_reason is None
+
+
+async def test_get_me_keeps_each_residency_on_its_own_request(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    pending = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    rejected = await make_org_house_flat_user()
+    session.add(
+        Resident(
+            user_id=pending.user_id,
+            house_id=rejected.house_id,
+            flat_id=rejected.flat_id,
+            role=ResidentRole.OWNER,
+        ),
+    )
+    await session.flush()
+    await _request_verification(session, pending.user_id, pending.flat_id)
+    await _request_verification(
+        session,
+        pending.user_id,
+        rejected.flat_id,
+        VerificationStatus.REJECTED,
+        REJECT_REASON,
+    )
+
+    # мультидом - обычный случай, и один запрос в базу разводит квартиры сам
+    view = await _profile_service(session).me(pending.user_id)
+
+    statuses = {
+        residency.flat.id: residency.verification_status
+        for residency in view.residencies
+        if residency.flat is not None
+    }
+    assert statuses == {
+        pending.flat_id: VerificationStatus.PENDING,
+        rejected.flat_id: VerificationStatus.REJECTED,
+    }

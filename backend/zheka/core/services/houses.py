@@ -4,7 +4,12 @@ from collections.abc import Sequence
 from decimal import Decimal
 
 from zheka.base import ZhekaType
-from zheka.core.enums import EventSource, EventType, ResidentRole
+from zheka.core.enums import (
+    EventSource,
+    EventType,
+    ResidentRole,
+    VerificationStatus,
+)
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -55,6 +60,10 @@ class ResidencyView(ZhekaType):
     house: House
     flat: Flat | None
     is_connected: bool
+    # статус последнего запроса подтверждения по квартире привязки: экран
+    # подтверждения решает по нему, что показать, еще до карточки квартиры
+    verification_status: VerificationStatus | None = None
+    verification_reject_reason: str | None = None
 
 
 class HouseCardData(ZhekaType):
