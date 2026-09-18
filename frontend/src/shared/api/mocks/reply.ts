@@ -28,6 +28,9 @@ export const notFound = (detail: string): Reply =>
 export const badRequest = (detail: string): Reply =>
   fail(400, "Некорректный запрос", detail);
 
+export const forbidden = (detail: string): Reply =>
+  fail(403, "Недостаточно прав", detail);
+
 export const conflict = (detail: string): Reply =>
   fail(409, "Конфликт состояния", detail);
 

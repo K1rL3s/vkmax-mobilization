@@ -35,6 +35,16 @@ type MockFlat = {
   account_no: string;
 };
 
+type MockVerification = {
+  id: number;
+  created_at: string;
+  flat_id: number;
+  account_no: string;
+  comment: string | null;
+  status: Schemas["VerificationStatus"];
+  reason: string | null;
+};
+
 type MockResidency = {
   resident_id: number;
   house_id: number;
@@ -178,18 +188,22 @@ const state = {
     consent_version: null as string | null,
   },
   residencies: [] as MockResidency[],
+  verifications: [] as MockVerification[],
   demand: new Map<number, number>([[4, 11]]),
   demandSent: new Set<number>(),
   nextResidentId: 501,
+  nextVerificationId: 9001,
 };
 
 export const resetState = (): void => {
   state.user.consent_at = null;
   state.user.consent_version = null;
   state.residencies = [];
+  state.verifications = [];
   state.demand = new Map([[4, 11]]);
   state.demandSent = new Set();
   state.nextResidentId = 501;
+  state.nextVerificationId = 9001;
 };
 
 export const hasConsent = (): boolean => state.user.consent_at !== null;
@@ -266,6 +280,40 @@ export const addResidency = (
   return residency;
 };
 
+export const latestVerification = (
+  flatId: number,
+): MockVerification | undefined =>
+  state.verifications.findLast((request) => request.flat_id === flatId);
+
+export const addVerification = (
+  flatId: number,
+  accountNo: string,
+  comment: string | null,
+  status: Schemas["VerificationStatus"],
+  reason: string | null,
+): MockVerification => {
+  const request: MockVerification = {
+    id: state.nextVerificationId,
+    created_at: new Date().toISOString(),
+    flat_id: flatId,
+    account_no: accountNo,
+    comment,
+    status,
+    reason,
+  };
+  state.nextVerificationId += 1;
+  state.verifications.push(request);
+
+  return request;
+};
+
+// подтверждение и есть тот момент, когда у привязки появляется квартира:
+// до него житель мог указать ее свободным номером
+export const setVerified = (residency: MockResidency, flatId: number): void => {
+  residency.verified = true;
+  residency.flat_id = flatId;
+};
+
 export const signalDemand = (houseId: number): number => {
   if (state.demandSent.has(houseId)) {
     return demandTotal(houseId);
@@ -336,6 +384,10 @@ export function residencySummary(
   residency: MockResidency,
 ): Schemas["ResidencySummary"] {
   const house = findHouse(residency.house_id);
+  const latest =
+    residency.flat_id === null
+      ? undefined
+      : latestVerification(residency.flat_id);
 
   return {
     resident_id: residency.resident_id,
@@ -350,8 +402,34 @@ export function residencySummary(
     is_connected: house?.is_connected ?? false,
     flat_id: residency.flat_id,
     flat_number: residency.flat_number,
+    verification_status: latest?.status ?? null,
+    // причина принадлежит отказу: у одобренного запроса в этом поле заметка УК
+    verification_reject_reason:
+      latest?.status === "rejected" ? latest.reason : null,
   };
 }
+
+export const verificationRequestItem = (
+  request: MockVerification,
+  flat: MockFlat,
+): Schemas["VerificationRequestItem"] => {
+  const house = findHouse(flat.house_id);
+
+  return {
+    id: request.id,
+    created_at: request.created_at,
+    flat_id: flat.id,
+    flat_number: flat.number,
+    house_id: flat.house_id,
+    address: house ? address(house) : "",
+    user_id: state.user.user_id,
+    user_name: state.user.name,
+    account_no: request.account_no,
+    status: request.status,
+    comment: request.comment,
+    reason: request.reason,
+  };
+};
 
 export const me = (): Schemas["MeResponse"] => ({
   user_id: state.user.user_id,
