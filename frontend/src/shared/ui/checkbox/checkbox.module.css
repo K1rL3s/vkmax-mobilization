@@ -1,0 +1,40 @@
+.Checkbox {
+  cursor: pointer;
+}
+
+.disabled {
+  cursor: default;
+}
+
+.Input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.Box {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid var(--controls-inactive);
+  border-radius: 6px;
+  color: var(--text-on-primary, #fff);
+}
+
+.Input:focus-visible + .Box {
+  outline: 2px solid var(--button-primary);
+  outline-offset: 2px;
+}
+
+.checked {
+  border-color: var(--button-primary);
+  background-color: var(--button-primary);
+}
+
+.Label {
+  min-width: 0;
+}

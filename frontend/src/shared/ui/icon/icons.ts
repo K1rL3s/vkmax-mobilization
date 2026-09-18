@@ -1,5 +1,6 @@
 import alertIcon from "./alert.svg";
 import buildingIcon from "./building.svg";
+import checkIcon from "./check.svg";
 import chevronSmallIcon from "./chevron-small.svg";
 import geoPinIcon from "./geo-pin.svg";
 import homeIcon from "./home.svg";
@@ -18,6 +19,7 @@ import wrenchIcon from "./wrench.svg";
 export {
   alertIcon,
   buildingIcon,
+  checkIcon,
   chevronSmallIcon,
   geoPinIcon,
   homeIcon,

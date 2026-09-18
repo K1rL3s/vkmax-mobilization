@@ -1,0 +1,13 @@
+.Message {
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.Description {
+  max-width: 280px;
+}
+
+.fill {
+  flex: 1;
+  min-height: 100%;
+}

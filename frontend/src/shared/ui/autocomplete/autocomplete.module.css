@@ -1,0 +1,24 @@
+.Icon {
+  /* в SVG из макета уже заложена прозрачность 28% */
+  color: var(--text-primary);
+}
+
+.Dropdown {
+  overflow: hidden;
+  border: 1px solid var(--divider-primary);
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Loading {
+  padding: 16px;
+}
+
+.Empty {
+  align-items: flex-start;
+  padding: 12px;
+}
+
+.OptionIcon {
+  color: var(--icon-primary);
+}
