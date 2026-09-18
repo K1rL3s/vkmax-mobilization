@@ -9,7 +9,11 @@ import { Component as ErrorPage } from "@/features/error/error.page";
 
 import { protectedLoader } from "./protected-loader";
 import { Providers } from "./providers";
-import { onboardedLoader, welcomeLoader } from "./session-loader";
+import {
+  onboardedLoader,
+  sessionLoader,
+  welcomeLoader,
+} from "./session-loader";
 import { TabBar } from "@/features/tab-bar";
 import { useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
@@ -49,6 +53,23 @@ const router = createBrowserRouter([
               {
                 path: Routes.ONBOARDING_HOUSE,
                 lazy: () => import("@/features/onboarding/house-select.page"),
+              },
+            ],
+          },
+          {
+            element: <PushedPage fallback={Routes.HOME} />,
+            children: [
+              {
+                path: Routes.FLAT_CONFIRMATION,
+                loader: sessionLoader,
+                lazy: () =>
+                  import("@/features/flat-confirmation/flat-confirmation.page"),
+              },
+              {
+                path: Routes.FLAT_CONFIRMATION_METHOD,
+                loader: sessionLoader,
+                lazy: () =>
+                  import("@/features/flat-confirmation/verify-method.page"),
               },
             ],
           },

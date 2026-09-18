@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { generatePath, useNavigate } from "react-router-dom";
 
 import { authParams, rqClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
@@ -11,9 +11,17 @@ export const useHouseLink = () => {
   const { residencies, reload } = useSession();
 
   const link = rqClient.useMutation("post", "/api/houses/{house_id}/link", {
-    onSuccess: async () => {
+    onSuccess: async (residency) => {
       await reload();
-      await navigate(Routes.HOME);
+
+      // в подключенном доме сразу предлагаем подтвердить квартиру: про саму
+      // фичу подтверждения онбординг не знает ничего, кроме маршрута
+      const confirmation = generatePath(Routes.FLAT_CONFIRMATION, {
+        residentId: String(residency.resident_id),
+      });
+      const next = residency.is_connected ? confirmation : Routes.HOME;
+
+      await navigate(next, { state: { returnTo: Routes.HOME } });
     },
   });
 

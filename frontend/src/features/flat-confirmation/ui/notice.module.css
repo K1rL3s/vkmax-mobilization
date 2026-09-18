@@ -1,0 +1,17 @@
+.Notice {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-secondary);
+}
+
+.Icon {
+  flex-shrink: 0;
+}
+
+.info {
+  color: var(--icon-tertiary);
+}
+
+.alert {
+  color: var(--icon-negative);
+}

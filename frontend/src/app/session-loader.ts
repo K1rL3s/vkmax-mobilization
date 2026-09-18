@@ -27,3 +27,9 @@ export const welcomeLoader = async () => {
 
   return null;
 };
+
+export const sessionLoader = async () => {
+  await loadSession();
+
+  return null;
+};

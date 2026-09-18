@@ -150,6 +150,13 @@ Three rules are deliberately **not** automated, because they need a view of a wh
 - Files and folders are `kebab-case`. Pages are `<name>.page.tsx` and end with `export const Component = <Name>Page` so the router can lazy-load them. Mocks are `<name>.mock.ts` inside `model/`.
 - A module that is imported from outside has an `index.ts` barrel — that barrel is its public API and the only thing outsiders may import. No consumer, no barrel.
 - CSS Modules only, colocated as `<name>.module.css` (`camelCase` locals, scoped names — see `vite.config.ts`). Block classes are `PascalCase` (`styles.TabBar`); variant classes are lowercase so they can be looked up dynamically (`styles[tone]`). No global stylesheets beyond what `@maxhub/max-ui` ships.
+- A constant earns its name by being used more than once. A string, number or
+  object referenced in exactly one place goes inline at that place: hoisting it
+  to the top of the file only makes the reader jump. This holds for user-facing
+  copy too — when those strings eventually move, they move into translations,
+  not into a block of `SCREAMING_CASE` at the top of a page. No lint rule
+  covers this (nothing in eslint or the installed plugins counts references
+  like that), so it is a review rule.
 - Path alias `@/*` → `src/*` (configured in both `tsconfig.json` and `vite.config.ts`). Within a module import relatively; across modules use `@/`.
 - Untrusted input — anything coming from the MAX Bridge, a URL, or storage — is parsed with `zod` at the boundary it enters, and the app-facing type is inferred from the schema (`z.infer`) so the shape and its validation cannot drift apart. Our own API is the exception: it is typed by the generated OpenAPI schema.
 - UI comes from `@maxhub/max-ui` (MAX's design system) — prefer its primitives (`Button`, `Container`, `Flex`, `Panel`, `Typography`, …) over hand-rolled ones.
