@@ -58,8 +58,15 @@ class ServicesProvider(Provider):
         residents_repo: ResidentsRepo,
         houses_repo: HousesRepo,
         orgs_repo: OrgsRepo,
+        flats_repo: FlatsRepo,
     ) -> ProfileService:
-        return ProfileService(users_repo, residents_repo, houses_repo, orgs_repo)
+        return ProfileService(
+            users_repo,
+            residents_repo,
+            houses_repo,
+            orgs_repo,
+            flats_repo,
+        )
 
     @provide
     def orgs_service(

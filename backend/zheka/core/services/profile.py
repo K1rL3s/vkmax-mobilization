@@ -1,13 +1,23 @@
 from zheka.base import ZhekaType
 from zheka.core.consent import CONSENT_VERSION
+from zheka.core.enums import VerificationStatus
 from zheka.core.errors import EntityNotFound, InvalidRequest
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
-from zheka.core.models import OrgMember, Organization, User
+from zheka.core.models import OrgMember, Organization, User, VerificationRequest
 from zheka.core.services.houses import ResidencyView, is_connected
+from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+
+
+def reject_reason(request: VerificationRequest | None) -> str | None:
+    # причина принадлежит отказу: у одобренного запроса в этом поле лежит
+    # заметка УК, которой жителю видеть незачем
+    if request is None or request.status is not VerificationStatus.REJECTED:
+        return None
+    return request.reason
 
 
 class OrgMembershipView(ZhekaType):
@@ -23,7 +33,7 @@ class MeView(ZhekaType):
 
 
 class ProfileService:
-    __slots__ = ("_houses", "_orgs", "_residents", "_users")
+    __slots__ = ("_flats", "_houses", "_orgs", "_residents", "_users")
 
     def __init__(
         self,
@@ -31,11 +41,13 @@ class ProfileService:
         residents_repo: ResidentsRepo,
         houses_repo: HousesRepo,
         orgs_repo: OrgsRepo,
+        flats_repo: FlatsRepo,
     ) -> None:
         self._users = users_repo
         self._residents = residents_repo
         self._houses = houses_repo
         self._orgs = orgs_repo
+        self._flats = flats_repo
 
     async def me(self, user_id: UserId) -> MeView:
         user = await self._users.get_by_id(user_id)
@@ -60,6 +72,11 @@ class ProfileService:
             )
         }
 
+        latest_by_flat = {
+            FlatId(request.flat_id): request
+            for request in await self._flats.list_latest_requests(user_id, flats.keys())
+        }
+
         members = await self._orgs.list_for_user(user_id)
         org_ids = {OrgId(house.org_id) for house in houses.values() if house.org_id}
         org_ids |= {OrgId(member.org_id) for member in members}
@@ -69,12 +86,19 @@ class ProfileService:
         for resident in residents:
             house = houses[resident.house_id]
             org = None if house.org_id is None else orgs.get(OrgId(house.org_id))
+            latest = (
+                None
+                if resident.flat_id is None
+                else latest_by_flat.get(resident.flat_id)
+            )
             residencies.append(
                 ResidencyView(
                     resident=resident,
                     house=house,
                     flat=None if resident.flat_id is None else flats[resident.flat_id],
                     is_connected=is_connected(house, org),
+                    verification_status=None if latest is None else latest.status,
+                    verification_reject_reason=reject_reason(latest),
                 ),
             )
         memberships = [

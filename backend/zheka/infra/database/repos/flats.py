@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime
 
 from sqlalchemy import Select, func, select
@@ -59,6 +59,30 @@ class FlatsRepo(BaseAlchemyRepo):
         )
         request: VerificationRequest | None = await self._session.scalar(stmt)
         return request
+
+    async def list_latest_requests(
+        self,
+        user_id: UserId,
+        flat_ids: Collection[FlatId],
+    ) -> Sequence[VerificationRequest]:
+        if not flat_ids:
+            return []
+        # DISTINCT ON оставляет от каждой квартиры одну, самую свежую запись:
+        # житель с тремя привязками стоит одного запроса, а не трех
+        stmt = (
+            select(VerificationRequest)
+            .where(
+                flat_verification_requests_table.c.user_id == user_id,
+                flat_verification_requests_table.c.flat_id.in_(flat_ids),
+            )
+            .distinct(flat_verification_requests_table.c.flat_id)
+            .order_by(
+                flat_verification_requests_table.c.flat_id,
+                flat_verification_requests_table.c.id.desc(),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
 
     async def list_verification_requests(
         self,
