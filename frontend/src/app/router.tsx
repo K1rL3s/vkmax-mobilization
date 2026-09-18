@@ -5,13 +5,16 @@ import {
   type To,
 } from "react-router-dom";
 import { App } from "./app";
+import { Component as ErrorPage } from "@/features/error/error.page";
+
 import { protectedLoader } from "./protected-loader";
 import { Providers } from "./providers";
+import { onboardedLoader, welcomeLoader } from "./session-loader";
 import { TabBar } from "@/features/tab-bar";
 import { useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 
-const PushedScreen = ({ fallback }: { fallback: To }) => {
+const PushedPage = ({ fallback }: { fallback: To }) => {
   useBackNavigation(fallback);
 
   return <Outlet />;
@@ -27,14 +30,20 @@ const router = createBrowserRouter([
     children: [
       {
         loader: protectedLoader,
+        errorElement: <ErrorPage />,
         children: [
           {
             path: Routes.WELCOME,
+            loader: welcomeLoader,
             lazy: () => import("@/features/onboarding/onboarding.page"),
           },
           {
-            element: <PushedScreen fallback={Routes.WELCOME} />,
+            element: <PushedPage fallback={Routes.WELCOME} />,
             children: [
+              {
+                path: Routes.PRIVACY,
+                lazy: () => import("@/features/onboarding/privacy.page"),
+              },
               {
                 path: Routes.ONBOARDING_HOUSE,
                 lazy: () => import("@/features/onboarding/house-select.page"),
@@ -42,6 +51,7 @@ const router = createBrowserRouter([
             ],
           },
           {
+            loader: onboardedLoader,
             element: (
               <>
                 <Outlet />
