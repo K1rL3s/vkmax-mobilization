@@ -10,21 +10,6 @@
     margin: 0;
   }
 
-  .Row {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .Text {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
   .Grow {
     flex: 1;
     min-width: 0;
@@ -67,18 +52,8 @@
     color: var(--icon-themed);
   }
 
-  .Section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
   .SectionAction {
     color: var(--text-themed);
-  }
-
-  .RequestText {
-    gap: 4px;
   }
 
   .StatusPill {

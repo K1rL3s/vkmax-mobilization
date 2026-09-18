@@ -1,18 +1,9 @@
-// Моки до появления эндпоинтов кабинета жителя (shared/api/schema/main.yaml пока пустой).
+// Моки до появления эндпоинтов заявок, счётчиков и опросов. Дом, квартира и
+// контакты УК приходят из API.
 
 export type NewsKind = "alert" | "announcement";
 
 export const HOME_MOCK = {
-  house: {
-    address: "ул. Ленина, 12, кв. 45",
-    city: "Казань",
-    isVerified: true,
-  },
-  company: {
-    name: "ООО «УК Уютный дом»",
-    schedule: "Приём сегодня до 18:00",
-    phone: "+78431234567",
-  },
   activeRequest: {
     number: 142,
     title: "Протечка, 2-й подъезд",
