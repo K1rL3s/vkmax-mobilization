@@ -1,0 +1,19 @@
+.Stars {
+  display: flex;
+  gap: 8px;
+}
+
+.Button {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.Star {
+  color: var(--controls-inactive);
+}
+
+.Star.filled {
+  color: var(--button-primary);
+}

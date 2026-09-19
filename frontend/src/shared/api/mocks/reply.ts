@@ -34,7 +34,7 @@ export const forbidden = (detail: string): Reply =>
 export const conflict = (detail: string): Reply =>
   fail(409, "Конфликт состояния", detail);
 
-type Handler = (request: MockHttpRequest) => Reply;
+type Handler = (request: MockHttpRequest) => Reply | Promise<Reply>;
 
 // заголовок авторизации проверяется у каждой ручки: забытый WebAppData должен
 // падать на моке так же, как упал бы на бекенде

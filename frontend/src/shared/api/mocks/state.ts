@@ -2,7 +2,9 @@ import type { components } from "../schema/generated";
 
 type Schemas = components["schemas"];
 
-export type MockHttpRequest = {
+// обработчику приходит express-запрос: кроме разобранных полей у него есть
+// непрочитанный поток тела, из которого `multipart.ts` достаёт файл
+export type MockHttpRequest = AsyncIterable<Uint8Array> & {
   params: Record<string, string>;
   query: Record<string, string | undefined>;
   body: Record<string, unknown>;
@@ -59,6 +61,7 @@ type MockRequest = {
   flat_number: string | null;
   executor_name: string | null;
   rating: number | null;
+  feedback: string | null;
   deadline_at: string | null;
   parent_request_id: number | null;
   photo_names: string[];
@@ -241,6 +244,7 @@ const request = (
   flat_number: "45",
   executor_name: null,
   rating: null,
+  feedback: null,
   deadline_at: null,
   parent_request_id: null,
   photo_names: [],
@@ -333,7 +337,6 @@ const SEED_REQUESTS: MockRequest[] = [
     description: "Не горит свет на 5 этаже",
     status: "done",
     created_at: days(-16),
-    rating: 5,
     executor_name: "Электрик Олег Смирнов",
     messages: [
       {
@@ -356,6 +359,7 @@ const SEED_REQUESTS: MockRequest[] = [
     status: "done",
     created_at: days(-24),
     rating: 4,
+    feedback: "Засыпали быстро, но асфальт положили не везде.",
   }),
   request({
     id: 120,
@@ -644,7 +648,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     timeline: requestTimeline(item),
     can_review: item.status === "on_review",
     can_rate: item.status === "done" && item.rating === null,
-    feedback: null,
+    feedback: item.feedback,
     parent_request_id: item.parent_request_id,
     flat_id: residencyForHouse(item.house_id)?.flat_id ?? null,
   };
@@ -652,6 +656,17 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
 
 export const findRequest = (requestId: number): MockRequest | undefined =>
   state.requests.find((item) => item.id === requestId);
+
+export const rateRequest = (
+  item: MockRequest,
+  rating: number,
+  feedback: string | null,
+): MockRequest => {
+  item.rating = rating;
+  item.feedback = feedback;
+
+  return item;
+};
 
 // демо-соседи: у протечки уже собрана группа, к отоплению присоединиться
 // нельзя - окно склейки закрыто, но пожаловавшиеся соседи есть
@@ -733,6 +748,32 @@ export const createRequest = (
       item.group_size = size;
     });
   }
+
+  return created;
+};
+
+// повтор наследует категорию и квартиру исходной заявки: житель жалуется на
+// ту же проблему, а не заводит новую
+export const repeatRequest = (
+  item: MockRequest,
+  description: string | null,
+  photos: string[],
+): MockRequest => {
+  const created = request({
+    id: state.nextRequestId,
+    house_id: item.house_id,
+    category: item.category,
+    description: description?.trim() || `Повторно по заявке №${item.id}`,
+    status: "new",
+    created_at: minutes(0),
+    deadline_at: minutes(CATEGORY_RULES[item.category].hours * 60),
+    flat_number: item.flat_number,
+    parent_request_id: item.id,
+    has_photos: photos.length > 0,
+    photo_names: photos,
+  });
+  state.nextRequestId += 1;
+  state.requests.push(created);
 
   return created;
 };

@@ -43,7 +43,8 @@ export const DeadlinePanel = ({ request }: { request: RequestCard }) => {
       )}
 
       <Typography.Text variant="description" color="secondary">
-        {request.deadline_at && `До ${formatDayTime(request.deadline_at)} · `}
+        {request.deadline_at &&
+          `${left?.overdue ? "Срок истёк" : "До"} ${formatDayTime(request.deadline_at)} · `}
         норматив {hours} {plural(hours, ["час", "часа", "часов"])}
       </Typography.Text>
     </div>

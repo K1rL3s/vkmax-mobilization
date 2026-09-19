@@ -150,6 +150,7 @@ Three rules are deliberately **not** automated, because they need a view of a wh
 - Files and folders are `kebab-case`. Pages are `<name>.page.tsx` and end with `export const Component = <Name>Page` so the router can lazy-load them. Mocks are `<name>.mock.ts` inside `model/`.
 - A module that is imported from outside has an `index.ts` barrel — that barrel is its public API and the only thing outsiders may import. No consumer, no barrel.
 - CSS Modules only, colocated as `<name>.module.css` (`camelCase` locals, scoped names — see `vite.config.ts`). Block classes are `PascalCase` (`styles.TabBar`); variant classes are lowercase so they can be looked up dynamically (`styles[tone]`). No global stylesheets beyond what `@maxhub/max-ui` ships.
+- The app only ever runs on a phone, inside MAX: the target viewport is **320-400px wide**, and every screen is checked there. Nothing is designed for a desktop width — a layout that only works wider is broken, not "fine on big screens". Two practical consequences: a row of two buttons rarely fits (give them content width and let them wrap), and a label that fits at 560px says nothing about 393px, where the kit silently truncates it with an ellipsis. Check at 360 and 393 before calling a screen done.
 - A constant earns its name by being used more than once. A string, number or
   object referenced in exactly one place goes inline at that place: hoisting it
   to the top of the file only makes the reader jump. This holds for user-facing

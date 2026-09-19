@@ -1,11 +1,14 @@
 import type { components } from "../schema/generated";
 
+import { readUploadedFile } from "./multipart";
 import { badRequest, forbidden, notFound, number, ok, route } from "./reply";
 import {
   createRequest,
   findRequest,
   houseRequests,
   nextFileName,
+  rateRequest,
+  repeatRequest,
   requestCard,
   requestCategories,
   requestListItem,
@@ -109,6 +112,58 @@ export const requestsConfigs = [
     ],
   },
   {
+    path: "/requests/:request_id/rating" as const,
+    method: "post" as const,
+    routes: [
+      route((request) => {
+        const item = findRequest(Number(request.params.request_id));
+
+        if (!item) {
+          return notFound("Заявка не найдена");
+        }
+
+        if (item.status !== "done" || item.rating !== null) {
+          return badRequest("Заявку сейчас нельзя оценить");
+        }
+
+        const body = request.body as Schemas["RateRequestRequest"];
+
+        if (
+          !Number.isInteger(body.rating) ||
+          body.rating < 1 ||
+          body.rating > 5
+        ) {
+          return badRequest("Оценка - от 1 до 5");
+        }
+
+        return ok(
+          requestCard(rateRequest(item, body.rating, body.feedback ?? null)),
+        );
+      }),
+    ],
+  },
+  {
+    path: "/requests/:request_id/repeat" as const,
+    method: "post" as const,
+    routes: [
+      route((request) => {
+        const item = findRequest(Number(request.params.request_id));
+
+        if (!item) {
+          return notFound("Заявка не найдена");
+        }
+
+        const body = request.body as Schemas["RepeatRequestRequest"];
+
+        return ok(
+          requestCard(
+            repeatRequest(item, body.description ?? null, body.photos ?? []),
+          ),
+        );
+      }),
+    ],
+  },
+  {
     path: "/request-categories" as const,
     method: "get" as const,
     routes: [route(() => ok(requestCategories()))],
@@ -117,20 +172,17 @@ export const requestsConfigs = [
     path: "/files" as const,
     method: "post" as const,
     routes: [
-      route((request) => {
+      route(async (request) => {
         const name = nextFileName();
-        // multipart мок-сервер не разбирает: тела у такого запроса нет, и
-        // вернуть содержимое принятого файла он не может. Превью в мастере
-        // всё равно локальное, а на приёмке фото жителя будет заглушкой
-        const file = (request.body as { file?: unknown } | undefined)?.file;
+        const url = await readUploadedFile(request);
 
-        if (typeof file === "string" && file.startsWith("data:")) {
-          saveFile(name, file);
-
-          return ok({ name, url: file });
+        if (!url) {
+          return badRequest("Файл не пришёл");
         }
 
-        return ok({ name, url: `/files/${name}` });
+        saveFile(name, url);
+
+        return ok({ name, url });
       }),
     ],
   },

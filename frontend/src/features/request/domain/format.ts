@@ -39,7 +39,7 @@ export const plural = (
   return units > 1 && units < 5 ? few : many;
 };
 
-const duration = (ms: number) => {
+export const duration = (ms: number) => {
   if (ms >= DAY) {
     const days = Math.floor(ms / DAY);
 

@@ -1,16 +1,20 @@
 import { Flex, Typography } from "@maxhub/max-ui";
+import { generatePath, Link } from "react-router-dom";
 
 import { cn } from "@/shared/lib/css";
+import { Routes } from "@/shared/model/routes";
 import { buildingIcon, Icon, userIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
-import { formatDay, formatTime, plural } from "./domain/format";
+import { deadlineLeft, formatDay, formatTime, plural } from "./domain/format";
 import { isFinished, STATUS_LABEL, STATUS_TONE } from "./domain/status";
 import { useRequest } from "./model/use-request";
 import { Answers } from "./ui/answers";
 import { DeadlinePanel } from "./ui/deadline-panel";
+import { EscalationPanel } from "./ui/escalation-panel";
+import { RatePanel } from "./ui/rate-panel";
 import { RequestTimeline } from "./ui/request-timeline";
 
 import styles from "./request.module.css";
@@ -27,6 +31,8 @@ const RequestPage = () => {
   }
 
   const tone = STATUS_TONE[request.status];
+  const overdue =
+    !isFinished(request.status) && deadlineLeft(request.deadline_at)?.overdue;
   // срок идёт, пока заявка в работе: на приёмке и после неё считать нечего
   const isRunning =
     !isFinished(request.status) && request.status !== "on_review";
@@ -56,6 +62,21 @@ const RequestPage = () => {
             {formatTime(request.created_at)}
             {request.flat_number && ` · кв. ${request.flat_number}`}
           </Typography.Text>
+          {request.parent_request_id && (
+            <Typography.Text
+              asChild
+              className={styles.Parent}
+              variant="description"
+            >
+              <Link
+                to={generatePath(Routes.REQUEST, {
+                  requestId: String(request.parent_request_id),
+                })}
+              >
+                Повторно по заявке №{request.parent_request_id}
+              </Link>
+            </Typography.Text>
+          )}
         </Flex>
       </Flex>
 
@@ -79,6 +100,10 @@ const RequestPage = () => {
       </Flex>
 
       {isRunning && <DeadlinePanel request={request} />}
+
+      {(request.can_rate || request.rating !== null) && (
+        <RatePanel request={request} />
+      )}
 
       <div className={styles.Responsible}>
         <Flex align="center" gap={12}>
@@ -116,6 +141,8 @@ const RequestPage = () => {
           </Flex>
         )}
       </div>
+
+      {overdue && <EscalationPanel request={request} />}
 
       <Flex asChild align="stretch" direction="column" gap={8}>
         <section>

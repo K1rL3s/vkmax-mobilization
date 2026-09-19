@@ -15,6 +15,11 @@
     min-width: 0;
   }
 
+  .Parent {
+    color: var(--text-themed);
+    text-decoration: none;
+  }
+
   .Pill {
     flex-shrink: 0;
     padding: 2px 8px;

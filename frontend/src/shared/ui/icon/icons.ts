@@ -22,6 +22,8 @@ import phoneIcon from "./phone.svg";
 import pollIcon from "./poll.svg";
 import receiptIcon from "./receipt.svg";
 import searchOutlineIcon from "./search-outline.svg";
+import starFilledIcon from "./star-filled.svg";
+import starIcon from "./star.svg";
 import trashIcon from "./trash.svg";
 import treeIcon from "./tree.svg";
 import userIcon from "./user.svg";
@@ -52,6 +54,8 @@ export {
   pollIcon,
   receiptIcon,
   searchOutlineIcon,
+  starFilledIcon,
+  starIcon,
   trashIcon,
   treeIcon,
   userIcon,

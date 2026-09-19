@@ -1,0 +1,21 @@
+.Panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+/* текст остаётся выделяемым: если копирование в webview MAX не сработает,
+   житель выделит его руками */
+.Appeal {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background-color: var(--background-tertiary);
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
