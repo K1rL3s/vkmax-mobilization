@@ -7,6 +7,7 @@ from zheka.core.enums import (
     RequestActorRole,
     RequestCategory,
     RequestChannel,
+    RequestCompletionReason,
     RequestGroupStatus,
     RequestPhotoKind,
     RequestStatus,
@@ -45,6 +46,7 @@ from zheka.core.services.request_groups import (
     SimilarRequests,
     rules_of,
 )
+from zheka.core.services.request_status import check_transition
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -65,9 +67,11 @@ GROUP_CLOSED = "Группа заявок уже закрыта"
 GROUP_OTHER_CATEGORY = "Группа заявок собрана по другой категории"
 EMPTY_DESCRIPTION = "Опишите проблему"
 TOO_MANY_PHOTOS = f"К заявке можно приложить не больше {MAX_PHOTOS} фото"
-RATE_NOT_DONE = "Оценку ставят выполненной заявке"
+RATE_NOT_DONE = "Оценку ставят принятой жителем заявке"
 RATED_ALREADY = "Оценка уже поставлена"
-REPEAT_NOT_DONE = "Повторную заявку подают по выполненной"
+REPEAT_NOT_DONE = "Повторную заявку подают после приемки или по выполненной"
+REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано плохо"
+ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
 
 
 class RequestDraft(ZhekaType):
@@ -106,6 +110,7 @@ class RequestCardData(ZhekaType):
     executor: User | None
     can_review: bool
     can_rate: bool
+    auto_close_at: datetime | None
 
 
 class RequestsService:
@@ -189,7 +194,8 @@ class RequestsService:
         photos: Sequence[str],
     ) -> RequestCardData:
         parent = await self._own_request(user_id, request_id)
-        if parent.status is not RequestStatus.DONE:
+        rejected_on_review = parent.status is RequestStatus.ON_REVIEW
+        if not rejected_on_review and parent.status is not RequestStatus.DONE:
             raise InvalidState(REPEAT_NOT_DONE)
 
         house_id = HouseId(parent.house_id)
@@ -197,13 +203,27 @@ class RequestsService:
         house = await self._get_house(house_id)
         # описание и фото у повтора свои, остальное - копия родителя: житель
         # жалуется на ту же проблему в той же квартире
-        text = _stated(parent.description if description is None else description)
+        if rejected_on_review:
+            # отказ от результата должен объяснить исполнителю, почему работа
+            # вернулась: это описание становится первым текстом повтора
+            comment = "" if description is None else description.strip()
+            if not comment:
+                raise InvalidRequest(REJECTION_COMMENT_REQUIRED)
+            text = comment
+        else:
+            text = _stated(parent.description if description is None else description)
         checked = self._checked_photos(photos)
         flat = (
             None
             if parent.flat_id is None
             else await self._houses.get_flat(FlatId(parent.flat_id))
         )
+        if rejected_on_review:
+            await self._complete_review(
+                parent,
+                user_id,
+                RequestCompletionReason.RESIDENT_REJECTED,
+            )
 
         request = await self._requests.create(
             house_id,
@@ -239,7 +259,8 @@ class RequestsService:
     ) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
         await self._active_resident(user_id, HouseId(request.house_id))
-        if request.status is not RequestStatus.DONE:
+
+        if request.completion_reason is not RequestCompletionReason.RESIDENT_ACCEPTED:
             raise InvalidState(RATE_NOT_DONE)
         if request.rating is not None:
             raise InvalidState(RATED_ALREADY)
@@ -253,6 +274,89 @@ class RequestsService:
             has_comment=request.feedback is not None,
         )
         return await self.get_card(user_id, request_id)
+
+    async def accept(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._active_resident(user_id, HouseId(request.house_id))
+        if request.status is not RequestStatus.ON_REVIEW:
+            raise InvalidState(ACCEPT_NOT_ON_REVIEW)
+
+        await self._complete_review(
+            request,
+            user_id,
+            RequestCompletionReason.RESIDENT_ACCEPTED,
+        )
+        return await self.get_card(user_id, request_id)
+
+    async def auto_close(self, now: datetime) -> int:
+        requests = await self._requests.list_reviewed_before(
+            now - AUTO_CLOSE_AFTER,
+        )
+        for request in requests:
+            check_transition(
+                request.status,
+                RequestStatus.DONE,
+                RequestActorRole.SYSTEM,
+                has_author=request.author_user_id is not None,
+            )
+            await self._requests.set_status(
+                request,
+                RequestStatus.DONE,
+                now,
+                completion_reason=RequestCompletionReason.AUTO_CLOSED,
+            )
+            await self._requests.add_log(
+                RequestId(request.id),
+                RequestStatus.ON_REVIEW,
+                RequestStatus.DONE,
+                None,
+                RequestActorRole.SYSTEM.value,
+                now,
+            )
+            await self._events.record(
+                EventType.REQUEST_AUTO_CLOSED,
+                request_id=RequestId(request.id),
+            )
+        return len(requests)
+
+    async def _complete_review(
+        self,
+        request: Request,
+        user_id: UserId,
+        completion_reason: RequestCompletionReason,
+    ) -> None:
+        check_transition(
+            request.status,
+            RequestStatus.DONE,
+            RequestActorRole.RESIDENT,
+            has_author=True,
+        )
+
+        at = datetime.now(UTC)
+        await self._requests.set_status(
+            request,
+            RequestStatus.DONE,
+            at,
+            completion_reason=completion_reason,
+        )
+        await self._requests.add_log(
+            RequestId(request.id),
+            RequestStatus.ON_REVIEW,
+            RequestStatus.DONE,
+            user_id,
+            RequestActorRole.RESIDENT.value,
+            at,
+        )
+        await self._events.record(
+            EventType.REQUEST_REVIEWED,
+            user_id=user_id,
+            request_id=RequestId(request.id),
+            accepted=completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED,
+        )
 
     async def get_card(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
@@ -540,7 +644,16 @@ async def build_card(
         ),
         executor=executor,
         can_review=request.status is RequestStatus.ON_REVIEW,
-        can_rate=request.status is RequestStatus.DONE and request.rating is None,
+        can_rate=(
+            request.completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED
+            and request.rating is None
+        ),
+        auto_close_at=(
+            None
+            if request.status is not RequestStatus.ON_REVIEW
+            or request.reviewed_at is None
+            else request.reviewed_at + AUTO_CLOSE_AFTER
+        ),
     )
 
 

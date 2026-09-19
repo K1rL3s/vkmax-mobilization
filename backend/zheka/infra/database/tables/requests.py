@@ -15,6 +15,7 @@ from sqlalchemy import (
 from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
+    RequestCompletionReason,
     RequestGroupStatus,
     RequestPhotoKind,
     RequestStatus,
@@ -34,6 +35,11 @@ requests_table = Table(
     Column("category", pg_enum(RequestCategory, "request_category"), nullable=False),
     Column("description", Text, nullable=False),
     Column("status", pg_enum(RequestStatus, "request_status"), nullable=False),
+    Column(
+        "completion_reason",
+        pg_enum(RequestCompletionReason, "request_completion_reason"),
+        nullable=True,
+    ),
     Column("parent_request_id", BigInteger, ForeignKey("requests.id"), nullable=True),
     Column(
         "group_id",

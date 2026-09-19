@@ -9,6 +9,7 @@ from zheka.core.enums import (
     CATEGORY_RULES,
     RequestCategory,
     RequestChannel,
+    RequestCompletionReason,
     RequestGroupStatus,
     RequestPhotoKind,
     RequestStatus,
@@ -337,12 +338,30 @@ class RequestsRepo(BaseAlchemyRepo):
         request: Request,
         status: RequestStatus,
         at: datetime,
+        *,
+        completion_reason: RequestCompletionReason | None = None,
     ) -> None:
         request.status = status
+        if status is RequestStatus.DONE:
+            request.completion_reason = completion_reason
         stamp = _STAMP_BY_STATUS.get(status)
         if stamp is not None:
             setattr(request, stamp, at)
         await self._session.flush()
+
+    async def list_reviewed_before(self, before: datetime) -> Sequence[Request]:
+        # блокировка строки делает запуск идемпотентным: второй воркер не
+        # увидит заявку, пока первый завершает ее по таймауту
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.status == RequestStatus.ON_REVIEW,
+                requests_table.c.reviewed_at <= before,
+            )
+            .with_for_update(skip_locked=True)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
 
     async def set_executor(self, request: Request, user_id: UserId) -> None:
         request.executor_user_id = user_id

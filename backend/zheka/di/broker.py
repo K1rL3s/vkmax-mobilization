@@ -1,7 +1,7 @@
 from typing import NewType, cast
 
 from dishka import BaseScope, Provider, Scope, provide
-from taskiq import AsyncBroker, ScheduleSource, TaskiqScheduler
+from taskiq import AsyncBroker, ScheduleSource, TaskiqScheduler, async_shared_broker
 from taskiq.schedule_sources import LabelScheduleSource
 from taskiq_redis import ListRedisScheduleSource, RedisStreamBroker
 
@@ -30,7 +30,7 @@ class BrokerProvider(Provider):
     ) -> TaskiqScheduler:
         return TaskiqScheduler(
             broker=broker,
-            sources=[schedule_source, LabelScheduleSource(broker)],
+            sources=[schedule_source, LabelScheduleSource(async_shared_broker)],
         )
 
 

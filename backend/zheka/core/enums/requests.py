@@ -13,6 +13,12 @@ class RequestStatus(StrEnum):
     DONE = "done"
 
 
+class RequestCompletionReason(StrEnum):
+    RESIDENT_ACCEPTED = "resident_accepted"
+    RESIDENT_REJECTED = "resident_rejected"
+    AUTO_CLOSED = "auto_closed"
+
+
 class RequestActorRole(StrEnum):
     # кто двинул статус: пишется в request_status_log.by_role строкой,
     # своего типа в базе у нее нет

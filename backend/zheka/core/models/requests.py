@@ -5,6 +5,7 @@ from zheka.base import ZhekaMutableType
 from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
+    RequestCompletionReason,
     RequestGroupStatus,
     RequestPhotoKind,
     RequestStatus,
@@ -37,6 +38,7 @@ class Request(ZhekaMutableType):
     category: RequestCategory
     description: str
     status: RequestStatus
+    completion_reason: RequestCompletionReason | None = None
     parent_request_id: RequestId | None = None
     group_id: RequestGroupId | None = None
     channel: RequestChannel

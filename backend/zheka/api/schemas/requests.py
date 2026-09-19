@@ -10,6 +10,7 @@ from zheka.core.enums import (
     CategoryRule,
     RequestCategory,
     RequestChannel,
+    RequestCompletionReason,
     RequestGroupStatus,
     RequestStatus,
     ResponsibilityZone,
@@ -144,6 +145,8 @@ class RequestCard(RequestListItem):
     feedback: str | None = None
     parent_request_id: RequestId | None = None
     flat_id: FlatId | None = None
+    completion_reason: RequestCompletionReason | None = None
+    auto_close_at: datetime | None = None
 
     @classmethod
     def of(
@@ -187,6 +190,8 @@ class RequestCard(RequestListItem):
                 else RequestId(request.parent_request_id)
             ),
             flat_id=None if request.flat_id is None else FlatId(request.flat_id),
+            completion_reason=request.completion_reason,
+            auto_close_at=card.auto_close_at,
         )
 
 
@@ -227,11 +232,6 @@ class RateRequestRequest(BaseSchema):
 class RepeatRequestRequest(BaseSchema):
     description: str | None = None
     photos: list[str] = Field(default_factory=list, description=PHOTOS_DESCRIPTION)
-
-
-class ReviewRequestRequest(BaseSchema):
-    accepted: bool
-    comment: str | None = None
 
 
 class RequestExport(BaseSchema):

@@ -44,7 +44,7 @@ CONTRACT: tuple[tuple[str, str, str], ...] = (
     ("get", "/api/requests/{request_id}", "get_request"),
     ("post", "/api/requests/{request_id}/rating", "rate_request"),
     ("post", "/api/requests/{request_id}/repeat", "create_repeat_request"),
-    ("post", "/api/requests/{request_id}/review", "review_request"),
+    ("post", "/api/requests/{request_id}/accept", "accept_request"),
     ("get", "/api/requests/{request_id}/export", "export_request"),
     ("get", "/api/flats/{flat_id}/meters", "list_flat_meters"),
     ("get", "/api/flats/{flat_id}/reading-periods", "list_reading_periods"),

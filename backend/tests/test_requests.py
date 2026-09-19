@@ -17,6 +17,7 @@ from zheka.core.enums import (
     RequestActorRole,
     RequestCategory,
     RequestChannel,
+    RequestCompletionReason,
     RequestGroupStatus,
     RequestPhotoKind,
     RequestStatus,
@@ -34,6 +35,7 @@ from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import (
+    AUTO_CLOSE_AFTER,
     MAX_PHOTOS,
     RequestDraft,
     RequestsService,
@@ -153,7 +155,17 @@ async def _mark_done(session: AsyncSession, request_id: RequestId) -> Request:
     request = await RequestsRepo(session).get(request_id)
     assert request is not None
     request.status = RequestStatus.DONE
+    request.completion_reason = RequestCompletionReason.RESIDENT_ACCEPTED
     request.done_at = datetime.now(UTC)
+    await session.flush()
+    return request
+
+
+async def _mark_on_review(session: AsyncSession, request_id: RequestId) -> Request:
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
+    request.status = RequestStatus.ON_REVIEW
+    request.reviewed_at = datetime.now(UTC)
     await session.flush()
     return request
 
@@ -566,6 +578,81 @@ async def test_rate_refuses_a_request_that_is_not_done(
         await service.rate(own.user_id, RequestId(card.request.id), 5, None)
 
 
+async def test_accept_closes_the_reviewed_request_and_opens_rating(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = RequestId(created.request.id)
+    await _mark_on_review(session, request_id)
+
+    accepted = await service.accept(own.user_id, request_id)
+
+    assert accepted.request.status is RequestStatus.DONE
+    assert (
+        accepted.request.completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED
+    )
+    assert accepted.request.done_at is not None
+    assert accepted.can_review is False
+    assert accepted.can_rate is True
+    assert (
+        RequestCard.of(accepted, [], []).completion_reason
+        is RequestCompletionReason.RESIDENT_ACCEPTED
+    )
+    logs = await _logs(session, request_id)
+    assert logs[-1].from_status is RequestStatus.ON_REVIEW
+    assert logs[-1].to_status is RequestStatus.DONE
+    assert logs[-1].by_role == RequestActorRole.RESIDENT
+    events = await _events(session, EventType.REQUEST_REVIEWED)
+    assert events[0].payload == {"request_id": request_id, "accepted": True}
+
+
+async def test_accept_refuses_a_request_outside_review(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+
+    with pytest.raises(InvalidState, match="на приемке"):
+        await service.accept(own.user_id, RequestId(created.request.id))
+
+
+async def test_auto_close_ends_an_expired_review_once(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = RequestId(created.request.id)
+    request = await _mark_on_review(session, request_id)
+    now = datetime.now(UTC)
+    request.reviewed_at = now - AUTO_CLOSE_AFTER
+    await session.flush()
+
+    reviewing = await service.get_card(own.user_id, request_id)
+    assert reviewing.auto_close_at == now
+    assert RequestCard.of(reviewing, [], []).auto_close_at == now
+
+    assert await service.auto_close(now) == 1
+    assert await service.auto_close(now) == 0
+
+    closed = await service.get_card(own.user_id, request_id)
+    assert closed.request.status is RequestStatus.DONE
+    assert closed.request.completion_reason is RequestCompletionReason.AUTO_CLOSED
+    assert closed.can_rate is False
+    assert closed.auto_close_at is None
+    logs = await _logs(session, request_id)
+    assert logs[-1].by_user_id is None
+    assert logs[-1].by_role == RequestActorRole.SYSTEM
+    events = await _events(session, EventType.REQUEST_AUTO_CLOSED)
+    assert events[0].payload == {"request_id": request_id}
+
+
 async def test_rate_puts_the_score_and_closes_the_rating(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
@@ -611,6 +698,57 @@ async def test_repeat_refuses_a_parent_that_is_not_done(
 
     with pytest.raises(InvalidState):
         await service.repeat(own.user_id, RequestId(created.request.id), None, [])
+
+
+async def test_repeat_from_review_rejects_the_result_and_opens_a_new_request(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    parent_id = RequestId(created.request.id)
+    await _mark_on_review(session, parent_id)
+
+    repeated = await service.repeat(
+        own.user_id,
+        parent_id,
+        "Не устранили протечку под ванной",
+        [],
+    )
+
+    parent = await RequestsRepo(session).get(parent_id)
+    assert parent is not None
+    assert parent.status is RequestStatus.DONE
+    assert parent.completion_reason is RequestCompletionReason.RESIDENT_REJECTED
+    assert (await service.get_card(own.user_id, parent_id)).can_rate is False
+    assert repeated.request.parent_request_id == parent_id
+    assert repeated.request.status is RequestStatus.NEW
+    assert repeated.request.description == "Не устранили протечку под ванной"
+    logs = await _logs(session, parent_id)
+    assert logs[-1].from_status is RequestStatus.ON_REVIEW
+    assert logs[-1].to_status is RequestStatus.DONE
+    assert logs[-1].by_role == RequestActorRole.RESIDENT
+    reviewed = await _events(session, EventType.REQUEST_REVIEWED)
+    assert reviewed[0].payload == {"request_id": parent_id, "accepted": False}
+
+
+async def test_repeat_from_review_requires_a_comment(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = RequestId(created.request.id)
+    await _mark_on_review(session, request_id)
+
+    with pytest.raises(InvalidRequest, match="что сделано плохо"):
+        await service.repeat(own.user_id, request_id, None, [])
+
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
+    assert request.status is RequestStatus.ON_REVIEW
 
 
 async def test_repeat_copies_the_parent_and_starts_from_scratch(

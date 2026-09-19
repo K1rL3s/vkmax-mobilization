@@ -38,6 +38,12 @@ def upgrade() -> None:
         "new", "accepted", "in_progress", "on_review", "done", name="request_status"
     ).create(op.get_bind())
     sa.Enum(
+        "resident_accepted",
+        "resident_rejected",
+        "auto_closed",
+        name="request_completion_reason",
+    ).create(op.get_bind())
+    sa.Enum(
         "leak",
         "elevator",
         "garbage",
@@ -751,6 +757,17 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
+        sa.Column(
+            "completion_reason",
+            postgresql.ENUM(
+                "resident_accepted",
+                "resident_rejected",
+                "auto_closed",
+                name="request_completion_reason",
+                create_type=False,
+            ),
+            nullable=True,
+        ),
         sa.Column("parent_request_id", sa.BigInteger(), nullable=True),
         sa.Column("group_id", sa.BigInteger(), nullable=True),
         sa.Column(
@@ -1207,6 +1224,12 @@ def downgrade() -> None:
     ).drop(op.get_bind())
     sa.Enum(
         "new", "accepted", "in_progress", "on_review", "done", name="request_status"
+    ).drop(op.get_bind())
+    sa.Enum(
+        "resident_accepted",
+        "resident_rejected",
+        "auto_closed",
+        name="request_completion_reason",
     ).drop(op.get_bind())
     sa.Enum("miniapp", "bot", "chat", "phone", name="request_channel").drop(
         op.get_bind()

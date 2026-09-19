@@ -13,7 +13,6 @@ from zheka.api.schemas.requests import (
     RequestCategoryItem,
     RequestExport,
     RequestListItem,
-    ReviewRequestRequest,
     SimilarRequestsResponse,
 )
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
@@ -149,13 +148,15 @@ async def create_repeat_request(
     return _card(card, files_service)
 
 
-@router.post("/requests/{request_id}/review", summary="Приемка работ жителем")
-async def review_request(
+@router.post("/requests/{request_id}/accept", summary="Принять работу")
+async def accept_request(
     request_id: RequestId,
     current_account: RequireConsentDep,
-    body: ReviewRequestRequest,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
 ) -> RequestCard:
-    raise NotImplementedError("ещё не реализовано")
+    card = await requests_service.accept(current_account.user_id, request_id)
+    return _card(card, files_service)
 
 
 @router.get("/requests/{request_id}/export", summary="Данные заявки для печати")
