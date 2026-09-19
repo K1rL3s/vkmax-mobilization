@@ -1888,6 +1888,10 @@ export interface components {
       house_id: number;
       /** Address */
       address: string;
+      /** Org Name */
+      org_name: string | null;
+      /** Normative Hours */
+      normative_hours: number;
       /** Photos */
       photos: components["schemas"]["FileRef"][];
       /** Result Photos */
@@ -3516,6 +3520,10 @@ export interface components {
       house_id: number;
       /** Address */
       address: string;
+      /** Org Name */
+      org_name: string | null;
+      /** Normative Hours */
+      normative_hours: number;
       /** Photos */
       photos: components["schemas"]["FileRef"][];
       /** Result Photos */

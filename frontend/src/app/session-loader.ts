@@ -1,6 +1,6 @@
 import { redirect } from "react-router-dom";
 
-import { loadHouseCard } from "@/shared/model/house";
+import { loadHouseCard } from "@/features/house";
 import { isOnboarded, loadSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 

@@ -8,7 +8,7 @@ import {
 } from "@maxhub/max-ui";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useHouseCard } from "@/shared/model/house";
+import { useHouseCard } from "@/features/house";
 import { useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 import { Card } from "@/shared/ui/card";
