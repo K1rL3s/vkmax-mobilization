@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, make_config
 
+from zheka.api.schemas.requests import AdminRequestCard, RequestCard
 from zheka.core.enums import (
     CATEGORY_RULES,
     EventType,
@@ -173,6 +174,34 @@ async def test_a_request_of_another_organization_is_not_found_by_id(
     # чужая заявка отвечает 404, а не 403
     with pytest.raises(EntityNotFound):
         await _admin(session).card(own.org_id, RequestId(alien.id))
+
+
+async def test_admin_card_has_the_same_org_and_normative_hours_as_the_resident_card(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request = await _complain(session, own.user_id, own.house_id)
+    request_id = RequestId(request.id)
+    org = await OrgsRepo(session).get(own.org_id)
+    assert org is not None
+
+    resident_card = RequestCard.of(
+        await _resident_service(session).get_card(own.user_id, request_id),
+        [],
+        [],
+    )
+    admin_card = AdminRequestCard.of_admin(
+        await _admin(session).card(own.org_id, request_id),
+        [],
+        [],
+    )
+
+    assert admin_card.org_name == resident_card.org_name == org.name
+    assert admin_card.normative_hours == resident_card.normative_hours
+    assert (
+        admin_card.normative_hours == CATEGORY_RULES[request.category].normative_hours
+    )
 
 
 async def test_overdue_requests_come_first_and_can_be_filtered(

@@ -208,3 +208,29 @@ def test_no_unreachable_validation_response(openapi: dict[str, Any]) -> None:
 
     assert not with_422
     assert "HTTPValidationError" not in openapi["components"]["schemas"]
+
+
+@pytest.mark.parametrize("schema_name", ["RequestCard", "AdminRequestCard"])
+def test_request_cards_expose_nullable_org_and_required_normative_hours(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["properties"]["org_name"]["anyOf"] == [
+        {"type": "string"},
+        {"type": "null"},
+    ]
+    assert schema["properties"]["normative_hours"]["type"] == "integer"
+    assert {"org_name", "normative_hours"} <= set(schema["required"])
+
+
+@pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
+def test_request_list_items_do_not_expose_card_org_and_normative_hours(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    properties = openapi["components"]["schemas"][schema_name]["properties"]
+
+    assert "org_name" not in properties
+    assert "normative_hours" not in properties

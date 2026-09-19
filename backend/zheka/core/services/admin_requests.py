@@ -349,7 +349,14 @@ class AdminRequestsService:
             else await self._houses.get_flat(FlatId(request.flat_id))
         )
         return AdminRequestCardData(
-            card=await build_card(self._requests, self._users, request, house, flat),
+            card=await build_card(
+                self._requests,
+                self._users,
+                self._orgs,
+                request,
+                house,
+                flat,
+            ),
             author=(
                 None
                 if request.author_user_id is None
