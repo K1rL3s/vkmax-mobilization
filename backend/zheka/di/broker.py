@@ -3,7 +3,7 @@ from typing import NewType, cast
 from dishka import BaseScope, Provider, Scope, provide
 from taskiq import AsyncBroker, ScheduleSource, TaskiqScheduler
 from taskiq.schedule_sources import LabelScheduleSource
-from taskiq_redis import ListQueueBroker, ListRedisScheduleSource
+from taskiq_redis import ListRedisScheduleSource, RedisStreamBroker
 
 from zheka.config import RedisConfig
 
@@ -34,8 +34,17 @@ class BrokerProvider(Provider):
         )
 
 
-def make_broker(config: RedisConfig) -> ListQueueBroker:
-    return ListQueueBroker(url=config.url, queue_name="zheka-tasks")
+def make_broker(config: RedisConfig) -> RedisStreamBroker:
+    # xread_block меньше socket_timeout, иначе redis-py обрывает чтение
+    # раньше, чем брокер вернёт пустой ответ
+    return RedisStreamBroker(
+        url=config.url,
+        queue_name="zheka-tasks",
+        consumer_group_name="zheka-tasks",
+        xread_block=30_000,
+        socket_connect_timeout=30,
+        socket_timeout=60,
+    )
 
 
 def make_schedule_source(config: RedisConfig) -> ListRedisScheduleSource:
