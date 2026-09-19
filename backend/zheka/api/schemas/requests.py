@@ -75,6 +75,7 @@ class RequestListItem(BaseSchema):
     executor_name: str | None = None
     rating: int | None = Field(default=None, description="Оценка жителя от 1 до 5")
     deadline_at: datetime | None = None
+    completion_reason: RequestCompletionReason | None = None
 
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
@@ -96,6 +97,7 @@ class RequestListItem(BaseSchema):
             executor_name=None if row.executor is None else row.executor.name,
             rating=request.rating,
             deadline_at=deadline_of(request),
+            completion_reason=request.completion_reason,
         )
 
 
@@ -145,7 +147,6 @@ class RequestCard(RequestListItem):
     feedback: str | None = None
     parent_request_id: RequestId | None = None
     flat_id: FlatId | None = None
-    completion_reason: RequestCompletionReason | None = None
     auto_close_at: datetime | None = None
 
     @classmethod
