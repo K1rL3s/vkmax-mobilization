@@ -1,4 +1,4 @@
-from collections.abc import Collection, Sequence
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
@@ -53,7 +53,8 @@ from zheka.infra.database.repos.users import UsersRepo
 
 # потолок вложений в одном сообщении MAX, он же потолок фото у заявки
 MAX_PHOTOS = 12
-# заявку, оставленную на приемке, закрывает планировщик блока 18
+# заявку, оставленную на приемке, закрывает планировщик блока 18; тот же
+# срок карточка показывает как дедлайн автозакрытия, пока заявка ON_REVIEW
 AUTO_CLOSE_AFTER = timedelta(hours=48)
 
 BLOCKED = "Вы заблокированы в этом доме"
@@ -106,6 +107,7 @@ class RequestCardData(ZhekaType):
     executor: User | None
     can_review: bool
     can_rate: bool
+    auto_close_at: datetime | None
 
 
 class RequestsService:
@@ -279,48 +281,7 @@ class RequestsService:
             limit,
             offset,
         )
-        photo_counts = await self._requests.count_photos(
-            [RequestId(request.id) for request in requests],
-        )
-        group_sizes = await self._requests.count_by_group(
-            {
-                RequestGroupId(request.group_id)
-                for request in requests
-                if request.group_id is not None
-            },
-        )
-        flats = await self._flats_by_id(
-            [
-                FlatId(request.flat_id)
-                for request in requests
-                if request.flat_id is not None
-            ],
-        )
-        executors = await self._users_by_id(
-            [
-                UserId(request.executor_user_id)
-                for request in requests
-                if request.executor_user_id is not None
-            ],
-        )
-        rows = [
-            RequestRow(
-                request=request,
-                flat=None if request.flat_id is None else flats.get(request.flat_id),
-                has_photos=photo_counts.get(RequestId(request.id), 0) > 0,
-                group_size=(
-                    0
-                    if request.group_id is None
-                    else group_sizes.get(RequestGroupId(request.group_id), 0)
-                ),
-                executor=(
-                    None
-                    if request.executor_user_id is None
-                    else executors.get(request.executor_user_id)
-                ),
-            )
-            for request in requests
-        ]
+        rows = await build_rows(self._requests, self._houses, self._users, requests)
         return rows, total
 
     async def similar(
@@ -469,22 +430,64 @@ class RequestsService:
             raise EntityNotFound("Дом не найден")
         return house
 
-    async def _flats_by_id(
-        self,
-        flat_ids: Collection[FlatId],
-    ) -> dict[FlatId, Flat]:
-        return {
-            FlatId(flat.id): flat
-            for flat in await self._houses.list_flats_by_ids(flat_ids)
-        }
 
-    async def _users_by_id(
-        self,
-        user_ids: Collection[UserId],
-    ) -> dict[UserId, User]:
-        return {
-            UserId(user.id): user for user in await self._users.list_by_ids(user_ids)
-        }
+async def build_rows(
+    requests_repo: RequestsRepo,
+    houses_repo: HousesRepo,
+    users_repo: UsersRepo,
+    requests: Sequence[Request],
+) -> list[RequestRow]:
+    # общий для кабинета жителя (list_mine) и кабинета УК (inbox) шаг:
+    # посчитать фото и размер группы и подтянуть квартиры с исполнителями
+    # одним запросом на весь список, а не по одному на заявку
+    photo_counts = await requests_repo.count_photos(
+        [RequestId(request.id) for request in requests],
+    )
+    group_sizes = await requests_repo.count_by_group(
+        {
+            RequestGroupId(request.group_id)
+            for request in requests
+            if request.group_id is not None
+        },
+    )
+    flats = {
+        FlatId(flat.id): flat
+        for flat in await houses_repo.list_flats_by_ids(
+            [
+                FlatId(request.flat_id)
+                for request in requests
+                if request.flat_id is not None
+            ],
+        )
+    }
+    executors = {
+        UserId(user.id): user
+        for user in await users_repo.list_by_ids(
+            [
+                UserId(request.executor_user_id)
+                for request in requests
+                if request.executor_user_id is not None
+            ],
+        )
+    }
+    return [
+        RequestRow(
+            request=request,
+            flat=None if request.flat_id is None else flats.get(request.flat_id),
+            has_photos=photo_counts.get(RequestId(request.id), 0) > 0,
+            group_size=(
+                0
+                if request.group_id is None
+                else group_sizes.get(RequestGroupId(request.group_id), 0)
+            ),
+            executor=(
+                None
+                if request.executor_user_id is None
+                else executors.get(request.executor_user_id)
+            ),
+        )
+        for request in requests
+    ]
 
 
 async def build_card(
@@ -541,6 +544,12 @@ async def build_card(
         executor=executor,
         can_review=request.status is RequestStatus.ON_REVIEW,
         can_rate=request.status is RequestStatus.DONE and request.rating is None,
+        auto_close_at=(
+            request.reviewed_at + AUTO_CLOSE_AFTER
+            if request.status is RequestStatus.ON_REVIEW
+            and request.reviewed_at is not None
+            else None
+        ),
     )
 
 

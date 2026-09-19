@@ -67,3 +67,23 @@ def check_transition(
     if target is RequestStatus.DONE:
         raise InvalidState(STAFF_CANNOT_CLOSE)
     raise InvalidState(ROLE_CANNOT)
+
+
+def transition_path(
+    current: RequestStatus,
+    target: RequestStatus,
+) -> tuple[RequestStatus, ...]:
+    # опоздавший участник склейки идет от своего статуса до цели группы тем
+    # же путем, что и обычный шаг вперед - по одному следующему статусу за
+    # раз. Пустой путь значит "уже там"; цель позади current недостижима тем
+    # же способом, каким check_transition ловит обратный ход - цепочка
+    # уходит в DONE и там обрывается, ни разу не встретив target
+    path: list[RequestStatus] = []
+    step = current
+    while step is not target:
+        options = ALLOWED_TRANSITIONS[step]
+        if not options:
+            raise InvalidState(BACKWARD)
+        step = next(iter(options))
+        path.append(step)
+    return tuple(path)

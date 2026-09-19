@@ -234,3 +234,29 @@ def test_request_list_items_do_not_expose_card_org_and_normative_hours(
 
     assert "org_name" not in properties
     assert "normative_hours" not in properties
+
+
+@pytest.mark.parametrize("schema_name", ["RequestCard", "AdminRequestCard"])
+def test_request_cards_expose_a_nullable_optional_auto_close_at(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["properties"]["auto_close_at"]["anyOf"] == [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"},
+    ]
+    # дедлайна нет большую часть жизни заявки, поэтому поле необязательное,
+    # в отличие от org_name и normative_hours
+    assert "auto_close_at" not in schema["required"]
+
+
+@pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
+def test_request_list_items_do_not_expose_the_auto_close_deadline(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    properties = openapi["components"]["schemas"][schema_name]["properties"]
+
+    assert "auto_close_at" not in properties

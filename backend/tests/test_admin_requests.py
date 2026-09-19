@@ -37,7 +37,7 @@ from zheka.core.services.admin_requests import (
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.request_groups import GroupingService
-from zheka.core.services.requests import RequestDraft, RequestsService
+from zheka.core.services.requests import AUTO_CLOSE_AFTER, RequestDraft, RequestsService
 from zheka.infra.database.models import Event, Flat, OrgMember, Resident, User
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -765,3 +765,237 @@ async def test_group_status_skips_a_member_that_is_already_there(
     # нее целиком: статусы внутри группы расходятся штатно
     assert all(row.request.status is RequestStatus.ACCEPTED for row in card.rows)
     assert await _logs(session, ahead) == [RequestStatus.NEW, RequestStatus.ACCEPTED]
+
+
+async def test_group_status_carries_a_late_joiner_through_two_steps(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    members = [await _complain(session, own.user_id, own.house_id)]
+    members += [
+        await _complain(
+            session,
+            await _neighbour(session, own.house_id, number),
+            own.house_id,
+        )
+        for number in ("2", "3")
+    ]
+    group_id = members[-1].group_id
+    assert group_id is not None
+    service = _admin(session)
+    for target in (RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS):
+        await service.change_group_status(own.org_id, group_id, target, None, staff)
+
+    # группа остается OPEN сквозь ACCEPTED/IN_PROGRESS, поэтому свежая жалоба
+    # вступает в нее как в любую другую открытую группу - и стартует с NEW,
+    # пока остальные участники уже в IN_PROGRESS
+    latecomer = await _complain(
+        session,
+        await _neighbour(session, own.house_id, "4"),
+        own.house_id,
+    )
+    assert latecomer.group_id == group_id
+    assert latecomer.status is RequestStatus.NEW
+
+    card = await service.change_group_status(
+        own.org_id,
+        group_id,
+        RequestStatus.IN_PROGRESS,
+        "Работаем",
+        staff,
+    )
+
+    assert card.flats_count == 4
+    assert len(card.rows) == 4
+    assert all(row.request.status is RequestStatus.IN_PROGRESS for row in card.rows)
+    # опоздавший идет двумя шагами (NEW -> ACCEPTED -> IN_PROGRESS) той же
+    # заявкой на смену статуса группы, а не выбивает ее целиком
+    assert await _logs(session, RequestId(latecomer.id)) == [
+        RequestStatus.NEW,
+        RequestStatus.ACCEPTED,
+        RequestStatus.IN_PROGRESS,
+    ]
+    # участники, ушедшие вперед раньше, этим вызовом второй раз не двигаются
+    for member in members:
+        assert await _logs(session, RequestId(member.id)) == [
+            RequestStatus.NEW,
+            RequestStatus.ACCEPTED,
+            RequestStatus.IN_PROGRESS,
+        ]
+    # комментарий сопровождает только фактический шаг каждого участника, а не
+    # плодит копии на каждый промежуточный статус опоздавшего
+    latecomer_card = await service.card(own.org_id, RequestId(latecomer.id))
+    assert [message.message.text for message in latecomer_card.card.messages] == [
+        "Работаем",
+    ]
+
+
+async def test_group_status_refuses_a_member_ahead_of_the_target(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    members = [await _complain(session, own.user_id, own.house_id)]
+    members += [
+        await _complain(
+            session,
+            await _neighbour(session, own.house_id, number),
+            own.house_id,
+        )
+        for number in ("2", "3")
+    ]
+    group_id = members[-1].group_id
+    assert group_id is not None
+    service = _admin(session)
+    ahead = RequestId(members[0].id)
+    await service.change_status(own.org_id, ahead, RequestStatus.ACCEPTED, None, staff)
+    await service.change_status(
+        own.org_id,
+        ahead,
+        RequestStatus.IN_PROGRESS,
+        None,
+        staff,
+    )
+
+    # один участник обогнал цель ACCEPTED (он уже в IN_PROGRESS) - назад его
+    # никто не двигает, поэтому вызов падает целиком и никого не трогает
+    with pytest.raises(InvalidState):
+        await service.change_group_status(
+            own.org_id,
+            group_id,
+            RequestStatus.ACCEPTED,
+            None,
+            staff,
+        )
+
+    for member in members[1:]:
+        assert await _logs(session, RequestId(member.id)) == [RequestStatus.NEW]
+
+
+async def test_phone_request_refuses_without_a_flat_or_full_caller_details(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    service = _admin(session)
+    incomplete_drafts = (
+        PhoneRequestDraft(
+            house_id=own.house_id,
+            category=RequestCategory.LEAK,
+            description="Течет",
+        ),
+        PhoneRequestDraft(
+            house_id=own.house_id,
+            category=RequestCategory.LEAK,
+            description="Течет",
+            caller_name="Мария Ивановна",
+        ),
+        PhoneRequestDraft(
+            house_id=own.house_id,
+            category=RequestCategory.LEAK,
+            description="Течет",
+            caller_phone="+70000000000",
+        ),
+    )
+
+    for draft in incomplete_drafts:
+        with pytest.raises(InvalidRequest):
+            await service.create_phone(own.org_id, draft, staff)
+
+
+async def test_phone_request_accepts_a_flat_without_caller_details(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+
+    card = await _admin(session).create_phone(
+        own.org_id,
+        PhoneRequestDraft(
+            house_id=own.house_id,
+            category=RequestCategory.LEAK,
+            description="Течет",
+            flat_id=own.flat_id,
+        ),
+        staff,
+    )
+
+    assert card.card.request.flat_id == own.flat_id
+    assert card.card.request.caller_name is None
+    assert card.card.request.caller_phone is None
+
+
+async def test_phone_request_accepts_caller_details_without_a_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+
+    card = await _admin(session).create_phone(
+        own.org_id,
+        PhoneRequestDraft(
+            house_id=own.house_id,
+            category=RequestCategory.LEAK,
+            description="Течет",
+            caller_name="Мария Ивановна",
+            caller_phone="+70000000000",
+        ),
+        staff,
+    )
+
+    assert card.card.request.flat_id is None
+    assert card.card.request.caller_name == "Мария Ивановна"
+    assert card.card.request.caller_phone == "+70000000000"
+
+
+async def test_card_carries_the_auto_close_deadline_only_while_on_review(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    service = _admin(session)
+    created = await service.create_phone(
+        own.org_id,
+        PhoneRequestDraft(
+            house_id=own.house_id,
+            category=RequestCategory.LEAK,
+            description="Течет по стояку",
+            caller_name="Мария Ивановна",
+            caller_phone="+70000000000",
+        ),
+        staff,
+    )
+    request_id = RequestId(created.card.request.id)
+    for target in (RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS):
+        moved = await service.change_status(own.org_id, request_id, target, None, staff)
+        card = AdminRequestCard.of_admin(moved, [], [])
+        assert card.auto_close_at is None
+
+    reviewed = await service.change_status(
+        own.org_id,
+        request_id,
+        RequestStatus.ON_REVIEW,
+        None,
+        staff,
+    )
+    reviewed_at = reviewed.card.request.reviewed_at
+    assert reviewed_at is not None
+    on_review_card = AdminRequestCard.of_admin(reviewed, [], [])
+    assert on_review_card.auto_close_at == reviewed_at + AUTO_CLOSE_AFTER
+
+    done = await service.change_status(
+        own.org_id,
+        request_id,
+        RequestStatus.DONE,
+        None,
+        staff,
+    )
+    done_card = AdminRequestCard.of_admin(done, [], [])
+    assert done_card.auto_close_at is None

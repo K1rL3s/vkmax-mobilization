@@ -33,8 +33,8 @@ from zheka.core.services.request_groups import (
     complaint_sources,
     rules_of,
 )
-from zheka.core.services.request_status import check_transition
-from zheka.core.services.requests import RequestCardData, build_card
+from zheka.core.services.request_status import check_transition, transition_path
+from zheka.core.services.requests import RequestCardData, build_card, build_rows
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters, RequestsRepo
@@ -49,6 +49,7 @@ NOT_AN_EXECUTOR = "Заявку ведет исполнитель, а не со�
 EMPTY_REPLY = "Напишите ответ жителю"
 EMPTY_DESCRIPTION = "Опишите проблему"
 GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе"
+NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
 
 
 class AdminRequestRow(ZhekaType):
@@ -215,14 +216,18 @@ class AdminRequestsService:
     ) -> RequestGroupCardData:
         group = await self._org_group(org_id, group_id)
         members = await self._requests.list_for_group(RequestGroupId(group.id))
-        # заявка, которую житель уже принял сам, второй раз не двигается:
-        # группа это один наряд работ, а не общий статус на всех
-        movable = [member for member in members if member.status is not target]
-        if not movable:
+        # опоздавший участник, застрявший в NEW, пока группа ушла вперед
+        # (группа остается OPEN сквозь ACCEPTED/IN_PROGRESS/ON_REVIEW, и
+        # свежая заявка вступает в нее как в любую другую открытую группу),
+        # идет через промежуточные статусы той же транзакцией - лог и
+        # событие на каждый шаг. Участник, обогнавший цель, ломает вызов
+        # целиком: transition_path поднимет InvalidState до первой записи
+        paths = [(member, transition_path(member.status, target)) for member in members]
+        if all(not path for _, path in paths):
             raise InvalidState(GROUP_ALREADY_THERE)
 
-        for member in movable:
-            await self._move(member, target, comment, actor)
+        for member, path in paths:
+            await self._move_through(member, path, comment, actor)
         if target is RequestStatus.DONE:
             await self._requests.set_group_status(group, RequestGroupStatus.CLOSED)
         return await self._group_card(group)
@@ -239,6 +244,12 @@ class AdminRequestsService:
         description = draft.description.strip()
         if not description:
             raise InvalidRequest(EMPTY_DESCRIPTION)
+        caller_name = (draft.caller_name or "").strip() or None
+        caller_phone = (draft.caller_phone or "").strip() or None
+        # заявку по звонку должно быть чем привязать к дому: либо к квартире,
+        # либо к тому, кто звонил - иначе ее некому показать и некому звонить
+        if draft.flat_id is None and not (caller_name and caller_phone):
+            raise InvalidRequest(NO_CALLER_IDENTIFICATION)
 
         flat = None
         if draft.flat_id is not None:
@@ -259,8 +270,8 @@ class AdminRequestsService:
             None,
             None,
             is_staff_author=True,
-            caller_name=draft.caller_name,
-            caller_phone=draft.caller_phone,
+            caller_name=caller_name,
+            caller_phone=caller_phone,
         )
         await self._requests.add_log(
             RequestId(request.id),
@@ -341,6 +352,20 @@ class AdminRequestsService:
             by_role=RequestActorRole.STAFF.value,
         )
 
+    async def _move_through(
+        self,
+        request: Request,
+        path: Sequence[RequestStatus],
+        comment: str | None,
+        actor: UserId,
+    ) -> None:
+        # комментарий сопровождает только последний шаг - тот, что диспетчер
+        # действительно попросил; промежуточные шаги опоздавшего участника не
+        # плодят копии одного и того же пояснения
+        last = len(path) - 1
+        for index, target in enumerate(path):
+            await self._move(request, target, comment if index == last else None, actor)
+
     async def _card(self, request: Request) -> AdminRequestCardData:
         house = await self._house_of(request)
         flat = (
@@ -381,15 +406,13 @@ class AdminRequestsService:
         )
 
     async def _rows(self, requests: Sequence[Request]) -> list[AdminRequestRow]:
-        photo_counts = await self._requests.count_photos(
-            [RequestId(request.id) for request in requests],
-        )
-        group_sizes = await self._requests.count_by_group(
-            {
-                RequestGroupId(request.group_id)
-                for request in requests
-                if request.group_id is not None
-            },
+        # счетчики фото/группы и подгрузка квартир/исполнителей общие с
+        # кабинетом жителя - build_rows считает их один раз для обоих
+        base_rows = await build_rows(
+            self._requests,
+            self._houses,
+            self._users,
+            requests,
         )
         houses = {
             HouseId(house.id): house
@@ -397,52 +420,31 @@ class AdminRequestsService:
                 [HouseId(request.house_id) for request in requests],
             )
         }
-        flats = {
-            FlatId(flat.id): flat
-            for flat in await self._houses.list_flats_by_ids(
+        authors = {
+            UserId(user.id): user
+            for user in await self._users.list_by_ids(
                 [
-                    FlatId(request.flat_id)
+                    UserId(request.author_user_id)
                     for request in requests
-                    if request.flat_id is not None
+                    if request.author_user_id is not None
                 ],
             )
         }
-        user_ids = [
-            UserId(request.author_user_id)
-            for request in requests
-            if request.author_user_id is not None
-        ]
-        user_ids += [
-            UserId(request.executor_user_id)
-            for request in requests
-            if request.executor_user_id is not None
-        ]
-        users = {
-            UserId(user.id): user for user in await self._users.list_by_ids(user_ids)
-        }
         return [
             AdminRequestRow(
-                request=request,
-                house=houses[HouseId(request.house_id)],
-                flat=None if request.flat_id is None else flats.get(request.flat_id),
+                request=row.request,
+                house=houses[HouseId(row.request.house_id)],
+                flat=row.flat,
                 author=(
                     None
-                    if request.author_user_id is None
-                    else users.get(request.author_user_id)
+                    if row.request.author_user_id is None
+                    else authors.get(row.request.author_user_id)
                 ),
-                executor=(
-                    None
-                    if request.executor_user_id is None
-                    else users.get(request.executor_user_id)
-                ),
-                has_photos=photo_counts.get(RequestId(request.id), 0) > 0,
-                group_size=(
-                    0
-                    if request.group_id is None
-                    else group_sizes.get(RequestGroupId(request.group_id), 0)
-                ),
+                executor=row.executor,
+                has_photos=row.has_photos,
+                group_size=row.group_size,
             )
-            for request in requests
+            for row in base_rows
         ]
 
     async def _org_request(self, org_id: OrgId, request_id: RequestId) -> Request:
