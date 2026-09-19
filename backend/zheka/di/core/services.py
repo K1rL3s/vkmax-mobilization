@@ -1,20 +1,26 @@
 from dishka import BaseScope, Provider, Scope, provide
 
 from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
+from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
 from zheka.core.services.houses import HousesService
+from zheka.core.services.meter_access import MeterAccess
+from zheka.core.services.meters import MetersService
 from zheka.core.services.moderation import ModerationService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.profile import ProfileService
+from zheka.core.services.readings import ReadingsService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
+from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
+from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -153,6 +159,54 @@ class ServicesProvider(Provider):
             grouping_service,
             events_service,
         )
+
+    @provide
+    def meter_access(
+        self,
+        meters_repo: MetersRepo,
+        houses_repo: HousesRepo,
+        residents_repo: ResidentsRepo,
+        orgs_repo: OrgsRepo,
+    ) -> MeterAccess:
+        return MeterAccess(meters_repo, houses_repo, residents_repo, orgs_repo)
+
+    @provide
+    def readings_service(
+        self,
+        meters_repo: MetersRepo,
+        charges_repo: ChargesRepo,
+        houses_repo: HousesRepo,
+        orgs_repo: OrgsRepo,
+        access: MeterAccess,
+        files_service: FilesService,
+        events_service: EventsService,
+    ) -> ReadingsService:
+        return ReadingsService(
+            meters_repo,
+            charges_repo,
+            houses_repo,
+            orgs_repo,
+            access,
+            files_service,
+            events_service,
+        )
+
+    @provide
+    def meters_service(
+        self,
+        meters_repo: MetersRepo,
+        access: MeterAccess,
+    ) -> MetersService:
+        return MetersService(meters_repo, access)
+
+    @provide
+    def admin_readings_service(
+        self,
+        meters_repo: MetersRepo,
+        houses_repo: HousesRepo,
+        users_repo: UsersRepo,
+    ) -> AdminReadingsService:
+        return AdminReadingsService(meters_repo, houses_repo, users_repo)
 
     @provide
     def admin_requests_service(

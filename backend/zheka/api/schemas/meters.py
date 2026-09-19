@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Self
 
 from pydantic import Field
 
@@ -6,9 +7,12 @@ from zheka.api.schemas.base import BaseSchema
 from zheka.api.schemas.files import PHOTOS_DESCRIPTION, FileRef
 from zheka.core.enums import MeterType, RequestCategory, TariffZone
 from zheka.core.ids import FlatId, MeterId, ReadingId
+from zheka.core.services.meter_access import MeterCard
+from zheka.core.services.readings import PeriodOption
 
 _READING = "Показание в тысячных долях единицы измерения"
 _CONSUMPTION = "Расход в тысячных долях единицы измерения"
+_AMOUNT = "Сумма в копейках, предварительный расчет, итог в квитанции"
 
 
 class MeterItem(BaseSchema):
@@ -26,6 +30,22 @@ class MeterItem(BaseSchema):
         description=_READING,
     )
 
+    @classmethod
+    def of(cls, card: MeterCard) -> Self:
+        meter = card.meter
+        return cls(
+            id=MeterId(meter.id),
+            flat_id=FlatId(meter.flat_id),
+            type=meter.type,
+            tariff_zones=meter.tariff_zones,
+            serial=meter.serial,
+            can_submit=card.can_submit,
+            verification_expired=card.verification_expired,
+            next_verification_date=meter.next_verification_date,
+            last_period=card.last_period,
+            last_values=card.last_values,
+        )
+
 
 class ReadingPeriodItem(BaseSchema):
     period: date
@@ -33,6 +53,15 @@ class ReadingPeriodItem(BaseSchema):
     is_submitted: bool
     # почему период закрыт, если закрыт
     reason: str | None = None
+
+    @classmethod
+    def of(cls, option: PeriodOption, *, is_submitted: bool) -> Self:
+        return cls(
+            period=option.period,
+            is_open=option.is_open,
+            is_submitted=is_submitted,
+            reason=option.reason,
+        )
 
 
 class ReadingItem(BaseSchema):
@@ -45,7 +74,7 @@ class ReadingItem(BaseSchema):
     is_below_previous: bool
     ocr_used: bool
     submitted_at: datetime
-    amount: int | None = Field(default=None, description="Сумма в копейках")
+    amount: int | None = Field(default=None, description=_AMOUNT)
 
 
 class SubmitReadingRequest(BaseSchema):
@@ -62,6 +91,31 @@ class SubmitReadingResponse(BaseSchema):
     warning: str | None = None
     # резкий рост расхода предлагает завести заявку
     suggested_category: RequestCategory | None = None
+
+
+class RecognizeReadingRequest(BaseSchema):
+    # имя файла из upload_file, не ссылка
+    photo_path: str
+    meter_type: MeterType
+
+
+class RecognizeReadingResponse(BaseSchema):
+    # None при любой ошибке, таймауте или отсутствующем ключе - житель просто
+    # вводит значение руками
+    values: dict[TariffZone, int] | None = Field(default=None, description=_READING)
+
+
+class AddMeterRequest(BaseSchema):
+    type: MeterType
+    tariff_zones: int
+    serial: str
+    next_verification_date: date | None = None
+
+
+class UpdateMeterRequest(BaseSchema):
+    tariff_zones: int
+    serial: str
+    next_verification_date: date | None = None
 
 
 class AdminReadingItem(BaseSchema):

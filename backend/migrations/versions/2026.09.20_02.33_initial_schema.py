@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: a72af32936f4
+Revision ID: 9911c77d6f6e
 Revises:
-Create Date: 2026-09-17 21:25:35.330746
+Create Date: 2026-09-20 02:33:57.985217
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "a72af32936f4"
+revision: str = "9911c77d6f6e"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -694,6 +694,7 @@ def upgrade() -> None:
             ["flat_id"], ["flats.id"], name=op.f("fk_meters_flat_id_flats")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_meters")),
+        sa.UniqueConstraint("flat_id", "type", name=op.f("uq_meters_flat_id")),
     )
     op.create_table(
         "poll_options",
@@ -833,6 +834,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.BigInteger(), nullable=False),
         sa.Column("house_id", sa.BigInteger(), nullable=False),
         sa.Column("flat_id", sa.BigInteger(), nullable=True),
+        sa.Column("flat_number", sa.String(length=16), nullable=True),
         sa.Column(
             "role",
             postgresql.ENUM("owner", "tenant", name="resident_role", create_type=False),
