@@ -1,9 +1,10 @@
-import { formatDayTime } from "./format";
-import type { RequestCard, RequestStatus } from "./types";
-
-// бэковая AUTO_CLOSE_AFTER: в контракт момент автозакрытия не выходит,
-// поэтому копия срока живёт здесь - до появления auto_close_at
-const AUTO_CLOSE_HOURS = 48;
+import { formatDayTime } from "@/shared/lib/format";
+import { isFinished } from "./status";
+import type {
+  RequestCard,
+  RequestCompletionReason,
+  RequestStatus,
+} from "./types";
 
 const ORDER: RequestStatus[] = [
   "new",
@@ -22,28 +23,40 @@ const STEP_TITLE: Record<RequestStatus, string> = {
 };
 
 /**
- * Автозакрытие приёмки: отсчёт идёт от шага «На приёмке», срок - та же копия
- * AUTO_CLOSE_HOURS, что и в подписи будущего шага. Обе уйдут, когда в
- * карточку приедет `auto_close_at`.
+ * Автозакрытие приёмки: момент считает бэк и присылает `auto_close_at`, у
+ * заявки вне приёмки поля нет. Полоса заполняется от шага «На приёмке».
  */
 export const autoClose = (request: RequestCard, now = Date.now()) => {
   const sent = request.timeline.find(
     (entry) => entry.to_status === "on_review",
   );
 
-  if (!sent) {
+  if (!sent || !request.auto_close_at) {
     return null;
   }
 
   const from = new Date(sent.at).getTime();
-  const at = from + AUTO_CLOSE_HOURS * 60 * 60 * 1000;
+  const at = new Date(request.auto_close_at).getTime();
 
   return {
     sentAt: sent.at,
-    at: new Date(at).toISOString(),
+    at: request.auto_close_at,
     left: at - now,
     progress: Math.min(1, Math.max(0, (now - from) / (at - from))),
   };
+};
+
+// «Выполнена» - конец пути, а не текущий шаг: заявке дальше некуда идти
+const stepState = (
+  index: number,
+  current: number,
+  finished: boolean,
+): TimelineStep["state"] => {
+  if (index < current || finished) {
+    return "done";
+  }
+
+  return index === current ? "current" : "future";
 };
 
 export type TimelineStep = {
@@ -53,18 +66,18 @@ export type TimelineStep = {
   state: "done" | "current" | "future";
 };
 
-// кто закрыл заявку, видно по роли последнего шага: житель принял работу сам
-// или сработало автозакрытие
-const closedBy = (status: RequestStatus, byRole: string) => {
-  if (status !== "done") {
+const COMPLETION_HINT: Record<RequestCompletionReason, string> = {
+  resident_accepted: " · вы приняли работу",
+  resident_rejected: " · вы не приняли работу",
+  auto_closed: " · закрыта автоматически",
+};
+
+const closedBy = (status: RequestStatus, request: RequestCard) => {
+  if (status !== "done" || !request.completion_reason) {
     return "";
   }
 
-  if (byRole === "resident") {
-    return " · вы приняли работу";
-  }
-
-  return byRole === "system" ? " · закрыта автоматически" : "";
+  return COMPLETION_HINT[request.completion_reason];
 };
 
 const futureHint = (status: RequestStatus, request: RequestCard) => {
@@ -73,7 +86,9 @@ const futureHint = (status: RequestStatus, request: RequestCard) => {
   }
 
   if (status === "done") {
-    return `После вашей проверки или через ${AUTO_CLOSE_HOURS} часов`;
+    return request.auto_close_at
+      ? `После вашей проверки или ${formatDayTime(request.auto_close_at)}`
+      : "После вашей проверки";
   }
 
   return null;
@@ -91,20 +106,14 @@ export const buildTimeline = (request: RequestCard): TimelineStep[] => {
 
   return ORDER.map((status, index) => {
     const entry = happened.get(status);
-    // «Выполнена» - конец пути, а не текущий шаг: заявке дальше некуда идти
-    const state =
-      index < current || request.status === "done"
-        ? "done"
-        : index === current
-          ? "current"
-          : "future";
+    const state = stepState(index, current, isFinished(request.status));
 
     if (index <= current) {
       return {
         status,
         title: STEP_TITLE[status],
         hint: entry
-          ? formatDayTime(entry.at) + closedBy(status, entry.by_role)
+          ? formatDayTime(entry.at) + closedBy(status, request)
           : null,
         state,
       };

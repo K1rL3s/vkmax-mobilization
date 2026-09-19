@@ -466,7 +466,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/requests/{request_id}/review": {
+  "/api/requests/{request_id}/accept": {
     parameters: {
       query?: never;
       header?: never;
@@ -475,8 +475,8 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Приемка работ жителем */
-    post: operations["review_request"];
+    /** Принять работу */
+    post: operations["accept_request"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1884,6 +1884,8 @@ export interface components {
       rating?: number | null;
       /** Deadline At */
       deadline_at?: string | null;
+      completion_reason?:
+        components["schemas"]["RequestCompletionReason"] | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -1910,6 +1912,8 @@ export interface components {
       parent_request_id?: number | null;
       /** Flat Id */
       flat_id?: number | null;
+      /** Auto Close At */
+      auto_close_at?: string | null;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -1954,6 +1958,8 @@ export interface components {
       rating?: number | null;
       /** Deadline At */
       deadline_at?: string | null;
+      completion_reason?:
+        components["schemas"]["RequestCompletionReason"] | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -3516,6 +3522,8 @@ export interface components {
       rating?: number | null;
       /** Deadline At */
       deadline_at?: string | null;
+      completion_reason?:
+        components["schemas"]["RequestCompletionReason"] | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -3542,6 +3550,8 @@ export interface components {
       parent_request_id?: number | null;
       /** Flat Id */
       flat_id?: number | null;
+      /** Auto Close At */
+      auto_close_at?: string | null;
     };
     /**
      * RequestCategory
@@ -3573,6 +3583,12 @@ export interface components {
      * @enum {string}
      */
     RequestChannel: "miniapp" | "bot" | "chat" | "phone";
+    /**
+     * RequestCompletionReason
+     * @enum {string}
+     */
+    RequestCompletionReason:
+      "resident_accepted" | "resident_rejected" | "auto_closed";
     /** RequestExport */
     RequestExport: {
       request: components["schemas"]["RequestCard"];
@@ -3641,6 +3657,8 @@ export interface components {
       rating?: number | null;
       /** Deadline At */
       deadline_at?: string | null;
+      completion_reason?:
+        components["schemas"]["RequestCompletionReason"] | null;
     };
     /** RequestMessageItem */
     RequestMessageItem: {
@@ -3716,13 +3734,6 @@ export interface components {
      * @enum {string}
      */
     ResponsibilityZone: "management" | "utility" | "municipality";
-    /** ReviewRequestRequest */
-    ReviewRequestRequest: {
-      /** Accepted */
-      accepted: boolean;
-      /** Comment */
-      comment?: string | null;
-    };
     /** RevokeVerificationRequest */
     RevokeVerificationRequest: {
       /** Reason */
@@ -6598,7 +6609,7 @@ export interface operations {
       };
     };
   };
-  review_request: {
+  accept_request: {
     parameters: {
       query?: never;
       header: {
@@ -6609,11 +6620,7 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ReviewRequestRequest"];
-      };
-    };
+    requestBody?: never;
     responses: {
       /** @description Successful Response */
       200: {

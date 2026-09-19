@@ -1,6 +1,6 @@
 import { Button, Flex, Textarea, Typography } from "@maxhub/max-ui";
 
-import { duration, formatDayTime } from "../domain/format";
+import { duration, formatDayTime } from "@/shared/lib/format";
 import { autoClose } from "../domain/timeline";
 import type { RequestCard } from "../domain/types";
 
@@ -94,7 +94,7 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
       </Flex>
 
       <Typography.Text variant="detail" color="secondary">
-        «Сделано плохо» отправит работу на доработку - напишите, что не так
+        «Сделано плохо» создаст повторную заявку со ссылкой на эту
       </Typography.Text>
     </div>
   );

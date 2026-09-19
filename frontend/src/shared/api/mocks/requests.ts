@@ -1,17 +1,26 @@
 import type { components } from "../schema/generated";
 
 import { readUploadedFile } from "./multipart";
-import { badRequest, forbidden, notFound, number, ok, route } from "./reply";
 import {
+  badRequest,
+  conflict,
+  forbidden,
+  notFound,
+  number,
+  ok,
+  route,
+} from "./reply";
+import {
+  acceptRequest,
   createRequest,
   findRequest,
   houseRequests,
   nextFileName,
   rateRequest,
+  rejectRequest,
   repeatRequest,
   requestCard,
   requestCategories,
-  reviewRequest,
   requestListItem,
   residencies,
   saveFile,
@@ -144,7 +153,7 @@ export const requestsConfigs = [
     ],
   },
   {
-    path: "/requests/:request_id/review" as const,
+    path: "/requests/:request_id/accept" as const,
     method: "post" as const,
     routes: [
       route((request) => {
@@ -155,16 +164,10 @@ export const requestsConfigs = [
         }
 
         if (item.status !== "on_review") {
-          return badRequest("Заявка не на приёмке");
+          return conflict("Заявка не на приёмке");
         }
 
-        const body = request.body as Schemas["ReviewRequestRequest"];
-
-        if (!body.accepted && !body.comment?.trim()) {
-          return badRequest("Опишите, что не так с работой");
-        }
-
-        return ok(requestCard(reviewRequest(item, body.accepted)));
+        return ok(requestCard(acceptRequest(item)));
       }),
     ],
   },
@@ -179,12 +182,25 @@ export const requestsConfigs = [
           return notFound("Заявка не найдена");
         }
 
+        if (item.status !== "done" && item.status !== "on_review") {
+          return conflict("Повтор заводится по завершённой заявке");
+        }
+
         const body = request.body as Schemas["RepeatRequestRequest"];
+        const description = body.description?.trim() || null;
+
+        // отказ от результата обязан объяснить исполнителю, что не так:
+        // это описание становится текстом повтора
+        if (item.status === "on_review") {
+          if (!description) {
+            return badRequest("Опишите, что не так с работой");
+          }
+
+          rejectRequest(item);
+        }
 
         return ok(
-          requestCard(
-            repeatRequest(item, body.description ?? null, body.photos ?? []),
-          ),
+          requestCard(repeatRequest(item, description, body.photos ?? [])),
         );
       }),
     ],

@@ -1,6 +1,6 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
-import { formatDayTime } from "../domain/format";
+import { formatDayTime } from "@/shared/lib/format";
 import type { RequestCard } from "../domain/types";
 
 import styles from "./answers.module.css";

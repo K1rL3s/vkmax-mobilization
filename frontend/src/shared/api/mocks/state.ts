@@ -65,6 +65,7 @@ type MockRequest = {
   has_result_photos: boolean;
   deadline_at: string | null;
   parent_request_id: number | null;
+  completion_reason: Schemas["RequestCompletionReason"] | null;
   photo_names: string[];
   messages: { after_minutes: number; text: string }[];
 };
@@ -236,23 +237,34 @@ const request = (
     "id" | "category" | "description" | "status" | "created_at"
   > &
     Partial<MockRequest>,
-): MockRequest => ({
-  house_id: 1,
-  channel: "miniapp",
-  has_photos: true,
-  group_size: 1,
-  group_id: null,
-  flat_number: "45",
-  executor_name: null,
-  rating: null,
-  feedback: null,
-  has_result_photos: false,
-  deadline_at: null,
-  parent_request_id: null,
-  photo_names: [],
-  messages: [],
-  ...fields,
-});
+): MockRequest => {
+  const item: MockRequest = {
+    house_id: 1,
+    channel: "miniapp",
+    has_photos: true,
+    group_size: 1,
+    group_id: null,
+    flat_number: "45",
+    executor_name: null,
+    rating: null,
+    feedback: null,
+    has_result_photos: false,
+    deadline_at: null,
+    parent_request_id: null,
+    completion_reason: null,
+    photo_names: [],
+    messages: [],
+    ...fields,
+  };
+
+  // у завершённой заявки причина есть всегда; демо-данные называют её только
+  // там, где она не «житель принял»
+  if (item.status === "done" && item.completion_reason === null) {
+    item.completion_reason = "resident_accepted";
+  }
+
+  return item;
+};
 
 // демо-лента повторяет макет; сроки считаются от «сейчас», иначе заявки
 // протухают вместе с датой, на которую их написали
@@ -356,6 +368,8 @@ const SEED_REQUESTS: MockRequest[] = [
     description: "Разбито стекло в подъезде",
     status: "done",
     created_at: days(-20),
+    // житель до приёмки не дошёл: такую заявку оценить уже нельзя
+    completion_reason: "auto_closed",
   }),
   request({
     id: 126,
@@ -590,6 +604,7 @@ export const requestListItem = (
   executor_name: item.executor_name,
   rating: item.rating,
   deadline_at: item.deadline_at,
+  completion_reason: item.completion_reason,
 });
 
 // заявка держит только случившееся; шаг помечается ролью того, кто его сделал
@@ -616,9 +631,26 @@ const requestTimeline = (
   return STEP.slice(0, reached + 1).map((step, index) => ({
     at: shift(item.created_at, step.after_minutes),
     to_status: step.status,
-    by_role: step.by_role,
+    by_role:
+      step.status === "done" && item.completion_reason === "auto_closed"
+        ? "system"
+        : step.by_role,
     from_status: index === 0 ? null : STEP[index - 1].status,
   }));
+};
+
+// бэковая AUTO_CLOSE_AFTER: момент автозакрытия считает бэк, мок стоит на
+// его месте и считает так же - от шага «На приёмке»
+const autoCloseAt = (item: MockRequest): string | null => {
+  if (item.status !== "on_review") {
+    return null;
+  }
+
+  const sent = requestTimeline(item).find(
+    (entry) => entry.to_status === "on_review",
+  );
+
+  return sent ? shift(sent.at, 48 * 60) : null;
 };
 
 const RESULT_PHOTO: Schemas["FileRef"] = {
@@ -631,6 +663,18 @@ const PHOTO: Schemas["FileRef"] = {
   url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23d9d9d9'/%3E%3C/svg%3E",
 };
 
+// загруженные фото приезжают по именам, демо-заявки обходятся заглушкой
+const requestPhotos = (item: MockRequest): Schemas["FileRef"][] => {
+  if (item.photo_names.length > 0) {
+    return item.photo_names.map((name) => ({
+      name,
+      url: state.files.get(name) ?? PHOTO.url,
+    }));
+  }
+
+  return item.has_photos ? [PHOTO] : [];
+};
+
 export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
   const house = findHouse(item.house_id);
 
@@ -640,14 +684,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     address: house ? address(house) : "",
     org_name: house?.org?.name ?? null,
     normative_hours: CATEGORY_RULES[item.category].hours,
-    photos: item.photo_names.length
-      ? item.photo_names.map((name) => ({
-          name,
-          url: state.files.get(name) ?? PHOTO.url,
-        }))
-      : item.has_photos
-        ? [PHOTO]
-        : [],
+    photos: requestPhotos(item),
     result_photos: item.has_result_photos ? [RESULT_PHOTO] : [],
     messages: item.messages.map((message) => ({
       created_at: shift(item.created_at, message.after_minutes),
@@ -657,23 +694,30 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     })),
     timeline: requestTimeline(item),
     can_review: item.status === "on_review",
-    can_rate: item.status === "done" && item.rating === null,
+    can_rate:
+      item.completion_reason === "resident_accepted" && item.rating === null,
     feedback: item.feedback,
     parent_request_id: item.parent_request_id,
     flat_id: residencyForHouse(item.house_id)?.flat_id ?? null,
+    auto_close_at: autoCloseAt(item),
   };
 };
 
 export const findRequest = (requestId: number): MockRequest | undefined =>
   state.requests.find((item) => item.id === requestId);
 
-// приёмка: принятая работа закрывает заявку, непринятая возвращает её в
-// работу - исполнителю есть что исправлять
-export const reviewRequest = (
-  item: MockRequest,
-  accepted: boolean,
-): MockRequest => {
-  item.status = accepted ? "done" : "in_progress";
+// приёмка закрывает заявку в обе стороны; отказ отличается причиной, по
+// которой заявку потом нельзя оценить
+export const acceptRequest = (item: MockRequest): MockRequest => {
+  item.status = "done";
+  item.completion_reason = "resident_accepted";
+
+  return item;
+};
+
+export const rejectRequest = (item: MockRequest): MockRequest => {
+  item.status = "done";
+  item.completion_reason = "resident_rejected";
 
   return item;
 };

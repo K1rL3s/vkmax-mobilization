@@ -2,7 +2,7 @@ import { Flex, Typography } from "@maxhub/max-ui";
 
 import { cameraIcon, Icon } from "@/shared/ui/icon";
 
-import { formatDay } from "../domain/format";
+import { formatDay } from "@/shared/lib/format";
 import type { RequestCard } from "../domain/types";
 
 import styles from "./photo-pair.module.css";

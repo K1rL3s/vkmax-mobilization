@@ -4,13 +4,14 @@ import { generatePath, useNavigate } from "react-router-dom";
 import {
   CATEGORY_ICON,
   deadlineLeft,
-  formatDay,
-  plural,
+  isOnReview,
   STATUS_LABEL,
   STATUS_TONE,
+  type RequestCompletionReason,
   type RequestListItem,
 } from "@/features/request";
 import { cn } from "@/shared/lib/css";
+import { formatDay, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { chevronSmallIcon, Icon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
@@ -22,17 +23,29 @@ type Note = {
   tone: "muted" | "action" | "overdue";
 };
 
+// оценить можно только принятую работу: у отклонённой и автозакрытой заявки
+// на карточке блока оценки нет, и звать туда жителя незачем
+const CLOSED_NOTE: Record<RequestCompletionReason, Note> = {
+  resident_accepted: { text: "Оцените работу", tone: "action" },
+  resident_rejected: { text: "Вы не приняли работу", tone: "muted" },
+  auto_closed: { text: "Закрыта автоматически", tone: "muted" },
+};
+
 // вторая строка карточки: пока заявка идёт - нормативный срок, дальше - то,
 // чего лента ждёт от жителя
 const note = (request: RequestListItem): Note | null => {
-  if (request.status === "on_review") {
+  if (isOnReview(request.status)) {
     return { text: "Проверьте работу", tone: "action" };
   }
 
   if (request.status === "done") {
-    return request.rating
-      ? { text: `Ваша оценка: ${request.rating} из 5`, tone: "muted" }
-      : { text: "Оцените работу", tone: "action" };
+    if (request.rating) {
+      return { text: `Ваша оценка: ${request.rating} из 5`, tone: "muted" };
+    }
+
+    return request.completion_reason
+      ? CLOSED_NOTE[request.completion_reason]
+      : null;
   }
 
   const deadline = deadlineLeft(request.deadline_at);

@@ -1,6 +1,6 @@
 import { Button, Flex, Typography } from "@maxhub/max-ui";
 
-import { plural } from "@/features/request";
+import { plural } from "@/shared/lib/format";
 import { userIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 

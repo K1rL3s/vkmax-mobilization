@@ -1,10 +1,7 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
-import {
-  plural,
-  ZONE_LABEL,
-  type RequestCategoryItem,
-} from "@/features/request";
+import { ZONE_LABEL, type RequestCategoryItem } from "@/features/request";
+import { plural } from "@/shared/lib/format";
 import { buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
 
 import styles from "./category-info.module.css";

@@ -10,6 +10,14 @@ import type { RequestCard } from "../domain/types";
 // бэк длину отзыва не ограничивает; пятьсот знаков - предел из макета
 export const FEEDBACK_LIMIT = 500;
 
+const failedAction = (rating: boolean, repeat: boolean) => {
+  if (repeat) {
+    return "repeat";
+  }
+
+  return rating ? "rate" : null;
+};
+
 // поле в макете одно на обе кнопки: к оценке текст уходит отзывом, к
 // «Сделано плохо» - описанием повторной заявки
 export const useRatePanel = (request: RequestCard) => {
@@ -62,7 +70,7 @@ export const useRatePanel = (request: RequestCard) => {
     setFeedback: (next: string) => setFeedback(next.slice(0, FEEDBACK_LIMIT)),
     isRating: rate.isPending || rate.isSuccess,
     isRepeating: repeat.isPending || repeat.isSuccess,
-    failed: repeat.isError ? "repeat" : rate.isError ? "rate" : null,
+    failed: failedAction(rate.isError, repeat.isError),
     canRate: rating > 0 && !isSending,
     canRepeat: text.length > 0 && !isSending,
     rate: () => {

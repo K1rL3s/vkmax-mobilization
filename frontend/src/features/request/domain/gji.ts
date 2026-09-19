@@ -1,6 +1,6 @@
 import type { HouseCard } from "@/features/house";
 
-import { duration, plural } from "./format";
+import { duration, plural } from "@/shared/lib/format";
 import { STATUS_LABEL } from "./status";
 import type { RequestCard } from "./types";
 

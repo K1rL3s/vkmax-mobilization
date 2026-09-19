@@ -21,3 +21,7 @@ export const STATUS_TONE: Record<RequestStatus, IconTileTone> = {
 };
 
 export const isFinished = (status: RequestStatus) => status === "done";
+
+// приёмка - единственный статус, на котором ход за жителем: её проверяют и
+// Главная, и лента, и карточка
+export const isOnReview = (status: RequestStatus) => status === "on_review";

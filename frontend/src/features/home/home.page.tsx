@@ -3,6 +3,7 @@ import {
   CellSimple,
   Flex,
   IconButton,
+  Panel,
   Tappable,
   Typography,
 } from "@maxhub/max-ui";
@@ -13,9 +14,10 @@ import {
   CATEGORY_ICON,
   deadlineLeft,
   deadlineProgress,
+  isOnReview,
+  type RequestListItem,
   STATUS_LABEL,
   STATUS_TONE,
-  type RequestListItem,
 } from "@/features/request";
 import { cn } from "@/shared/lib/css";
 import { useSession } from "@/shared/model/session";
@@ -54,7 +56,7 @@ const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
   const navigate = useNavigate();
   const tone = STATUS_TONE[request.status];
   // на приёмке нормативный срок уже не идёт: работы сделаны, ход за жителем
-  const onReview = request.status === "on_review";
+  const onReview = isOnReview(request.status);
   const deadline = onReview ? null : deadlineLeft(request.deadline_at);
   const progress = onReview
     ? null
@@ -152,7 +154,7 @@ const HomePage = () => {
   const connected = house.is_connected;
 
   return (
-    <div className={styles.Page}>
+    <Panel className={styles.Page} mode="secondary">
       <Flex asChild align="center" gap={12}>
         <Tappable
           className={styles.HouseCard}
@@ -328,7 +330,7 @@ const HomePage = () => {
           </section>
         </Flex>
       )}
-    </div>
+    </Panel>
   );
 };
 

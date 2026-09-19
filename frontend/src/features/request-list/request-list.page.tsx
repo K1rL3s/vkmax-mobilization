@@ -1,4 +1,4 @@
-import { Button, Flex, Typography } from "@maxhub/max-ui";
+import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
@@ -15,7 +15,7 @@ const RequestListPage = () => {
   const list = useRequestList();
 
   return (
-    <div className={styles.Page}>
+    <Panel className={styles.Page} mode="secondary">
       <Button asChild size="large" stretched>
         <Link to={Routes.REQUEST_NEW}>Новая заявка</Link>
       </Button>
@@ -72,7 +72,7 @@ const RequestListPage = () => {
           </section>
         </Flex>
       ))}
-    </div>
+    </Panel>
   );
 };
 

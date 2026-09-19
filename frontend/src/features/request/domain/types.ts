@@ -8,6 +8,9 @@ export type RequestListItem = components["schemas"]["RequestListItem"];
 
 export type RequestCard = components["schemas"]["RequestCard"];
 
+export type RequestCompletionReason =
+  components["schemas"]["RequestCompletionReason"];
+
 export type ResponsibilityZone = components["schemas"]["ResponsibilityZone"];
 
 export type RequestCategoryItem = components["schemas"]["RequestCategoryItem"];

@@ -1,4 +1,4 @@
-import { Button, Flex, Textarea, Typography } from "@maxhub/max-ui";
+import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
 
 import { useHouseCard } from "@/features/house";
 import { useSession } from "@/shared/model/session";
@@ -31,7 +31,7 @@ const NewRequestPage = () => {
   );
 
   return (
-    <div className={styles.Page}>
+    <Panel className={styles.Page} mode="secondary">
       <div className={styles.Content}>
         <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
@@ -137,7 +137,7 @@ const NewRequestPage = () => {
           Отправить заявку
         </Button>
       </div>
-    </div>
+    </Panel>
   );
 };
 

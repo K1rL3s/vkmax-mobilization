@@ -1,9 +1,9 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
 import { cn } from "@/shared/lib/css";
+import { formatDayTime, plural } from "@/shared/lib/format";
 
-import { deadlineLeft, deadlineProgress, plural } from "../domain/format";
-import { formatDayTime } from "../domain/format";
+import { deadlineLeft, deadlineProgress } from "../domain/format";
 import type { RequestCard } from "../domain/types";
 
 import styles from "./deadline-panel.module.css";

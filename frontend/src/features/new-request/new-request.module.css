@@ -1,8 +1,5 @@
 .Page {
-  display: flex;
   flex: 1;
-  flex-direction: column;
-  background-color: var(--background-surface);
 
   h2 {
     margin: 0;

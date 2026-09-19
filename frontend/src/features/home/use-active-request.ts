@@ -1,4 +1,8 @@
-import { isFinished, type RequestListItem } from "@/features/request";
+import {
+  isFinished,
+  isOnReview,
+  type RequestListItem,
+} from "@/features/request";
 import { rqClient } from "@/shared/api/instance";
 import { houseParams } from "@/shared/model/session";
 
@@ -9,7 +13,7 @@ const PAGE_LIMIT = 100;
 // на Главной место одной заявки - той, которая ждёт жителя: сначала приёмка,
 // дальше ближайший нормативный срок, так что просроченная оказывается сверху
 const urgency = (item: RequestListItem) => [
-  item.status === "on_review" ? 0 : 1,
+  isOnReview(item.status) ? 0 : 1,
   item.deadline_at ? new Date(item.deadline_at).getTime() : Infinity,
 ];
 

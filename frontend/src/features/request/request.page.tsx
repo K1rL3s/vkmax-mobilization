@@ -1,15 +1,21 @@
-import { Flex, Typography } from "@maxhub/max-ui";
+import { Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link } from "react-router-dom";
 
 import { cn } from "@/shared/lib/css";
+import { formatDay, formatTime, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { buildingIcon, Icon, userIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
-import { deadlineLeft, formatDay, formatTime, plural } from "./domain/format";
-import { isFinished, STATUS_LABEL, STATUS_TONE } from "./domain/status";
+import { deadlineLeft } from "./domain/format";
+import {
+  isFinished,
+  isOnReview,
+  STATUS_LABEL,
+  STATUS_TONE,
+} from "./domain/status";
 import { useRequest } from "./model/use-request";
 import { ReviewPanel } from "./review";
 import { Answers } from "./ui/answers";
@@ -33,14 +39,13 @@ const RequestPage = () => {
 
   const tone = STATUS_TONE[request.status];
   // срок идёт, пока заявка в работе: на приёмке и после неё считать нечего
-  const isRunning =
-    !isFinished(request.status) && request.status !== "on_review";
+  const isRunning = !isFinished(request.status) && !isOnReview(request.status);
   // на приёмке ход за жителем, а не за УК: предлагать жалобу на бездействие,
   // когда работа сдана, не за что
   const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
 
   return (
-    <div className={styles.Page}>
+    <Panel className={styles.Page} mode="secondary">
       <Flex align="center" gap={12}>
         <IconTile
           icon={CATEGORY_ICON[request.category]}
@@ -167,7 +172,7 @@ const RequestPage = () => {
           </section>
         </Flex>
       )}
-    </div>
+    </Panel>
   );
 };
 

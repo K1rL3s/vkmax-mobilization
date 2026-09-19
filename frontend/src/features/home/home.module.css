@@ -1,10 +1,7 @@
 .Page {
-  display: flex;
   flex: 1;
-  flex-direction: column;
   gap: 20px;
   padding: 16px 16px 24px;
-  background-color: var(--background-surface);
 
   h2 {
     margin: 0;
