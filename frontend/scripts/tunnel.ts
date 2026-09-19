@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -15,6 +18,7 @@ const { values } = parseArgs({
   options: {
     host: { type: "string" },
     user: { type: "string" },
+    identity: { type: "string", short: "i" },
     "local-port": { type: "string" },
     "local-host": { type: "string" },
     "remote-port": { type: "string" },
@@ -38,6 +42,8 @@ if (values.help) {
 Опции:
   --host <host>             SSH-хост сервера            [DEV_TUNNEL_SSH_HOST]
   --user <user>             SSH-пользователь            [DEV_TUNNEL_SSH_USER]
+  -i, --identity <path>     приватный ключ для ssh -i   [DEV_TUNNEL_SSH_KEY]
+                            без него ssh берёт свои умолчания и агента
   --local-port <port>       порт локального dev-сервера [DEV_TUNNEL_LOCAL_PORT] (5173)
   --local-host <host>       хост локального dev-сервера [DEV_TUNNEL_LOCAL_HOST] (localhost)
   --remote-port <port>      порт на сервере             [DEV_TUNNEL_REMOTE_PORT] (5022)
@@ -111,8 +117,30 @@ const aliveInterval = setting(
 );
 const aliveCount = setting("alive-count", "DEV_TUNNEL_ALIVE_COUNT", "3");
 
+// ключ необязателен: без него ssh ищет его сам - по ~/.ssh/config и агенту
+const identity = (): string | null => {
+  const value = values.identity ?? process.env.DEV_TUNNEL_SSH_KEY ?? "";
+  if (value === "") {
+    return null;
+  }
+  // тильду раскрываем сами: ssh запускается без шелла, и в --dry-run должен
+  // печататься тот же путь, по которому пойдёт соединение
+  const path = value.startsWith("~/")
+    ? resolve(homedir(), value.slice(2))
+    : value;
+  if (!existsSync(path)) {
+    return fail(
+      `Ключ не найден: ${path}. Проверьте DEV_TUNNEL_SSH_KEY в .env.local или --identity.`,
+    );
+  }
+  return path;
+};
+
+const key = identity();
+
 const args = [
   "-N",
+  ...(key === null ? [] : ["-i", key]),
   "-R",
   `${remoteBind}:${remotePort}:${localHost}:${localPort}`,
   "-o",
