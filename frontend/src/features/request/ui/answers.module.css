@@ -1,0 +1,19 @@
+.Answers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.Message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}

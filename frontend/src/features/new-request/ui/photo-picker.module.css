@@ -1,0 +1,40 @@
+.Picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.Thumb {
+  position: relative;
+  overflow: hidden;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  background-color: var(--background-secondary);
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.Remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.Add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+  color: var(--text-themed);
+  cursor: pointer;
+}

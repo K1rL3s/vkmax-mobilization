@@ -1,6 +1,6 @@
 import type { components } from "../schema/generated";
 
-import type { MockRequest } from "./state";
+import type { MockHttpRequest } from "./state";
 
 export type Reply = {
   status: number;
@@ -34,13 +34,13 @@ export const forbidden = (detail: string): Reply =>
 export const conflict = (detail: string): Reply =>
   fail(409, "Конфликт состояния", detail);
 
-type Handler = (request: MockRequest) => Reply;
+type Handler = (request: MockHttpRequest) => Reply;
 
 // заголовок авторизации проверяется у каждой ручки: забытый WebAppData должен
 // падать на моке так же, как упал бы на бекенде
 export const route = (handler: Handler) => ({
   data: (request: unknown) => {
-    const mockRequest = request as MockRequest;
+    const mockRequest = request as MockHttpRequest;
 
     return mockRequest.headers.webappdata
       ? handler(mockRequest)

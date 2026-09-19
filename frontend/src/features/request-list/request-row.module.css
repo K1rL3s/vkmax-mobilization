@@ -1,0 +1,63 @@
+.Row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.Chevron {
+  /* в SVG из макета уже заложена прозрачность 28% */
+  color: var(--text-primary);
+}
+
+.StatusPill {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.themed {
+  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+  color: var(--text-themed);
+}
+
+.promo {
+  background-color: color-mix(
+    in srgb,
+    var(--promo-text-step-1) 12%,
+    transparent
+  );
+  color: var(--promo-text-step-1);
+}
+
+.neutral {
+  background-color: var(--background-secondary);
+  color: var(--text-secondary);
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.action {
+  color: var(--text-themed);
+}
+
+.overdue {
+  color: var(--text-negative);
+}

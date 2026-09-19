@@ -6,9 +6,18 @@ import {
   Tappable,
   Typography,
 } from "@maxhub/max-ui";
-import { Link, useNavigate } from "react-router-dom";
+import { generatePath, Link, useNavigate } from "react-router-dom";
 
 import { useHouseCard } from "@/features/house";
+import {
+  CATEGORY_ICON,
+  deadlineLeft,
+  deadlineProgress,
+  STATUS_LABEL,
+  STATUS_TONE,
+  type RequestListItem,
+} from "@/features/request";
+import { cn } from "@/shared/lib/css";
 import { useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 import { Card } from "@/shared/ui/card";
@@ -22,13 +31,13 @@ import {
   meterIcon,
   phoneIcon,
   pollIcon,
-  wrenchIcon,
 } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { DemandCard } from "./demand-card";
 import { HOME_MOCK, type NewsKind } from "./home.mock";
+import { useActiveRequest } from "./use-active-request";
 
 import styles from "./home.module.css";
 
@@ -41,10 +50,93 @@ const Chevron = () => (
   <Icon src={chevronSmallIcon} size={12} className={styles.Chevron} />
 );
 
+const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
+  const navigate = useNavigate();
+  const tone = STATUS_TONE[request.status];
+  // на приёмке нормативный срок уже не идёт: работы сделаны, ход за жителем
+  const onReview = request.status === "on_review";
+  const deadline = onReview ? null : deadlineLeft(request.deadline_at);
+  const progress = onReview
+    ? null
+    : deadlineProgress(request.created_at, request.deadline_at);
+  const hint = onReview ? "Проверьте работу" : deadline?.text;
+
+  return (
+    <Flex asChild align="center" gap={12}>
+      <Tappable
+        className={styles.CardLink}
+        onClick={() =>
+          void navigate(
+            generatePath(Routes.REQUEST, { requestId: String(request.id) }),
+          )
+        }
+      >
+        <IconTile icon={CATEGORY_ICON[request.category]} tone={tone} />
+        <Flex
+          className={styles.Grow}
+          align="stretch"
+          direction="column"
+          gapY={4}
+        >
+          <Flex align="center" gap={12}>
+            <Typography.Text
+              variant="description"
+              color="secondary"
+              className={styles.Grow}
+            >
+              Заявка №{request.id}
+            </Typography.Text>
+            <Typography.Text
+              variant="label-strong"
+              className={cn(styles.StatusPill, styles[tone])}
+            >
+              {STATUS_LABEL[request.status]}
+            </Typography.Text>
+          </Flex>
+          <Typography.Text
+            variant="body-strong"
+            color="primary"
+            className={styles.Ellipsis}
+          >
+            {request.description}
+          </Typography.Text>
+          {hint && (
+            <div className={styles.Deadline}>
+              {progress !== null && (
+                <div className={styles.ProgressTrack}>
+                  <div
+                    className={cn(
+                      styles.ProgressFill,
+                      deadline?.overdue && styles.overdue,
+                    )}
+                    style={{ width: `${progress * 100}%` }}
+                  />
+                </div>
+              )}
+              <Typography.Text
+                variant="description"
+                className={cn(
+                  styles.Hint,
+                  onReview && styles.action,
+                  deadline?.overdue && styles.overdue,
+                )}
+              >
+                {hint}
+              </Typography.Text>
+            </div>
+          )}
+        </Flex>
+        <Chevron />
+      </Tappable>
+    </Flex>
+  );
+};
+
 const HomePage = () => {
   const navigate = useNavigate();
-  const { activeRequest, meters, poll, news } = HOME_MOCK;
+  const { meters, poll, news } = HOME_MOCK;
   const { currentResidency: residency } = useSession();
+  const request = useActiveRequest();
 
   const card = useHouseCard(residency?.house_id);
 
@@ -125,7 +217,7 @@ const HomePage = () => {
 
           {connected && (
             <Button asChild size="medium" stretched>
-              <Link to={Routes.REQUESTS}>Подать заявку</Link>
+              <Link to={Routes.REQUEST_NEW}>Подать заявку</Link>
             </Button>
           )}
         </Card>
@@ -147,57 +239,7 @@ const HomePage = () => {
               <h2>Актуальное</h2>
             </Typography.Text>
 
-            <Flex asChild align="center" gap={12}>
-              <Tappable
-                className={styles.CardLink}
-                onClick={() => navigate(Routes.REQUESTS)}
-              >
-                <IconTile icon={wrenchIcon} tone="themed" />
-                <Flex
-                  className={styles.Grow}
-                  align="stretch"
-                  direction="column"
-                  gapY={4}
-                >
-                  <Flex align="center" gap={12}>
-                    <Typography.Text
-                      variant="description"
-                      color="secondary"
-                      className={styles.Grow}
-                    >
-                      Заявка №{activeRequest.number}
-                    </Typography.Text>
-                    <Typography.Text
-                      variant="label-strong"
-                      className={styles.StatusPill}
-                    >
-                      {activeRequest.status}
-                    </Typography.Text>
-                  </Flex>
-                  <Typography.Text
-                    variant="body-strong"
-                    color="primary"
-                    className={styles.Ellipsis}
-                  >
-                    {activeRequest.title}
-                  </Typography.Text>
-                  <div className={styles.Deadline}>
-                    <div className={styles.ProgressTrack}>
-                      <div
-                        className={styles.ProgressFill}
-                        style={{
-                          width: `${activeRequest.deadlineProgress * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <Typography.Text variant="description" color="secondary">
-                      {activeRequest.deadlineLeft}
-                    </Typography.Text>
-                  </div>
-                </Flex>
-                <Chevron />
-              </Tappable>
-            </Flex>
+            {request && <ActiveRequestCard request={request} />}
 
             <Flex asChild align="center" gap={12}>
               <Card>

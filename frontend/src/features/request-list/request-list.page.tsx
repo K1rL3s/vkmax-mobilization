@@ -1,0 +1,79 @@
+import { Button, Flex, Typography } from "@maxhub/max-ui";
+import { Link } from "react-router-dom";
+
+import { Routes } from "@/shared/model/routes";
+import { wrenchIcon } from "@/shared/ui/icon";
+import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
+
+import { RequestRow } from "./request-row";
+import { StatusFilter } from "./status-filter";
+import { useRequestList } from "./use-request-list";
+
+import styles from "./request-list.module.css";
+
+const RequestListPage = () => {
+  const list = useRequestList();
+
+  return (
+    <div className={styles.Page}>
+      <Button asChild size="large" stretched>
+        <Link to={Routes.REQUEST_NEW}>Новая заявка</Link>
+      </Button>
+
+      <StatusFilter value={list.filter} onChange={list.setFilter} />
+
+      {list.isPending && <LoadingState fill title="Загружаем заявки" />}
+
+      {list.isError && <ErrorState fill onRetry={list.retry} />}
+
+      {list.isEmpty && (
+        <EmptyState
+          fill
+          icon={wrenchIcon}
+          title="Заявок пока нет"
+          description="Расскажите управляющей компании о проблеме: заявка попадёт диспетчеру, а срок ответа задаст категория."
+        />
+      )}
+
+      {!list.isEmpty && list.groups.length === 0 && (
+        <EmptyState
+          fill
+          icon={wrenchIcon}
+          title="В этом фильтре пусто"
+          description="По выбранному статусу заявок нет."
+          action={
+            <Button
+              size="medium"
+              variant="secondary"
+              onClick={() => list.setFilter("all")}
+            >
+              Показать все
+            </Button>
+          }
+        />
+      )}
+
+      {list.groups.map((group) => (
+        <Flex
+          key={group.title}
+          asChild
+          align="stretch"
+          direction="column"
+          gap={8}
+        >
+          <section>
+            <Typography.Text asChild variant="title" color="primary">
+              <h2>{group.title}</h2>
+            </Typography.Text>
+
+            {group.items.map((request) => (
+              <RequestRow key={request.id} request={request} />
+            ))}
+          </section>
+        </Flex>
+      ))}
+    </div>
+  );
+};
+
+export const Component = RequestListPage;

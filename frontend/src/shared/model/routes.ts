@@ -6,6 +6,8 @@ export const Routes = {
   FLAT_CONFIRMATION_METHOD: "/residencies/:residentId/confirm/:method",
   HOME: "/home",
   REQUESTS: "/requests",
+  REQUEST_NEW: "/requests/new",
+  REQUEST: "/requests/:requestId",
   MEETINGS: "/meetings",
   PROFILE: "/profile",
   OUTSIDE_MAX: "/outside-max",

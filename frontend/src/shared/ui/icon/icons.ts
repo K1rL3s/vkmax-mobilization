@@ -1,8 +1,13 @@
 import alertIcon from "./alert.svg";
 import buildingIcon from "./building.svg";
+import bulbIcon from "./bulb.svg";
+import cameraIcon from "./camera.svg";
 import checkIcon from "./check.svg";
 import chevronSmallIcon from "./chevron-small.svg";
 import clockIcon from "./clock.svg";
+import dropletIcon from "./droplet.svg";
+import elevatorIcon from "./elevator.svg";
+import flameIcon from "./flame.svg";
 import geoPinIcon from "./geo-pin.svg";
 import homeIcon from "./home.svg";
 import houseOutlineIcon from "./house-outline.svg";
@@ -15,15 +20,24 @@ import navProfileIcon from "./nav-profile.svg";
 import navRequestsIcon from "./nav-requests.svg";
 import phoneIcon from "./phone.svg";
 import pollIcon from "./poll.svg";
+import receiptIcon from "./receipt.svg";
 import searchOutlineIcon from "./search-outline.svg";
+import trashIcon from "./trash.svg";
+import treeIcon from "./tree.svg";
+import userIcon from "./user.svg";
 import wrenchIcon from "./wrench.svg";
 
 export {
   alertIcon,
   buildingIcon,
+  bulbIcon,
+  cameraIcon,
   checkIcon,
   chevronSmallIcon,
   clockIcon,
+  dropletIcon,
+  elevatorIcon,
+  flameIcon,
   geoPinIcon,
   homeIcon,
   houseOutlineIcon,
@@ -36,6 +50,10 @@ export {
   navRequestsIcon,
   phoneIcon,
   pollIcon,
+  receiptIcon,
   searchOutlineIcon,
+  trashIcon,
+  treeIcon,
+  userIcon,
   wrenchIcon,
 };

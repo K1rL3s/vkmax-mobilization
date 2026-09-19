@@ -2,7 +2,7 @@ import type { components } from "../schema/generated";
 
 type Schemas = components["schemas"];
 
-export type MockRequest = {
+export type MockHttpRequest = {
   params: Record<string, string>;
   query: Record<string, string | undefined>;
   body: Record<string, unknown>;
@@ -43,6 +43,26 @@ type MockVerification = {
   comment: string | null;
   status: Schemas["VerificationStatus"];
   reason: string | null;
+};
+
+type MockRequest = {
+  id: number;
+  house_id: number;
+  created_at: string;
+  category: Schemas["RequestCategory"];
+  description: string;
+  status: Schemas["RequestStatus"];
+  channel: Schemas["RequestChannel"];
+  has_photos: boolean;
+  group_size: number;
+  group_id: number | null;
+  flat_number: string | null;
+  executor_name: string | null;
+  rating: number | null;
+  deadline_at: string | null;
+  parent_request_id: number | null;
+  photo_names: string[];
+  messages: { after_minutes: number; text: string }[];
 };
 
 type MockResidency = {
@@ -178,6 +198,201 @@ const FLATS: MockFlat[] = [
   },
 ];
 
+// копия CATEGORY_RULES бэка: справочник категорий отдаёт те же подписи,
+// зоны и нормативы
+const CATEGORY_RULES: Record<
+  Schemas["RequestCategory"],
+  { label: string; zone: Schemas["ResponsibilityZone"]; hours: number }
+> = {
+  leak: { label: "Протечка", zone: "management", hours: 4 },
+  elevator: { label: "Лифт", zone: "management", hours: 24 },
+  garbage: { label: "Мусор", zone: "management", hours: 24 },
+  heating: { label: "Отопление", zone: "utility", hours: 24 },
+  water_supply: { label: "Водоснабжение", zone: "utility", hours: 8 },
+  electricity: { label: "Электричество", zone: "utility", hours: 24 },
+  entrance: { label: "Подъезд", zone: "management", hours: 72 },
+  yard: { label: "Двор и территория", zone: "municipality", hours: 72 },
+  meter_error: { label: "Ошибка в показаниях", zone: "management", hours: 72 },
+  charge_dispute: {
+    label: "Спор по начислению",
+    zone: "management",
+    hours: 72,
+  },
+  other: { label: "Другое", zone: "management", hours: 72 },
+};
+
+const minutes = (count: number) =>
+  new Date(Date.now() + count * 60 * 1000).toISOString();
+
+const days = (count: number) => minutes(count * 24 * 60);
+
+const request = (
+  fields: Pick<
+    MockRequest,
+    "id" | "category" | "description" | "status" | "created_at"
+  > &
+    Partial<MockRequest>,
+): MockRequest => ({
+  house_id: 1,
+  channel: "miniapp",
+  has_photos: true,
+  group_size: 1,
+  group_id: null,
+  flat_number: "45",
+  executor_name: null,
+  rating: null,
+  deadline_at: null,
+  parent_request_id: null,
+  photo_names: [],
+  messages: [],
+  ...fields,
+});
+
+// демо-лента повторяет макет; сроки считаются от «сейчас», иначе заявки
+// протухают вместе с датой, на которую их написали
+const SEED_REQUESTS: MockRequest[] = [
+  request({
+    id: 145,
+    category: "water_supply",
+    description: "Нет холодной воды",
+    status: "accepted",
+    created_at: days(-2),
+    deadline_at: minutes(20 * 60),
+    messages: [
+      {
+        after_minutes: 26,
+        text: "Авария на водоводе, работы ведёт Водоканал. Передали вашу заявку, следим за сроками.",
+      },
+    ],
+  }),
+  request({
+    id: 142,
+    category: "leak",
+    description: "Протечка, 2-й подъезд",
+    status: "in_progress",
+    created_at: days(-3),
+    deadline_at: minutes(332),
+    group_size: 7,
+    group_id: 12,
+    executor_name: "Сантехник Алексей Петров",
+    messages: [
+      {
+        after_minutes: 18,
+        text: "Заявку приняли, передаём сантехнику. Напишем, когда назначим время.",
+      },
+      {
+        after_minutes: 104,
+        text: "Сантехник придёт сегодня до 16:00. Обеспечьте, пожалуйста, доступ в квартиру.",
+      },
+    ],
+  }),
+  request({
+    id: 141,
+    category: "electricity",
+    description: "Снова не горит свет на 5 этаже",
+    status: "in_progress",
+    created_at: days(-1),
+    deadline_at: minutes(10 * 60),
+    parent_request_id: 131,
+  }),
+  request({
+    id: 139,
+    category: "heating",
+    description: "Холодные батареи в квартире",
+    status: "in_progress",
+    created_at: days(-5),
+    deadline_at: minutes(-190),
+  }),
+  request({
+    id: 137,
+    category: "elevator",
+    description: "Не закрывается дверь лифта",
+    status: "on_review",
+    created_at: days(-7),
+    deadline_at: days(-6),
+    executor_name: "Механик Ильдар Гафуров",
+    messages: [
+      {
+        after_minutes: 1330,
+        text: "Заменили доводчик двери. Посмотрите, пожалуйста, и примите работу.",
+      },
+    ],
+  }),
+  request({
+    id: 133,
+    category: "garbage",
+    description: "Не вывезли мусор с площадки",
+    status: "new",
+    created_at: minutes(-120),
+    deadline_at: minutes(22 * 60),
+    has_photos: false,
+  }),
+  request({
+    id: 131,
+    category: "electricity",
+    description: "Не горит свет на 5 этаже",
+    status: "done",
+    created_at: days(-16),
+    rating: 5,
+    executor_name: "Электрик Олег Смирнов",
+    messages: [
+      {
+        after_minutes: 1425,
+        text: "Заменили лампу и датчик движения на 5 этаже.",
+      },
+    ],
+  }),
+  request({
+    id: 128,
+    category: "entrance",
+    description: "Разбито стекло в подъезде",
+    status: "done",
+    created_at: days(-20),
+  }),
+  request({
+    id: 126,
+    category: "yard",
+    description: "Яма у детской площадки",
+    status: "done",
+    created_at: days(-24),
+    rating: 4,
+  }),
+  request({
+    id: 120,
+    category: "garbage",
+    description: "Мусор у контейнерной площадки",
+    status: "done",
+    created_at: days(-28),
+    rating: 5,
+  }),
+  request({
+    id: 118,
+    category: "meter_error",
+    description: "Ошибка в показаниях за июль",
+    status: "done",
+    created_at: days(-33),
+    rating: 4,
+    has_photos: false,
+  }),
+  request({
+    id: 112,
+    category: "charge_dispute",
+    description: "Спор по начислению за отопление",
+    status: "done",
+    created_at: days(-40),
+    rating: 5,
+    has_photos: false,
+  }),
+  request({
+    id: 108,
+    category: "other",
+    description: "Не работает домофон у первого подъезда",
+    status: "done",
+    created_at: days(-46),
+    rating: 5,
+  }),
+];
+
 const TAKEN_FLAT_IDS = new Set<number>([103]);
 
 const state = {
@@ -191,8 +406,12 @@ const state = {
   verifications: [] as MockVerification[],
   demand: new Map<number, number>([[4, 11]]),
   demandSent: new Set<number>(),
+  requests: [...SEED_REQUESTS],
+  files: new Map<string, string>(),
   nextResidentId: 501,
   nextVerificationId: 9001,
+  nextRequestId: 150,
+  nextFileId: 1,
 };
 
 export const resetState = (): void => {
@@ -202,8 +421,12 @@ export const resetState = (): void => {
   state.verifications = [];
   state.demand = new Map([[4, 11]]);
   state.demandSent = new Set();
+  state.requests = [...SEED_REQUESTS];
+  state.files = new Map();
   state.nextResidentId = 501;
   state.nextVerificationId = 9001;
+  state.nextRequestId = 150;
+  state.nextFileId = 1;
 };
 
 export const hasConsent = (): boolean => state.user.consent_at !== null;
@@ -328,6 +551,199 @@ export const signalDemand = (houseId: number): number => {
 
 export const demandTotal = (houseId: number): number =>
   state.demand.get(houseId) ?? 0;
+
+export const houseRequests = (
+  houseId: number,
+  status: Schemas["RequestStatus"] | null,
+): MockRequest[] =>
+  state.requests
+    .filter(
+      (item) =>
+        item.house_id === houseId &&
+        (status === null || item.status === status),
+    )
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+export const requestListItem = (
+  item: MockRequest,
+): Schemas["RequestListItem"] => ({
+  id: item.id,
+  created_at: item.created_at,
+  category: item.category,
+  category_label: CATEGORY_RULES[item.category].label,
+  description: item.description,
+  status: item.status,
+  channel: item.channel,
+  has_photos: item.has_photos,
+  group_size: item.group_size,
+  flat_number: item.flat_number,
+  group_id: item.group_id,
+  executor_name: item.executor_name,
+  rating: item.rating,
+  deadline_at: item.deadline_at,
+});
+
+// заявка держит только случившееся; шаг помечается ролью того, кто его сделал
+const STEP: {
+  status: Schemas["RequestStatus"];
+  after_minutes: number;
+  by_role: string;
+}[] = [
+  { status: "new", after_minutes: 0, by_role: "resident" },
+  { status: "accepted", after_minutes: 17, by_role: "staff" },
+  { status: "in_progress", after_minutes: 102, by_role: "staff" },
+  { status: "on_review", after_minutes: 1320, by_role: "executor" },
+  { status: "done", after_minutes: 1440, by_role: "resident" },
+];
+
+const shift = (iso: string, addMinutes: number) =>
+  new Date(new Date(iso).getTime() + addMinutes * 60 * 1000).toISOString();
+
+const requestTimeline = (
+  item: MockRequest,
+): Schemas["RequestStatusLogItem"][] => {
+  const reached = STEP.findIndex(({ status }) => status === item.status);
+
+  return STEP.slice(0, reached + 1).map((step, index) => ({
+    at: shift(item.created_at, step.after_minutes),
+    to_status: step.status,
+    by_role: step.by_role,
+    from_status: index === 0 ? null : STEP[index - 1].status,
+  }));
+};
+
+const PHOTO: Schemas["FileRef"] = {
+  name: "Фото от жителя",
+  url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23d9d9d9'/%3E%3C/svg%3E",
+};
+
+export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
+  const house = findHouse(item.house_id);
+
+  return {
+    ...requestListItem(item),
+    house_id: item.house_id,
+    address: house ? address(house) : "",
+    org_name: house?.org?.name ?? null,
+    normative_hours: CATEGORY_RULES[item.category].hours,
+    photos: item.photo_names.length
+      ? item.photo_names.map((name) => ({
+          name,
+          url: state.files.get(name) ?? PHOTO.url,
+        }))
+      : item.has_photos
+        ? [PHOTO]
+        : [],
+    result_photos: [],
+    messages: item.messages.map((message) => ({
+      created_at: shift(item.created_at, message.after_minutes),
+      author_role: "staff",
+      author_name: "Диспетчер УК",
+      text: message.text,
+    })),
+    timeline: requestTimeline(item),
+    can_review: item.status === "on_review",
+    can_rate: item.status === "done" && item.rating === null,
+    feedback: null,
+    parent_request_id: item.parent_request_id,
+    flat_id: residencyForHouse(item.house_id)?.flat_id ?? null,
+  };
+};
+
+export const findRequest = (requestId: number): MockRequest | undefined =>
+  state.requests.find((item) => item.id === requestId);
+
+// демо-соседи: у протечки уже собрана группа, к отоплению присоединиться
+// нельзя - окно склейки закрыто, но пожаловавшиеся соседи есть
+const NEIGHBOURS: Partial<Record<Schemas["RequestCategory"], number>> = {
+  heating: 3,
+  elevator: 1,
+};
+
+export const similarRequests = (
+  houseId: number,
+  category: Schemas["RequestCategory"],
+): Schemas["SimilarRequestsResponse"] => {
+  const group = state.requests.find(
+    (item) =>
+      item.house_id === houseId &&
+      item.category === category &&
+      item.group_id !== null &&
+      item.status !== "done",
+  );
+
+  if (group) {
+    return {
+      category,
+      neighbours_count: group.group_size,
+      can_join: true,
+      group_id: group.group_id,
+      window_started_at: group.created_at,
+    };
+  }
+
+  return {
+    category,
+    neighbours_count: NEIGHBOURS[category] ?? 0,
+    can_join: false,
+    group_id: null,
+    window_started_at: null,
+  };
+};
+
+export const saveFile = (name: string, url: string): void => {
+  state.files.set(name, url);
+};
+
+export const nextFileName = (): string => {
+  const name = `photo-${state.nextFileId}.jpg`;
+  state.nextFileId += 1;
+
+  return name;
+};
+
+export const createRequest = (
+  houseId: number,
+  body: Schemas["CreateRequestRequest"],
+): MockRequest => {
+  const created = request({
+    id: state.nextRequestId,
+    house_id: houseId,
+    category: body.category,
+    description: body.description,
+    status: "new",
+    created_at: minutes(0),
+    deadline_at: minutes(CATEGORY_RULES[body.category].hours * 60),
+    flat_number: residencyForHouse(houseId)?.flat_number ?? null,
+    group_id: body.join_group_id ?? null,
+    has_photos: (body.photos?.length ?? 0) > 0,
+    photo_names: body.photos ?? [],
+  });
+  state.nextRequestId += 1;
+  state.requests.push(created);
+
+  // присоединение растит группу: новое число квартир видят все её заявки
+  if (created.group_id !== null) {
+    const members = state.requests.filter(
+      (item) => item.group_id === created.group_id && item.id !== created.id,
+    );
+    const size = (members[0]?.group_size ?? 0) + 1;
+
+    [...members, created].forEach((item) => {
+      item.group_size = size;
+    });
+  }
+
+  return created;
+};
+
+export const requestCategories = (): Schemas["RequestCategoryItem"][] =>
+  Object.entries(CATEGORY_RULES).map(([category, rule]) => ({
+    category: category as Schemas["RequestCategory"],
+    label: rule.label,
+    zone: rule.zone,
+    normative_hours: rule.hours,
+  }));
 
 export const address = (house: MockHouse): string =>
   `${house.city}, ул. ${house.street}, д. ${house.building}`;

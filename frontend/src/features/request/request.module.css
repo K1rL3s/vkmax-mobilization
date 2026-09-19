@@ -1,0 +1,56 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px 24px;
+  background-color: var(--background-surface);
+
+  h2 {
+    margin: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Pill {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  .themed {
+    background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+    color: var(--text-themed);
+  }
+
+  .promo {
+    background-color: color-mix(
+      in srgb,
+      var(--promo-text-step-1) 12%,
+      transparent
+    );
+    color: var(--promo-text-step-1);
+  }
+
+  .neutral {
+    background-color: var(--background-secondary);
+    color: var(--text-secondary);
+  }
+
+  .Responsible {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .RowIcon {
+    flex-shrink: 0;
+    color: var(--icon-tertiary);
+  }
+}

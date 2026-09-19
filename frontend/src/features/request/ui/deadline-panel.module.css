@@ -1,0 +1,38 @@
+.Panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Left {
+  color: var(--text-themed);
+}
+
+.Left.overdue {
+  color: var(--text-negative);
+}
+
+.Track {
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--controls-inactive);
+}
+
+.Fill {
+  height: 100%;
+  border-radius: 2px;
+  background-color: var(--icon-positive);
+}
+
+.Fill.overdue {
+  background-color: var(--icon-negative);
+}

@@ -57,6 +57,20 @@ const router = createBrowserRouter([
             ],
           },
           {
+            loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.REQUESTS} />,
+            children: [
+              {
+                path: Routes.REQUEST_NEW,
+                lazy: () => import("@/features/new-request/new-request.page"),
+              },
+              {
+                path: Routes.REQUEST,
+                lazy: () => import("@/features/request/request.page"),
+              },
+            ],
+          },
+          {
             element: <PushedPage fallback={Routes.HOME} />,
             children: [
               {
@@ -88,7 +102,7 @@ const router = createBrowserRouter([
               },
               {
                 path: Routes.REQUESTS,
-                lazy: () => import("@/features/requests/requests.page"),
+                lazy: () => import("@/features/request-list/request-list.page"),
               },
               {
                 path: Routes.MEETINGS,

@@ -1,0 +1,14 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  /* чипы фильтра выходят за отступы страницы, но не за экран */
+  overflow-x: clip;
+  padding: 16px 16px 24px;
+  background-color: var(--background-surface);
+
+  h2 {
+    margin: 0;
+  }
+}
