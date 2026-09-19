@@ -29,6 +29,7 @@ from zheka.core.ids import (
 from zheka.core.models import (
     Flat,
     House,
+    Organization,
     Request,
     RequestMessage,
     RequestPhoto,
@@ -95,6 +96,7 @@ class RequestRow(ZhekaType):
 class RequestCardData(ZhekaType):
     request: Request
     house: House
+    org: Organization | None
     flat: Flat | None
     issue_photos: Sequence[RequestPhoto]
     result_photos: Sequence[RequestPhoto]
@@ -364,7 +366,14 @@ class RequestsService:
         house: House,
         flat: Flat | None,
     ) -> RequestCardData:
-        return await build_card(self._requests, self._users, request, house, flat)
+        return await build_card(
+            self._requests,
+            self._users,
+            self._orgs,
+            request,
+            house,
+            flat,
+        )
 
     async def _open(self, request: Request, user_id: UserId) -> None:
         # статус NEW - такая же запись в журнале, как и любая следующая:
@@ -481,6 +490,7 @@ class RequestsService:
 async def build_card(
     requests_repo: RequestsRepo,
     users_repo: UsersRepo,
+    orgs_repo: OrgsRepo,
     request: Request,
     house: House,
     flat: Flat | None,
@@ -507,6 +517,7 @@ async def build_card(
     return RequestCardData(
         request=request,
         house=house,
+        org=None if house.org_id is None else await orgs_repo.get(OrgId(house.org_id)),
         flat=flat,
         issue_photos=[
             photo for photo in photos if photo.kind is RequestPhotoKind.ISSUE

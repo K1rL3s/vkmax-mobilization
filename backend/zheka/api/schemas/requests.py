@@ -133,6 +133,8 @@ class RequestStatusLogItem(BaseSchema):
 class RequestCard(RequestListItem):
     house_id: HouseId
     address: str
+    org_name: str | None
+    normative_hours: int
     photos: list[FileRef]
     result_photos: list[FileRef]
     messages: list[RequestMessageItem]
@@ -170,6 +172,8 @@ class RequestCard(RequestListItem):
             deadline_at=deadline_of(request),
             house_id=HouseId(request.house_id),
             address=card.house.address,
+            org_name=None if card.org is None else card.org.name,
+            normative_hours=CATEGORY_RULES[request.category].normative_hours,
             photos=photos,
             result_photos=result_photos,
             messages=[RequestMessageItem.of(view) for view in card.messages],

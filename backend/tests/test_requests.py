@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, make_config
 
+from zheka.api.schemas.requests import RequestCard, RequestCategoryItem
 from zheka.core.enums import (
+    CATEGORY_RULES,
     EventType,
     OrgRole,
     RequestActorRole,
@@ -404,6 +406,108 @@ async def test_get_card_hides_a_request_of_another_resident(
     # сосед по дому - такой же чужой для заявки, как любой другой аккаунт
     with pytest.raises(EntityNotFound):
         await service.get_card(neighbour, RequestId(card.request.id))
+
+
+@pytest.mark.parametrize("category", RequestCategory)
+async def test_card_has_the_house_org_and_category_normative_hours(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    category: RequestCategory,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(
+        own.user_id,
+        own.house_id,
+        _draft(category=category),
+    )
+    org = await OrgsRepo(session).get(own.org_id)
+    assert org is not None
+
+    card = RequestCard.of(
+        await service.get_card(own.user_id, RequestId(created.request.id)),
+        [],
+        [],
+    )
+    category_item = RequestCategoryItem.of(category, CATEGORY_RULES[category])
+
+    assert card.org_name == org.name
+    assert card.normative_hours == category_item.normative_hours
+
+
+async def test_card_without_a_house_org_serializes_an_explicit_null(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    house = await HousesRepo(session).get(own.house_id)
+    assert house is not None
+    house.org_id = None
+    await session.flush()
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+
+    card = RequestCard.of(
+        await service.get_card(own.user_id, RequestId(created.request.id)),
+        [],
+        [],
+    )
+
+    assert card.model_dump(mode="json")["org_name"] is None
+    assert card.normative_hours == CATEGORY_RULES[RequestCategory.LEAK].normative_hours
+
+
+async def test_card_uses_the_current_house_org(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    other = await make_org_house_flat_user()
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    house = await HousesRepo(session).get(own.house_id)
+    org = await OrgsRepo(session).get(other.org_id)
+    assert house is not None
+    assert org is not None
+    house.org_id = other.org_id
+    await session.flush()
+
+    card = RequestCard.of(
+        await service.get_card(own.user_id, RequestId(created.request.id)),
+        [],
+        [],
+    )
+
+    assert card.org_name == org.name
+
+
+async def test_collective_request_keeps_the_category_normative_hours(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    single = RequestCard.of(
+        await service.create(own.user_id, own.house_id, _draft()),
+        [],
+        [],
+    )
+    group_id = await _add_group(session, own.house_id)
+    created = await service.create(own.user_id, own.house_id, _draft(group_id=group_id))
+
+    collective = RequestCard.of(
+        await service.get_card(own.user_id, RequestId(created.request.id)),
+        [],
+        [],
+    )
+
+    assert single.group_id is None
+    assert collective.group_id == group_id
+    assert collective.normative_hours == single.normative_hours
+    assert (
+        collective.normative_hours
+        == CATEGORY_RULES[collective.category].normative_hours
+    )
 
 
 async def test_list_mine_shows_only_own_requests_of_the_current_house(
