@@ -1,0 +1,46 @@
+.Panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Left {
+  color: var(--text-themed);
+}
+
+.Track {
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--controls-inactive);
+}
+
+.Fill {
+  height: 100%;
+  border-radius: 2px;
+  background-color: var(--icon-positive);
+}
+
+.Comment {
+  width: 100%;
+}
+
+.Counter {
+  align-self: flex-end;
+}
+
+.Failed {
+  color: var(--text-negative);
+}
+
+.Action {
+  flex: 1 1 auto;
+}

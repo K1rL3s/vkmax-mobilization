@@ -21,6 +21,31 @@ const STEP_TITLE: Record<RequestStatus, string> = {
   done: "Выполнена",
 };
 
+/**
+ * Автозакрытие приёмки: отсчёт идёт от шага «На приёмке», срок - та же копия
+ * AUTO_CLOSE_HOURS, что и в подписи будущего шага. Обе уйдут, когда в
+ * карточку приедет `auto_close_at`.
+ */
+export const autoClose = (request: RequestCard, now = Date.now()) => {
+  const sent = request.timeline.find(
+    (entry) => entry.to_status === "on_review",
+  );
+
+  if (!sent) {
+    return null;
+  }
+
+  const from = new Date(sent.at).getTime();
+  const at = from + AUTO_CLOSE_HOURS * 60 * 60 * 1000;
+
+  return {
+    sentAt: sent.at,
+    at: new Date(at).toISOString(),
+    left: at - now,
+    progress: Math.min(1, Math.max(0, (now - from) / (at - from))),
+  };
+};
+
 export type TimelineStep = {
   status: RequestStatus;
   title: string;

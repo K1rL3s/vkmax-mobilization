@@ -62,6 +62,7 @@ type MockRequest = {
   executor_name: string | null;
   rating: number | null;
   feedback: string | null;
+  has_result_photos: boolean;
   deadline_at: string | null;
   parent_request_id: number | null;
   photo_names: string[];
@@ -245,6 +246,7 @@ const request = (
   executor_name: null,
   rating: null,
   feedback: null,
+  has_result_photos: false,
   deadline_at: null,
   parent_request_id: null,
   photo_names: [],
@@ -312,9 +314,12 @@ const SEED_REQUESTS: MockRequest[] = [
     category: "elevator",
     description: "Не закрывается дверь лифта",
     status: "on_review",
-    created_at: days(-7),
-    deadline_at: days(-6),
+    // приёмка должна идти прямо сейчас: от шага «На приёмке» считается
+    // автозакрытие, и с давней датой счётчик показывал бы прошедшее
+    created_at: days(-2),
+    deadline_at: days(-1),
     executor_name: "Механик Ильдар Гафуров",
+    has_result_photos: true,
     messages: [
       {
         after_minutes: 1330,
@@ -616,6 +621,11 @@ const requestTimeline = (
   }));
 };
 
+const RESULT_PHOTO: Schemas["FileRef"] = {
+  name: "Фото исполнителя",
+  url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23c7d4e0'/%3E%3C/svg%3E",
+};
+
 const PHOTO: Schemas["FileRef"] = {
   name: "Фото от жителя",
   url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23d9d9d9'/%3E%3C/svg%3E",
@@ -638,7 +648,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
       : item.has_photos
         ? [PHOTO]
         : [],
-    result_photos: [],
+    result_photos: item.has_result_photos ? [RESULT_PHOTO] : [],
     messages: item.messages.map((message) => ({
       created_at: shift(item.created_at, message.after_minutes),
       author_role: "staff",
@@ -656,6 +666,17 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
 
 export const findRequest = (requestId: number): MockRequest | undefined =>
   state.requests.find((item) => item.id === requestId);
+
+// приёмка: принятая работа закрывает заявку, непринятая возвращает её в
+// работу - исполнителю есть что исправлять
+export const reviewRequest = (
+  item: MockRequest,
+  accepted: boolean,
+): MockRequest => {
+  item.status = accepted ? "done" : "in_progress";
+
+  return item;
+};
 
 export const rateRequest = (
   item: MockRequest,

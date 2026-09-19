@@ -11,6 +11,7 @@ import { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
 import { deadlineLeft, formatDay, formatTime, plural } from "./domain/format";
 import { isFinished, STATUS_LABEL, STATUS_TONE } from "./domain/status";
 import { useRequest } from "./model/use-request";
+import { ReviewPanel } from "./review";
 import { Answers } from "./ui/answers";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
@@ -31,11 +32,12 @@ const RequestPage = () => {
   }
 
   const tone = STATUS_TONE[request.status];
-  const overdue =
-    !isFinished(request.status) && deadlineLeft(request.deadline_at)?.overdue;
   // срок идёт, пока заявка в работе: на приёмке и после неё считать нечего
   const isRunning =
     !isFinished(request.status) && request.status !== "on_review";
+  // на приёмке ход за жителем, а не за УК: предлагать жалобу на бездействие,
+  // когда работа сдана, не за что
+  const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
 
   return (
     <div className={styles.Page}>
@@ -100,6 +102,8 @@ const RequestPage = () => {
       </Flex>
 
       {isRunning && <DeadlinePanel request={request} />}
+
+      {request.can_review && <ReviewPanel request={request} />}
 
       {(request.can_rate || request.rating !== null) && (
         <RatePanel request={request} />

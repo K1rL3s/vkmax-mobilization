@@ -11,6 +11,7 @@ import {
   repeatRequest,
   requestCard,
   requestCategories,
+  reviewRequest,
   requestListItem,
   residencies,
   saveFile,
@@ -139,6 +140,31 @@ export const requestsConfigs = [
         return ok(
           requestCard(rateRequest(item, body.rating, body.feedback ?? null)),
         );
+      }),
+    ],
+  },
+  {
+    path: "/requests/:request_id/review" as const,
+    method: "post" as const,
+    routes: [
+      route((request) => {
+        const item = findRequest(Number(request.params.request_id));
+
+        if (!item) {
+          return notFound("Заявка не найдена");
+        }
+
+        if (item.status !== "on_review") {
+          return badRequest("Заявка не на приёмке");
+        }
+
+        const body = request.body as Schemas["ReviewRequestRequest"];
+
+        if (!body.accepted && !body.comment?.trim()) {
+          return badRequest("Опишите, что не так с работой");
+        }
+
+        return ok(requestCard(reviewRequest(item, body.accepted)));
       }),
     ],
   },
