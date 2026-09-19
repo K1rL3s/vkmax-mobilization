@@ -86,6 +86,18 @@ const router = createBrowserRouter([
                 path: Routes.HOME,
                 lazy: () => import("@/features/home/home.page"),
               },
+              {
+                path: Routes.REQUESTS,
+                lazy: () => import("@/features/requests/requests.page"),
+              },
+              {
+                path: Routes.MEETINGS,
+                lazy: () => import("@/features/meetings/meetings.page"),
+              },
+              {
+                path: Routes.PROFILE,
+                lazy: () => import("@/features/profile/profile.page"),
+              },
             ],
           },
         ],
