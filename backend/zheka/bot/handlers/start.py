@@ -1,10 +1,7 @@
-from dishka import FromDishka
 from maxo import Router
 from maxo.routing.filters import CommandStart
 from maxo.types import BotStarted, MessageCreated
 from maxo.utils.builders import KeyboardBuilder
-
-from zheka.config import MaxConfig
 
 router = Router(name=__name__)
 
@@ -16,25 +13,20 @@ GREETING = (
 
 
 @router.bot_started()
-async def bot_started_handler(
-    update: BotStarted,
-    config: FromDishka[MaxConfig],
-) -> None:
-    await greet(update, config)
+async def bot_started_handler(update: BotStarted) -> None:
+    await greet(update)
 
 
 @router.message_created(CommandStart())
-async def start_command_handler(
-    update: MessageCreated,
-    config: FromDishka[MaxConfig],
-) -> None:
-    await greet(update, config)
+async def start_command_handler(update: MessageCreated) -> None:
+    await greet(update)
 
 
-async def greet(update: BotStarted | MessageCreated, config: MaxConfig) -> None:
+async def greet(update: BotStarted | MessageCreated) -> None:
     keyboard = KeyboardBuilder()
-    if config.miniapp_url:
-        keyboard.add_open_app(text="Открыть приложение", web_app=config.miniapp_url)
+    username = update.bot.state.info.username
+    if username:
+        keyboard.add_open_app(text="Открыть приложение", web_app=username)
 
     await update.send_message(
         text=GREETING,

@@ -196,7 +196,6 @@ def make_config() -> Config:
             mode=BotMode.POLLING,
             webhook_url=None,
             secret_token=None,
-            miniapp_url="https://example.com",
         ),
         files=FilesConfig(
             dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"),

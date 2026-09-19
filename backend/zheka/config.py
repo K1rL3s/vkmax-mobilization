@@ -62,7 +62,6 @@ class MaxConfig(ZhekaType):
     mode: BotMode
     webhook_url: str | None
     secret_token: str | None
-    miniapp_url: str
 
 
 class FilesConfig(ZhekaType):
@@ -143,7 +142,6 @@ def _load_max(env: Env) -> MaxConfig:
             mode=BotMode(env.str("BOT_MODE", BotMode.POLLING).lower()),
             webhook_url=env.str("WEBHOOK_URL", None),
             secret_token=env.str("SECRET_TOKEN", None),
-            miniapp_url=env.str("MINIAPP_URL", ""),
         )
 
 
