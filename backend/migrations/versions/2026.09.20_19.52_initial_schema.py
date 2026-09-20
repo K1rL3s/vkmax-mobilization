@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: c7e26a5603a8
+Revision ID: 25dab9b5c030
 Revises:
-Create Date: 2026-09-20 03:32:30.395863
+Create Date: 2026-09-20 19:52:20.202296
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "c7e26a5603a8"
+revision: str = "25dab9b5c030"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -35,13 +35,13 @@ def upgrade() -> None:
         op.get_bind()
     )
     sa.Enum(
-        "new", "accepted", "in_progress", "on_review", "done", name="request_status"
-    ).create(op.get_bind())
-    sa.Enum(
         "resident_accepted",
         "resident_rejected",
         "auto_closed",
         name="request_completion_reason",
+    ).create(op.get_bind())
+    sa.Enum(
+        "new", "accepted", "in_progress", "on_review", "done", name="request_status"
     ).create(op.get_bind())
     sa.Enum(
         "leak",
@@ -140,6 +140,7 @@ def upgrade() -> None:
         sa.Column("text", sa.Text(), nullable=False),
         sa.Column("channels", sa.ARRAY(sa.String()), nullable=False),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
+        sa.Column("recipients_count", sa.Integer(), server_default="0", nullable=False),
         sa.ForeignKeyConstraint(
             ["created_by"], ["users.id"], name=op.f("fk_announcements_created_by_users")
         ),

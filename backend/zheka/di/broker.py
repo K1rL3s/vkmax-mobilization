@@ -5,6 +5,7 @@ from taskiq import AsyncBroker, ScheduleSource, TaskiqScheduler, async_shared_br
 from taskiq.schedule_sources import LabelScheduleSource
 from taskiq_redis import ListRedisScheduleSource, RedisStreamBroker
 
+from zheka.broker.publisher import TaskPublisher
 from zheka.config import RedisConfig
 
 ZhekaBroker = NewType("ZhekaBroker", AsyncBroker)
@@ -17,6 +18,11 @@ class BrokerProvider(Provider):
     @provide
     def broker(self, config: RedisConfig) -> ZhekaBroker:
         return cast(ZhekaBroker, make_broker(config))
+
+    # запросная: задачи копятся в ней и уезжают одним flush после коммита
+    @provide(scope=Scope.REQUEST)
+    def publisher(self, broker: ZhekaBroker) -> TaskPublisher:
+        return TaskPublisher(broker)
 
     @provide
     def schedule_source(self, config: RedisConfig) -> ZhekaScheduleSource:

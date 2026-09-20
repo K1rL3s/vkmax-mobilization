@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from dishka import AsyncContainer
@@ -14,7 +14,11 @@ from maxo.routing.utils import collect_used_updates
 
 from zheka.__meta__ import API_PREFIX, __version__
 from zheka.api.errors import ERROR_RESPONSES, exception_handlers
-from zheka.api.middlewares import request_logging_middleware, trace_id_middleware
+from zheka.api.middlewares import (
+    request_logging_middleware,
+    trace_id_middleware,
+    transaction_middleware,
+)
 from zheka.api.routes import (
     admin_analytics_router,
     admin_announcements_router,
@@ -46,11 +50,14 @@ from zheka.logger import setup_logger
 logger = logging.getLogger(__name__)
 
 
-def app_factory(config: Config | None = None) -> FastAPI:
+def app_factory(config: Config | None = None, dp: Dispatcher | None = None) -> FastAPI:
     config = config or load_config()
     setup_logger(config.log)
 
-    dp = make_dispatcher(config.redis)
+    # диспетчер в процессе один: роутеры - модульные синглтоны, и второй
+    # make_dispatcher поднимет RouterAlreadyIncludedError. Готовый принимается
+    # для тестов, которым нужен свой
+    dp = dp or make_dispatcher(config.redis)
     container = make_container(config=config, context={Dispatcher: dp})
     setup_maxo_dishka(container, dp, auto_inject=True)
 
@@ -179,12 +186,30 @@ def app_factory(config: Config | None = None) -> FastAPI:
     # пути файлов зафиксированы целиком, nginx разводит /api/ и /files/ сам
     app.include_router(files_router, responses=ERROR_RESPONSES)
 
+    setup_middlewares(app, container, config.api.cors)
+
+    return app
+
+
+def setup_middlewares(
+    app: FastAPI,
+    container: AsyncContainer,
+    cors: Sequence[str],
+) -> None:
+    # порядок регистрации - это стек наизнанку: зарегистрированный последним
+    # оказывается снаружи. transaction_middleware должен быть внутри
+    # контейнера dishka (ему нужен request.state.dishka_container) и снаружи
+    # обработчиков ошибок, которые живут в ExceptionMiddleware - иначе он не
+    # увидит ни контейнера, ни ответа 404. trace_id_middleware остается
+    # снаружи логирования и транзакции, чтобы trace id был в каждой строке
+    # лога и в каждом теле ошибки
+    app.middleware("http")(transaction_middleware)
     app.middleware("http")(request_logging_middleware)
     app.middleware("http")(trace_id_middleware)
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(config.api.cors) or ["*"],
+        allow_origins=list(cors) or ["*"],
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["Content-Disposition"],
@@ -192,8 +217,6 @@ def app_factory(config: Config | None = None) -> FastAPI:
     )
 
     setup_dishka(container, app)
-
-    return app
 
 
 def _lifespan(

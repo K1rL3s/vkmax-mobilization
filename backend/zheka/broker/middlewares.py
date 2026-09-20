@@ -5,6 +5,7 @@ from dishka.integrations.taskiq import CONTAINER_ID, CONTAINER_REGISTRY
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import TaskiqMessage, TaskiqMiddleware, TaskiqResult
 
+from zheka.broker.publisher import TaskPublisher
 from zheka.logger.context import task_id, task_name
 
 
@@ -23,8 +24,12 @@ class CommitMiddleware(TaskiqMiddleware):
     ) -> None:
         if result.is_err:
             return
-        session = await self._container(message).get(AsyncSession)
+        container = self._container(message)
+        session = await container.get(AsyncSession)
         await session.commit()
+        # задачи, поставленные этой задачей, уезжают после ее коммита
+        publisher = await container.get(TaskPublisher)
+        await publisher.flush()
 
     async def on_error(
         self,

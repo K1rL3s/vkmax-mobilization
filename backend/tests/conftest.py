@@ -4,6 +4,7 @@ import tempfile
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from pathlib import Path
+from typing import Any
 
 import psycopg
 import pytest
@@ -11,9 +12,13 @@ import pytest_asyncio
 from alembic import command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from taskiq import AckableMessage, AsyncBroker, BrokerMessage
+from taskiq.message import TaskiqMessage
 from testcontainers.postgres import PostgresContainer
 
 from zheka.base import ZhekaType
+from zheka.broker.publisher import TaskPublisher
+from zheka.broker.task_names import TaskName
 from zheka.config import (
     ApiConfig,
     BotMode,
@@ -29,6 +34,8 @@ from zheka.config import (
 )
 from zheka.core.enums import OrgRole, ResidentRole
 from zheka.core.ids import FlatId, HouseId, MaxUserId, OrgId, UserId
+from zheka.core.services.events import EventsService
+from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.models import (
     Flat,
     House,
@@ -37,6 +44,8 @@ from zheka.infra.database.models import (
     Resident,
     User,
 )
+from zheka.infra.database.repos.events import EventsRepo
+from zheka.infra.database.repos.notifications import NotificationsRepo
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -204,4 +213,49 @@ def make_config() -> Config:
         ),
         deeplinks=DeeplinksConfig(org_register="test-register-code"),
         yandex=YandexConfig(api_key=None, folder_id=None),
+    )
+
+
+class RecordingBroker(AsyncBroker):
+    # настоящий брокер, только без сети: публикация проходит весь путь
+    # AsyncKicker.kiq и оседает здесь
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.messages: list[TaskiqMessage] = []
+
+    async def kick(self, message: BrokerMessage) -> None:
+        self.messages.append(self.formatter.loads(message.message))
+
+    def listen(self) -> AsyncGenerator[bytes | AckableMessage]:
+        raise NotImplementedError
+
+    def enqueued(self, task_name: TaskName) -> list[dict[str, Any]]:
+        return [
+            message.kwargs
+            for message in self.messages
+            if message.task_name == task_name.value
+        ]
+
+
+@pytest.fixture
+def broker() -> RecordingBroker:
+    return RecordingBroker()
+
+
+@pytest.fixture
+def publisher(broker: RecordingBroker) -> TaskPublisher:
+    return TaskPublisher(broker)
+
+
+def make_notifications_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> NotificationsService:
+    # публикация копится в TaskPublisher до flush, поэтому тесту, который на
+    # нее не смотрит, хватает отдельного одноразового
+    return NotificationsService(
+        NotificationsRepo(session),
+        publisher or TaskPublisher(RecordingBroker()),
+        EventsService(EventsRepo(session)),
     )

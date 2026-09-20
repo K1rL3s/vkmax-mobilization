@@ -8,6 +8,7 @@ from zheka.core.enums import RequestStatus
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.infra.database.models import DemandSignal, Flat, House
 from zheka.infra.database.repos.base import BaseAlchemyRepo
+from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
 from zheka.infra.database.tables.requests import requests_table
@@ -301,3 +302,20 @@ class HousesRepo(BaseAlchemyRepo):
     async def set_binding_code(self, house: House, code: str) -> None:
         house.chat_binding_code = code
         await self._session.flush()
+
+    async def ids_for_org(
+        self,
+        house_ids: Collection[HouseId],
+        org_id: OrgId,
+    ) -> set[HouseId]:
+        # дома приходят из тела запроса, поэтому выборка сужается тем же
+        # единственным инструментом изоляции, а не проверкой на месте вызова
+        if not house_ids:
+            return set()
+        stmt = scoped_to_org(
+            select(houses_table.c.id).where(houses_table.c.id.in_(house_ids)),
+            houses_table.c.id,
+            org_id,
+        )
+        result = await self._session.execute(stmt)
+        return {HouseId(house_id) for house_id in result.scalars().all()}

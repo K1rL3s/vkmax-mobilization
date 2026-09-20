@@ -16,3 +16,4 @@ class Announcement(ZhekaMutableType):
     text: str
     channels: list[str]
     created_by: UserId
+    recipients_count: int = 0

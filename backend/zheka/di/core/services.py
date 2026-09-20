@@ -1,8 +1,10 @@
 from dishka import BaseScope, Provider, Scope, provide
 
+from zheka.broker.publisher import TaskPublisher
 from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
 from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
+from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.charges import ChargesService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
@@ -11,18 +13,22 @@ from zheka.core.services.houses import HousesService
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.meters import MetersService
 from zheka.core.services.moderation import ModerationService
+from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.polls import PollsService
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.readings import ReadingsService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
+from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
+from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.meters import MetersRepo
+from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -36,6 +42,15 @@ class ServicesProvider(Provider):
     @provide
     def events_service(self, events_repo: EventsRepo) -> EventsService:
         return EventsService(events_repo)
+
+    @provide
+    def notifications_service(
+        self,
+        notifications_repo: NotificationsRepo,
+        publisher: TaskPublisher,
+        events_service: EventsService,
+    ) -> NotificationsService:
+        return NotificationsService(notifications_repo, publisher, events_service)
 
     @provide(scope=Scope.APP)
     def files_service(self, config: FilesConfig, max_config: MaxConfig) -> FilesService:
@@ -102,12 +117,14 @@ class ServicesProvider(Provider):
         residents_repo: ResidentsRepo,
         users_repo: UsersRepo,
         houses_repo: HousesRepo,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> ModerationService:
         return ModerationService(
             residents_repo,
             users_repo,
             houses_repo,
+            notifications_service,
             events_service,
         )
 
@@ -120,6 +137,7 @@ class ServicesProvider(Provider):
         invites_repo: InvitesRepo,
         users_repo: UsersRepo,
         orgs_repo: OrgsRepo,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> FlatsService:
         return FlatsService(
@@ -129,6 +147,7 @@ class ServicesProvider(Provider):
             invites_repo,
             users_repo,
             orgs_repo,
+            notifications_service,
             events_service,
         )
 
@@ -257,6 +276,7 @@ class ServicesProvider(Provider):
         users_repo: UsersRepo,
         orgs_repo: OrgsRepo,
         grouping_service: GroupingService,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> AdminRequestsService:
         return AdminRequestsService(
@@ -265,5 +285,27 @@ class ServicesProvider(Provider):
             users_repo,
             orgs_repo,
             grouping_service,
+            notifications_service,
+            events_service,
+        )
+
+    @provide
+    def announcements_service(
+        self,
+        announcements_repo: AnnouncementsRepo,
+        houses_repo: HousesRepo,
+        residents_repo: ResidentsRepo,
+        chats_repo: ChatsRepo,
+        orgs_repo: OrgsRepo,
+        notifications_service: NotificationsService,
+        events_service: EventsService,
+    ) -> AnnouncementsService:
+        return AnnouncementsService(
+            announcements_repo,
+            houses_repo,
+            residents_repo,
+            chats_repo,
+            orgs_repo,
+            notifications_service,
             events_service,
         )

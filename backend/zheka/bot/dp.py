@@ -6,7 +6,11 @@ from maxo.fsm.storages.memory import DisabledEventIsolation
 from maxo.fsm.storages.redis import RedisStorage
 
 from zheka.bot.handlers import start_router
-from zheka.bot.middlewares import LoggingMiddleware, ThrottlingMiddleware
+from zheka.bot.middlewares import (
+    LoggingMiddleware,
+    ThrottlingMiddleware,
+    TransactionMiddleware,
+)
 from zheka.config import RedisConfig
 
 STATE_TTL = timedelta(days=30)
@@ -35,6 +39,9 @@ def make_dispatcher(config: RedisConfig) -> Dispatcher:
     dp.update.middleware.outer(LoggingMiddleware())
     dp.message_created.middleware.outer(ThrottlingMiddleware())
     dp.message_callback.middleware.outer(ThrottlingMiddleware())
+    # inner, а не outer: DishkaMiddleware регистрируется позже, уже из
+    # setup_dishka, и outer-мидлварь отсюда оказалась бы снаружи контейнера
+    dp.update.middleware.inner(TransactionMiddleware())
 
     dp.include(start_router)
 

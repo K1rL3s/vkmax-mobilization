@@ -1,27 +1,31 @@
-from zheka.core.enums import EventType, ResidentStatus
+from zheka.core import texts
+from zheka.core.enums import EventType, NotificationCategory, ResidentStatus
 from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Resident
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseResidentView
+from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 
 class ModerationService:
-    __slots__ = ("_events", "_houses", "_residents", "_users")
+    __slots__ = ("_events", "_houses", "_notifications", "_residents", "_users")
 
     def __init__(
         self,
         residents_repo: ResidentsRepo,
         users_repo: UsersRepo,
         houses_repo: HousesRepo,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> None:
         self._residents = residents_repo
         self._users = users_repo
         self._houses = houses_repo
+        self._notifications = notifications_service
         self._events = events_service
 
     async def block(
@@ -45,6 +49,9 @@ class ModerationService:
             resident_id=resident_id,
             reason=stated,
         )
+        self._notify(
+            resident, texts.resident_blocked(await self._address(resident), stated)
+        )
         return await self._view(resident)
 
     async def unblock(
@@ -61,6 +68,7 @@ class ModerationService:
             resident_id=resident_id,
             reason=None,
         )
+        self._notify(resident, texts.resident_unblocked(await self._address(resident)))
         return await self._view(resident)
 
     async def revoke_verification(
@@ -103,6 +111,20 @@ class ModerationService:
             await self._residents.clear_chairman(HouseId(resident.house_id))
         await self._residents.set_chairman(resident, value)
         return await self._view(resident)
+
+    async def _address(self, resident: Resident) -> str:
+        house = await self._houses.get(HouseId(resident.house_id))
+        return "" if house is None else house.address
+
+    def _notify(self, resident: Resident, text: str) -> None:
+        # закрытый и открытый доступ житель должен увидеть при любых
+        # настройках, поэтому сообщение обязательное
+        self._notifications.notify_user(
+            UserId(resident.user_id),
+            text,
+            category=NotificationCategory.REQUESTS,
+            mandatory=True,
+        )
 
     async def _get_resident(self, org_id: OrgId, resident_id: ResidentId) -> Resident:
         resident = await self._residents.get_for_org(resident_id, org_id)

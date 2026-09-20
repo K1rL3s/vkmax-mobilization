@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from fastapi import FastAPI
+from maxo import Dispatcher
 
 from tests.conftest import make_config
 
@@ -154,11 +155,11 @@ CONTRACT: tuple[tuple[str, str, str], ...] = (
 )
 
 
-# make_dispatcher включает модульные роутеры, поэтому приложение в процессе
-# может быть построено только один раз
+# диспетчер в процессе один, и настоящий нужен тесту бота: контракту хватает
+# пустого, боевые роутеры в openapi все равно не попадают
 @pytest.fixture(scope="module")
 def app() -> FastAPI:
-    return app_factory(make_config())
+    return app_factory(make_config(), Dispatcher())
 
 
 @pytest.fixture(scope="module")

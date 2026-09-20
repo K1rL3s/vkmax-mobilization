@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Literal, Self
 
@@ -57,6 +58,15 @@ class NotificationSettingItem(BaseSchema):
 
 class NotificationSettingsResponse(BaseSchema):
     settings: list[NotificationSettingItem]
+
+    @classmethod
+    def of(cls, levels: Mapping[NotificationCategory, NotificationLevel]) -> Self:
+        return cls(
+            settings=[
+                NotificationSettingItem(category=category, level=level)
+                for category, level in levels.items()
+            ],
+        )
 
 
 class UpdateNotificationSettingsRequest(BaseSchema):

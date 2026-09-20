@@ -6,9 +6,15 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser
+from tests.conftest import (
+    OrgHouseFlatUser,
+    RecordingBroker,
+    make_notifications_service,
+)
 
 from zheka.api.schemas.flats import FlatCard
+from zheka.broker.publisher import TaskPublisher
+from zheka.broker.task_names import TaskName
 from zheka.core.enums import OrgRole, ResidentRole, VerificationStatus
 from zheka.core.errors import (
     EntityNotFound,
@@ -33,7 +39,10 @@ ACCOUNT = "ЛС-0042 7781"
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 
-def _make_service(session: AsyncSession) -> FlatsService:
+def _make_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> FlatsService:
     return FlatsService(
         FlatsRepo(session),
         HousesRepo(session),
@@ -41,6 +50,7 @@ def _make_service(session: AsyncSession) -> FlatsService:
         InvitesRepo(session),
         UsersRepo(session),
         OrgsRepo(session),
+        make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
     )
 
@@ -662,3 +672,57 @@ async def test_verify_answers_not_found_for_a_flat_of_another_house(
     # flat_id существует
     with pytest.raises(EntityNotFound):
         await _make_service(session).verify(own.user_id, other.flat_id, ACCOUNT)
+
+
+async def test_approve_notifies_the_resident(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
+    resident = await _add_resident(
+        session, await _add_user(session), staff.house_id, None
+    )
+    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
+
+    await _make_service(session, publisher).approve_verification(
+        staff.org_id,
+        request.id,
+        staff.user_id,
+    )
+
+    await publisher.flush()
+    enqueued = broker.enqueued(TaskName.SEND_TO_USER)
+    assert len(enqueued) == 1
+    assert enqueued[0]["user_id"] == resident.user_id
+    assert enqueued[0]["mandatory"] is True
+    assert "подтвердила" in enqueued[0]["text"]
+
+
+async def test_rejection_carries_the_reason_to_the_resident(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
+    resident = await _add_resident(
+        session, await _add_user(session), staff.house_id, None
+    )
+    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
+    reason = "Лицевой счет не совпал с нашей базой"
+
+    await _make_service(session, publisher).reject_verification(
+        staff.org_id,
+        request.id,
+        staff.user_id,
+        reason,
+    )
+
+    await publisher.flush()
+    enqueued = broker.enqueued(TaskName.SEND_TO_USER)
+    assert len(enqueued) == 1
+    assert enqueued[0]["user_id"] == resident.user_id
+    assert enqueued[0]["mandatory"] is True
+    assert reason in enqueued[0]["text"]

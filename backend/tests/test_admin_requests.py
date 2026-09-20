@@ -6,7 +6,11 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, make_config
+from tests.conftest import (
+    OrgHouseFlatUser,
+    make_config,
+    make_notifications_service,
+)
 
 from zheka.api.schemas.requests import AdminRequestCard, RequestCard
 from zheka.core.enums import (
@@ -63,6 +67,7 @@ def _admin(session: AsyncSession) -> AdminRequestsService:
         UsersRepo(session),
         OrgsRepo(session),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        make_notifications_service(session),
         EventsService(EventsRepo(session)),
     )
 

@@ -77,11 +77,35 @@ review finding.
   `raise NotEnoughRights()` still produces a usable `detail`.
 - `InvalidRequest` deliberately does not inherit `ValueError`: otherwise the
   `ValueError` handler would answer 409 instead of 400.
-- `trace_id_middleware` registers last, making it the outermost middleware, so
-  every log line and error body carries a trace id.
+- `trace_id_middleware` registers last among the http middlewares, so it wraps
+  logging and the transaction and every log line and error body carries a trace
+  id. Middleware order lives in one place, `setup_middlewares` in
+  `zheka/api/app.py`, and registration order is the stack inside out: the last
+  registered is the outermost.
+- A dishka REQUEST container always belongs to exactly one decider, and there
+  are exactly three: `transaction_middleware` for an http request (commits only
+  on a response below 400), `CommitMiddleware` for a taskiq task (commits on a
+  result without an error), and `TransactionMiddleware` in `zheka/bot/` for a
+  bot update (commits when the handler returns). Each of them commits the
+  session and then flushes the `TaskPublisher`; each rolls back on an
+  exception. No provider and no route commits - the session provider keeps a
+  rollback as a backstop only. A new entry point that opens a REQUEST container
+  brings its own decider, otherwise its writes are silently dropped.
+- The provider cannot decide the transaction itself: domain errors are turned
+  into responses by `ExceptionMiddleware`, which sits inside the dishka
+  container, and dishka finalizes a provider generator with `agen.asend(exc)`,
+  so an exception arrives as a value and never as a raise.
+- The bot's `TransactionMiddleware` registers `inner` on `dp.update`, because
+  `DishkaMiddleware` is registered later, by `setup_dishka`, and an outer
+  middleware from `make_dispatcher` would sit outside the container. It follows
+  that a dispatcher from `make_dispatcher` is only usable once
+  `setup_maxo_dishka` has wired it: without that, every update raises
+  `KeyError` on `ctx[CONTAINER_NAME]`, and maxo's error middleware logs and
+  swallows it, so the bot goes quiet instead of failing loudly.
 - One dispatcher per process. Routers are module-level singletons, so calling
   `make_dispatcher` twice raises `RouterAlreadyIncludedError`. `app_factory`
-  owns the only one.
+  builds it, or takes a ready one - that argument exists so a test can own the
+  process's single real dispatcher.
 - `zheka/api/asgi.py` builds the app at import time and therefore needs a real
   environment. It is excluded from slotscheck for that reason; import
   `app_factory` from `zheka.api.app` if you need the app without an env.

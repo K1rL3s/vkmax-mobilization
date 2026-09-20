@@ -2,7 +2,13 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
-from zheka.core.enums import EventType, ResidentRole, VerificationStatus
+from zheka.core import texts
+from zheka.core.enums import (
+    EventType,
+    NotificationCategory,
+    ResidentRole,
+    VerificationStatus,
+)
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -21,6 +27,7 @@ from zheka.core.models import (
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import ResidencyView, is_connected
 from zheka.core.services.invites import issue_invite
+from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
@@ -89,6 +96,7 @@ class FlatsService:
         "_flats",
         "_houses",
         "_invites",
+        "_notifications",
         "_orgs",
         "_residents",
         "_users",
@@ -102,6 +110,7 @@ class FlatsService:
         invites_repo: InvitesRepo,
         users_repo: UsersRepo,
         orgs_repo: OrgsRepo,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> None:
         self._flats = flats_repo
@@ -110,6 +119,7 @@ class FlatsService:
         self._invites = invites_repo
         self._users = users_repo
         self._orgs = orgs_repo
+        self._notifications = notifications_service
         self._events = events_service
 
     async def flat_card(self, user_id: UserId, flat_id: FlatId) -> FlatCardData:
@@ -273,6 +283,10 @@ class FlatsService:
             by="admin",
             decided_by=by,
         )
+        self._notify(
+            UserId(request.user_id),
+            texts.flat_verified(flat.number, house.address),
+        )
         return VerificationRequestView(
             request=request,
             flat=flat,
@@ -300,6 +314,10 @@ class FlatsService:
             by,
             datetime.now(UTC),
             stated,
+        )
+        self._notify(
+            UserId(request.user_id),
+            texts.flat_verification_rejected(flat.number, house.address, stated),
         )
         return VerificationRequestView(
             request=request,
@@ -539,3 +557,13 @@ class FlatsService:
             for request in requests
             if request.flat_id in flats and request.user_id in users
         ]
+
+    def _notify(self, user_id: UserId, text: str) -> None:
+        # решение по заявке на подтверждение житель ждет, поэтому оно
+        # приходит при любых настройках
+        self._notifications.notify_user(
+            user_id,
+            text,
+            category=NotificationCategory.REQUESTS,
+            mandatory=True,
+        )

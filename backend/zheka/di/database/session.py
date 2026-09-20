@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterable
+from collections.abc import AsyncGenerator, AsyncIterable
 
 from dishka import Provider, Scope, provide
 from sqlalchemy.ext.asyncio import (
@@ -44,12 +44,14 @@ class DbProvider(Provider):
     async def session(
         self,
         maker: async_sessionmaker[AsyncSession],
-    ) -> AsyncIterable[AsyncSession]:
+    ) -> AsyncGenerator[AsyncSession, BaseException | None]:
         async with maker() as session:
-            try:
-                yield session
-            except Exception:
+            # коммитит транзакцию transaction_middleware в api и
+            # CommitMiddleware в воркере - тот, кто знает исход. Здесь
+            # остается только страховочный откат, и он именно на присланном
+            # значении: dishka финализирует провайдер через agen.asend(exc),
+            # то есть передает исключение значением, а не броском, и
+            # try/except вокруг yield не сработал бы никогда
+            exception = yield session
+            if exception is not None:
                 await session.rollback()
-                raise
-            else:
-                await session.commit()

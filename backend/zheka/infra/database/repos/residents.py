@@ -245,3 +245,22 @@ class ResidentsRepo(BaseAlchemyRepo):
         resident.verified_at = at
         resident.verified_by = by
         await self._session.flush()
+
+    async def active_user_ids(
+        self,
+        house_ids: Collection[HouseId],
+    ) -> Sequence[UserId]:
+        # один житель может стоять в нескольких домах рассылки, поэтому
+        # distinct: иначе он получит одно объявление дважды
+        if not house_ids:
+            return []
+        stmt = (
+            select(residents_table.c.user_id)
+            .where(
+                residents_table.c.house_id.in_(house_ids),
+                residents_table.c.status == ResidentStatus.ACTIVE,
+            )
+            .distinct()
+        )
+        result = await self._session.execute(stmt)
+        return [UserId(user_id) for user_id in result.scalars().all()]

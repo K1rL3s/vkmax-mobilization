@@ -167,7 +167,8 @@ target-version = ["py312"]
 include = 'zheka/.*\.py$|migrations/.*\.py$|tests/.*\.py$'
 
 [tool.codespell]
-ignore-words-list = "dependant,selectin,ba"
+# asend - это метод асинхронного генератора, им финализирует провайдеры dishka
+ignore-words-list = "dependant,selectin,ba,asend"
 
 [tool.bandit]
 skips = ["B311"]

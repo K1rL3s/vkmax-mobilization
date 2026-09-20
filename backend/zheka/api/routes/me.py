@@ -12,6 +12,7 @@ from zheka.api.schemas.me import (
     UpdateNotificationSettingsRequest,
 )
 from zheka.core.services.events import EventsService
+from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.profile import ProfileService
 
 router = APIRouter(tags=["Профиль"], route_class=DishkaRoute)
@@ -38,16 +39,23 @@ async def accept_consent(
 @router.get("/me/notifications", summary="Настройки уведомлений")
 async def get_notification_settings(
     current_account: RequireConsentDep,
+    notifications_service: FromDishka[NotificationsService],
 ) -> NotificationSettingsResponse:
-    raise NotImplementedError("ещё не реализовано")
+    levels = await notifications_service.levels(current_account.user_id)
+    return NotificationSettingsResponse.of(levels)
 
 
 @router.put("/me/notifications", summary="Изменить настройки уведомлений")
 async def update_notification_settings(
     current_account: RequireConsentDep,
     body: UpdateNotificationSettingsRequest,
+    notifications_service: FromDishka[NotificationsService],
 ) -> NotificationSettingsResponse:
-    raise NotImplementedError("ещё не реализовано")
+    levels = await notifications_service.update(
+        current_account.user_id,
+        {item.category: item.level for item in body.settings},
+    )
+    return NotificationSettingsResponse.of(levels)
 
 
 @router.post("/events", summary="Записать событие мини-аппа")

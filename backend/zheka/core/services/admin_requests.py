@@ -2,8 +2,10 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from zheka.base import ZhekaType
+from zheka.core import texts
 from zheka.core.enums import (
     EventType,
+    NotificationCategory,
     OrgRole,
     RequestActorRole,
     RequestCategory,
@@ -28,6 +30,7 @@ from zheka.core.models import (
     User,
 )
 from zheka.core.services.events import EventsService
+from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
     GroupingService,
     complaint_sources,
@@ -93,6 +96,7 @@ class AdminRequestsService:
         "_events",
         "_grouping",
         "_houses",
+        "_notifications",
         "_orgs",
         "_requests",
         "_users",
@@ -105,6 +109,7 @@ class AdminRequestsService:
         users_repo: UsersRepo,
         orgs_repo: OrgsRepo,
         grouping_service: GroupingService,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> None:
         self._requests = requests_repo
@@ -112,6 +117,7 @@ class AdminRequestsService:
         self._users = users_repo
         self._orgs = orgs_repo
         self._grouping = grouping_service
+        self._notifications = notifications_service
         self._events = events_service
 
     async def inbox(
@@ -162,13 +168,16 @@ class AdminRequestsService:
         if not stated:
             raise InvalidRequest(EMPTY_REPLY)
 
-        # ответ УК - транзакционное сообщение, его не выключают настройками;
-        # саму отправку жителю делает блок 13
+        # ответ УК - транзакционное сообщение, его не выключают настройками
         await self._requests.add_message(
             RequestId(request.id),
             actor,
             RequestActorRole.STAFF.value,
             stated,
+        )
+        self._notify_author(
+            request,
+            texts.request_reply(RequestId(request.id), stated),
         )
         return await self._card(request)
 
@@ -317,6 +326,7 @@ class AdminRequestsService:
         target: RequestStatus,
         comment: str | None,
         actor: UserId,
+        notify_author: bool = True,
     ) -> None:
         current = request.status
         check_transition(
@@ -351,6 +361,23 @@ class AdminRequestsService:
             **{"from": current.value, "to": target.value},
             by_role=RequestActorRole.STAFF.value,
         )
+        if notify_author:
+            self._notify_author(
+                request,
+                texts.request_status_changed(RequestId(request.id), target, stated),
+            )
+
+    def _notify_author(self, request: Request, text: str) -> None:
+        # у заявки по звонку автора в сервисе нет, и обратного канала тоже:
+        # бот не пишет первым тому, кто его не запускал
+        if request.author_user_id is None:
+            return
+        self._notifications.notify_user(
+            UserId(request.author_user_id),
+            text,
+            category=NotificationCategory.REQUESTS,
+            mandatory=True,
+        )
 
     async def _move_through(
         self,
@@ -359,12 +386,19 @@ class AdminRequestsService:
         comment: str | None,
         actor: UserId,
     ) -> None:
-        # комментарий сопровождает только последний шаг - тот, что диспетчер
-        # действительно попросил; промежуточные шаги опоздавшего участника не
-        # плодят копии одного и того же пояснения
+        # комментарий и уведомление сопровождают только последний шаг - тот,
+        # что диспетчер действительно попросил; промежуточные шаги опоздавшего
+        # участника не плодят ни копий пояснения, ни пачки пушей автору
         last = len(path) - 1
         for index, target in enumerate(path):
-            await self._move(request, target, comment if index == last else None, actor)
+            is_last = index == last
+            await self._move(
+                request,
+                target,
+                comment if is_last else None,
+                actor,
+                notify_author=is_last,
+            )
 
     async def _card(self, request: Request) -> AdminRequestCardData:
         house = await self._house_of(request)
