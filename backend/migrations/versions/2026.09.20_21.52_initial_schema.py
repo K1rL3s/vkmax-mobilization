@@ -123,6 +123,7 @@ def upgrade() -> None:
         sa.Column("consent_version", sa.String(), nullable=True),
         sa.Column("consent_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("bot_stopped_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("max_chat_id", sa.BigInteger(), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_users")),
         sa.UniqueConstraint("max_user_id", name=op.f("uq_users_max_user_id")),
     )
@@ -799,8 +800,6 @@ def upgrade() -> None:
             server_default=sa.text("false"),
             nullable=False,
         ),
-        sa.Column("executor_message_id", sa.String(length=64), nullable=True),
-        sa.Column("review_message_id", sa.String(length=64), nullable=True),
         sa.ForeignKeyConstraint(
             ["author_user_id"],
             ["users.id"],
@@ -904,11 +903,6 @@ def upgrade() -> None:
         sa.Column("flat_id", sa.BigInteger(), nullable=False),
         sa.Column("slot_id", sa.BigInteger(), nullable=True),
         sa.Column("responded_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "notified_message_ids",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-        ),
         sa.ForeignKeyConstraint(
             ["access_request_id"],
             ["access_requests.id"],

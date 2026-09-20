@@ -3,20 +3,32 @@ import secrets
 import tempfile
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import psycopg
 import pytest
 import pytest_asyncio
 from alembic import command
 from alembic.config import Config as AlembicConfig
+from dishka import AsyncContainer, BaseScope, Provider, Scope, provide
+from maxo import Dispatcher
+from maxo.dialogs import BgManagerFactory
+from maxo.dialogs.manager.bg_manager import BgManagerFactoryImpl
+from maxo.dialogs.test_tools import MockMessageManager
+from maxo.dialogs.test_tools.bot_client import FakeBot
+from maxo.dialogs.test_tools.memory_storage import JsonMemoryStorage
+from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
+from maxo.routing.interfaces import BaseRouter
+from maxo.routing.signals import BeforeStartup
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from taskiq import AckableMessage, AsyncBroker, BrokerMessage
 from taskiq.message import TaskiqMessage
 from testcontainers.postgres import PostgresContainer
 
 from zheka.base import ZhekaType
+from zheka.bot import BotSetup, make_dispatcher
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.config import (
@@ -36,6 +48,8 @@ from zheka.core.enums import OrgRole, ResidentRole
 from zheka.core.ids import FlatId, HouseId, MaxUserId, OrgId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
+from zheka.di import make_container
+from zheka.di.broker import ZhekaBroker
 from zheka.infra.database.models import (
     Flat,
     House,
@@ -259,3 +273,138 @@ def make_notifications_service(
         publisher or TaskPublisher(RecordingBroker()),
         EventsService(EventsRepo(session)),
     )
+
+
+# у бота своя база в том же контейнере: его окна коммитят по-настоящему, а
+# остальной прогон живет в транзакции, которую откатывают, и проверки вида
+# "в events ровно два события" ломались бы о чужие строки
+BOT_DB_NAME = "zheka_bot"
+
+
+def make_bot_config() -> Config:
+    return replace(
+        make_config(),
+        db=DbConfig(
+            host=os.environ["POSTGRES_HOST"],
+            port=int(os.environ["POSTGRES_PORT"]),
+            user=os.environ["POSTGRES_USER"],
+            password=os.environ["POSTGRES_PASSWORD"],
+            name=BOT_DB_NAME,
+        ),
+    )
+
+
+@pytest.fixture(scope="session")
+def bot_database_url(database_url: str) -> str:
+    dsn = database_url.replace("postgresql+psycopg://", "postgresql://")
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        connection.execute(f'CREATE DATABASE "{BOT_DB_NAME}"')
+
+    main_db = os.environ["POSTGRES_DB"]
+    os.environ["POSTGRES_DB"] = BOT_DB_NAME
+    try:
+        alembic_cfg = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
+        alembic_cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+        command.upgrade(alembic_cfg, "head")
+    finally:
+        os.environ["POSTGRES_DB"] = main_db
+
+    return (
+        dsn.rsplit("/", 1)[0].replace(
+            "postgresql://",
+            "postgresql+psycopg://",
+        )
+        + f"/{BOT_DB_NAME}"
+    )
+
+
+@pytest_asyncio.fixture(scope="session")
+async def bot_engine(bot_database_url: str) -> AsyncGenerator[AsyncEngine]:
+    engine = create_async_engine(bot_database_url)
+    yield engine
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def bot_session(bot_engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
+    # читает то, что окна бота уже закоммитили; своих записей не коммитит
+    async with AsyncSession(bind=bot_engine) as db_session:
+        yield db_session
+
+
+def empty_bot_setup() -> BotSetup:
+    # тестам, которым бот не нужен, хватает пустого диспетчера: настоящий в
+    # прогоне один, и он принадлежит фикстуре bot_setup
+    dp = Dispatcher()
+    return BotSetup(dp=dp, bg_manager_factory=BgManagerFactoryImpl(dp))
+
+
+class RecordingBrokerProvider(Provider):
+    # настоящий TaskPublisher из контейнера, но кикает в память, а не в редис
+    scope: BaseScope | None = Scope.APP
+
+    def __init__(self, broker: RecordingBroker) -> None:
+        super().__init__()
+        self._broker = broker
+
+    @provide(override=True)
+    def broker(self) -> ZhekaBroker:
+        return cast(ZhekaBroker, self._broker)
+
+
+# диспетчер в прогоне один - роутеры и диалоги модульные синглтоны, - а maxo
+# запрещает include после старта. Поэтому пробники тестов складываются сюда на
+# импорте модуля и уезжают в диспетчер вместе с боевыми роутерами
+PROBE_ROUTERS: list[BaseRouter] = []
+
+
+@pytest.fixture(scope="session")
+def fake_bot() -> FakeBot:
+    return FakeBot()
+
+
+@pytest.fixture(scope="session")
+def message_manager() -> MockMessageManager:
+    return MockMessageManager()
+
+
+@pytest.fixture(scope="session")
+def bot_broker() -> RecordingBroker:
+    return RecordingBroker()
+
+
+@pytest.fixture(scope="session")
+def bot_setup(message_manager: MockMessageManager) -> BotSetup:
+    # настоящий make_dispatcher: тест обязан краснеть, если мидлварь или
+    # роутер забыли зарегистрировать именно там. Другая проводка добывается
+    # аргументами make_dispatcher, а не правкой внутренностей maxo
+    setup = make_dispatcher(
+        make_config().redis,
+        storage=JsonMemoryStorage(),
+        message_manager=message_manager,
+    )
+    setup.dp.include(*PROBE_ROUTERS)
+    return setup
+
+
+@pytest_asyncio.fixture(scope="session")
+async def bot_container(
+    bot_database_url: str,  # noqa: ARG001
+    bot_setup: BotSetup,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+) -> AsyncGenerator[AsyncContainer]:
+    container = make_container(
+        RecordingBrokerProvider(bot_broker),
+        config=make_bot_config(),
+        context={
+            Dispatcher: bot_setup.dp,
+            BgManagerFactory: bot_setup.bg_manager_factory,
+        },
+    )
+    setup_maxo_dishka(container, bot_setup.dp, auto_inject=True)
+    # before_startup раскладывает inner-мидлвари диспетчера по дочерним
+    # роутерам и инжектит dishka в хендлеры: без него апдейт до окна не дойдет
+    await bot_setup.dp.feed_signal(BeforeStartup(), fake_bot)
+    yield container
+    await container.close()

@@ -29,6 +29,7 @@ users_table = Table(
     Column("consent_version", String, nullable=True),
     Column("consent_at", DateTime(timezone=True), nullable=True),
     Column("bot_stopped_at", DateTime(timezone=True), nullable=True),
+    Column("max_chat_id", BigInteger, nullable=True),
 )
 
 notification_settings_table = Table(

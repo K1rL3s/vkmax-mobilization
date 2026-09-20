@@ -9,6 +9,7 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from maxo import Bot, Dispatcher
+from maxo.dialogs import BgManagerFactory
 from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
 from maxo.routing.utils import collect_used_updates
 
@@ -42,7 +43,7 @@ from zheka.api.routes import (
     reception_router,
     requests_router,
 )
-from zheka.bot import make_dispatcher, make_engine
+from zheka.bot import BotSetup, make_dispatcher, make_engine
 from zheka.config import BotMode, Config, load_config
 from zheka.di import make_container
 from zheka.logger import setup_logger
@@ -50,15 +51,26 @@ from zheka.logger import setup_logger
 logger = logging.getLogger(__name__)
 
 
-def app_factory(config: Config | None = None, dp: Dispatcher | None = None) -> FastAPI:
+def app_factory(
+    config: Config | None = None,
+    bot_setup: BotSetup | None = None,
+) -> FastAPI:
     config = config or load_config()
     setup_logger(config.log)
 
-    # диспетчер в процессе один: роутеры - модульные синглтоны, и второй
-    # make_dispatcher поднимет RouterAlreadyIncludedError. Готовый принимается
-    # для тестов, которым нужен свой
-    dp = dp or make_dispatcher(config.redis)
-    container = make_container(config=config, context={Dispatcher: dp})
+    # диспетчер в процессе один: роутеры и диалоги - модульные синглтоны, и
+    # второй make_dispatcher поднимет RouterAlreadyIncludedError. Готовый
+    # принимается для тестов, которым нужен свой - вместе с фабрикой фоновых
+    # менеджеров, которую вернул setup_dialogs
+    bot_setup = bot_setup or make_dispatcher(config.redis)
+    dp = bot_setup.dp
+    container = make_container(
+        config=config,
+        context={
+            Dispatcher: dp,
+            BgManagerFactory: bot_setup.bg_manager_factory,
+        },
+    )
     setup_maxo_dishka(container, dp, auto_inject=True)
 
     app = FastAPI(

@@ -63,8 +63,6 @@ requests_table = Table(
         server_default=false(),
         nullable=False,
     ),
-    Column("executor_message_id", String(64), nullable=True),
-    Column("review_message_id", String(64), nullable=True),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),

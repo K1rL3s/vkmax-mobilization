@@ -4,9 +4,8 @@ from typing import Any
 
 import pytest
 from fastapi import FastAPI
-from maxo import Dispatcher
 
-from tests.conftest import make_config
+from tests.conftest import empty_bot_setup, make_config
 
 from zheka.api.app import app_factory
 from zheka.api.schemas import polls as poll_schemas
@@ -155,11 +154,12 @@ CONTRACT: tuple[tuple[str, str, str], ...] = (
 )
 
 
-# диспетчер в процессе один, и настоящий нужен тесту бота: контракту хватает
-# пустого, боевые роутеры в openapi все равно не попадают
+# контракту бот не нужен, и настоящий диспетчер он не занимает: тот в
+# прогоне один, принадлежит фикстуре bot_setup, и второй setup_maxo_dishka
+# повесил бы на него второй контейнер
 @pytest.fixture(scope="module")
 def app() -> FastAPI:
-    return app_factory(make_config(), Dispatcher())
+    return app_factory(make_config(), empty_bot_setup())
 
 
 @pytest.fixture(scope="module")

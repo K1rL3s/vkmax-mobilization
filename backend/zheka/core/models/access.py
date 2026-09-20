@@ -1,6 +1,5 @@
-from dataclasses import field
 from datetime import date, datetime
-from typing import Any, cast
+from typing import cast
 
 from zheka.base import ZhekaMutableType
 from zheka.core.ids import (
@@ -42,4 +41,3 @@ class AccessTarget(ZhekaMutableType):
     flat_id: FlatId
     slot_id: AccessSlotId | None = None
     responded_at: datetime | None = None
-    notified_message_ids: Any = field(default_factory=list)

@@ -51,8 +51,6 @@ class Request(ZhekaMutableType):
     done_at: datetime | None = None
     reviewed_at: datetime | None = None
     is_staff_author: bool = False
-    executor_message_id: str | None = None
-    review_message_id: str | None = None
 
 
 class RequestGroup(ZhekaMutableType):

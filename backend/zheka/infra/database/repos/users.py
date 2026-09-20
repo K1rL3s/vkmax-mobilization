@@ -1,11 +1,11 @@
 from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.errors import EntityNotFound
-from zheka.core.ids import MaxUserId, UserId
+from zheka.core.ids import MaxChatId, MaxUserId, UserId
 from zheka.infra.database.models import User, fresh_timestamp
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.users import users_table
@@ -17,20 +17,29 @@ class UsersRepo(BaseAlchemyRepo):
         max_user_id: MaxUserId,
         name: str,
         username: str | None,
+        max_chat_id: MaxChatId | None = None,
     ) -> User:
-        stmt = (
-            pg_insert(User)
-            .values(max_user_id=max_user_id, name=name, username=username)
-            .on_conflict_do_update(
-                index_elements=[users_table.c.max_user_id],
-                set_={
-                    "name": name,
-                    "username": username,
-                    "updated_at": fresh_timestamp(),
-                },
-            )
-            .returning(User)
+        insert = pg_insert(User).values(
+            max_user_id=max_user_id,
+            name=name,
+            username=username,
+            max_chat_id=max_chat_id,
         )
+        stmt = insert.on_conflict_do_update(
+            index_elements=[users_table.c.max_user_id],
+            set_={
+                "name": name,
+                "username": username,
+                # апдейт из чата дома приходит без id личного диалога, и NULL
+                # оттуда навсегда отрезал бы жителя от окон, которые открывает
+                # задача: у нее нет другого адреса, кроме max_chat_id
+                "max_chat_id": func.coalesce(
+                    insert.excluded.max_chat_id,
+                    users_table.c.max_chat_id,
+                ),
+                "updated_at": fresh_timestamp(),
+            },
+        ).returning(User)
         # populate_existing: без него уже загруженный в identity map объект
         # не подхватит name/username, обновлённые веткой DO UPDATE
         result = await self._session.execute(

@@ -8,7 +8,6 @@ from sqlalchemy import (
     Table,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 
 from zheka.infra.database.tables._columns import created_at_column, id_column
 from zheka.infra.database.tables.base import metadata
@@ -52,5 +51,4 @@ access_targets_table = Table(
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=False),
     Column("slot_id", BigInteger, ForeignKey("access_slots.id"), nullable=True),
     Column("responded_at", DateTime(timezone=True), nullable=True),
-    Column("notified_message_ids", JSONB, default=list, nullable=False),
 )

@@ -1,11 +1,10 @@
 import secrets
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import cast
 
 import pytest
 import pytest_asyncio
-from dishka import AsyncContainer, BaseScope, FromDishka, Provider, Scope, provide
+from dishka import AsyncContainer, FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from dishka.integrations.taskiq import (
     CONTAINER_ID,
@@ -16,10 +15,8 @@ from fastapi import APIRouter, FastAPI
 from fastapi.responses import StreamingResponse
 from httpx import ASGITransport, AsyncClient
 from maxo import Dispatcher, Router
-from maxo.integrations.dishka import (
-    inject as maxo_inject,
-    setup_dishka as setup_maxo_dishka,
-)
+from maxo.dialogs import BgManagerFactory
+from maxo.integrations.dishka import inject as maxo_inject
 from maxo.routing.signals.update import MaxoUpdate
 from maxo.types import ChatTitleChanged, User as MaxUser
 from sqlalchemy import select
@@ -27,13 +24,18 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.pool import QueuePool
 from taskiq import TaskiqMessage, TaskiqResult
 
-from tests.conftest import RecordingBroker
+from tests.conftest import (
+    PROBE_ROUTERS,
+    RecordingBroker,
+    RecordingBrokerProvider,
+    empty_bot_setup,
+)
 
 from zheka.api.app import setup_middlewares
 from zheka.api.errors import ERROR_RESPONSES, exception_handlers
 from zheka.api.middlewares import TRACE_HEADER
 from zheka.api.routes import healthcheck_router
-from zheka.bot import make_dispatcher
+from zheka.bot import BotSetup
 from zheka.broker.middlewares import CommitMiddleware
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -43,7 +45,6 @@ from zheka.core.errors import EntityNotFound
 from zheka.core.ids import MaxUserId, UserId
 from zheka.core.services.notifications import NotificationsService
 from zheka.di import make_container
-from zheka.di.broker import ZhekaBroker
 from zheka.infra.database.models import User
 from zheka.infra.database.tables.users import users_table
 
@@ -145,28 +146,19 @@ async def probe_stream(
     return StreamingResponse(body(), media_type="application/octet-stream")
 
 
-class _RecordingBrokerProvider(Provider):
-    # настоящий TaskPublisher из контейнера, но кикает в память, а не в редис
-    scope: BaseScope | None = Scope.APP
-
-    def __init__(self, broker: RecordingBroker) -> None:
-        super().__init__()
-        self._broker = broker
-
-    @provide(override=True)
-    def broker(self) -> ZhekaBroker:
-        return cast(ZhekaBroker, self._broker)
-
-
 @pytest_asyncio.fixture
 async def probe_container(
     database_url: str,  # noqa: ARG001
     broker: RecordingBroker,
 ) -> AsyncGenerator[AsyncContainer]:
+    bot_setup = empty_bot_setup()
     container = make_container(
-        _RecordingBrokerProvider(broker),
+        RecordingBrokerProvider(broker),
         config=load_config(),
-        context={Dispatcher: Dispatcher()},
+        context={
+            Dispatcher: bot_setup.dp,
+            BgManagerFactory: bot_setup.bg_manager_factory,
+        },
     )
     yield container
     await container.close()
@@ -373,6 +365,8 @@ async def test_worker_flushes_after_its_own_commit(
 
 
 probe_bot_router = Router(name="probe")
+# включается в общий диспетчер из conftest: maxo запрещает include после старта
+PROBE_ROUTERS.append(probe_bot_router)
 
 
 @probe_bot_router.chat_title_changed()
@@ -393,33 +387,6 @@ async def probe_bot_handler(
         raise RuntimeError("обработчик упал")
 
 
-@pytest.fixture(scope="module")
-def bot_broker() -> RecordingBroker:
-    return RecordingBroker()
-
-
-@pytest_asyncio.fixture(scope="module")
-async def bot_dispatcher(
-    database_url: str,  # noqa: ARG001
-    bot_broker: RecordingBroker,
-) -> AsyncGenerator[Dispatcher]:
-    # диспетчер в процессе один, поэтому и он, и его контейнер модульные, а
-    # тесты различают свои сообщения по метке
-    config = load_config()
-    container = make_container(
-        _RecordingBrokerProvider(bot_broker),
-        config=config,
-        context={Dispatcher: Dispatcher()},
-    )
-    # настоящий make_dispatcher: тест обязан краснеть, если прослойку забыли
-    # зарегистрировать именно там
-    dispatcher = make_dispatcher(config.redis)
-    setup_maxo_dishka(container, dispatcher, auto_inject=True)
-    dispatcher.include(probe_bot_router)
-    yield dispatcher
-    await container.close()
-
-
 def _delivered(broker: RecordingBroker, marker: MaxUserId) -> int:
     return sum(
         1
@@ -437,34 +404,38 @@ def _bot_update(marker: MaxUserId, title: str) -> MaxoUpdate[ChatTitleChanged]:
             timestamp=datetime.now(UTC),
             chat_id=marker,
             title=title,
-            user=MaxUser(first_name="Житель", is_bot=False, user_id=marker),
+            # отправитель апдейта - не метка: UserMiddleware заводит по нему
+            # свою строку users, и совпадение упало бы в уникальный индекс
+            user=MaxUser(first_name="Житель", is_bot=False, user_id=_marker()),
         ),
     )
 
 
 async def test_bot_handler_commits_and_delivers(
-    bot_dispatcher: Dispatcher,
-    engine: AsyncEngine,
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
+    bot_engine: AsyncEngine,
     bot_broker: RecordingBroker,
 ) -> None:
     marker = _marker()
 
-    await bot_dispatcher.feed_max_update(_bot_update(marker, "Дом на Тестовой"))
+    await bot_setup.dp.feed_max_update(_bot_update(marker, "Дом на Тестовой"))
 
-    assert await _committed(engine, marker) == 1
+    assert await _committed(bot_engine, marker) == 1
     assert _delivered(bot_broker, marker) == 1
 
 
 async def test_failed_bot_handler_leaves_nothing(
-    bot_dispatcher: Dispatcher,
-    engine: AsyncEngine,
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
+    bot_engine: AsyncEngine,
     bot_broker: RecordingBroker,
 ) -> None:
     marker = _marker()
 
     # feed_max_update логирует и глотает исключение обработчика - ровно как
     # в поллинге, поэтому смотреть надо на базу и на очередь
-    await bot_dispatcher.feed_max_update(_bot_update(marker, FAIL_TITLE))
+    await bot_setup.dp.feed_max_update(_bot_update(marker, FAIL_TITLE))
 
-    assert await _committed(engine, marker) == 0
+    assert await _committed(bot_engine, marker) == 0
     assert _delivered(bot_broker, marker) == 0

@@ -3,7 +3,7 @@ from typing import cast
 
 from zheka.base import ZhekaMutableType
 from zheka.core.enums import NotificationCategory, NotificationLevel
-from zheka.core.ids import MaxUserId, NotificationSettingId, UserId
+from zheka.core.ids import MaxChatId, MaxUserId, NotificationSettingId, UserId
 
 _UNSET_AT = cast(datetime, None)
 _UNSET_USER_ID = cast(UserId, None)
@@ -20,6 +20,8 @@ class User(ZhekaMutableType):
     consent_version: str | None = None
     consent_at: datetime | None = None
     bot_stopped_at: datetime | None = None
+    # личный диалог с ботом; NULL - бот не запущен, окно открывать некуда
+    max_chat_id: MaxChatId | None = None
 
 
 class NotificationSetting(ZhekaMutableType):
