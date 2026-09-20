@@ -1,0 +1,8 @@
+.Alert {
+  color: var(--icon-negative);
+}
+
+.Warning {
+  flex: 1;
+  min-width: 0;
+}

@@ -1,0 +1,14 @@
+.Card {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-tertiary);
+}
+
+.Icon {
+  color: var(--icon-secondary);
+}
+
+.Text {
+  flex: 1;
+  min-width: 0;
+}

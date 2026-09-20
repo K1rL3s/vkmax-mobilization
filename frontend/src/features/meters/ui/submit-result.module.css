@@ -1,0 +1,94 @@
+.Content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px 16px 24px;
+
+  h1,
+  h2 {
+    margin: 0;
+  }
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Hero {
+  padding-top: 8px;
+  text-align: center;
+}
+
+.Check {
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
+}
+
+.Title {
+  font: inherit;
+}
+
+.Panel {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-tertiary);
+}
+
+.Line {
+  padding: 12px;
+
+  & + & {
+    border-top: 1px solid var(--divider-primary);
+  }
+}
+
+.Comparison {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-tertiary);
+}
+
+.Track {
+  overflow: hidden;
+  height: 8px;
+  border-radius: 4px;
+  background-color: var(--controls-inactive);
+}
+
+.Fill,
+.HouseFill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.Fill {
+  background-color: var(--button-primary);
+}
+
+.HouseFill {
+  background-color: var(--icon-tertiary);
+}
+
+.Alert {
+  color: var(--icon-negative);
+}
+
+.Suggest {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-tertiary);
+}
+
+.Note {
+  text-align: center;
+}
+
+.Footer {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background-color: var(--background-surface);
+}

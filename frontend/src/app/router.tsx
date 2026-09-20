@@ -71,6 +71,16 @@ const router = createBrowserRouter([
             ],
           },
           {
+            loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.HOME} />,
+            children: [
+              {
+                path: Routes.METERS,
+                lazy: () => import("@/features/meters/meters.page"),
+              },
+            ],
+          },
+          {
             element: <PushedPage fallback={Routes.HOME} />,
             children: [
               {

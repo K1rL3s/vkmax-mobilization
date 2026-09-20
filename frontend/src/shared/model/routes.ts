@@ -8,6 +8,7 @@ export const Routes = {
   REQUESTS: "/requests",
   REQUEST_NEW: "/requests/new",
   REQUEST: "/requests/:requestId",
+  METERS: "/meters",
   MEETINGS: "/meetings",
   PROFILE: "/profile",
   OUTSIDE_MAX: "/outside-max",

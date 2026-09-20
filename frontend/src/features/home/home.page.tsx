@@ -10,6 +10,7 @@ import {
 import { generatePath, Link, useNavigate } from "react-router-dom";
 
 import { useHouseCard } from "@/features/house";
+import { useReadingsHint } from "@/features/meters";
 import {
   CATEGORY_ICON,
   deadlineLeft,
@@ -136,9 +137,10 @@ const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { meters, poll, news } = HOME_MOCK;
+  const { poll, news } = HOME_MOCK;
   const { currentResidency: residency } = useSession();
   const request = useActiveRequest();
+  const readingsHint = useReadingsHint();
 
   const card = useHouseCard(residency?.house_id);
 
@@ -255,12 +257,14 @@ const HomePage = () => {
                   <Typography.Text variant="body-strong" color="primary">
                     Передать показания
                   </Typography.Text>
-                  <Typography.Text variant="description" color="secondary">
-                    {meters.windowLeft}
-                  </Typography.Text>
+                  {readingsHint && (
+                    <Typography.Text variant="description" color="secondary">
+                      {readingsHint}
+                    </Typography.Text>
+                  )}
                 </Flex>
                 <Button asChild size="small">
-                  <Link to={Routes.PROFILE}>Передать</Link>
+                  <Link to={Routes.METERS}>Передать</Link>
                 </Button>
               </Card>
             </Flex>
