@@ -3,6 +3,7 @@ from dishka import BaseScope, Provider, Scope, provide
 from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
 from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
+from zheka.core.services.charges import ChargesService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
@@ -198,6 +199,27 @@ class ServicesProvider(Provider):
         access: MeterAccess,
     ) -> MetersService:
         return MetersService(meters_repo, access)
+
+    @provide
+    def charges_service(
+        self,
+        charges_repo: ChargesRepo,
+        meters_repo: MetersRepo,
+        houses_repo: HousesRepo,
+        access: MeterAccess,
+        readings_service: ReadingsService,
+        requests_service: RequestsService,
+        events_service: EventsService,
+    ) -> ChargesService:
+        return ChargesService(
+            charges_repo,
+            meters_repo,
+            houses_repo,
+            access,
+            readings_service,
+            requests_service,
+            events_service,
+        )
 
     @provide
     def admin_readings_service(

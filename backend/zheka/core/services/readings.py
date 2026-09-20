@@ -3,11 +3,12 @@ from collections.abc import Collection, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 
 from zheka.base import ZhekaType
+from zheka.core.charges import to_kopecks
 from zheka.core.enums import (
+    SERVICE_OF_METER,
     EventType,
     MeterType,
     RequestCategory,
-    ServiceType,
     TariffZone,
 )
 from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
@@ -54,14 +55,6 @@ BELOW_PREVIOUS_WARNING = "Новое значение меньше предыд�
 _ZONES_BY_COUNT: Mapping[int, frozenset[TariffZone]] = {
     1: frozenset({TariffZone.SINGLE}),
     2: frozenset({TariffZone.DAY, TariffZone.NIGHT}),
-}
-
-_SERVICE_OF: Mapping[MeterType, ServiceType] = {
-    MeterType.HOT_WATER: ServiceType.HOT_WATER,
-    MeterType.COLD_WATER: ServiceType.COLD_WATER,
-    MeterType.ELECTRICITY: ServiceType.ELECTRICITY,
-    MeterType.GAS: ServiceType.GAS,
-    MeterType.HEATING: ServiceType.HEATING,
 }
 
 
@@ -179,10 +172,10 @@ def is_spike(current: int, history: Sequence[int]) -> bool:
 
 
 def _kopecks(consumption_map: Mapping[TariffZone, int], tariff_value: int) -> int:
-    # расход (1/1000 ед.) * тариф (1/10000 руб/ед.) = 1/10_000_000 руб =
-    # 1/100_000 копейки; округление вверх-от-половины ровно один раз
+    # деление денег живет в core/charges.py - здесь только сумма произведения
+    # по зонам перед округлением
     total = sum(value * tariff_value for value in consumption_map.values())
-    return (total + 50_000) // 100_000
+    return to_kopecks(total)
 
 
 def _checked_values(meter: Meter, values: Mapping[TariffZone, int]) -> None:
@@ -270,7 +263,7 @@ class ReadingsService:
                 if reading.period not in tariff_cache:
                     tariff = await self._charges.tariff_at(
                         house_id,
-                        _SERVICE_OF[meter.type],
+                        SERVICE_OF_METER[meter.type],
                         reading.period,
                     )
                     tariff_cache[reading.period] = (
@@ -345,13 +338,13 @@ class ReadingsService:
         )
 
         tariff = await self._charges.tariff_at(
-            house_id, _SERVICE_OF[meter.type], draft.period
+            house_id, SERVICE_OF_METER[meter.type], draft.period
         )
         amount = None
         if tariff is not None and resident.can_see_charges:
             amount = _kopecks(consumption_map, tariff.value)
 
-        house_average = await self._house_average(house_id, meter.type, draft.period)
+        house_average = await self.house_average(house_id, meter.type, draft.period)
 
         history = await self._spike_history(meter_id, draft.period)
         spike = is_spike(sum(consumption_map.values()), history)
@@ -409,7 +402,7 @@ class ReadingsService:
             always_open=settings.meter_window_always_open,
         )
 
-    async def _house_average(
+    async def house_average(
         self,
         house_id: HouseId,
         meter_type: MeterType,

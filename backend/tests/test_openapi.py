@@ -263,3 +263,29 @@ def test_request_list_items_do_not_expose_the_auto_close_deadline(
     properties = openapi["components"]["schemas"][schema_name]["properties"]
 
     assert "auto_close_at" not in properties
+
+
+def test_charge_breakdown_exposes_consumption_additively(
+    openapi: dict[str, Any],
+) -> None:
+    # задача 11, заметка контроллера: consumption не входит в замороженный
+    # контракт, поэтому поле необязательное (свой дефолт - пустой список)
+    schema = openapi["components"]["schemas"]["ChargeBreakdown"]
+
+    assert schema["properties"]["consumption"]["items"] == {
+        "$ref": "#/components/schemas/ServiceConsumption"
+    }
+    assert "consumption" not in schema["required"]
+
+
+def test_service_consumption_nests_meter_id_and_consumption_points(
+    openapi: dict[str, Any],
+) -> None:
+    schema = openapi["components"]["schemas"]["ServiceConsumption"]
+
+    assert schema["properties"]["points"]["items"] == {
+        "$ref": "#/components/schemas/ConsumptionPoint"
+    }
+    assert {"service", "meter_id", "points"} <= set(schema["required"])
+    # среднее по дому не всегда посчитано (нет ни одной подачи по дому)
+    assert "house_average" not in schema["required"]
