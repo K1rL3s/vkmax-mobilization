@@ -63,5 +63,10 @@ poll_votes_table = Table(
     ),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True),
     Column("counted_by_area", Boolean, nullable=False),
-    UniqueConstraint("poll_id", "user_id"),
+    # (poll_id, user_id) без option_id не пускал multiple-choice - у него по
+    # одной строке на выбранный вариант. "Один голос на человека" держит
+    # сервис: PollsService.vote проверяет get_vote(), а PollsRepo.add_vote
+    # вставляет весь выбор одной транзакцией с ON CONFLICT DO NOTHING по
+    # этому индексу
+    UniqueConstraint("poll_id", "user_id", "option_id"),
 )

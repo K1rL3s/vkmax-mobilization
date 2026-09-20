@@ -8,6 +8,9 @@ from fastapi import FastAPI
 from tests.conftest import make_config
 
 from zheka.api.app import app_factory
+from zheka.api.schemas import polls as poll_schemas
+from zheka.api.schemas.polls import DISCLAIMER
+from zheka.core.services import quorum
 
 # контракт мини-аппа: метод, путь и имя операции из плана. Правка этого списка
 # ломает фронт, поэтому она обсуждается, а не делается по ходу задачи
@@ -47,9 +50,12 @@ CONTRACT: tuple[tuple[str, str, str], ...] = (
     ("post", "/api/requests/{request_id}/accept", "accept_request"),
     ("get", "/api/requests/{request_id}/export", "export_request"),
     ("get", "/api/flats/{flat_id}/meters", "list_flat_meters"),
+    ("post", "/api/flats/{flat_id}/meters", "add_meter"),
+    ("patch", "/api/meters/{meter_id}", "update_meter"),
     ("get", "/api/flats/{flat_id}/reading-periods", "list_reading_periods"),
     ("get", "/api/meters/{meter_id}/readings", "list_meter_readings"),
     ("post", "/api/meters/{meter_id}/readings", "submit_reading"),
+    ("post", "/api/meters/readings/recognize", "recognize_reading"),
     ("get", "/api/houses/{house_id}/tariffs", "list_house_tariffs"),
     ("get", "/api/flats/{flat_id}/charges", "list_flat_charges"),
     ("get", "/api/charges/{charge_id}", "get_charge"),
@@ -234,3 +240,86 @@ def test_request_list_items_do_not_expose_card_org_and_normative_hours(
 
     assert "org_name" not in properties
     assert "normative_hours" not in properties
+
+
+@pytest.mark.parametrize("schema_name", ["RequestCard", "AdminRequestCard"])
+def test_request_cards_expose_a_nullable_optional_auto_close_at(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["properties"]["auto_close_at"]["anyOf"] == [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"},
+    ]
+    # дедлайна нет большую часть жизни заявки, поэтому поле необязательное,
+    # в отличие от org_name и normative_hours
+    assert "auto_close_at" not in schema["required"]
+
+
+@pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
+def test_request_list_items_do_not_expose_the_auto_close_deadline(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    properties = openapi["components"]["schemas"][schema_name]["properties"]
+
+    assert "auto_close_at" not in properties
+
+
+def test_charge_breakdown_exposes_consumption_additively(
+    openapi: dict[str, Any],
+) -> None:
+    # задача 11, заметка контроллера: consumption не входит в замороженный
+    # контракт, поэтому поле необязательное (свой дефолт - пустой список)
+    schema = openapi["components"]["schemas"]["ChargeBreakdown"]
+
+    assert schema["properties"]["consumption"]["items"] == {
+        "$ref": "#/components/schemas/ServiceConsumption"
+    }
+    assert "consumption" not in schema["required"]
+
+
+def test_service_consumption_nests_meter_id_and_consumption_points(
+    openapi: dict[str, Any],
+) -> None:
+    schema = openapi["components"]["schemas"]["ServiceConsumption"]
+
+    assert schema["properties"]["points"]["items"] == {
+        "$ref": "#/components/schemas/ConsumptionPoint"
+    }
+    assert {"service", "meter_id", "points"} <= set(schema["required"])
+    # среднее по дому не всегда посчитано (нет ни одной подачи по дому)
+    assert "house_average" not in schema["required"]
+
+
+def test_quorum_percent_is_imported_from_the_core_module_not_redefined() -> None:
+    # задача 12, заметка контроллера: api/schemas/polls.py не заводит свою
+    # копию QUORUM_PERCENT, а берет ее из core/services/quorum.py
+    assert poll_schemas.QUORUM_PERCENT is quorum.QUORUM_PERCENT
+    assert poll_schemas.QUORUM_PERCENT == 5000
+
+
+@pytest.mark.parametrize("schema_name", ["PollCard", "PollResults"])
+def test_poll_card_and_results_carry_the_oss_disclaimer_additively(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    # задача 12, заметка контроллера: is_oss и disclaimer - не опциональные
+    # для фронта строки, а часть каждого ответа, добавлены аддитивно
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["properties"]["is_oss"]["default"] is False
+    assert schema["properties"]["disclaimer"]["default"] == DISCLAIMER
+
+
+def test_poll_results_exposes_flats_without_area_additively(
+    openapi: dict[str, Any],
+) -> None:
+    # задача 12, заметка контроллера: flats_without_area - не в замороженном
+    # контракте, добавлено аддитивно и всегда присутствует (нет дефолта)
+    schema = openapi["components"]["schemas"]["PollResults"]
+
+    assert schema["properties"]["flats_without_area"]["type"] == "integer"
+    assert "flats_without_area" in schema["required"]

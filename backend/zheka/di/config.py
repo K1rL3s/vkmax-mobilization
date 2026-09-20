@@ -9,6 +9,7 @@ from zheka.config import (
     LogConfig,
     MaxConfig,
     RedisConfig,
+    YandexConfig,
 )
 
 
@@ -44,3 +45,7 @@ class ConfigProvider(Provider):
     @provide
     def deeplinks(self, config: Config) -> DeeplinksConfig:
         return config.deeplinks
+
+    @provide
+    def yandex(self, config: Config) -> YandexConfig:
+        return config.yandex

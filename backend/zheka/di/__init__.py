@@ -12,6 +12,7 @@ from zheka.di.core.services import ServicesProvider
 from zheka.di.database.repos import ReposProvider
 from zheka.di.database.session import DbProvider
 from zheka.di.max_bot import MaxBotProvider
+from zheka.di.yandex import YandexProvider
 
 
 def make_container(
@@ -32,6 +33,7 @@ def make_container(
         ServicesProvider(),
         MaxBotProvider(),
         BrokerProvider(),
+        YandexProvider(),
         *extra_providers,
         context=context,
         validation_settings=STRICT_VALIDATION,

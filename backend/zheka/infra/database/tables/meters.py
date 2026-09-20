@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    UniqueConstraint,
     desc,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -27,6 +28,7 @@ meters_table = Table(
     Column("tariff_zones", Integer, default=1, server_default="1", nullable=False),
     Column("serial", String(32), nullable=False),
     Column("next_verification_date", Date, nullable=True),
+    UniqueConstraint("flat_id", "type"),
 )
 
 readings_table = Table(

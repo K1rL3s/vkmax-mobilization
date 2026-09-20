@@ -73,6 +73,13 @@ class DeeplinksConfig(ZhekaType):
     org_register: str
 
 
+class YandexConfig(ZhekaType):
+    # оба поля опциональны: без них клиент коротко замыкается на None и не
+    # ходит в сеть. Блок 22 доложит сюда же model для вызова LLM
+    api_key: str | None
+    folder_id: str | None
+
+
 class Config(ZhekaType):
     log: LogConfig
     api: ApiConfig
@@ -81,6 +88,7 @@ class Config(ZhekaType):
     max: MaxConfig
     files: FilesConfig
     deeplinks: DeeplinksConfig
+    yandex: YandexConfig
 
 
 def load_config(env_path: str | None = None) -> Config:
@@ -95,6 +103,7 @@ def load_config(env_path: str | None = None) -> Config:
         max=_load_max(env),
         files=_load_files(env),
         deeplinks=_load_deeplinks(env),
+        yandex=_load_yandex(env),
     )
     if config.max.mode is BotMode.WEBHOOK and not config.max.webhook_url:
         raise ValueError("MAX_WEBHOOK_URL обязателен при MAX_BOT_MODE=webhook")
@@ -163,3 +172,10 @@ def _load_deeplinks(env: Env) -> DeeplinksConfig:
     if not org_register.isascii():
         raise ValueError("DEEPLINK_ORG_REGISTER должен состоять только из ASCII")
     return DeeplinksConfig(org_register=org_register)
+
+
+def _load_yandex(env: Env) -> YandexConfig:
+    return YandexConfig(
+        api_key=env.str("YANDEX_API_KEY", None),
+        folder_id=env.str("YANDEX_FOLDER_ID", None),
+    )

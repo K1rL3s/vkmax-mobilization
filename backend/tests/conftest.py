@@ -25,6 +25,7 @@ from zheka.config import (
     LogFormat,
     MaxConfig,
     RedisConfig,
+    YandexConfig,
 )
 from zheka.core.enums import OrgRole, ResidentRole
 from zheka.core.ids import FlatId, HouseId, MaxUserId, OrgId, UserId
@@ -202,4 +203,5 @@ def make_config() -> Config:
             max_size_mb=10,
         ),
         deeplinks=DeeplinksConfig(org_register="test-register-code"),
+        yandex=YandexConfig(api_key=None, folder_id=None),
     )

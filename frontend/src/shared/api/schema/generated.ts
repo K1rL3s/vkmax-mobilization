@@ -510,7 +510,8 @@ export interface paths {
     /** Счетчики квартиры */
     get: operations["list_flat_meters"];
     put?: never;
-    post?: never;
+    /** Завести счетчик */
+    post: operations["add_meter"];
     delete?: never;
     options?: never;
     head?: never;
@@ -550,6 +551,40 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
+    trace?: never;
+  };
+  "/api/meters/readings/recognize": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Распознать показание по фото */
+    post: operations["recognize_reading"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/meters/{meter_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Изменить счетчик */
+    patch: operations["update_meter"];
     trace?: never;
   };
   "/api/houses/{house_id}/tariffs": {
@@ -1712,6 +1747,16 @@ export interface components {
       /** Code */
       code?: string | null;
     };
+    /** AddMeterRequest */
+    AddMeterRequest: {
+      type: components["schemas"]["MeterType"];
+      /** Tariff Zones */
+      tariff_zones: number;
+      /** Serial */
+      serial: string;
+      /** Next Verification Date */
+      next_verification_date?: string | null;
+    };
     /** AdminHouseCard */
     AdminHouseCard: {
       /** Id */
@@ -1912,7 +1957,10 @@ export interface components {
       parent_request_id?: number | null;
       /** Flat Id */
       flat_id?: number | null;
-      /** Auto Close At */
+      /**
+       * Auto Close At
+       * @description Автозакрытие заявки, оставленной на приемке
+       */
       auto_close_at?: string | null;
       /** Is Staff Author */
       is_staff_author: boolean;
@@ -2199,6 +2247,8 @@ export interface components {
        * @description Сумма в копейках
        */
       previous_total?: number | null;
+      /** Consumption */
+      consumption?: components["schemas"]["ServiceConsumption"][];
     };
     /** ChargeBreakdownLine */
     ChargeBreakdownLine: {
@@ -2342,6 +2392,19 @@ export interface components {
     ConsentRequest: {
       /** Version */
       version: string;
+    };
+    /** ConsumptionPoint */
+    ConsumptionPoint: {
+      /**
+       * Period
+       * Format: date
+       */
+      period: string;
+      /**
+       * Consumption
+       * @description Объем в тысячных долях единицы измерения
+       */
+      consumption: number;
     };
     /** CreateAccessRequestRequest */
     CreateAccessRequestRequest: {
@@ -3183,6 +3246,7 @@ export interface components {
       paid_at: string;
       /**
        * Is Demo
+       * @description Демонстрация, платеж не проводится
        * @default true
        */
       is_demo: boolean;
@@ -3218,12 +3282,20 @@ export interface components {
       can_vote: boolean;
       /** Options */
       options: components["schemas"]["PollOptionItem"][];
-      /** Disclaimer */
+      /**
+       * Disclaimer
+       * @default предварительный сбор позиций собственников, не является голосованием (ОСС) по ЖК РФ
+       */
       disclaimer: string;
       /** Description */
       description?: string | null;
       /** My Option Ids */
       my_option_ids: number[];
+      /**
+       * Is Oss
+       * @default false
+       */
+      is_oss: boolean;
     };
     /** PollListItem */
     PollListItem: {
@@ -3322,8 +3394,18 @@ export interface components {
       unverified_flats: number;
       /** Options */
       options: components["schemas"]["PollOptionResult"][];
-      /** Disclaimer */
+      /**
+       * Disclaimer
+       * @default предварительный сбор позиций собственников, не является голосованием (ОСС) по ЖК РФ
+       */
       disclaimer: string;
+      /**
+       * Is Oss
+       * @default false
+       */
+      is_oss: boolean;
+      /** Flats Without Area */
+      flats_without_area: number;
     };
     /**
      * PollStatus
@@ -3375,7 +3457,7 @@ export interface components {
       submitted_at: string;
       /**
        * Amount
-       * @description Сумма в копейках
+       * @description Сумма в копейках, предварительный расчет, итог в квитанции
        */
       amount?: number | null;
     };
@@ -3438,6 +3520,22 @@ export interface components {
       slot_minutes: number;
       /** Id */
       id: number;
+    };
+    /** RecognizeReadingRequest */
+    RecognizeReadingRequest: {
+      /** Photo Path */
+      photo_path: string;
+      meter_type: components["schemas"]["MeterType"];
+    };
+    /** RecognizeReadingResponse */
+    RecognizeReadingResponse: {
+      /**
+       * Values
+       * @description Показание в тысячных долях единицы измерения
+       */
+      values?: {
+        [key: string]: number;
+      } | null;
     };
     /** RegisterOrgRequest */
     RegisterOrgRequest: {
@@ -3550,7 +3648,10 @@ export interface components {
       parent_request_id?: number | null;
       /** Flat Id */
       flat_id?: number | null;
-      /** Auto Close At */
+      /**
+       * Auto Close At
+       * @description Автозакрытие заявки, оставленной на приемке
+       */
       auto_close_at?: string | null;
     };
     /**
@@ -3739,6 +3840,19 @@ export interface components {
       /** Reason */
       reason: string;
     };
+    /** ServiceConsumption */
+    ServiceConsumption: {
+      service: components["schemas"]["ServiceType"];
+      /** Meter Id */
+      meter_id: number;
+      /** Points */
+      points: components["schemas"]["ConsumptionPoint"][];
+      /**
+       * House Average
+       * @description Объем в тысячных долях единицы измерения
+       */
+      house_average?: number | null;
+    };
     /**
      * ServiceType
      * @enum {string}
@@ -3865,6 +3979,15 @@ export interface components {
       address: string;
       /** Waiting */
       waiting: number;
+    };
+    /** UpdateMeterRequest */
+    UpdateMeterRequest: {
+      /** Tariff Zones */
+      tariff_zones: number;
+      /** Serial */
+      serial: string;
+      /** Next Verification Date */
+      next_verification_date?: string | null;
     };
     /** UpdateNotificationSettingsRequest */
     UpdateNotificationSettingsRequest: {
@@ -6870,6 +6993,97 @@ export interface operations {
       };
     };
   };
+  add_meter: {
+    parameters: {
+      query?: never;
+      header: {
+        WebAppData: string;
+      };
+      path: {
+        flat_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AddMeterRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MeterItem"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
   list_reading_periods: {
     parameters: {
       query?: never;
@@ -7068,6 +7282,186 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SubmitReadingResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  recognize_reading: {
+    parameters: {
+      query?: never;
+      header: {
+        WebAppData: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecognizeReadingRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RecognizeReadingResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  update_meter: {
+    parameters: {
+      query?: never;
+      header: {
+        WebAppData: string;
+      };
+      path: {
+        meter_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateMeterRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MeterItem"];
         };
       };
       /** @description Некорректный запрос */

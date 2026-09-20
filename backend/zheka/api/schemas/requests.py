@@ -147,7 +147,10 @@ class RequestCard(RequestListItem):
     feedback: str | None = None
     parent_request_id: RequestId | None = None
     flat_id: FlatId | None = None
-    auto_close_at: datetime | None = None
+    auto_close_at: datetime | None = Field(
+        default=None,
+        description="Автозакрытие заявки, оставленной на приемке",
+    )
 
     @classmethod
     def of(
@@ -252,24 +255,18 @@ class AdminRequestListItem(RequestListItem):
 
     @classmethod
     def of_admin(cls, row: AdminRequestRow) -> Self:
+        base = RequestListItem.of_row(
+            RequestRow(
+                request=row.request,
+                flat=row.flat,
+                has_photos=row.has_photos,
+                group_size=row.group_size,
+                executor=row.executor,
+            ),
+        )
         request = row.request
         return cls(
-            id=RequestId(request.id),
-            created_at=request.created_at,
-            category=request.category,
-            category_label=CATEGORY_RULES[request.category].label,
-            description=request.description,
-            status=request.status,
-            channel=request.channel,
-            has_photos=row.has_photos,
-            group_size=row.group_size,
-            flat_number=None if row.flat is None else row.flat.number,
-            group_id=(
-                None if request.group_id is None else RequestGroupId(request.group_id)
-            ),
-            executor_name=None if row.executor is None else row.executor.name,
-            rating=request.rating,
-            deadline_at=deadline_of(request),
+            **base.model_dump(),
             house_id=HouseId(request.house_id),
             address=row.house.address,
             is_staff_author=request.is_staff_author,
