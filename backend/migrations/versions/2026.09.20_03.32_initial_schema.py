@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: 9911c77d6f6e
+Revision ID: c7e26a5603a8
 Revises:
-Create Date: 2026-09-20 02:33:57.985217
+Create Date: 2026-09-20 03:32:30.395863
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "9911c77d6f6e"
+revision: str = "c7e26a5603a8"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -985,7 +985,9 @@ def upgrade() -> None:
             ["user_id"], ["users.id"], name=op.f("fk_poll_votes_user_id_users")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_poll_votes")),
-        sa.UniqueConstraint("poll_id", "user_id", name=op.f("uq_poll_votes_poll_id")),
+        sa.UniqueConstraint(
+            "poll_id", "user_id", "option_id", name=op.f("uq_poll_votes_poll_id")
+        ),
     )
     op.create_table(
         "readings",

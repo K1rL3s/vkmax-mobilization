@@ -8,6 +8,9 @@ from fastapi import FastAPI
 from tests.conftest import make_config
 
 from zheka.api.app import app_factory
+from zheka.api.schemas import polls as poll_schemas
+from zheka.api.schemas.polls import DISCLAIMER
+from zheka.core.services import quorum
 
 # контракт мини-аппа: метод, путь и имя операции из плана. Правка этого списка
 # ломает фронт, поэтому она обсуждается, а не делается по ходу задачи
@@ -289,3 +292,34 @@ def test_service_consumption_nests_meter_id_and_consumption_points(
     assert {"service", "meter_id", "points"} <= set(schema["required"])
     # среднее по дому не всегда посчитано (нет ни одной подачи по дому)
     assert "house_average" not in schema["required"]
+
+
+def test_quorum_percent_is_imported_from_the_core_module_not_redefined() -> None:
+    # задача 12, заметка контроллера: api/schemas/polls.py не заводит свою
+    # копию QUORUM_PERCENT, а берет ее из core/services/quorum.py
+    assert poll_schemas.QUORUM_PERCENT is quorum.QUORUM_PERCENT
+    assert poll_schemas.QUORUM_PERCENT == 5000
+
+
+@pytest.mark.parametrize("schema_name", ["PollCard", "PollResults"])
+def test_poll_card_and_results_carry_the_oss_disclaimer_additively(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    # задача 12, заметка контроллера: is_oss и disclaimer - не опциональные
+    # для фронта строки, а часть каждого ответа, добавлены аддитивно
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["properties"]["is_oss"]["default"] is False
+    assert schema["properties"]["disclaimer"]["default"] == DISCLAIMER
+
+
+def test_poll_results_exposes_flats_without_area_additively(
+    openapi: dict[str, Any],
+) -> None:
+    # задача 12, заметка контроллера: flats_without_area - не в замороженном
+    # контракте, добавлено аддитивно и всегда присутствует (нет дефолта)
+    schema = openapi["components"]["schemas"]["PollResults"]
+
+    assert schema["properties"]["flats_without_area"]["type"] == "integer"
+    assert "flats_without_area" in schema["required"]

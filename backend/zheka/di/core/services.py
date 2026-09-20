@@ -12,6 +12,7 @@ from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.meters import MetersService
 from zheka.core.services.moderation import ModerationService
 from zheka.core.services.orgs import OrgsService
+from zheka.core.services.polls import PollsService
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.readings import ReadingsService
 from zheka.core.services.request_groups import GroupingService
@@ -23,6 +24,7 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -218,6 +220,23 @@ class ServicesProvider(Provider):
             access,
             readings_service,
             requests_service,
+            events_service,
+        )
+
+    @provide
+    def polls_service(
+        self,
+        polls_repo: PollsRepo,
+        houses_repo: HousesRepo,
+        residents_repo: ResidentsRepo,
+        orgs_repo: OrgsRepo,
+        events_service: EventsService,
+    ) -> PollsService:
+        return PollsService(
+            polls_repo,
+            houses_repo,
+            residents_repo,
+            orgs_repo,
             events_service,
         )
 

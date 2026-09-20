@@ -7,6 +7,7 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -26,4 +27,5 @@ class ReposProvider(Provider):
         RequestsRepo,
         MetersRepo,
         ChargesRepo,
+        PollsRepo,
     )
