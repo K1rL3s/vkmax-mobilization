@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: 25dab9b5c030
+Revision ID: 317e45ecb123
 Revises:
-Create Date: 2026-09-20 19:52:20.202296
+Create Date: 2026-09-20 21:52:42.644086
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "25dab9b5c030"
+revision: str = "317e45ecb123"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -136,9 +136,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("org_id", sa.BigInteger(), nullable=False),
-        sa.Column("house_ids", sa.ARRAY(sa.BigInteger()), nullable=False),
+        sa.Column("house_ids", postgresql.ARRAY(sa.BigInteger()), nullable=False),
         sa.Column("text", sa.Text(), nullable=False),
-        sa.Column("channels", sa.ARRAY(sa.String()), nullable=False),
+        sa.Column("channels", postgresql.ARRAY(sa.String()), nullable=False),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         sa.Column("recipients_count", sa.Integer(), server_default="0", nullable=False),
         sa.ForeignKeyConstraint(
@@ -356,6 +356,7 @@ def upgrade() -> None:
         sa.Column("time_from", sa.Time(), nullable=False),
         sa.Column("time_to", sa.Time(), nullable=False),
         sa.Column("slot_minutes", sa.Integer(), nullable=False),
+        sa.Column("capacity", sa.Integer(), server_default="1", nullable=False),
         sa.ForeignKeyConstraint(
             ["org_id"],
             ["organizations.id"],

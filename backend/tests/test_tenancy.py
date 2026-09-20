@@ -18,7 +18,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import HouseId, MaxUserId, OrgId, RequestId, UserId
-from zheka.core.services.access import can_invite, can_remove_member
+from zheka.core.roles import can_invite, can_remove_member
 from zheka.core.services.events import EventsService
 from zheka.infra.database.models import Event, OrgMember, Request, User
 from zheka.infra.database.repos.events import EventsRepo

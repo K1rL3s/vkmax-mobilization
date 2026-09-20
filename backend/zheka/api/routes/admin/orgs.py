@@ -16,7 +16,7 @@ from zheka.api.schemas.orgs import (
 )
 from zheka.core.deeplinks import org_invite_payload
 from zheka.core.ids import UserId
-from zheka.core.services.access import can_remove_member
+from zheka.core.roles import can_remove_member
 from zheka.core.services.orgs import OrgsService
 
 router = APIRouter(tags=["Админка: организация"], route_class=DishkaRoute)

@@ -324,3 +324,31 @@ def test_poll_results_exposes_flats_without_area_additively(
 
     assert schema["properties"]["flats_without_area"]["type"] == "integer"
     assert "flats_without_area" in schema["required"]
+
+
+def test_access_request_grid_exposes_flats_without_residents_additively(
+    openapi: dict[str, Any],
+) -> None:
+    # задача 14, заметка контроллера: flats_without_residents добавлено
+    # аддитивно, заполняет его только создание запроса
+    schema = openapi["components"]["schemas"]["AccessRequestGrid"]
+
+    assert schema["properties"]["flats_without_residents"]["default"] == []
+    assert "flats_without_residents" not in schema["required"]
+    assert CYRILLIC.search(
+        schema["properties"]["flats_without_residents"]["description"],
+    )
+
+
+@pytest.mark.parametrize("schema_name", ["ReceptionWindowInput", "ReceptionWindowItem"])
+def test_reception_windows_expose_capacity_additively(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    # задача 14, решение владельца: в слот принимают столько жителей, сколько
+    # сотрудников ведет прием. Поле добавлено аддитивно, дефолт - одно место
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["properties"]["capacity"]["default"] == 1
+    assert "capacity" not in schema["required"]
+    assert CYRILLIC.search(schema["properties"]["capacity"]["description"])

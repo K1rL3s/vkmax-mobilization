@@ -14,7 +14,7 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import OrgId, UserId
 from zheka.core.models import OrgInvite, OrgMember, OrgSettings, Organization, User
-from zheka.core.services.access import can_invite, can_remove_member, higher_role
+from zheka.core.roles import can_invite, can_remove_member, higher_role
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseFound, is_connected
 from zheka.core.services.invites import issue_invite

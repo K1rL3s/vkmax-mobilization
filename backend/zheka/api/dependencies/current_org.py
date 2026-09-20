@@ -10,7 +10,7 @@ from zheka.base import ZhekaType
 from zheka.core.enums import OrgRole
 from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import OrgId, UserId
-from zheka.core.services.access import can_manage_houses, is_staff
+from zheka.core.roles import can_manage_houses, is_staff
 from zheka.infra.database.models import OrgMember
 from zheka.infra.database.repos.orgs import OrgsRepo
 

@@ -10,7 +10,6 @@ from tests.conftest import OrgHouseFlatUser
 
 from zheka.api.dependencies.current_account import CurrentAccount
 from zheka.api.dependencies.current_residency import (
-    BLOCKED,
     CurrentResidency,
     residency_for,
     residency_for_flat,
@@ -22,6 +21,7 @@ from zheka.core.enums import ResidentRole, ResidentStatus, VerificationStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
 from zheka.core.services.profile import ProfileService
+from zheka.core.texts import BLOCKED
 from zheka.infra.database.models import Resident
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo

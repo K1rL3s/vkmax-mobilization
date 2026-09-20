@@ -1,14 +1,32 @@
 from datetime import date, datetime
+from typing import Self
+
+from pydantic import Field
 
 from zheka.api.schemas.base import BaseSchema
 from zheka.core.ids import AccessRequestId, AccessSlotId, FlatId, HouseId
+from zheka.core.services.access import (
+    AccessGridData,
+    AccessRequestData,
+    AccessSlotData,
+    AccessTargetData,
+)
 
 
 class AccessSlotItem(BaseSchema):
     id: AccessSlotId
     starts_at: datetime
-    capacity: int
-    taken: int
+    capacity: int = Field(description="Сколько квартир помещается в окно")
+    taken: int = Field(description="Сколько квартир уже выбрали это окно")
+
+    @classmethod
+    def of(cls, data: AccessSlotData) -> Self:
+        return cls(
+            id=AccessSlotId(data.slot.id),
+            starts_at=data.slot.starts_at,
+            capacity=data.slot.capacity,
+            taken=data.taken,
+        )
 
 
 class AccessRequestItem(BaseSchema):
@@ -25,10 +43,27 @@ class AccessRequestItem(BaseSchema):
     my_flat_id: FlatId | None = None
     my_slot_id: AccessSlotId | None = None
 
+    @classmethod
+    def of(cls, data: AccessRequestData) -> Self:
+        request = data.request
+        return cls(
+            id=AccessRequestId(request.id),
+            created_at=request.created_at,
+            house_id=HouseId(request.house_id),
+            address=data.address,
+            reason=request.reason,
+            date=request.date,
+            slots=[AccessSlotItem.of(slot) for slot in data.slots],
+            responded_count=data.responded_count,
+            targets_count=data.targets_count,
+            my_flat_id=data.my_flat_id,
+            my_slot_id=data.my_slot_id,
+        )
+
 
 class AccessSlotInput(BaseSchema):
     starts_at: datetime
-    capacity: int
+    capacity: int = Field(description="Сколько квартир помещается в окно")
 
 
 class CreateAccessRequestRequest(BaseSchema):
@@ -45,7 +80,33 @@ class AccessTargetCell(BaseSchema):
     slot_id: AccessSlotId | None = None
     responded_at: datetime | None = None
 
+    @classmethod
+    def of(cls, data: AccessTargetData) -> Self:
+        target = data.target
+        return cls(
+            flat_id=FlatId(target.flat_id),
+            flat_number=data.flat_number,
+            slot_id=(None if target.slot_id is None else AccessSlotId(target.slot_id)),
+            responded_at=target.responded_at,
+        )
+
 
 class AccessRequestGrid(BaseSchema):
     access_request: AccessRequestItem
     targets: list[AccessTargetCell]
+    flats_without_residents: list[FlatId] = Field(
+        default=[],
+        description=(
+            "Квартиры, которым не досталось ячейки: в них некому ответить - "
+            "подтвержденного жителя нет вовсе или он заблокирован УК. "
+            "Заполняется только при создании запроса"
+        ),
+    )
+
+    @classmethod
+    def of(cls, data: AccessGridData) -> Self:
+        return cls(
+            access_request=AccessRequestItem.of(data.request),
+            targets=[AccessTargetCell.of(target) for target in data.targets],
+            flats_without_residents=list(data.flats_without_residents),
+        )

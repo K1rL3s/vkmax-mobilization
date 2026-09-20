@@ -5,6 +5,8 @@ from types import MappingProxyType
 from zheka.core.enums import RequestStatus
 from zheka.core.ids import RequestId
 
+BLOCKED = "УК закрыла вам доступ к этому дому"
+
 REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = MappingProxyType(
     {
         RequestStatus.NEW: "Новая",
@@ -60,3 +62,11 @@ def resident_unblocked(address: str) -> str:
 
 def announcement(org_name: str, text: str) -> str:
     return f"Объявление от {_plain(org_name)}\n\n{_plain(text)}"
+
+
+def blocked_detail(reason: str | None) -> str:
+    # причина из residents.block_reason: отказ без нее не подсказывает жителю,
+    # к кому идти и что исправлять. Единственная строка файла без _plain:
+    # она уезжает в detail ответа API, а не в сообщение MAX, - для бота
+    # берите resident_blocked, иначе «<» от УК уедет в HTML неэкранированным
+    return BLOCKED if reason is None else f"{BLOCKED}: {reason}"

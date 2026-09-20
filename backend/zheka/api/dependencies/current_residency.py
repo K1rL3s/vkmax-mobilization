@@ -7,6 +7,7 @@ from fastapi import Depends, Header
 
 from zheka.api.dependencies.current_account import CurrentAccountDep
 from zheka.base import ZhekaType
+from zheka.core import texts
 from zheka.core.enums import ResidentRole, ResidentStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, ResidentId, UserId
@@ -14,7 +15,6 @@ from zheka.infra.database.models import Resident
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-BLOCKED = "УК закрыла вам доступ к этому дому"
 FLAT_NOT_FOUND = "Квартира не найдена"
 HOUSE_NOT_FOUND = "Дом не найден"
 
@@ -47,12 +47,6 @@ def _to_residency(resident: Resident) -> CurrentResidency:
     )
 
 
-def blocked_detail(reason: str | None) -> str:
-    # причина из residents.block_reason: отказ без нее не подсказывает жителю,
-    # к кому идти и что исправлять
-    return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
-
-
 def residency_of(resident: Resident | None, not_found: str) -> CurrentResidency:
     # чужой дом и чужая квартира отвечают 404, потому что 403 подтвердил бы,
     # что такой id есть. Заблокированный житель - обратный случай: он и так
@@ -61,7 +55,7 @@ def residency_of(resident: Resident | None, not_found: str) -> CurrentResidency:
     if resident is None:
         raise EntityNotFound(not_found)
     if resident.status is ResidentStatus.BLOCKED:
-        raise NotEnoughRights(blocked_detail(resident.block_reason))
+        raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
     return _to_residency(resident)
 
 

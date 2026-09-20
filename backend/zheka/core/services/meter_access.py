@@ -1,11 +1,12 @@
 from datetime import date
 
 from zheka.base import ZhekaType
+from zheka.core import texts
 from zheka.core.enums import ResidentStatus, TariffZone
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
 from zheka.core.models import Meter, Resident
-from zheka.core.services.access import is_staff
+from zheka.core.roles import is_staff
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -18,7 +19,6 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 FLAT_NOT_FOUND = "Квартира не найдена"
 METER_NOT_FOUND = "Счетчик не найден"
 NOT_VERIFIED = "Подтвердите квартиру, чтобы работать со счетчиками"
-BLOCKED = "УК закрыла вам доступ к этому дому"
 CANNOT_MANAGE_METER = (
     "Добавлять и редактировать счетчики может собственник или сотрудник УК"
 )
@@ -35,10 +35,6 @@ class MeterCard(ZhekaType):
 def zones_of(raw: dict[str, int]) -> dict[TariffZone, int]:
     # JSONB отдает ключи обратно строками, а не TariffZone
     return {TariffZone(key): value for key, value in raw.items()}
-
-
-def _blocked_detail(reason: str | None) -> str:
-    return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
 
 
 class MeterAccess:
@@ -79,7 +75,7 @@ class MeterAccess:
         if resident is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         if resident.status is ResidentStatus.BLOCKED:
-            raise NotEnoughRights(_blocked_detail(resident.block_reason))
+            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
         if resident.verified_at is None:
             raise NotEnoughRights(NOT_VERIFIED)
         return resident
@@ -88,7 +84,7 @@ class MeterAccess:
         resident = await self.resident_of_flat(user_id, flat_id)
         if resident is not None:
             if resident.status is ResidentStatus.BLOCKED:
-                raise NotEnoughRights(_blocked_detail(resident.block_reason))
+                raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
             if resident.verified_at is not None and resident.can_see_charges:
                 return
 

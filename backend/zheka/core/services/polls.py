@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from zheka.base import ZhekaType
+from zheka.core import texts
 from zheka.core.enums import EventType, PollStatus, ResidentStatus
 from zheka.core.errors import (
     EntityNotFound,
@@ -20,7 +21,7 @@ from zheka.core.ids import (
     UserId,
 )
 from zheka.core.models import Flat, Poll, PollOption, PollVote, Resident
-from zheka.core.services.access import is_staff
+from zheka.core.roles import is_staff
 from zheka.core.services.events import EventsService
 from zheka.core.services.quorum import FlatArea, QuorumForecast, forecast
 from zheka.infra.database.repos.houses import HousesRepo
@@ -36,7 +37,6 @@ MIN_POLL_OPTIONS = 2
 
 POLL_NOT_FOUND = "Опрос не найден"
 HOUSE_NOT_FOUND = "Дом не найден"
-BLOCKED = "УК закрыла вам доступ к этому дому"
 NOT_A_CHAIRMAN = "Опрос дома может создать только председатель"
 POLL_ENDED = "Опрос завершен"
 TENANT_CANNOT_VOTE = "Арендатор не участвует в опросах"
@@ -91,10 +91,6 @@ class PollResultsData(ZhekaType):
 class AdminPollListItemData(ZhekaType):
     item: PollListItemData
     address: str
-
-
-def _blocked_detail(reason: str | None) -> str:
-    return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
 
 
 def _effective_status(poll: Poll, now: datetime) -> PollStatus:
@@ -174,7 +170,7 @@ class PollsService:
             if resident is None:
                 raise EntityNotFound(HOUSE_NOT_FOUND)
             if resident.status is ResidentStatus.BLOCKED:
-                raise NotEnoughRights(_blocked_detail(resident.block_reason))
+                raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
             if not resident.is_chairman:
                 raise NotEnoughRights(NOT_A_CHAIRMAN)
             role = "chairman"
@@ -284,7 +280,7 @@ class PollsService:
         if not _is_open(poll, now):
             raise InvalidState(POLL_ENDED)
         if resident.status is ResidentStatus.BLOCKED:
-            raise NotEnoughRights(_blocked_detail(resident.block_reason))
+            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
         if not resident.can_vote:
             raise NotEnoughRights(TENANT_CANNOT_VOTE)
 

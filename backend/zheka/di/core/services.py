@@ -2,6 +2,7 @@ from dishka import BaseScope, Provider, Scope, provide
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
+from zheka.core.services.access import AccessService
 from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.announcements import AnnouncementsService
@@ -18,8 +19,10 @@ from zheka.core.services.orgs import OrgsService
 from zheka.core.services.polls import PollsService
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.readings import ReadingsService
+from zheka.core.services.reception import ReceptionService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
+from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
@@ -31,6 +34,7 @@ from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
+from zheka.infra.database.repos.reception import ReceptionRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -307,5 +311,41 @@ class ServicesProvider(Provider):
             chats_repo,
             orgs_repo,
             notifications_service,
+            events_service,
+        )
+
+    @provide
+    def reception_service(
+        self,
+        reception_repo: ReceptionRepo,
+        houses_repo: HousesRepo,
+        orgs_repo: OrgsRepo,
+        residents_repo: ResidentsRepo,
+        requests_repo: RequestsRepo,
+        users_repo: UsersRepo,
+        events_service: EventsService,
+    ) -> ReceptionService:
+        return ReceptionService(
+            reception_repo,
+            houses_repo,
+            orgs_repo,
+            residents_repo,
+            requests_repo,
+            users_repo,
+            events_service,
+        )
+
+    @provide
+    def access_service(
+        self,
+        access_repo: AccessRepo,
+        houses_repo: HousesRepo,
+        residents_repo: ResidentsRepo,
+        events_service: EventsService,
+    ) -> AccessService:
+        return AccessService(
+            access_repo,
+            houses_repo,
+            residents_repo,
             events_service,
         )

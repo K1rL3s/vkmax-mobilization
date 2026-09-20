@@ -46,9 +46,13 @@ class ResidentsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def list_verified_for_house(self, house_id: HouseId) -> Sequence[Resident]:
+        # заблокированный житель не адресат: рассылка его уже не видит
+        # (active_user_ids), и после блокировки он не отвечает ни на что,
+        # так что запрос доступа к его квартире некому было бы закрыть
         stmt = select(Resident).where(
             residents_table.c.house_id == house_id,
             residents_table.c.verified_at.is_not(None),
+            residents_table.c.status != ResidentStatus.BLOCKED,
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
@@ -264,3 +268,19 @@ class ResidentsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return [UserId(user_id) for user_id in result.scalars().all()]
+
+    async def list_for_houses_and_users(
+        self,
+        house_ids: Collection[HouseId],
+        user_ids: Collection[UserId],
+    ) -> Sequence[Resident]:
+        # список записей на прием берет квартиру и имя одним запросом на весь
+        # день, а не по запросу на запись
+        if not house_ids or not user_ids:
+            return []
+        stmt = select(Resident).where(
+            residents_table.c.house_id.in_(house_ids),
+            residents_table.c.user_id.in_(user_ids),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
