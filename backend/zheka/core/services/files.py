@@ -2,8 +2,10 @@ import hashlib
 import hmac
 import re
 import time
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
+from typing import BinaryIO, cast
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -95,3 +97,51 @@ class FilesService:
             f"{name}:{exp}".encode(),
             hashlib.sha256,
         ).hexdigest()
+
+    async def save_download(
+        self,
+        content_type: str,
+        download: Callable[[BinaryIO], Awaitable[object]],
+    ) -> str:
+        # bot.download ничего не проверяет и тянет поток до конца таймаута,
+        # поэтому потолок стоит на самой записи, а не на готовом файле: иначе
+        # между скачиванием и проверкой на диск ложится сколько успеет прийти
+        suffix = _SUFFIX_BY_MIME.get(content_type)
+        if suffix is None:
+            raise InvalidRequest("Поддерживаются только изображения")
+
+        name = f"{uuid4().hex}{suffix}"
+        destination = self.path_of(name)
+        try:
+            with destination.open("wb") as out:
+                writer = _CappedWriter(out, self._max_bytes, self._max_size_mb)
+                await download(cast("BinaryIO", writer))
+        except BaseException:
+            destination.unlink(missing_ok=True)
+            raise
+        return name
+
+
+class _CappedWriter:
+    """Считает записанное и рвет поток на превышении.
+
+    maxo пишет в destination синхронным write и зовет flush, больше ему от
+    BinaryIO ничего не нужно, поэтому cast дешевле реализации протокола
+    """
+
+    __slots__ = ("_max_bytes", "_max_size_mb", "_out", "_written")
+
+    def __init__(self, out: BinaryIO, max_bytes: int, max_size_mb: int) -> None:
+        self._out = out
+        self._max_bytes = max_bytes
+        self._max_size_mb = max_size_mb
+        self._written = 0
+
+    def write(self, chunk: bytes) -> int:
+        self._written += len(chunk)
+        if self._written > self._max_bytes:
+            raise InvalidRequest(f"Файл больше {self._max_size_mb} МБ")
+        return self._out.write(chunk)
+
+    def flush(self) -> None:
+        self._out.flush()

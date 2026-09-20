@@ -1,8 +1,8 @@
 import asyncio
 import secrets
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pytest
@@ -15,8 +15,11 @@ from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.dialogs.test_tools.keyboard import InlineButtonTextLocator
 from maxo.enums import ChatType
+from maxo.omit import Omittable, Omitted
 from maxo.routing.filters import Command
+from maxo.routing.signals import MaxoUpdate
 from maxo.types import (
+    BotStarted,
     Message,
     MessageBody,
     MessageCreated,
@@ -25,21 +28,31 @@ from maxo.types import (
     SendMessageResult,
 )
 from maxo.types.update_context import UpdateContext
-from sqlalchemy import select
+from sqlalchemy import Row, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import PROBE_ROUTERS
+from tests.conftest import PROBE_ROUTERS, RecordingBroker
 
 from zheka.bot import BotSetup
 from zheka.bot.handlers.menu.windows import MENU_TEXT
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.middlewares.user import private_chat_id
 from zheka.bot.states import Consent, Menu
+from zheka.broker.task_names import TaskName
 from zheka.core.consent import CONSENT_TEXT
-from zheka.core.enums import EventType
+from zheka.core.deeplinks import house_payload, org_invite_payload
+from zheka.core.enums import (
+    CATEGORY_RULES,
+    EventSource,
+    EventType,
+    RequestCategory,
+    ResidentRole,
+)
 from zheka.core.errors import NotEnoughRights
-from zheka.core.ids import MaxChatId, MaxUserId, UserId
+from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.models import User
+from zheka.core.services.orgs import INVITE_NOT_FOUND
+from zheka.infra.database.models import House, Resident
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.users import users_table
@@ -77,6 +90,13 @@ def _new_message() -> NewMessage:
 
 
 ACCEPT = InlineButtonTextLocator("Согласен")
+NEW_REQUEST = InlineButtonTextLocator("Подать заявку")
+FIRST_CATEGORY = InlineButtonTextLocator(
+    CATEGORY_RULES[next(iter(RequestCategory))].label,
+)
+NEXT = InlineButtonTextLocator("Дальше")
+SEND = InlineButtonTextLocator("Отправить")
+TO_MENU = InlineButtonTextLocator("В меню")
 
 
 def _max_id() -> MaxUserId:
@@ -480,3 +500,190 @@ async def test_a_window_shares_the_chat_bucket_with_a_broadcast(
                 await sender.start_dialog(Menu.main, user, notify=False)
 
     assert probe.notify is None
+
+
+async def _bot_started(client: BotClient, payload: Omittable[str | None]) -> None:
+    await client.dp.feed_update(
+        MaxoUpdate(
+            update=BotStarted(
+                chat_id=client.chat.chat_id,
+                user=client.user,
+                payload=payload,
+                timestamp=datetime.now(UTC),
+            ).as_(client.bot),
+        ),
+        client.bot,
+    )
+
+
+async def _bot_house(session: AsyncSession) -> tuple[HouseId, str]:
+    house = House(
+        region="Тестовая область",
+        city="Тестоград",
+        street="Диплинковая",
+        building=secrets.token_hex(2),
+        cadastral_no=secrets.token_hex(8),
+        chat_binding_code=secrets.token_hex(4),
+    )
+    session.add(house)
+    await session.commit()
+    await session.refresh(house)
+    return HouseId(house.id), house.address
+
+
+async def _starts_of(session: AsyncSession, client: BotClient) -> Sequence[Row[Any]]:
+    stmt = select(events_table).where(
+        events_table.c.type == EventType.BOT_START,
+        events_table.c.user_id.in_(
+            select(users_table.c.id).where(
+                users_table.c.max_user_id == client.user.id,
+            ),
+        ),
+    )
+    return (await session.execute(stmt)).all()
+
+
+async def test_an_unparseable_payload_falls_through_to_start(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    # обработчик диплинков обязан вернуть UNHANDLED: вернув None, он съел бы
+    # апдейт, и житель с опечаткой в ссылке получил бы немого бота
+    await _bot_started(client, "не-диплинк")
+
+    # сперва факт ответа, потом его текст: иначе съеденный апдейт падал бы
+    # IndexError из last_message(), а не на проверке, которая его сторожит
+    assert message_manager.sent_messages
+    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
+    events = await _starts_of(bot_session, client)
+    assert len(events) == 1
+    assert events[0].payload == {"source": EventSource.DIRECT.value}
+
+
+async def test_a_plain_start_falls_through_to_start(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    # самый частый вход в бота: «Начать» без всякой ссылки. Тот же UNHANDLED,
+    # что и у опечатки, но ветка своя - payload тут Omitted, а не строка
+    await _bot_started(client, Omitted())
+
+    assert message_manager.sent_messages
+    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
+    events = await _starts_of(bot_session, client)
+    assert len(events) == 1
+    assert events[0].payload == {"source": EventSource.DIRECT.value}
+
+
+async def test_a_house_deeplink_asks_consent_and_then_opens_the_house(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, address = await _bot_house(bot_session)
+
+    await _bot_started(client, house_payload(house_id))
+    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
+
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    text = message_manager.last_message().body.text or ""
+    assert address in text
+    assert MENU_TEXT not in text
+
+
+async def test_a_dead_invite_link_is_answered_instead_of_silence(
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
+    message_manager: MockMessageManager,
+) -> None:
+    # у BotStarted нет ни колбэка, ни сообщения, на которое отвечают, поэтому
+    # протухшая ссылка приглашения иначе уходила бы в тишину
+    message_manager.reset_history()
+    max_user_id = _max_id()
+    recorder = _RecordingBot()
+    client = BotClient(
+        bot_setup.dp,
+        user_id=max_user_id,
+        chat_id=max_user_id,
+        bot=recorder,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    recorder.texts.clear()
+
+    await _bot_started(client, org_invite_payload("deadbeef"))
+
+    assert recorder.texts == [INVITE_NOT_FOUND]
+
+
+async def _linked(
+    session: AsyncSession,
+    client: BotClient,
+    house_id: HouseId,
+    created_at: datetime,
+) -> None:
+    user = await _saved(session, MaxUserId(client.user.id))
+    assert user is not None
+    session.add(
+        Resident(
+            user_id=UserId(user.id),
+            house_id=house_id,
+            role=ResidentRole.OWNER,
+            created_at=created_at,
+        ),
+    )
+    await session.commit()
+
+
+async def _draft_request(client: BotClient, message_manager: MockMessageManager) -> str:
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    address = message_manager.last_message().body.text or ""
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.send("Течет кран на кухне")
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    return address
+
+
+async def test_the_request_goes_to_the_house_the_resident_linked_last(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    # с двумя домами порядок выдачи базы ничего не решает: окно и задача
+    # обязаны взять тот, который житель завел последним
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    now = datetime.now(UTC)
+    first, _ = await _bot_house(bot_session)
+    last, last_address = await _bot_house(bot_session)
+    await _linked(bot_session, client, first, now)
+    await _linked(bot_session, client, last, now + timedelta(minutes=1))
+
+    address = await _draft_request(client, message_manager)
+
+    assert last_address in address
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)
+    assert enqueued[-1]["house_id"] == int(last)
+
+
+async def test_the_sent_window_leads_back_to_the_menu(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    # окно «Принял, оформляю» - терминальное состояние заявки, а живой диалог
+    # глотает обычное сообщение: без кнопки из него нет дороги, кроме /start
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    house_id, _ = await _bot_house(bot_session)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    await _draft_request(client, message_manager)
+
+    await client.click(message_manager.last_message(), TO_MENU)
+
+    assert MENU_TEXT in (message_manager.last_message().body.text or "")

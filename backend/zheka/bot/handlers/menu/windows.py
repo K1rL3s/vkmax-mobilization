@@ -1,10 +1,10 @@
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
-from maxo.dialogs.widgets.kbd import WebApp
-from maxo.dialogs.widgets.text import Const, Format
+from maxo.dialogs.widgets.kbd import Start, WebApp
+from maxo.dialogs.widgets.text import Const, Format, Multi
 
 from zheka.bot.handlers.menu.handlers import get_menu
-from zheka.bot.states import Menu
+from zheka.bot.states import Menu, NewRequest, Onboarding
 
 MENU_TEXT = (
     "Жэка Коммуналкин на связи.\n\n"
@@ -14,7 +14,13 @@ MENU_TEXT = (
 
 menu_dialog = Dialog(
     Window(
-        Const(MENU_TEXT),
+        Multi(
+            Format("{notice}", when=F["notice"]),
+            Const(MENU_TEXT),
+            sep="\n\n",
+        ),
+        Start(Const("Найти дом"), id="find_house", state=Onboarding.method),
+        Start(Const("Подать заявку"), id="new_request", state=NewRequest.category),
         WebApp(
             Const("Открыть приложение"),
             Format("{bot_username}"),

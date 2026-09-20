@@ -17,7 +17,14 @@ from zheka.infra.database.tables.users import users_table
 
 class ResidentsRepo(BaseAlchemyRepo):
     async def list_for_user(self, user_id: UserId) -> Sequence[Resident]:
-        stmt = select(Resident).where(residents_table.c.user_id == user_id)
+        # порядок задан явно: без него это порядок выдачи базы, а он меняется
+        # после любого обновления строки, и вызывающий, который берет из списка
+        # один дом, начинает брать разные
+        stmt = (
+            select(Resident)
+            .where(residents_table.c.user_id == user_id)
+            .order_by(residents_table.c.created_at)
+        )
         result = await self._session.execute(stmt)
         return result.scalars().all()
 

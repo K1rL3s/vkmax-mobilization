@@ -31,6 +31,8 @@ MIN_GROUP_THRESHOLD = 2
 MIN_GROUP_WINDOW_HOURS = 1
 MAX_GROUP_WINDOW_HOURS = 168
 
+INVITE_NOT_FOUND = "Приглашение не найдено"
+
 
 class OrgLookupView(ZhekaType):
     org: Organization | None
@@ -276,13 +278,13 @@ class OrgsService:
     async def revoke_invite(self, org_id: OrgId, code: str) -> None:
         invite = await self._invites.get(code)
         if invite is None or invite.org_id != org_id:
-            raise EntityNotFound("Приглашение не найдено")
+            raise EntityNotFound(INVITE_NOT_FOUND)
         await self._invites.revoke(invite, datetime.now(UTC))
 
     async def activate_invite(self, user_id: UserId, code: str) -> OrgMembershipView:
         invite = await self._invites.get(code)
         if invite is None:
-            raise EntityNotFound("Приглашение не найдено")
+            raise EntityNotFound(INVITE_NOT_FOUND)
 
         org_id = OrgId(invite.org_id)
         org = await self._get_org(org_id)

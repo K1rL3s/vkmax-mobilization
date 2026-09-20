@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+from typing import BinaryIO
 from uuid import uuid4
 
 import pytest
@@ -9,6 +10,10 @@ from zheka.core.errors import EntityNotFound, InvalidRequest
 from zheka.core.services.files import FilesService
 
 _TOKEN = "test-max-token"  # noqa: S105
+
+# 4 МБ при потолке в 1 МБ: поток обязан оборваться далеко не на последнем куске
+_CHUNK = 64 * 1024
+_CHUNKS = 64
 
 
 class _FakeUpload:
@@ -164,3 +169,37 @@ def test_verify_rejects_a_path_traversal_name(tmp_path: Path, name: str) -> None
 
     with pytest.raises(EntityNotFound):
         service.verify(name, exp, sig)
+
+
+async def test_save_download_refuses_a_non_image(tmp_path: Path) -> None:
+    service = _make_service(tmp_path, max_size_mb=1)
+
+    async def _write(destination: BinaryIO) -> None:
+        destination.write(b"x")
+
+    with pytest.raises(InvalidRequest):
+        await service.save_download("application/pdf", _write)
+
+    assert list(tmp_path.iterdir()) == []  # noqa: ASYNC240
+
+
+async def test_save_download_breaks_an_oversized_stream_instead_of_landing_it(
+    tmp_path: Path,
+) -> None:
+    # bot.download ничего не проверяет и тянет поток до конца таймаута: потолок
+    # обязан рвать запись на превышении, а не судить уже скачанный файл -
+    # число записанных кусков и есть то, что до диска не доехало
+    service = _make_service(tmp_path, max_size_mb=1)
+    written = 0
+
+    async def _stream(destination: BinaryIO) -> None:
+        nonlocal written
+        for _ in range(_CHUNKS):
+            destination.write(b"x" * _CHUNK)
+            written += 1
+
+    with pytest.raises(InvalidRequest):
+        await service.save_download("image/jpeg", _stream)
+
+    assert written < _CHUNKS
+    assert list(tmp_path.iterdir()) == []  # noqa: ASYNC240

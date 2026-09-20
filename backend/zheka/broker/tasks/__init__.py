@@ -1,3 +1,4 @@
+from zheka.broker.tasks.bot_requests import create_bot_request
 from zheka.broker.tasks.notifications import (
     broadcast_to_chats,
     broadcast_to_users,
@@ -9,5 +10,6 @@ __all__ = (
     "auto_close_reviewed_requests",
     "broadcast_to_chats",
     "broadcast_to_users",
+    "create_bot_request",
     "send_to_user",
 )

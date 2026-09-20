@@ -5,7 +5,7 @@ from maxo.routing.filters import Command, CommandStart
 from maxo.types import BotStarted, MessageCreated
 
 from zheka.bot.states import entry_state
-from zheka.core.enums import EventType
+from zheka.core.enums import EventSource, EventType
 from zheka.core.ids import UserId
 from zheka.core.models import User
 from zheka.core.services.events import EventsService
@@ -56,6 +56,6 @@ async def open_entry_window(
     await events_service.record(
         EventType.BOT_START,
         user_id=UserId(user.id),
-        source="direct",
+        source=EventSource.DIRECT.value,
     )
     await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)

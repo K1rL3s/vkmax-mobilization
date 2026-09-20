@@ -16,9 +16,12 @@ from zheka.base import ZhekaType
 from zheka.bot.handlers import (
     commands_router,
     consent_dialog,
+    deeplinks_router,
     error_router,
     fallback_router,
     menu_dialog,
+    onboarding_dialog,
+    request_dialog,
 )
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.middlewares import (
@@ -96,11 +99,16 @@ def make_dispatcher(
     private_router.message_created.filter(PRIVATE_ONLY)
     private_router.message_callback.filter(PRIVATE_ONLY)
     private_router.bot_started.filter(PRIVATE_ONLY)
+    # диплинки раньше команд: bot_started у ссылки и у чистого /start один и
+    # тот же, а maxo останавливается на первом ответившем обработчике.
     # fallback последним: он отвечает на все, что не разобрали до него
     private_router.include(
+        deeplinks_router,
         commands_router,
         consent_dialog,
         menu_dialog,
+        onboarding_dialog,
+        request_dialog,
         fallback_router,
     )
 

@@ -8,3 +8,4 @@ class TaskName(StrEnum):
     SEND_TO_USER = "send_to_user"
     BROADCAST_TO_USERS = "broadcast_to_users"
     BROADCAST_TO_CHATS = "broadcast_to_chats"
+    CREATE_BOT_REQUEST = "create_bot_request"
