@@ -1,7 +1,11 @@
 import { redirect } from "react-router-dom";
 
 import { loadHouseCard } from "@/features/house";
-import { isOnboarded, loadSession } from "@/shared/model/session";
+import {
+  currentResidency,
+  isOnboarded,
+  loadSession,
+} from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 
 export const onboardedLoader = async () => {
@@ -11,7 +15,7 @@ export const onboardedLoader = async () => {
     throw redirect(Routes.WELCOME);
   }
 
-  const current = session.residencies.at(-1);
+  const current = currentResidency(session);
 
   if (current) {
     await loadHouseCard(current.house_id);

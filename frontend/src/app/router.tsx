@@ -78,6 +78,10 @@ const router = createBrowserRouter([
                 path: Routes.METERS,
                 lazy: () => import("@/features/meters/meters.page"),
               },
+              {
+                path: Routes.RESIDENCIES,
+                lazy: () => import("@/features/residencies/residencies.page"),
+              },
             ],
           },
           {

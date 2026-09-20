@@ -160,7 +160,7 @@ const HomePage = () => {
       <Flex asChild align="center" gap={12}>
         <Tappable
           className={styles.HouseCard}
-          onClick={() => navigate(Routes.PROFILE)}
+          onClick={() => void navigate(Routes.RESIDENCIES)}
         >
           <IconTile icon={homeIcon} tone="card" size="large" />
           <Flex

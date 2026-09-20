@@ -5,6 +5,7 @@ export const Routes = {
   FLAT_CONFIRMATION: "/residencies/:residentId/confirm",
   FLAT_CONFIRMATION_METHOD: "/residencies/:residentId/confirm/:method",
   HOME: "/home",
+  RESIDENCIES: "/residencies",
   REQUESTS: "/requests",
   REQUEST_NEW: "/requests/new",
   REQUEST: "/requests/:requestId",

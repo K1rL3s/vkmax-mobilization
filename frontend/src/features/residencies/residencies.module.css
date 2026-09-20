@@ -1,0 +1,13 @@
+.Page {
+  flex: 1;
+  gap: 16px;
+  padding: 16px 16px 24px;
+
+  .Check {
+    color: var(--icon-themed);
+  }
+
+  .Note {
+    text-align: center;
+  }
+}
