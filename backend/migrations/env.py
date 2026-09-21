@@ -17,7 +17,9 @@ config.set_main_option(
 )
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # тесты накатывают миграции внутри своего процесса, и выключенные логгеры
+    # приложения молча теряли бы там каждую запись
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = metadata
 

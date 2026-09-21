@@ -56,6 +56,7 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.yandex import YandexClassifier
 
 # потолок вложений в одном сообщении MAX, он же потолок фото у заявки
 MAX_PHOTOS = 12
@@ -131,6 +132,7 @@ class RequestCardData(ZhekaType):
 
 class RequestsService:
     __slots__ = (
+        "_classifier",
         "_events",
         "_files",
         "_grouping",
@@ -153,6 +155,7 @@ class RequestsService:
         grouping_service: GroupingService,
         notifications_service: NotificationsService,
         events_service: EventsService,
+        classifier: YandexClassifier,
     ) -> None:
         self._requests = requests_repo
         self._houses = houses_repo
@@ -163,6 +166,7 @@ class RequestsService:
         self._grouping = grouping_service
         self._notifications = notifications_service
         self._events = events_service
+        self._classifier = classifier
 
     async def create(
         self,
@@ -203,6 +207,14 @@ class RequestsService:
             llm_suggested=draft.llm_suggested,
             llm_accepted=draft.llm_accepted,
         )
+        # принять можно только то, что было подсказано; флаги присылает клиент
+        if draft.llm_suggested and draft.llm_accepted:
+            await self._events.record(
+                EventType.LLM_ACCEPTED,
+                user_id=user_id,
+                house_id=house_id,
+                category=draft.category.value,
+            )
         return await self._built_card(request, house, flat)
 
     async def repeat(
@@ -598,6 +610,18 @@ class RequestsService:
             request_id=request_id,
         )
         return card
+
+    async def classify(self, user_id: UserId, text: str) -> RequestCategory | None:
+        # ponytail: каждый вызов - платный запрос, и сдерживает их только
+        # debounce фронта; лимит на пользователя - когда об этом скажет счет
+        category = await self._classifier.classify(text)
+        if category is not None:
+            await self._events.record(
+                EventType.LLM_SUGGESTED,
+                user_id=user_id,
+                category=category.value,
+            )
+        return category
 
 
 async def build_rows(

@@ -523,6 +523,27 @@ review finding.
   backstop under the route's and the bot's consent gates, as in
   `HousesService.link`. The reviewer's account number ends with the flat
   number `Д{user_id}`, so it never equals a seeded flat's. The kind changes only the bot's notice.
+- The LLM category hint is optional and decided by the answer, never by a
+  probe: `YandexClassifier` in `zheka/infra/yandex/classifier.py` returns
+  `None` without a network call when `YANDEX_API_KEY` or `YANDEX_FOLDER_ID` is
+  unset; a 401 or 403, or a key httpx cannot put into a header (a non-ASCII
+  character pasted with it), means the key does not work, logs one error line
+  and turns the classifier off for the life of the process (it is an APP-scope
+  singleton, so each worker finds out on its own first call); a timeout, a
+  5xx, a 429, a network error, bad JSON or an answer outside
+  `RequestCategory` is `None` for that call only. The key is never logged,
+  only the status code. `POST /requests/classify` answers 200 with
+  `category: null` on every one of those, so a deploy without a key works in
+  full and the resident picks a category with the buttons. The model picks
+  the category only; the zone comes from `CATEGORY_RULES`. The resident's text
+  rides as its own `user` message and the enum check is the backstop against
+  injection. The bot does not classify: `NewRequest` asks the category before
+  the description, so a hint would have nothing to act on there. The answer
+  is read from `result.alternatives` with a fallback to a top-level
+  `alternatives`, because the api-ref page and the REST example in
+  `concepts/generation/structured-output` disagree and nothing here can call
+  the real API. The per-user rate limit that is not there is a `ponytail:`
+  marker at `RequestsService.classify`.
 
 ## Orientation
 
@@ -540,21 +561,21 @@ the next agent does not pay for them again.
   for its frontend half and blocks no backend block; block 16 has no mini-app
   screen to route to.
 - The forty-five `EventType` members divide with nothing left over:
-  37 + 4 + 2 + 2. Thirty-seven are recorded **inside** `core/services/`, so a
+  39 + 4 + 2. Thirty-nine are recorded **inside** `core/services/`, so a
   bot handler or a route that records one of those again doubles the
   statistic - pass the service the right `source` or `method` and let it
   write; `CHAT_BOUND` and `CHAT_ADMIN_GRANTED` are among them, in
   `ChatsService`, so are `READING_REMINDER_SENT` and
-  `APPOINTMENT_REMINDER_SENT`, in `RemindersService`, and so is
-  `REQUEST_EXPORTED`, in `RequestsService.export`. Four are recorded in bot
-  handlers: `BOT_START` in `bot/handlers/commands/start.py`, `BOT_STOPPED`,
+  `APPOINTMENT_REMINDER_SENT`, in `RemindersService`, so is
+  `REQUEST_EXPORTED`, in `RequestsService.export`, and so are `LLM_SUGGESTED`
+  and `LLM_ACCEPTED`, in `RequestsService.classify` and `create`. Four are
+  recorded in bot handlers: `BOT_START` in `bot/handlers/commands/start.py`, `BOT_STOPPED`,
   `BOT_MUTED` and `BOT_UNMUTED` in `bot/handlers/lifecycle.py`.
   `MINIAPP_OPEN` and `ANNOUNCEMENT_CLICK` are recorded by `POST /me/events`,
   where the client sends the type in the body, so no `EventType.MINIAPP_OPEN`
   appears at any `record` call and grep alone will tell you they are written
   nowhere; the `Literal` in `TrackEventRequest` is the whitelist, and those two
-  are the only events a client may send. The remaining two have no writer yet
-  and get one in their own block: `LLM_SUGGESTED` and `LLM_ACCEPTED`.
+  are the only events a client may send. Every member has a writer.
 - The truth about maxo is in the installed sources,
   `.venv/lib/python3.12/site-packages/maxo/`, never in the plan and never from
   memory - the plan was wrong four times in block 15 and reading the source

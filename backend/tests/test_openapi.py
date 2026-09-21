@@ -49,6 +49,7 @@ CONTRACT: tuple[tuple[str, str, str], ...] = (
     ("post", "/api/requests/{request_id}/repeat", "create_repeat_request"),
     ("post", "/api/requests/{request_id}/accept", "accept_request"),
     ("get", "/api/requests/{request_id}/export", "export_request"),
+    ("post", "/api/requests/classify", "classify_request_text"),
     ("get", "/api/flats/{flat_id}/meters", "list_flat_meters"),
     ("post", "/api/flats/{flat_id}/meters", "add_meter"),
     ("patch", "/api/meters/{meter_id}", "update_meter"),

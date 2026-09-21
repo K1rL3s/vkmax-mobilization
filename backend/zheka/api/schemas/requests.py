@@ -370,3 +370,22 @@ class ExecutorItem(BaseSchema):
             username=view.user.username,
             active_requests=view.active_requests,
         )
+
+
+class ClassifyRequestRequest(BaseSchema):
+    # у описания заявки своего потолка нет, а здесь каждый символ - платные
+    # токены. 4000 - потолок текста сообщения MAX: описание длиннее не влезло бы
+    # и в карточку заявки, которую бот шлет исполнителю
+    text: str = Field(max_length=4000, description="Описание проблемы жителем")
+
+
+class ClassifyRequestResponse(BaseSchema):
+    category: RequestCategory | None
+    zone: ResponsibilityZone | None
+
+    @classmethod
+    def of(cls, category: RequestCategory | None) -> Self:
+        return cls(
+            category=category,
+            zone=None if category is None else CATEGORY_RULES[category].zone,
+        )

@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,10 +16,15 @@ from tests.conftest import (
 )
 
 from zheka.api.dependencies.current_account import CurrentAccount
-from zheka.api.routes.requests import export_request
-from zheka.api.schemas.requests import RequestCard, RequestCategoryItem
+from zheka.api.routes.requests import classify_request_text, export_request
+from zheka.api.schemas.requests import (
+    ClassifyRequestRequest,
+    RequestCard,
+    RequestCategoryItem,
+)
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
+from zheka.config import YandexConfig
 from zheka.core.enums import (
     CATEGORY_RULES,
     EventType,
@@ -74,6 +80,7 @@ from zheka.infra.database.tables.requests import (
     request_status_log_table,
     requests_table,
 )
+from zheka.infra.yandex import YandexClassifier
 
 DESCRIPTION = "Течет труба в ванной, вода на полу"
 
@@ -83,6 +90,7 @@ Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 def _make_service(
     session: AsyncSession,
     publisher: TaskPublisher | None = None,
+    classifier: YandexClassifier | None = None,
 ) -> RequestsService:
     return RequestsService(
         RequestsRepo(session),
@@ -94,6 +102,7 @@ def _make_service(
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
+        classifier or YandexClassifier(make_config().yandex),
     )
 
 
@@ -1042,3 +1051,101 @@ async def test_export_hides_a_request_of_another_resident_and_records_nothing(
         await service.export(neighbour, RequestId(created.request.id))
 
     assert await _events(session, EventType.REQUEST_EXPORTED) == []
+
+
+class _StubClassifier(YandexClassifier):
+    __slots__ = ("_category",)
+
+    def __init__(self, category: RequestCategory | None) -> None:
+        super().__init__(YandexConfig(api_key=None, folder_id=None))
+        self._category = category
+
+    async def classify(self, text: str) -> RequestCategory | None:  # noqa: ARG002
+        return self._category
+
+
+def _account(user_id: UserId) -> CurrentAccount:
+    return CurrentAccount(
+        user_id=user_id,
+        max_user_id=MaxUserId(secrets.randbits(48)),
+        name="Житель",
+        consent_at=datetime.now(UTC),
+    )
+
+
+async def test_classify_answers_the_category_with_its_zone_and_records_it(
+    session: AsyncSession,
+) -> None:
+    user_id = await _add_user(session)
+    service = _make_service(
+        session,
+        classifier=_StubClassifier(RequestCategory.HEATING),
+    )
+
+    response = await classify_request_text(
+        _account(user_id),
+        service,
+        ClassifyRequestRequest(text="Батареи холодные"),
+    )
+
+    assert response.category is RequestCategory.HEATING
+    assert response.zone is CATEGORY_RULES[RequestCategory.HEATING].zone
+    events = await _events(session, EventType.LLM_SUGGESTED)
+    assert [(event.user_id, event.payload) for event in events] == [
+        (user_id, {"category": RequestCategory.HEATING.value}),
+    ]
+
+
+async def test_classify_without_an_answer_is_null_and_records_nothing(
+    session: AsyncSession,
+) -> None:
+    user_id = await _add_user(session)
+    service = _make_service(session, classifier=_StubClassifier(None))
+
+    response = await classify_request_text(
+        _account(user_id),
+        service,
+        ClassifyRequestRequest(text="Батареи холодные"),
+    )
+
+    assert response.category is None
+    assert response.zone is None
+    assert await _events(session, EventType.LLM_SUGGESTED) == []
+
+
+def test_classify_text_is_capped() -> None:
+    with pytest.raises(ValidationError):
+        ClassifyRequestRequest(text="а" * 4001)
+
+
+@pytest.mark.parametrize(
+    ("suggested", "accepted", "recorded"),
+    [(True, True, True), (True, False, False), (False, True, False)],
+)
+async def test_create_records_an_accepted_suggestion_only_when_accepted(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    suggested: bool,
+    accepted: bool,
+    recorded: bool,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+
+    await service.create(
+        own.user_id,
+        own.house_id,
+        RequestDraft(
+            category=RequestCategory.ELEVATOR,
+            description=DESCRIPTION,
+            llm_suggested=suggested,
+            llm_accepted=accepted,
+        ),
+    )
+
+    events = await _events(session, EventType.LLM_ACCEPTED)
+    expected = [(own.user_id, own.house_id, RequestCategory.ELEVATOR.value)]
+    assert [
+        (event.user_id, event.payload["house_id"], event.payload["category"])
+        for event in events
+    ] == (expected if recorded else [])

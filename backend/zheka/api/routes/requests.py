@@ -6,6 +6,8 @@ from zheka.api.dependencies import CurrentResidencyDep, RequireConsentDep
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.requests import (
+    ClassifyRequestRequest,
+    ClassifyRequestResponse,
     CreateRequestRequest,
     RateRequestRequest,
     RepeatRequestRequest,
@@ -172,3 +174,15 @@ async def export_request(
         request=_card(card, files_service),
         disclaimer=REQUEST_EXPORT_DISCLAIMER,
     )
+
+
+@router.post("/requests/classify", summary="Подсказать категорию по описанию")
+async def classify_request_text(
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    body: ClassifyRequestRequest,
+) -> ClassifyRequestResponse:
+    # без ключа и при любом сбое модели ответ - null с 200: кнопки категорий
+    # остаются у жителя, и о подсказке он просто не узнает
+    category = await requests_service.classify(current_account.user_id, body.text)
+    return ClassifyRequestResponse.of(category)

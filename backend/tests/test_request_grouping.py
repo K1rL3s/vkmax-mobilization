@@ -43,6 +43,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.requests import request_groups_table, requests_table
+from zheka.infra.yandex import YandexClassifier
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
@@ -58,6 +59,7 @@ def _make_service(session: AsyncSession) -> RequestsService:
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session),
         EventsService(EventsRepo(session)),
+        YandexClassifier(make_config().yandex),
     )
 
 

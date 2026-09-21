@@ -5,6 +5,10 @@ from sqlalchemy import URL
 
 from zheka.base import ZhekaType
 
+# самая дешевая текстовая модель AI Studio: выбрать одну категорию из закрытого
+# списка ей по силам
+YANDEX_DEFAULT_MODEL = "yandexgpt-5-lite"
+
 
 class BotMode(StrEnum):
     POLLING = "polling"
@@ -74,10 +78,11 @@ class DeeplinksConfig(ZhekaType):
 
 
 class YandexConfig(ZhekaType):
-    # оба поля опциональны: без них клиент коротко замыкается на None и не
-    # ходит в сеть. Блок 22 доложит сюда же model для вызова LLM
+    # ключ и каталог опциональны: без них клиенты коротко замыкаются на None и
+    # не ходят в сеть
     api_key: str | None
     folder_id: str | None
+    model: str = YANDEX_DEFAULT_MODEL
 
 
 class Config(ZhekaType):
@@ -178,4 +183,5 @@ def _load_yandex(env: Env) -> YandexConfig:
     return YandexConfig(
         api_key=env.str("YANDEX_API_KEY", None),
         folder_id=env.str("YANDEX_FOLDER_ID", None),
+        model=env.str("YANDEX_MODEL", YANDEX_DEFAULT_MODEL),
     )

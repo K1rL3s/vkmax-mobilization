@@ -43,6 +43,7 @@ from zheka.infra.database.repos.reception import ReceptionRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.yandex import YandexClassifier
 
 
 class ServicesProvider(Provider):
@@ -180,6 +181,7 @@ class ServicesProvider(Provider):
         grouping_service: GroupingService,
         notifications_service: NotificationsService,
         events_service: EventsService,
+        classifier: YandexClassifier,
     ) -> RequestsService:
         return RequestsService(
             requests_repo,
@@ -191,6 +193,7 @@ class ServicesProvider(Provider):
             grouping_service,
             notifications_service,
             events_service,
+            classifier,
         )
 
     @provide
