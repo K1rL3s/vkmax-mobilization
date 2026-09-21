@@ -28,7 +28,7 @@ access_dialog = Dialog(
                 type_factory=int,
                 items="slots",
                 on_click=on_slot,
-            ),
+            )
         ),
         state=AccessSlots.pick,
         getter=get_slots,

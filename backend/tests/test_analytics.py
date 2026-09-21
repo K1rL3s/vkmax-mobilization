@@ -68,8 +68,7 @@ REGION = "Аналитическая область"
 
 
 def _service(
-    session: AsyncSession,
-    publisher: TaskPublisher | None = None,
+    session: AsyncSession, publisher: TaskPublisher | None = None
 ) -> AnalyticsService:
     reminders = RemindersService(
         HousesRepo(session),
@@ -83,10 +82,7 @@ def _service(
         make_notifications_service(session, publisher),
     )
     return AnalyticsService(
-        AnalyticsRepo(session),
-        HousesRepo(session),
-        OrgsRepo(session),
-        reminders,
+        AnalyticsRepo(session), HousesRepo(session), OrgsRepo(session), reminders
     )
 
 
@@ -107,7 +103,7 @@ async def _house(
     )
     session.add(house)
     await session.flush()
-    return HouseId(house.id)
+    return house.id
 
 
 async def _org(
@@ -131,7 +127,7 @@ async def _org(
     await session.flush()
     if settings is not None:
         session.add(OrgSettings(org_id=org.id, **settings))
-    return OrgId(org.id), await _house(session, OrgId(org.id), city, region)
+    return org.id, await _house(session, OrgId(org.id), city, region)
 
 
 async def _request(
@@ -167,14 +163,14 @@ async def _request(
     )
     session.add(request)
     await session.flush()
-    return RequestId(request.id)
+    return request.id
 
 
 async def _user(session: AsyncSession, name: str = "Житель") -> UserId:
     user = User(max_user_id=MaxUserId(secrets.randbits(48)), name=name)
     session.add(user)
     await session.flush()
-    return UserId(user.id)
+    return user.id
 
 
 async def _peer(
@@ -188,11 +184,7 @@ async def _peer(
 ) -> OrgId:
     # организация с одной принятой заявкой: время до принятия - minutes
     org_id, house_id = await _org(
-        session,
-        city=city,
-        region=region,
-        is_demo=is_demo,
-        registered=registered,
+        session, city=city, region=region, is_demo=is_demo, registered=registered
     )
     await _request(session, house_id, accepted_after=timedelta(minutes=minutes))
     return org_id
@@ -203,9 +195,7 @@ def _metric(benchmark: Benchmark, metric: AnalyticsMetric) -> BenchmarkValue:
     return found
 
 
-async def test_the_benchmark_names_no_other_organization(
-    session: AsyncSession,
-) -> None:
+async def test_the_benchmark_names_no_other_organization(session: AsyncSession) -> None:
     caller = await _peer(session, 10)
     others = [await _peer(session, 20), await _peer(session, 30)]
 
@@ -300,8 +290,7 @@ async def test_two_organizations_hide_the_platform_median_and_rank(
     await _peer(session, 30)
 
     alone = _metric(
-        await _service(session).benchmark(caller, NOW),
-        AnalyticsMetric.ACCEPT_TIME,
+        await _service(session).benchmark(caller, NOW), AnalyticsMetric.ACCEPT_TIME
     )
 
     assert alone.value == 10
@@ -309,8 +298,7 @@ async def test_two_organizations_hide_the_platform_median_and_rank(
 
     await _peer(session, 20)
     compared = _metric(
-        await _service(session).benchmark(caller, NOW),
-        AnalyticsMetric.ACCEPT_TIME,
+        await _service(session).benchmark(caller, NOW), AnalyticsMetric.ACCEPT_TIME
     )
 
     assert (compared.platform_median, compared.rank, compared.total) == (20, 1, 3)
@@ -325,12 +313,10 @@ async def test_a_demo_organization_is_compared_only_with_demo_ones(
     demo = await _peer(session, 5, is_demo=True)
 
     demo_metric = _metric(
-        await _service(session).benchmark(demo, NOW),
-        AnalyticsMetric.ACCEPT_TIME,
+        await _service(session).benchmark(demo, NOW), AnalyticsMetric.ACCEPT_TIME
     )
     real_metric = _metric(
-        await _service(session).benchmark(real, NOW),
-        AnalyticsMetric.ACCEPT_TIME,
+        await _service(session).benchmark(real, NOW), AnalyticsMetric.ACCEPT_TIME
     )
 
     assert (demo_metric.platform_median, demo_metric.rank) == (None, None)
@@ -343,8 +329,7 @@ async def test_an_unregistered_organization_is_no_peer(session: AsyncSession) ->
     await _peer(session, 30, registered=False)
 
     metric = _metric(
-        await _service(session).benchmark(caller, NOW),
-        AnalyticsMetric.ACCEPT_TIME,
+        await _service(session).benchmark(caller, NOW), AnalyticsMetric.ACCEPT_TIME
     )
 
     assert metric.total is None
@@ -356,7 +341,7 @@ async def test_the_rank_follows_each_metric_direction(session: AsyncSession) -> 
     caller = await _peer(session, 10)
     caller_house = (await HousesRepo(session).list_for_org(caller))[0].id
     for channel in (RequestChannel.BOT, RequestChannel.CHAT):
-        await _request(session, HouseId(caller_house), channel=channel)
+        await _request(session, caller_house, channel=channel)
     for minutes in (20, 30):
         _, house_id = await _org(session)
         await _request(
@@ -391,12 +376,7 @@ async def test_a_foreign_house_in_the_reminder_is_not_found(
     _, foreign = await _org(session)
 
     with pytest.raises(EntityNotFound):
-        await _service(session).remind_not_submitted(
-            org_id,
-            [own, foreign],
-            None,
-            NOW,
-        )
+        await _service(session).remind_not_submitted(org_id, [own, foreign], None, NOW)
 
 
 async def test_overdue_counts_by_the_category_hours(session: AsyncSession) -> None:
@@ -436,10 +416,7 @@ async def test_the_tiles_average_and_share_are_rounded_once(
     org_id, house_id = await _org(session)
     first = await _request(session, house_id, accepted_after=timedelta(minutes=10))
     await _request(
-        session,
-        house_id,
-        accepted_after=timedelta(minutes=21),
-        parent_request_id=first,
+        session, house_id, accepted_after=timedelta(minutes=21), parent_request_id=first
     )
     await _request(session, house_id, parent_request_id=first)
 
@@ -475,7 +452,7 @@ async def test_the_executor_median_starts_at_the_last_assignment(
                 type=EventType.REQUEST_ASSIGNED.value,
                 payload={"request_id": request_id, "executor_user_id": user_id},
                 created_at=NOW - timedelta(hours=hours),
-            ),
+            )
         )
     await session.flush()
 
@@ -516,9 +493,7 @@ async def test_the_executor_table_counts_closed_ratings_and_repeats(
     assert ExecutorStatsItem.model_validate(row).rating == 450
 
 
-async def test_an_empty_organization_is_explicitly_empty(
-    session: AsyncSession,
-) -> None:
+async def test_an_empty_organization_is_explicitly_empty(session: AsyncSession) -> None:
     org_id, _ = await _org(session)
     service = _service(session)
 
@@ -563,9 +538,7 @@ async def test_the_channel_split_shares_add_up(session: AsyncSession) -> None:
 
 
 async def _metered_resident(
-    session: AsyncSession,
-    house_id: HouseId,
-    period: date | None = None,
+    session: AsyncSession, house_id: HouseId, period: date | None = None
 ) -> UserId:
     flat = Flat(house_id=house_id, number=secrets.token_hex(2))
     session.add(flat)
@@ -578,7 +551,7 @@ async def _metered_resident(
             flat_id=flat.id,
             role=ResidentRole.OWNER,
             verified_at=NOW,
-        ),
+        )
     )
     meter = Meter(flat_id=flat.id, type=MeterType.COLD_WATER, serial="1")
     session.add(meter)
@@ -594,7 +567,7 @@ async def _metered_resident(
                 is_below_previous=False,
                 submitted_at=NOW,
                 submitted_by=user_id,
-            ),
+            )
         )
         await session.flush()
     return user_id
@@ -605,8 +578,7 @@ async def test_the_season_counts_the_period_of_a_wrapping_window(
 ) -> None:
     # окно 25-5: третье марта - хвост окна, открывшегося в феврале
     org_id, house_id = await _org(
-        session,
-        settings={"meter_window_day_from": 25, "meter_window_day_to": 5},
+        session, settings={"meter_window_day_from": 25, "meter_window_day_to": 5}
     )
     await _metered_resident(session, house_id, date(2031, 2, 1))
     await _metered_resident(session, house_id)
@@ -614,9 +586,7 @@ async def test_the_season_counts_the_period_of_a_wrapping_window(
     await session.flush()
 
     season = await _service(session).season(
-        org_id,
-        None,
-        datetime(2031, 3, 3, 12, tzinfo=UTC),
+        org_id, None, datetime(2031, 3, 3, 12, tzinfo=UTC)
     )
 
     assert season.period == date(2031, 2, 1)
@@ -629,9 +599,7 @@ async def test_the_season_counts_the_period_of_a_wrapping_window(
     assert season.houses[0].percent == 5000
 
     past = await _service(session).season(
-        org_id,
-        date(2031, 1, 1),
-        datetime(2031, 3, 3, 12, tzinfo=UTC),
+        org_id, date(2031, 1, 1), datetime(2031, 3, 3, 12, tzinfo=UTC)
     )
 
     assert (past.period, past.window_open) == (date(2031, 1, 1), False)
@@ -641,15 +609,12 @@ async def test_the_season_counts_the_period_of_a_wrapping_window(
     assert closed.window_open is False
 
 
-async def test_the_reminder_refuses_outside_the_window(
-    session: AsyncSession,
-) -> None:
+async def test_the_reminder_refuses_outside_the_window(session: AsyncSession) -> None:
     now = datetime.now(UTC)
     # день окна - любой, кроме сегодняшнего
     day = now.day % 28 + 1
     org_id, house_id = await _org(
-        session,
-        settings={"meter_window_day_from": day, "meter_window_day_to": day},
+        session, settings={"meter_window_day_from": day, "meter_window_day_to": day}
     )
     await _metered_resident(session, house_id)
 
@@ -661,17 +626,10 @@ async def test_the_reminder_refuses_another_period(session: AsyncSession) -> Non
     org_id, _ = await _org(session, settings={"meter_window_always_open": True})
 
     with pytest.raises(InvalidRequest):
-        await _service(session).remind_not_submitted(
-            org_id,
-            [],
-            date(2031, 2, 1),
-            NOW,
-        )
+        await _service(session).remind_not_submitted(org_id, [], date(2031, 2, 1), NOW)
 
 
-async def test_a_second_press_the_same_day_queues_nobody(
-    session: AsyncSession,
-) -> None:
+async def test_a_second_press_the_same_day_queues_nobody(session: AsyncSession) -> None:
     now = datetime.now(UTC)
     org_id, house_id = await _org(session, settings={"meter_window_always_open": True})
     user_id = await _metered_resident(session, house_id)
@@ -700,7 +658,7 @@ async def test_the_reminder_skips_a_resident_reminded_today_by_the_schedule(
             type=EventType.READING_REMINDER_SENT.value,
             payload={"house_id": house_id, "kind": ReadingReminder.OPEN.value},
             created_at=now,
-        ),
+        )
     )
     await session.flush()
 
@@ -723,7 +681,7 @@ async def test_yesterdays_press_does_not_silence_today(session: AsyncSession) ->
                 "kind": ReadingReminder.MANUAL.value,
             },
             created_at=now - timedelta(days=1),
-        ),
+        )
     )
     await session.flush()
 
@@ -782,8 +740,7 @@ async def test_a_median_half_rounds_away_from_zero(session: AsyncSession) -> Non
         await _peer(session, minutes)
 
     metric = _metric(
-        await _service(session).benchmark(caller, NOW),
-        AnalyticsMetric.ACCEPT_TIME,
+        await _service(session).benchmark(caller, NOW), AnalyticsMetric.ACCEPT_TIME
     )
 
     assert metric.platform_median == 11
@@ -878,7 +835,7 @@ async def test_an_executor_assigned_after_review_is_not_charged(
             type=EventType.REQUEST_ASSIGNED.value,
             payload={"request_id": request_id, "executor_user_id": first},
             created_at=now - timedelta(hours=10),
-        ),
+        )
     )
     await session.flush()
     admin = AdminRequestsService(

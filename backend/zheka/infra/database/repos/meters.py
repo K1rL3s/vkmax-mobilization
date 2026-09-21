@@ -57,7 +57,7 @@ class MetersRepo(BaseAlchemyRepo):
                 next_verification_date=next_verification_date,
             )
             .on_conflict_do_nothing(
-                index_elements=[meters_table.c.flat_id, meters_table.c.type],
+                index_elements=[meters_table.c.flat_id, meters_table.c.type]
             )
             .returning(Meter)
         )
@@ -146,10 +146,10 @@ class MetersRepo(BaseAlchemyRepo):
         self,
         house_id: HouseId,
         *,
-        period: date | None = None,
-        meter_type: MeterType | None = None,
+        period: date | None,
+        meter_type: MeterType | None,
+        limit: int,
         only_below_previous: bool = False,
-        limit: int = 50,
         offset: int = 0,
     ) -> tuple[Sequence[Reading], int]:
         stmt = (
@@ -175,9 +175,7 @@ class MetersRepo(BaseAlchemyRepo):
         return result.scalars().all(), total
 
     async def flats_without_reading(
-        self,
-        house_id: HouseId,
-        period: date,
+        self, house_id: HouseId, period: date
     ) -> Sequence[FlatId]:
         # только квартиры, у которых вообще есть счетчик - без него подавать
         # показание нечем, и напоминание о показаниях такой квартире не нужно

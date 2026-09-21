@@ -1,15 +1,11 @@
 import math
 import secrets
 from collections.abc import Sequence
+from dataclasses import replace
 from decimal import Decimal
 
 from zheka.base import ZhekaType
-from zheka.core.enums import (
-    EventSource,
-    EventType,
-    ResidentRole,
-    VerificationStatus,
-)
+from zheka.core.enums import EventSource, EventType, ResidentRole, VerificationStatus
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -29,9 +25,6 @@ from zheka.infra.database.repos.users import UsersRepo
 NEARBY_METERS_PER_DEGREE = 111_320
 
 CONSENT_REQUIRED = "Сначала примите согласие на обработку персональных данных"
-SEARCH_NEEDS_ADDRESS = "Укажите адрес или город"
-FLAT_ID_AND_NUMBER = "Укажите либо квартиру из списка, либо ее номер"
-FLAT_CHANGE_REFUSED = "Квартира уже подтверждена, переезд оформляет УК"
 
 
 def stated(value: str | None) -> str | None:
@@ -121,17 +114,12 @@ class HousesService:
         self._events = events_service
 
     async def cities(
-        self,
-        region: str | None,
-        query: str | None,
+        self, region: str | None, query: str | None
     ) -> Sequence[tuple[str, str]]:
         return await self._houses.list_cities(region, query)
 
     async def streets(
-        self,
-        city: str,
-        region: str | None,
-        query: str | None,
+        self, city: str, region: str | None, query: str | None
     ) -> Sequence[str]:
         return await self._houses.list_streets(city, region, query)
 
@@ -153,15 +141,10 @@ class HousesService:
         )
         # без города и без строки поиска запрос перебрал бы весь справочник
         if city is None and query is None:
-            raise InvalidRequest(SEARCH_NEEDS_ADDRESS)
+            raise InvalidRequest("Укажите адрес или город")
 
         houses, total = await self._houses.search(
-            city,
-            street,
-            building,
-            query,
-            limit,
-            offset,
+            city, street, building, query, limit, offset
         )
         await self._events.record(
             EventType.HOUSE_SEARCH,
@@ -174,12 +157,7 @@ class HousesService:
         return await self._with_orgs(houses), total
 
     async def nearest(
-        self,
-        user_id: UserId,
-        lat: float,
-        lon: float,
-        radius_m: int,
-        limit: int,
+        self, user_id: UserId, lat: float, lon: float, radius_m: int, limit: int
     ) -> list[HouseFound]:
         rows = await self._houses.nearest(
             Decimal(str(lat)),
@@ -190,16 +168,11 @@ class HousesService:
         )
         found = await self._with_orgs([house for house, _ in rows])
         await self._events.record(
-            EventType.HOUSE_SEARCH,
-            user_id=user_id,
-            method="geo",
-            found=len(found),
+            EventType.HOUSE_SEARCH, user_id=user_id, method="geo", found=len(found)
         )
         return [
-            HouseFound(
-                house=item.house,
-                org=item.org,
-                is_connected=item.is_connected,
+            replace(
+                item,
                 distance_m=round(math.sqrt(float(distance)) * NEARBY_METERS_PER_DEGREE),
             )
             for item, (_, distance) in zip(found, rows, strict=True)
@@ -241,7 +214,7 @@ class HousesService:
     ) -> ResidencyView:
         number = stated(flat_number)
         if flat_id is not None and number is not None:
-            raise InvalidRequest(FLAT_ID_AND_NUMBER)
+            raise InvalidRequest("Укажите либо квартиру из списка, либо ее номер")
 
         user = await self._users.get_by_id(user_id)
         if user is None:
@@ -260,17 +233,24 @@ class HousesService:
             # иначе у дома завелся бы второй житель той же квартиры без flat_id
             known = await self._houses.get_flat_by_number(house_id, number)
             if known is not None:
-                flat_id, number = FlatId(known.id), None
+                flat_id, number = known.id, None
 
+        # квартиру житель выбирает до всякого подтверждения, и до него повторная
+        # привязка ее меняет. Из подтвержденной квартиры жителя уводит только УК
         existing = await self._residents.get_for_house(user_id, house_id)
-        self._ensure_can_take_flat(existing, flat_id, number)
+        if (
+            existing is not None
+            and existing.flat_id is not None
+            and existing.verified_at is not None
+            and (
+                number is not None
+                or (flat_id is not None and flat_id != existing.flat_id)
+            )
+        ):
+            raise InvalidState("Квартира уже подтверждена, переезд оформляет УК")
 
         resident, created = await self._residents.add_or_get(
-            user_id,
-            house_id,
-            flat_id,
-            number,
-            role,
+            user_id, house_id, flat_id, number, role
         )
         if created:
             await self._events.record(
@@ -283,9 +263,7 @@ class HousesService:
                 entrance=entrance,
             )
         return await self._view(
-            resident,
-            house,
-            is_connected(house, await self._org_of(house)),
+            resident, house, is_connected(house, await self._org_of(house))
         )
 
     async def unlink(self, user_id: UserId, resident_id: ResidentId) -> None:
@@ -294,13 +272,11 @@ class HousesService:
         if resident is None or resident.user_id != user_id:
             raise EntityNotFound("Привязка к дому не найдена")
 
-        house_id = HouseId(resident.house_id)
+        house_id = resident.house_id
         # удаляется только строка жителя: заявки, показания и голоса остаются
         await self._residents.delete(resident)
         await self._events.record(
-            EventType.HOUSE_LEFT,
-            user_id=user_id,
-            house_id=house_id,
+            EventType.HOUSE_LEFT, user_id=user_id, house_id=house_id
         )
 
     async def demand_signal(self, user_id: UserId, house_id: HouseId) -> int:
@@ -311,10 +287,7 @@ class HousesService:
         await self._houses.add_demand_signal(house_id, user_id)
         total = await self._houses.count_demand(house_id)
         await self._events.record(
-            EventType.DEMAND_SIGNAL,
-            user_id=user_id,
-            house_id=house_id,
-            total=total,
+            EventType.DEMAND_SIGNAL, user_id=user_id, house_id=house_id, total=total
         )
         return total
 
@@ -334,35 +307,13 @@ class HousesService:
             raise EntityNotFound("Дом не найден")
 
         flats, total = await self._houses.list_flats(
-            house_id,
-            query,
-            entrance,
-            limit,
-            offset,
+            house_id, query, entrance, limit, offset
         )
         residents = await self._residents.list_for_house(house_id)
         taken = {
-            FlatId(resident.flat_id)
-            for resident in residents
-            if resident.flat_id is not None
+            resident.flat_id for resident in residents if resident.flat_id is not None
         }
         return flats, total, taken
-
-    def _ensure_can_take_flat(
-        self,
-        existing: Resident | None,
-        flat_id: FlatId | None,
-        flat_number: str | None,
-    ) -> None:
-        # квартиру житель выбирает на первом же экране, до всякого
-        # подтверждения, поэтому до него повторная привязка ее и меняет.
-        # Из подтвержденной квартиры жителя уводит только УК
-        if existing is None or existing.flat_id is None or existing.verified_at is None:
-            return
-        if flat_number is not None or (
-            flat_id is not None and flat_id != existing.flat_id
-        ):
-            raise InvalidState(FLAT_CHANGE_REFUSED)
 
     async def _get_house(self, house_id: HouseId) -> House:
         house = await self._houses.get(house_id)
@@ -376,43 +327,33 @@ class HousesService:
         return await self._orgs.get(OrgId(house.org_id))
 
     async def _view(
-        self,
-        resident: Resident,
-        house: House,
-        connected: bool,
+        self, resident: Resident, house: House, connected: bool
     ) -> ResidencyView:
         flat = (
             None
             if resident.flat_id is None
-            else await self._houses.get_flat(FlatId(resident.flat_id))
+            else await self._houses.get_flat(resident.flat_id)
         )
         return ResidencyView(
-            resident=resident,
-            house=house,
-            flat=flat,
-            is_connected=connected,
+            resident=resident, house=house, flat=flat, is_connected=connected
         )
 
     async def _with_orgs(self, houses: Sequence[House]) -> list[HouseFound]:
-        org_ids = {OrgId(house.org_id) for house in houses if house.org_id is not None}
+        org_ids = {house.org_id for house in houses if house.org_id is not None}
         orgs = {org.id: org for org in await self._orgs.list_by_ids(org_ids)}
         found = []
         for house in houses:
-            org = None if house.org_id is None else orgs.get(OrgId(house.org_id))
+            org = None if house.org_id is None else orgs.get(house.org_id)
             found.append(
-                HouseFound(house=house, org=org, is_connected=is_connected(house, org)),
+                HouseFound(house=house, org=org, is_connected=is_connected(house, org))
             )
         return found
 
     async def org_houses(
-        self,
-        org_id: OrgId,
-        query: str | None,
-        limit: int,
-        offset: int,
+        self, org_id: OrgId, query: str | None, limit: int, offset: int
     ) -> tuple[list[AdminHouseRow], int]:
         houses, total = await self._houses.search_for_org(org_id, query, limit, offset)
-        house_ids = [HouseId(house.id) for house in houses]
+        house_ids = [house.id for house in houses]
         flats = await self._houses.count_flats_by_house(house_ids)
         residents = await self._residents.count_by_house(house_ids)
         open_requests = await self._houses.count_open_requests_by_house(house_ids)
@@ -420,27 +361,21 @@ class HousesService:
         rows = [
             AdminHouseRow(
                 house=house,
-                flats_count=flats.get(HouseId(house.id), 0),
-                residents_count=residents.get(HouseId(house.id), 0),
-                open_requests=open_requests.get(HouseId(house.id), 0),
-                chat_bound=HouseId(house.id) in chats,
+                flats_count=flats.get(house.id, 0),
+                residents_count=residents.get(house.id, 0),
+                open_requests=open_requests.get(house.id, 0),
+                chat_bound=house.id in chats,
             )
             for house in houses
         ]
         return rows, total
 
-    async def admin_card(
-        self,
-        org_id: OrgId,
-        house_id: HouseId,
-    ) -> AdminHouseCardData:
+    async def admin_card(self, org_id: OrgId, house_id: HouseId) -> AdminHouseCardData:
         house = await self._org_house(org_id, house_id)
         chats = await self._houses.bound_chat_titles([house_id])
         chairman = await self._residents.get_chairman(house_id)
         chairman_user = (
-            None
-            if chairman is None
-            else await self._users.get_by_id(UserId(chairman.user_id))
+            None if chairman is None else await self._users.get_by_id(chairman.user_id)
         )
         counts = await self._houses.count_flats_by_house([house_id])
         residents = await self._residents.count_by_house([house_id])
@@ -451,7 +386,7 @@ class HousesService:
             residents_count=residents.get(house_id, 0),
             verified_residents_count=await self._residents.count_verified(house_id),
             pending_verifications=await self._flats.count_pending_verifications(
-                house_id,
+                house_id
             ),
             open_requests=open_requests.get(house_id, 0),
             chat_bound=house_id in chats,
@@ -475,41 +410,25 @@ class HousesService:
     ) -> tuple[list[HouseResidentView], int]:
         await self._org_house(org_id, house_id)
         residents, total = await self._residents.search_for_house(
-            house_id,
-            query,
-            limit,
-            offset,
+            house_id, query, limit, offset
         )
-        return await self._resident_views(residents), total
-
-    async def _org_house(self, org_id: OrgId, house_id: HouseId) -> House:
-        # дом чужой организации отвечает 404: 403 подтвердил бы, что он есть
-        house = await self._houses.get_for_org(house_id, org_id)
-        if house is None:
-            raise EntityNotFound("Дом не найден")
-        return house
-
-    async def _resident_views(
-        self,
-        residents: Sequence[Resident],
-    ) -> list[HouseResidentView]:
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [UserId(resident.user_id) for resident in residents],
+                [resident.user_id for resident in residents]
             )
         }
         flats = {
             flat.id: flat
             for flat in await self._houses.list_flats_by_ids(
                 [
-                    FlatId(resident.flat_id)
+                    resident.flat_id
                     for resident in residents
                     if resident.flat_id is not None
-                ],
+                ]
             )
         }
-        return [
+        views = [
             HouseResidentView(
                 resident=resident,
                 user=users[resident.user_id],
@@ -517,3 +436,11 @@ class HousesService:
             )
             for resident in residents
         ]
+        return views, total
+
+    async def _org_house(self, org_id: OrgId, house_id: HouseId) -> House:
+        # дом чужой организации отвечает 404: 403 подтвердил бы, что он есть
+        house = await self._houses.get_for_org(house_id, org_id)
+        if house is None:
+            raise EntityNotFound("Дом не найден")
+        return house

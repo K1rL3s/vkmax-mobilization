@@ -12,7 +12,6 @@ from zheka.core.services.flats import (
     FlatCardData,
     FlatResidentView,
     VerificationRequestView,
-    VerifyResult,
 )
 
 
@@ -40,8 +39,8 @@ class FlatCard(BaseSchema):
         verified = resident.verified_at is not None
         account_no = card.flat.account_no
         return cls(
-            id=FlatId(card.flat.id),
-            house_id=HouseId(card.flat.house_id),
+            id=card.flat.id,
+            house_id=card.flat.house_id,
             address=card.house.address,
             number=card.flat.number,
             role=resident.role,
@@ -72,10 +71,6 @@ class VerifyFlatResponse(BaseSchema):
     # что делать дальше, если лицевой счет не сошелся
     detail: str
     verification_status: VerificationStatus | None = None
-
-    @classmethod
-    def of(cls, result: VerifyResult) -> Self:
-        return cls.model_validate(result)
 
 
 class FlatVerificationRequest(BaseSchema):

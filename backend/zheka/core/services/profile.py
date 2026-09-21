@@ -2,7 +2,7 @@ from zheka.base import ZhekaType
 from zheka.core.consent import CONSENT_VERSION
 from zheka.core.enums import VerificationStatus
 from zheka.core.errors import EntityNotFound, InvalidRequest
-from zheka.core.ids import FlatId, HouseId, OrgId, UserId
+from zheka.core.ids import UserId
 from zheka.core.models import OrgMember, Organization, User, VerificationRequest
 from zheka.core.services.houses import ResidencyView, is_connected
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -58,34 +58,34 @@ class ProfileService:
         houses = {
             house.id: house
             for house in await self._houses.list_by_ids(
-                [HouseId(resident.house_id) for resident in residents],
+                [resident.house_id for resident in residents]
             )
         }
         flats = {
             flat.id: flat
             for flat in await self._houses.list_flats_by_ids(
                 [
-                    FlatId(resident.flat_id)
+                    resident.flat_id
                     for resident in residents
                     if resident.flat_id is not None
-                ],
+                ]
             )
         }
 
         latest_by_flat = {
-            FlatId(request.flat_id): request
+            request.flat_id: request
             for request in await self._flats.list_latest_requests(user_id, flats.keys())
         }
 
         members = await self._orgs.list_for_user(user_id)
-        org_ids = {OrgId(house.org_id) for house in houses.values() if house.org_id}
-        org_ids |= {OrgId(member.org_id) for member in members}
+        org_ids = {house.org_id for house in houses.values() if house.org_id}
+        org_ids |= {member.org_id for member in members}
         orgs = {org.id: org for org in await self._orgs.list_by_ids(org_ids)}
 
         residencies = []
         for resident in residents:
             house = houses[resident.house_id]
-            org = None if house.org_id is None else orgs.get(OrgId(house.org_id))
+            org = None if house.org_id is None else orgs.get(house.org_id)
             latest = (
                 None
                 if resident.flat_id is None
@@ -99,7 +99,7 @@ class ProfileService:
                     is_connected=is_connected(house, org),
                     verification_status=None if latest is None else latest.status,
                     verification_reject_reason=reject_reason(latest),
-                ),
+                )
             )
         memberships = [
             OrgMembershipView(member=member, org=orgs[member.org_id])

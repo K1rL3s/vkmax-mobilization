@@ -47,9 +47,9 @@ class AccessRequestItem(BaseSchema):
     def of(cls, data: AccessRequestData) -> Self:
         request = data.request
         return cls(
-            id=AccessRequestId(request.id),
+            id=request.id,
             created_at=request.created_at,
-            house_id=HouseId(request.house_id),
+            house_id=request.house_id,
             address=data.address,
             reason=request.reason,
             date=request.date,
@@ -84,9 +84,9 @@ class AccessTargetCell(BaseSchema):
     def of(cls, data: AccessTargetData) -> Self:
         target = data.target
         return cls(
-            flat_id=FlatId(target.flat_id),
+            flat_id=target.flat_id,
             flat_number=data.flat_number,
-            slot_id=(None if target.slot_id is None else AccessSlotId(target.slot_id)),
+            slot_id=target.slot_id,
             responded_at=target.responded_at,
         )
 

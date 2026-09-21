@@ -3,10 +3,7 @@ from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
 from zheka.api.dependencies import CurrentOrgDep
-from zheka.api.schemas.announcements import (
-    AnnouncementItem,
-    CreateAnnouncementRequest,
-)
+from zheka.api.schemas.announcements import AnnouncementItem, CreateAnnouncementRequest
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.core.ids import HouseId
 from zheka.core.services.announcements import AnnouncementsService
@@ -23,10 +20,7 @@ async def list_org_announcements(
     offset: Offset = 0,
 ) -> Page[AnnouncementItem]:
     items, total = await announcements_service.list_for_org(
-        current_org.org_id,
-        house_id,
-        limit,
-        offset,
+        current_org.org_id, house_id, limit, offset
     )
     return Page(items=[AnnouncementItem.of(item) for item in items], total=total)
 

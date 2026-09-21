@@ -14,14 +14,7 @@ from zheka.core.enums import (
     RequestPhotoKind,
     RequestStatus,
 )
-from zheka.core.ids import (
-    FlatId,
-    HouseId,
-    OrgId,
-    RequestGroupId,
-    RequestId,
-    UserId,
-)
+from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
 from zheka.infra.database.models import (
     Request,
     RequestGroup,
@@ -40,13 +33,8 @@ from zheka.infra.database.tables.requests import (
 )
 
 # заявка считается открытой, пока ее не приняли жителем или таймаутом
-OPEN_STATUSES = (
-    RequestStatus.NEW,
-    RequestStatus.ACCEPTED,
-    RequestStatus.IN_PROGRESS,
-)
+OPEN_STATUSES = (RequestStatus.NEW, RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS)
 
-# колонка со временем, которую проставляет каждый статус
 _STAMP_BY_STATUS = {
     RequestStatus.ACCEPTED: "accepted_at",
     RequestStatus.ON_REVIEW: "reviewed_at",
@@ -76,7 +64,7 @@ def overdue_at(now: datetime) -> ColumnElement[bool]:
                     < now - timedelta(hours=rule.normative_hours),
                 )
                 for category, rule in CATEGORY_RULES.items()
-            ],
+            ]
         ),
         requests_table.c.status != RequestStatus.DONE,
     )
@@ -146,10 +134,7 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all(), total
 
     async def set_rating(
-        self,
-        request: Request,
-        rating: int,
-        feedback: str | None,
+        self, request: Request, rating: int, feedback: str | None
     ) -> None:
         request.rating = rating
         request.feedback = feedback
@@ -161,16 +146,13 @@ class RequestsRepo(BaseAlchemyRepo):
         path: str,
         kind: RequestPhotoKind,
         uploaded_by: UserId,
-    ) -> RequestPhoto:
-        photo = RequestPhoto(
-            request_id=request_id,
-            path=path,
-            kind=kind,
-            uploaded_by=uploaded_by,
+    ) -> None:
+        self._session.add(
+            RequestPhoto(
+                request_id=request_id, path=path, kind=kind, uploaded_by=uploaded_by
+            )
         )
-        self._session.add(photo)
         await self._session.flush()
-        return photo
 
     async def list_photos(self, request_id: RequestId) -> Sequence[RequestPhoto]:
         stmt = (
@@ -182,8 +164,7 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def count_photos(
-        self,
-        request_ids: Collection[RequestId],
+        self, request_ids: Collection[RequestId]
     ) -> dict[RequestId, int]:
         if not request_ids:
             return {}
@@ -203,18 +184,18 @@ class RequestsRepo(BaseAlchemyRepo):
         by_user_id: UserId | None,
         by_role: str,
         at: datetime,
-    ) -> RequestStatusLog:
-        log = RequestStatusLog(
-            request_id=request_id,
-            from_status=from_status,
-            to_status=to_status,
-            by_user_id=by_user_id,
-            by_role=by_role,
-            at=at,
+    ) -> None:
+        self._session.add(
+            RequestStatusLog(
+                request_id=request_id,
+                from_status=from_status,
+                to_status=to_status,
+                by_user_id=by_user_id,
+                by_role=by_role,
+                at=at,
+            )
         )
-        self._session.add(log)
         await self._session.flush()
-        return log
 
     async def list_log(self, request_id: RequestId) -> Sequence[RequestStatusLog]:
         stmt = (
@@ -226,21 +207,17 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def add_message(
-        self,
-        request_id: RequestId,
-        author_user_id: UserId,
-        author_role: str,
-        text: str,
-    ) -> RequestMessage:
-        message = RequestMessage(
-            request_id=request_id,
-            author_user_id=author_user_id,
-            author_role=author_role,
-            text=text,
+        self, request_id: RequestId, author_user_id: UserId, author_role: str, text: str
+    ) -> None:
+        self._session.add(
+            RequestMessage(
+                request_id=request_id,
+                author_user_id=author_user_id,
+                author_role=author_role,
+                text=text,
+            )
         )
-        self._session.add(message)
         await self._session.flush()
-        return message
 
     async def list_messages(self, request_id: RequestId) -> Sequence[RequestMessage]:
         stmt = (
@@ -257,8 +234,7 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def count_by_group(
-        self,
-        group_ids: Collection[RequestGroupId],
+        self, group_ids: Collection[RequestGroupId]
     ) -> dict[RequestGroupId, int]:
         if not group_ids:
             return {}
@@ -270,11 +246,7 @@ class RequestsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return {RequestGroupId(group_id): count for group_id, count in result.tuples()}
 
-    async def get_for_org(
-        self,
-        request_id: RequestId,
-        org_id: OrgId,
-    ) -> Request | None:
+    async def get_for_org(self, request_id: RequestId, org_id: OrgId) -> Request | None:
         # request_id приходит из пути: чужая заявка отвечает 404, а не 403
         stmt = scoped_to_org(
             select(Request).where(requests_table.c.id == request_id),
@@ -293,18 +265,10 @@ class RequestsRepo(BaseAlchemyRepo):
         offset: int,
     ) -> tuple[Sequence[Request], int]:
         stmt = scoped_to_org(select(Request), requests_table.c.house_id, org_id)
-        if filters.house_id is not None:
-            stmt = stmt.where(requests_table.c.house_id == filters.house_id)
-        if filters.category is not None:
-            stmt = stmt.where(requests_table.c.category == filters.category)
-        if filters.status is not None:
-            stmt = stmt.where(requests_table.c.status == filters.status)
-        if filters.channel is not None:
-            stmt = stmt.where(requests_table.c.channel == filters.channel)
-        if filters.executor_user_id is not None:
-            stmt = stmt.where(
-                requests_table.c.executor_user_id == filters.executor_user_id,
-            )
+        for name in ("house_id", "category", "status", "channel", "executor_user_id"):
+            value = getattr(filters, name)
+            if value is not None:
+                stmt = stmt.where(requests_table.c[name] == value)
         overdue = overdue_at(now)
         if filters.overdue:
             stmt = stmt.where(overdue)
@@ -319,7 +283,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 or_(
                     requests_table.c.group_id.is_(None),
                     requests_table.c.id.in_(leaders),
-                ),
+                )
             )
 
         total = await self._count(stmt)
@@ -368,23 +332,23 @@ class RequestsRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def count_active_by_executor(self, org_id: OrgId) -> dict[UserId, int]:
-        stmt = scoped_to_org(
-            select(requests_table.c.executor_user_id, func.count()),
-            requests_table.c.house_id,
-            org_id,
-        ).where(
-            requests_table.c.executor_user_id.is_not(None),
-            requests_table.c.status.in_(OPEN_STATUSES),
+        stmt = (
+            scoped_to_org(
+                select(requests_table.c.executor_user_id, func.count()),
+                requests_table.c.house_id,
+                org_id,
+            )
+            .where(
+                requests_table.c.executor_user_id.is_not(None),
+                requests_table.c.status.in_(OPEN_STATUSES),
+            )
+            .group_by(requests_table.c.executor_user_id)
         )
-        grouped_stmt = stmt.group_by(requests_table.c.executor_user_id)
-        result = await self._session.execute(grouped_stmt)
+        result = await self._session.execute(stmt)
         return {UserId(user_id): count for user_id, count in result.tuples()}
 
     async def find_open_group(
-        self,
-        house_id: HouseId,
-        category: RequestCategory,
-        since: datetime,
+        self, house_id: HouseId, category: RequestCategory, since: datetime
     ) -> RequestGroup | None:
         stmt = (
             select(RequestGroup)
@@ -401,9 +365,7 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def get_group_for_org(
-        self,
-        group_id: RequestGroupId,
-        org_id: OrgId,
+        self, group_id: RequestGroupId, org_id: OrgId
     ) -> RequestGroup | None:
         stmt = scoped_to_org(
             select(RequestGroup).where(request_groups_table.c.id == group_id),
@@ -414,10 +376,7 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def create_group(
-        self,
-        house_id: HouseId,
-        category: RequestCategory,
-        window_started_at: datetime,
+        self, house_id: HouseId, category: RequestCategory, window_started_at: datetime
     ) -> RequestGroup:
         group = RequestGroup(
             house_id=house_id,
@@ -430,18 +389,13 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def set_group_status(
-        self,
-        group: RequestGroup,
-        status: RequestGroupStatus,
+        self, group: RequestGroup, status: RequestGroupStatus
     ) -> None:
         group.status = status
         await self._session.flush()
 
     async def list_open_in_window(
-        self,
-        house_id: HouseId,
-        category: RequestCategory,
-        since: datetime,
+        self, house_id: HouseId, category: RequestCategory, since: datetime
     ) -> Sequence[Request]:
         stmt = (
             select(Request)
@@ -466,9 +420,7 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def attach_to_group(
-        self,
-        requests: Sequence[Request],
-        group_id: RequestGroupId,
+        self, requests: Sequence[Request], group_id: RequestGroupId
     ) -> None:
         for request in requests:
             request.group_id = group_id

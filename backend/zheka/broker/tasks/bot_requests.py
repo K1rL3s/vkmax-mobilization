@@ -11,7 +11,7 @@ from zheka.bot.states import NewRequest
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import RequestCategory, RequestChannel
 from zheka.core.errors import InvalidRequest
-from zheka.core.ids import FlatId, HouseId, RequestId, UserId
+from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestDraft, RequestsService
 from zheka.infra.database.repos.users import UsersRepo
@@ -54,7 +54,7 @@ async def create_bot_request(
         RequestChannel(channel),
     )
 
-    request_id = RequestId(card.request.id)
+    request_id = card.request.id
     user = await users_repo.get_by_id(user_id)
     if user is not None:
         # тот же стек, что у окна «Принял, оформляю»: житель видит, как оно
@@ -62,26 +62,23 @@ async def create_bot_request(
         await sender.start_dialog(
             NewRequest.sent,
             user,
-            data=NewRequestData(request_id=int(request_id)).to_data(),
+            data=NewRequestData(request_id=request_id).to_data(),
             stack_id=stack_id,
             notify=False,
         )
-    return int(request_id)
+    return request_id
 
 
 async def save_photos(
-    bot: Bot,
-    files_service: FilesService,
-    photo_urls: Sequence[str],
+    bot: Bot, files_service: FilesService, photo_urls: Sequence[str]
 ) -> list[str]:
     photos = []
     for url in photo_urls:
         try:
             photos.append(
                 await files_service.save_download(
-                    PHOTO_MIME,
-                    partial(bot.download, url, seek=False),
-                ),
+                    PHOTO_MIME, partial(bot.download, url, seek=False)
+                )
             )
         except InvalidRequest as error:
             logger.warning("Фото из бота не сохранено: %s", error)

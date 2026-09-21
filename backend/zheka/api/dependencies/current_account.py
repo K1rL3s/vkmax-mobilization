@@ -19,20 +19,18 @@ class CurrentAccount(ZhekaType):
     consent_at: datetime | None
 
 
-def _full_name(first_name: str, last_name: str | None) -> str:
-    return f"{first_name} {last_name}" if last_name else first_name
-
-
 @inject
 async def get_current_account(
-    *,
-    current_user: CurrentUserDep,
-    users_repo: FromDishka[UsersRepo],
+    *, current_user: CurrentUserDep, users_repo: FromDishka[UsersRepo]
 ) -> CurrentAccount:
     webapp_user = current_user.init_data.user
     user = await users_repo.upsert_by_max_id(
         current_user.max_user_id,
-        name=_full_name(webapp_user.first_name, webapp_user.last_name),
+        name=(
+            f"{webapp_user.first_name} {webapp_user.last_name}"
+            if webapp_user.last_name
+            else webapp_user.first_name
+        ),
         username=webapp_user.username,
     )
     return CurrentAccount(

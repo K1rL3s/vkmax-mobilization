@@ -17,10 +17,7 @@ class LoggingMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
     __slots__ = ()
 
     async def __call__(
-        self,
-        update: MaxoUpdate[Any],
-        ctx: Ctx,
-        next: NextMiddleware[MaxoUpdate[Any]],
+        self, update: MaxoUpdate[Any], ctx: Ctx, next: NextMiddleware[MaxoUpdate[Any]]
     ) -> Any:
         update_token = update_id.set(str(update.marker))
         user = ctx.get(EVENT_FROM_USER_KEY)

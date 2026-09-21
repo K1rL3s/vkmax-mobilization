@@ -16,7 +16,6 @@ from zheka.core.enums import (
     ResponsibilityZone,
 )
 from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
-from zheka.core.models import RequestStatusLog
 from zheka.core.services.admin_requests import (
     AdminRequestCardData,
     AdminRequestRow,
@@ -73,7 +72,7 @@ class RequestListItem(BaseSchema):
         request = row.request
         rule = CATEGORY_RULES[request.category]
         return cls(
-            id=RequestId(request.id),
+            id=request.id,
             created_at=request.created_at,
             category=request.category,
             category_label=rule.label,
@@ -83,9 +82,7 @@ class RequestListItem(BaseSchema):
             has_photos=row.has_photos,
             group_size=row.group_size,
             flat_number=None if row.flat is None else row.flat.number,
-            group_id=(
-                None if request.group_id is None else RequestGroupId(request.group_id)
-            ),
+            group_id=request.group_id,
             executor_name=None if row.executor is None else row.executor.name,
             rating=request.rating,
             # фронт красит просрочку сам, поэтому отдается срок, а не флаг
@@ -116,15 +113,6 @@ class RequestStatusLogItem(BaseSchema):
     by_role: str
     from_status: RequestStatus | None = None
 
-    @classmethod
-    def of(cls, log: RequestStatusLog) -> Self:
-        return cls(
-            at=log.at,
-            to_status=log.to_status,
-            by_role=log.by_role,
-            from_status=log.from_status,
-        )
-
 
 class RequestCard(RequestListItem):
     house_id: HouseId
@@ -141,16 +129,12 @@ class RequestCard(RequestListItem):
     parent_request_id: RequestId | None = None
     flat_id: FlatId | None = None
     auto_close_at: datetime | None = Field(
-        default=None,
-        description="Автозакрытие заявки, оставленной на приемке",
+        default=None, description="Автозакрытие заявки, оставленной на приемке"
     )
 
     @classmethod
     def of(
-        cls,
-        card: RequestCardData,
-        photos: list[FileRef],
-        result_photos: list[FileRef],
+        cls, card: RequestCardData, photos: list[FileRef], result_photos: list[FileRef]
     ) -> Self:
         request = card.request
         base = RequestListItem.of_row(
@@ -160,27 +144,25 @@ class RequestCard(RequestListItem):
                 has_photos=bool(photos),
                 group_size=card.group_size,
                 executor=card.executor,
-            ),
+            )
         )
         return cls(
             **base.model_dump(),
-            house_id=HouseId(request.house_id),
+            house_id=request.house_id,
             address=card.house.address,
             org_name=None if card.org is None else card.org.name,
             normative_hours=CATEGORY_RULES[request.category].normative_hours,
             photos=photos,
             result_photos=result_photos,
             messages=[RequestMessageItem.of(view) for view in card.messages],
-            timeline=[RequestStatusLogItem.of(log) for log in card.timeline],
+            timeline=[
+                RequestStatusLogItem.model_validate(log) for log in card.timeline
+            ],
             can_review=card.can_review,
             can_rate=card.can_rate,
             feedback=request.feedback,
-            parent_request_id=(
-                None
-                if request.parent_request_id is None
-                else RequestId(request.parent_request_id)
-            ),
-            flat_id=None if request.flat_id is None else FlatId(request.flat_id),
+            parent_request_id=request.parent_request_id,
+            flat_id=request.flat_id,
             auto_close_at=card.auto_close_at,
         )
 
@@ -239,19 +221,11 @@ class AdminRequestListItem(RequestListItem):
 
     @classmethod
     def of_admin(cls, row: AdminRequestRow) -> Self:
-        base = RequestListItem.of_row(
-            RequestRow(
-                request=row.request,
-                flat=row.flat,
-                has_photos=row.has_photos,
-                group_size=row.group_size,
-                executor=row.executor,
-            ),
-        )
+        base = RequestListItem.of_row(row)
         request = row.request
         return cls(
             **base.model_dump(),
-            house_id=HouseId(request.house_id),
+            house_id=request.house_id,
             address=row.house.address,
             is_staff_author=request.is_staff_author,
             author_name=None if row.author is None else row.author.name,
@@ -282,11 +256,7 @@ class AdminRequestCard(RequestCard):
             author_name=None if data.author is None else data.author.name,
             caller_name=request.caller_name,
             caller_phone=request.caller_phone,
-            executor_user_id=(
-                None
-                if request.executor_user_id is None
-                else UserId(request.executor_user_id)
-            ),
+            executor_user_id=request.executor_user_id,
         )
 
 
@@ -327,8 +297,8 @@ class RequestGroupCard(BaseSchema):
     def of(cls, data: RequestGroupCardData) -> Self:
         group = data.group
         return cls(
-            id=RequestGroupId(group.id),
-            house_id=HouseId(group.house_id),
+            id=group.id,
+            house_id=group.house_id,
             address=data.house.address,
             category=group.category,
             category_label=CATEGORY_RULES[group.category].label,
@@ -353,7 +323,7 @@ class ExecutorItem(BaseSchema):
     @classmethod
     def of(cls, view: ExecutorView) -> Self:
         return cls(
-            user_id=UserId(view.user.id),
+            user_id=view.user.id,
             name=view.user.name,
             username=view.user.username,
             active_requests=view.active_requests,

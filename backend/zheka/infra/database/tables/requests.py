@@ -41,12 +41,7 @@ requests_table = Table(
         nullable=True,
     ),
     Column("parent_request_id", BigInteger, ForeignKey("requests.id"), nullable=True),
-    Column(
-        "group_id",
-        BigInteger,
-        ForeignKey("request_groups.id"),
-        nullable=True,
-    ),
+    Column("group_id", BigInteger, ForeignKey("request_groups.id"), nullable=True),
     Column("channel", pg_enum(RequestChannel, "request_channel"), nullable=False),
     Column("caller_name", String, nullable=True),
     Column("caller_phone", String, nullable=True),
@@ -76,9 +71,7 @@ request_groups_table = Table(
     Column("category", pg_enum(RequestCategory, "request_category"), nullable=False),
     Column("window_started_at", DateTime(timezone=True), nullable=False),
     Column(
-        "status",
-        pg_enum(RequestGroupStatus, "request_group_status"),
-        nullable=False,
+        "status", pg_enum(RequestGroupStatus, "request_group_status"), nullable=False
     ),
 )
 
@@ -98,11 +91,7 @@ request_status_log_table = Table(
     metadata,
     id_column(),
     Column("request_id", BigInteger, ForeignKey("requests.id"), nullable=False),
-    Column(
-        "from_status",
-        pg_enum(RequestStatus, "request_status"),
-        nullable=True,
-    ),
+    Column("from_status", pg_enum(RequestStatus, "request_status"), nullable=True),
     Column("to_status", pg_enum(RequestStatus, "request_status"), nullable=False),
     Column("by_user_id", BigInteger, ForeignKey("users.id"), nullable=True),
     Column("by_role", String(16), nullable=False),

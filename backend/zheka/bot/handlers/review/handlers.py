@@ -76,8 +76,7 @@ async def on_accept(
 ) -> None:
     try:
         await requests_service.accept(
-            dialog_user_id(dialog_manager),
-            _request_id(dialog_manager),
+            dialog_user_id(dialog_manager), _request_id(dialog_manager)
         )
     except ZhekaError as error:
         await refused(callback, error)
@@ -86,14 +85,12 @@ async def on_accept(
 
 
 async def on_reject(
-    _callback: MessageCallback,
-    _button: Button,
-    dialog_manager: DialogManager,
+    _callback: MessageCallback, _button: Button, dialog_manager: DialogManager
 ) -> None:
     await ask_in_default_stack(
         dialog_manager,
         Review.rejection,
-        ReviewData(request_id=int(_request_id(dialog_manager))).to_data(),
+        ReviewData(request_id=_request_id(dialog_manager)).to_data(),
     )
 
 
@@ -109,10 +106,7 @@ async def on_rating(
 ) -> None:
     try:
         await requests_service.rate(
-            dialog_user_id(dialog_manager),
-            _request_id(dialog_manager),
-            rating,
-            None,
+            dialog_user_id(dialog_manager), _request_id(dialog_manager), rating, None
         )
     except ZhekaError as error:
         await refused(callback, error)
@@ -139,7 +133,7 @@ async def on_rejection(
         # должен стать повторной заявкой по закрытой
         await back_to_menu(dialog_manager, str(error))
         return
-    await back_to_menu(dialog_manager, repeat_sent(RequestId(card.request.id)))
+    await back_to_menu(dialog_manager, repeat_sent(card.request.id))
 
 
 def repeat_sent(request_id: RequestId) -> str:

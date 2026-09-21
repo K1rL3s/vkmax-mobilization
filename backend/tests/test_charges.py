@@ -1,12 +1,11 @@
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
-from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, make_config, make_notifications_service
+from tests.test_requests import _events, _photo
 
 from zheka.core.enums import (
     EventType,
@@ -25,7 +24,7 @@ from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
-from zheka.infra.database.models import Charge, Event, Resident, Tariff
+from zheka.infra.database.models import Charge, Resident, Tariff
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -34,7 +33,6 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
-from zheka.infra.database.tables.events import events_table
 from zheka.infra.yandex import YandexClassifier
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
@@ -98,7 +96,7 @@ async def _add_resident(
             can_see_charges=is_owner,
             can_vote=is_owner,
             verified_at=datetime.now(UTC) if verified else None,
-        ),
+        )
     )
     await session.flush()
 
@@ -130,19 +128,11 @@ async def _add_charge(
     total: int,
 ) -> Charge:
     charge = Charge(
-        flat_id=flat_id,
-        period=period,
-        lines=lines,
-        total=total,
-        is_closed=True,
+        flat_id=flat_id, period=period, lines=lines, total=total, is_closed=True
     )
     session.add(charge)
     await session.flush()
     return charge
-
-
-def _photo() -> str:
-    return f"{uuid4().hex}.jpg"
 
 
 async def _add_reading(
@@ -166,11 +156,6 @@ async def _add_reading(
     )
 
 
-async def _events(session: AsyncSession, event_type: EventType) -> list[Event]:
-    stmt = select(Event).where(events_table.c.type == event_type)
-    return list((await session.execute(stmt)).scalars().all())
-
-
 async def _charge(
     session: AsyncSession,
     own: OrgHouseFlatUser,
@@ -188,8 +173,7 @@ async def _charge(
 
 
 async def test_tariff_at_picks_the_row_with_the_greatest_valid_from_le_period(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_tariff(
@@ -211,8 +195,7 @@ async def test_tariff_at_picks_the_row_with_the_greatest_valid_from_le_period(
 
 
 async def test_tariffs_list_newest_valid_from_first(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_tariff(
@@ -259,28 +242,23 @@ async def test_charges_need_a_verified_resident_with_can_see_charges(
     charge = await _charge(session, own)
 
     with pytest.raises(NotEnoughRights):
-        await _CALLS[call](_make_service(session), ChargeId(charge.id), own.user_id)
+        await _CALLS[call](_make_service(session), charge.id, own.user_id)
 
 
 @pytest.mark.parametrize("call", ["card", "breakdown", "pay"])
 async def test_a_foreign_charge_id_is_not_found(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-    call: str,
+    session: AsyncSession, make_org_house_flat_user: Fixture, call: str
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own)
     other_charge = await _charge(session, await make_org_house_flat_user())
 
     with pytest.raises(EntityNotFound):
-        await _CALLS[call](
-            _make_service(session), ChargeId(other_charge.id), own.user_id
-        )
+        await _CALLS[call](_make_service(session), other_charge.id, own.user_id)
 
 
 async def test_card_lists_the_charge_lines_with_address_and_flat_number(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own)
@@ -294,8 +272,7 @@ async def test_card_lists_the_charge_lines_with_address_and_flat_number(
 
 
 async def test_breakdown_diffs_against_the_charge_one_month_before(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own)
@@ -314,8 +291,7 @@ async def test_breakdown_diffs_against_the_charge_one_month_before(
 
 
 async def test_breakdown_has_no_previous_charge_for_the_first_period(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own)
@@ -335,8 +311,7 @@ async def test_breakdown_has_no_previous_charge_for_the_first_period(
 
 
 async def test_breakdown_includes_the_resident_own_consumption_sparkline(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own)
@@ -358,8 +333,7 @@ async def test_breakdown_includes_the_resident_own_consumption_sparkline(
 
 
 async def test_dispute_creates_a_charge_dispute_request_with_period_photos(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own)
@@ -372,10 +346,7 @@ async def test_dispute_creates_a_charge_dispute_request_with_period_photos(
     charge = await _charge(session, own)
 
     request_id = await _make_service(session).dispute(
-        charge.id,
-        own.user_id,
-        "Почему так много?",
-        None,
+        charge.id, own.user_id, "Почему так много?", None
     )
 
     requests_repo = RequestsRepo(session)
@@ -393,8 +364,7 @@ async def test_dispute_creates_a_charge_dispute_request_with_period_photos(
 
 
 async def test_pay_demo_sets_paid_at_and_refuses_a_second_payment(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own)
@@ -410,8 +380,7 @@ async def test_pay_demo_sets_paid_at_and_refuses_a_second_payment(
 
 
 async def test_list_for_flat_orders_by_period_descending_and_reports_total(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     for month in (1, 3, 2):

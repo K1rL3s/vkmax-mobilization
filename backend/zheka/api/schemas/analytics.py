@@ -62,7 +62,7 @@ class MetersSeasonResponse(BaseSchema):
     window_from: date
     window_to: date
     window_open: bool = Field(
-        description="Окно подачи открыто и период текущий: кнопка напоминания активна",
+        description="Окно подачи открыто и период текущий: кнопка напоминания активна"
     )
     submitted: int
     not_submitted: int
@@ -85,12 +85,10 @@ class ExecutorStatsItem(BaseSchema):
     closed: int
     repeat_share: int = Field(description=_PERCENT)
     median_time: int | None = Field(
-        default=None,
-        description="Медианное время закрытия в минутах",
+        default=None, description="Медианное время закрытия в минутах"
     )
     rating: int | None = Field(
-        default=None,
-        description="Средняя оценка в сотых долях балла",
+        default=None, description="Средняя оценка в сотых долях балла"
     )
 
 
@@ -138,5 +136,5 @@ class BenchmarkResponse(BaseSchema):
         description=(
             "Нет ни своих метрик, ни разрезов, ни неподключенных домов: фронт "
             "показывает пустое состояние"
-        ),
+        )
     )

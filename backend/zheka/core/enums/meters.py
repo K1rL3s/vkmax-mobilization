@@ -30,8 +30,6 @@ class ServiceType(StrEnum):
     RECALCULATION = "recalculation"
 
 
-# русские названия услуг для квитанции, тарифа и разбора начисления - единая
-# таблица, чтобы литерал не разъезжался по местам вызова
 SERVICE_LABELS: Mapping[ServiceType, str] = MappingProxyType(
     {
         ServiceType.COLD_WATER: "Холодная вода",
@@ -47,14 +45,7 @@ SERVICE_LABELS: Mapping[ServiceType, str] = MappingProxyType(
     }
 )
 
-# счетчик какого типа считает расход по какой услуге тарифа - используется и
-# предварительным расчетом при подаче показания, и разбором начисления
+# счетчик какого типа считает расход по какой услуге тарифа: значения совпадают
 SERVICE_OF_METER: Mapping[MeterType, ServiceType] = MappingProxyType(
-    {
-        MeterType.HOT_WATER: ServiceType.HOT_WATER,
-        MeterType.COLD_WATER: ServiceType.COLD_WATER,
-        MeterType.ELECTRICITY: ServiceType.ELECTRICITY,
-        MeterType.GAS: ServiceType.GAS,
-        MeterType.HEATING: ServiceType.HEATING,
-    }
+    {meter_type: ServiceType(meter_type) for meter_type in MeterType}
 )

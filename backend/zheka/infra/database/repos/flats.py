@@ -18,22 +18,19 @@ def _joined_to_flats() -> Select[tuple[VerificationRequest]]:
     # у запроса подтверждения нет своего дома, он достается через квартиру:
     # без этого соединения scoped_to_org не к чему применить
     return select(VerificationRequest).join(
-        flats_table,
-        flats_table.c.id == flat_verification_requests_table.c.flat_id,
+        flats_table, flats_table.c.id == flat_verification_requests_table.c.flat_id
     )
 
 
 class FlatsRepo(BaseAlchemyRepo):
     async def get_verification_request(
-        self,
-        verification_id: VerificationRequestId,
-        org_id: OrgId,
+        self, verification_id: VerificationRequestId, org_id: OrgId
     ) -> VerificationRequest | None:
         # verification_id приходит из пути, поэтому запрос сужается до домов
         # организации: чужой запрос отвечает 404, а не 403
         stmt = scoped_to_org(
             _joined_to_flats().where(
-                flat_verification_requests_table.c.id == verification_id,
+                flat_verification_requests_table.c.id == verification_id
             ),
             flats_table.c.house_id,
             org_id,
@@ -44,9 +41,7 @@ class FlatsRepo(BaseAlchemyRepo):
         return request
 
     async def get_latest_request(
-        self,
-        user_id: UserId,
-        flat_id: FlatId,
+        self, user_id: UserId, flat_id: FlatId
     ) -> VerificationRequest | None:
         stmt = (
             select(VerificationRequest)
@@ -61,9 +56,7 @@ class FlatsRepo(BaseAlchemyRepo):
         return request
 
     async def list_latest_requests(
-        self,
-        user_id: UserId,
-        flat_ids: Collection[FlatId],
+        self, user_id: UserId, flat_ids: Collection[FlatId]
     ) -> Sequence[VerificationRequest]:
         if not flat_ids:
             return []
@@ -108,11 +101,7 @@ class FlatsRepo(BaseAlchemyRepo):
         return result.scalars().all(), total
 
     async def add_verification_request(
-        self,
-        flat_id: FlatId,
-        user_id: UserId,
-        account_no: str,
-        comment: str | None,
+        self, flat_id: FlatId, user_id: UserId, account_no: str, comment: str | None
     ) -> VerificationRequest | None:
         # None означает, что заявка по этой квартире уже ждет решения.
         # Частичный уникальный индекс разводит два параллельных нажатия, а

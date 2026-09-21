@@ -3,14 +3,7 @@ from datetime import date, datetime
 
 from sqlalchemy import func, select
 
-from zheka.core.ids import (
-    AccessRequestId,
-    AccessSlotId,
-    FlatId,
-    HouseId,
-    OrgId,
-    UserId,
-)
+from zheka.core.ids import AccessRequestId, AccessSlotId, FlatId, HouseId, OrgId, UserId
 from zheka.infra.database.models import AccessRequest, AccessSlot, AccessTarget
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.scopes import scoped_to_org
@@ -43,21 +36,19 @@ class AccessRepo(BaseAlchemyRepo):
 
     async def get(self, access_request_id: AccessRequestId) -> AccessRequest:
         stmt = select(AccessRequest).where(
-            access_requests_table.c.id == access_request_id,
+            access_requests_table.c.id == access_request_id
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
     async def get_for_org(
-        self,
-        access_request_id: AccessRequestId,
-        org_id: OrgId,
+        self, access_request_id: AccessRequestId, org_id: OrgId
     ) -> AccessRequest | None:
         # id приходит из пути, поэтому запрос сужается до домов организации:
         # чужой запрос отвечает 404, а не 403
         stmt = scoped_to_org(
             select(AccessRequest).where(
-                access_requests_table.c.id == access_request_id,
+                access_requests_table.c.id == access_request_id
             ),
             access_requests_table.c.house_id,
             org_id,
@@ -66,9 +57,7 @@ class AccessRepo(BaseAlchemyRepo):
         return request
 
     async def list_for_org(
-        self,
-        org_id: OrgId,
-        house_id: HouseId | None,
+        self, org_id: OrgId, house_id: HouseId | None
     ) -> Sequence[AccessRequest]:
         stmt = select(AccessRequest).where(access_requests_table.c.org_id == org_id)
         if house_id is not None:
@@ -78,8 +67,7 @@ class AccessRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def list_for_flat(
-        self,
-        flat_id: FlatId,
+        self, flat_id: FlatId
     ) -> Sequence[tuple[AccessRequest, AccessTarget]]:
         # запрос и своя ячейка в нем одним запросом: без нее жителю нечего
         # подсветить в списке
@@ -96,9 +84,7 @@ class AccessRepo(BaseAlchemyRepo):
         return result.tuples().all()
 
     async def add_slots(
-        self,
-        access_request_id: AccessRequestId,
-        slots: Sequence[tuple[datetime, int]],
+        self, access_request_id: AccessRequestId, slots: Sequence[tuple[datetime, int]]
     ) -> Sequence[AccessSlot]:
         rows = [
             AccessSlot(
@@ -113,9 +99,7 @@ class AccessRepo(BaseAlchemyRepo):
         return rows
 
     async def add_targets(
-        self,
-        access_request_id: AccessRequestId,
-        flat_ids: Sequence[FlatId],
+        self, access_request_id: AccessRequestId, flat_ids: Sequence[FlatId]
     ) -> Sequence[AccessTarget]:
         rows = [
             AccessTarget(access_request_id=access_request_id, flat_id=flat_id)
@@ -126,8 +110,7 @@ class AccessRepo(BaseAlchemyRepo):
         return rows
 
     async def list_slots(
-        self,
-        access_request_ids: Collection[AccessRequestId],
+        self, access_request_ids: Collection[AccessRequestId]
     ) -> Sequence[AccessSlot]:
         stmt = (
             select(AccessSlot)
@@ -138,8 +121,7 @@ class AccessRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def list_targets(
-        self,
-        access_request_id: AccessRequestId,
+        self, access_request_id: AccessRequestId
     ) -> Sequence[AccessTarget]:
         stmt = (
             select(AccessTarget)
@@ -150,14 +132,10 @@ class AccessRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def target_for_flats(
-        self,
-        access_request_id: AccessRequestId,
-        flat_ids: Collection[FlatId],
+        self, access_request_id: AccessRequestId, flat_ids: Collection[FlatId]
     ) -> AccessTarget | None:
         # житель приходит сюда без зависимости о доме, поэтому ячейку ищет
         # его собственная подтвержденная квартира, а не id из тела запроса
-        if not flat_ids:
-            return None
         stmt = select(AccessTarget).where(
             access_targets_table.c.access_request_id == access_request_id,
             access_targets_table.c.flat_id.in_(flat_ids),
@@ -166,9 +144,7 @@ class AccessRepo(BaseAlchemyRepo):
         return target
 
     async def lock_slot(
-        self,
-        access_request_id: AccessRequestId,
-        slot_id: AccessSlotId,
+        self, access_request_id: AccessRequestId, slot_id: AccessSlotId
     ) -> AccessSlot | None:
         # вместимость больше единицы, поэтому уникальный индекс ее не удержит:
         # блокировка строки слота выстраивает выборы этого окна в очередь
@@ -193,10 +169,7 @@ class AccessRepo(BaseAlchemyRepo):
         return result.scalar_one()
 
     async def pick(
-        self,
-        target: AccessTarget,
-        slot_id: AccessSlotId,
-        at: datetime,
+        self, target: AccessTarget, slot_id: AccessSlotId, at: datetime
     ) -> None:
         target.slot_id = slot_id
         # ответил житель один раз: смена решения не новый ответ, и счетчик
@@ -206,8 +179,7 @@ class AccessRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def picks_by_slot(
-        self,
-        access_request_ids: Collection[AccessRequestId],
+        self, access_request_ids: Collection[AccessRequestId]
     ) -> dict[AccessSlotId, int]:
         stmt = (
             select(access_targets_table.c.slot_id, func.count())
@@ -221,8 +193,7 @@ class AccessRepo(BaseAlchemyRepo):
         return {AccessSlotId(slot_id): count for slot_id, count in result.tuples()}
 
     async def counters(
-        self,
-        access_request_ids: Collection[AccessRequestId],
+        self, access_request_ids: Collection[AccessRequestId]
     ) -> dict[AccessRequestId, tuple[int, int]]:
         stmt = (
             select(
@@ -230,9 +201,7 @@ class AccessRepo(BaseAlchemyRepo):
                 func.count(access_targets_table.c.responded_at),
                 func.count(),
             )
-            .where(
-                access_targets_table.c.access_request_id.in_(access_request_ids),
-            )
+            .where(access_targets_table.c.access_request_id.in_(access_request_ids))
             .group_by(access_targets_table.c.access_request_id)
         )
         result = await self._session.execute(stmt)

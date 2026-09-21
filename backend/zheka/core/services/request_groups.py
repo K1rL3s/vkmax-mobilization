@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core.enums import EventType, RequestCategory
-from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
+from zheka.core.ids import FlatId, HouseId, RequestGroupId, UserId
 from zheka.core.models import OrgSettings, Request
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -28,12 +28,10 @@ class SimilarRequests(ZhekaType):
 def rules_of(settings: OrgSettings | None) -> GroupingRules:
     if settings is None:
         return GroupingRules(
-            threshold=DEFAULT_GROUP_THRESHOLD,
-            window_hours=DEFAULT_GROUP_WINDOW_HOURS,
+            threshold=DEFAULT_GROUP_THRESHOLD, window_hours=DEFAULT_GROUP_WINDOW_HOURS
         )
     return GroupingRules(
-        threshold=settings.group_threshold,
-        window_hours=settings.group_window_hours,
+        threshold=settings.group_threshold, window_hours=settings.group_window_hours
     )
 
 
@@ -56,45 +54,35 @@ class GroupingService:
     __slots__ = ("_events", "_requests")
 
     def __init__(
-        self,
-        requests_repo: RequestsRepo,
-        events_service: EventsService,
+        self, requests_repo: RequestsRepo, events_service: EventsService
     ) -> None:
         self._requests = requests_repo
         self._events = events_service
 
     async def attach(
-        self,
-        request: Request,
-        rules: GroupingRules,
-        now: datetime,
-    ) -> RequestGroupId | None:
+        self, request: Request, rules: GroupingRules, now: datetime
+    ) -> None:
         # склейка считается на записи, до того как житель увидит заявку:
         # иначе вместо кнопки «присоединиться» ему нечего показать
         since = now - timedelta(hours=rules.window_hours)
-        house_id = HouseId(request.house_id)
+        house_id = request.house_id
         group = await self._requests.find_open_group(house_id, request.category, since)
         if group is not None:
-            group_id = RequestGroupId(group.id)
-            await self._requests.attach_to_group([request], group_id)
-            await self.joined(request, group_id)
-            return group_id
+            await self._requests.attach_to_group([request], group.id)
+            await self.joined(request, group.id)
+            return
 
         open_requests = await self._requests.list_open_in_window(
-            house_id,
-            request.category,
-            since,
+            house_id, request.category, since
         )
-        sources = complaint_sources(open_requests)
-        if len(sources) < rules.threshold:
-            return None
+        if len(complaint_sources(open_requests)) < rules.threshold:
+            return
 
         # окно группы начинается с самой ранней из собранных заявок, а не
         # с «сейчас»: иначе следующая жалоба посчитает окно заново
         oldest = min(item.created_at for item in open_requests)
         group = await self._requests.create_group(house_id, request.category, oldest)
-        group_id = RequestGroupId(group.id)
-        await self._requests.attach_to_group(open_requests, group_id)
+        await self._requests.attach_to_group(open_requests, group.id)
         await self._events.record(
             EventType.REQUEST_GROUP_FORMED,
             user_id=request.author_user_id,
@@ -102,7 +90,6 @@ class GroupingService:
             category=request.category.value,
             size=len(open_requests),
         )
-        return group_id
 
     async def similar(
         self,
@@ -110,16 +97,14 @@ class GroupingService:
         category: RequestCategory,
         rules: GroupingRules,
         now: datetime,
-        exclude_flat_id: FlatId | None = None,
-        exclude_user_id: UserId | None = None,
+        exclude_flat_id: FlatId | None,
+        exclude_user_id: UserId,
     ) -> SimilarRequests:
         # тот же набор, что считает склейка, но ничего не пишет
         since = now - timedelta(hours=rules.window_hours)
         group = await self._requests.find_open_group(house_id, category, since)
         open_requests = await self._requests.list_open_in_window(
-            house_id,
-            category,
-            since,
+            house_id, category, since
         )
         # «пожаловались N соседей» - соседей, а не считая себя
         sources = complaint_sources(open_requests) - {
@@ -129,7 +114,7 @@ class GroupingService:
         return SimilarRequests(
             category=category,
             flats_count=len(sources),
-            group_id=None if group is None else RequestGroupId(group.id),
+            group_id=None if group is None else group.id,
             window_started_at=(
                 group.window_started_at
                 if group is not None
@@ -142,7 +127,7 @@ class GroupingService:
         await self._events.record(
             EventType.REQUEST_JOINED,
             user_id=request.author_user_id,
-            request_id=RequestId(request.id),
+            request_id=request.id,
             group_id=group_id,
             group_size=sizes.get(group_id, 0),
         )

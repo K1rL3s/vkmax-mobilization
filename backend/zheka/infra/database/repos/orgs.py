@@ -40,8 +40,7 @@ class OrgsRepo(BaseAlchemyRepo):
 
     async def get_member(self, org_id: OrgId, user_id: UserId) -> OrgMember | None:
         stmt = select(OrgMember).where(
-            org_members_table.c.org_id == org_id,
-            org_members_table.c.user_id == user_id,
+            org_members_table.c.org_id == org_id, org_members_table.c.user_id == user_id
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -73,20 +72,16 @@ class OrgsRepo(BaseAlchemyRepo):
         return result.scalar_one()
 
     async def add_member(
-        self,
-        org_id: OrgId,
-        user_id: UserId,
-        role: OrgRole,
+        self, org_id: OrgId, user_id: UserId, role: OrgRole
     ) -> OrgMember:
         member = OrgMember(org_id=org_id, user_id=user_id, role=role)
         self._session.add(member)
         await self._session.flush()
         return member
 
-    async def set_member_role(self, member: OrgMember, role: OrgRole) -> OrgMember:
+    async def set_member_role(self, member: OrgMember, role: OrgRole) -> None:
         member.role = role
         await self._session.flush()
-        return member
 
     async def remove_member(self, member: OrgMember) -> None:
         await self._session.delete(member)
@@ -99,10 +94,7 @@ class OrgsRepo(BaseAlchemyRepo):
         return settings
 
     async def add_member_or_get(
-        self,
-        org_id: OrgId,
-        user_id: UserId,
-        role: OrgRole,
+        self, org_id: OrgId, user_id: UserId, role: OrgRole
     ) -> OrgMember:
         # второе нажатие того же диплинка разводит уникальный индекс
         # (org_id, user_id), и прежняя роль остается как была
@@ -110,10 +102,7 @@ class OrgsRepo(BaseAlchemyRepo):
             pg_insert(OrgMember)
             .values(org_id=org_id, user_id=user_id, role=role)
             .on_conflict_do_nothing(
-                index_elements=[
-                    org_members_table.c.org_id,
-                    org_members_table.c.user_id,
-                ],
+                index_elements=[org_members_table.c.org_id, org_members_table.c.user_id]
             )
             .returning(OrgMember)
         )

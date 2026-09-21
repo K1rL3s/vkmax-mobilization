@@ -29,11 +29,7 @@ residents_table = Table(
     Column("flat_number", String(16), nullable=True),
     Column("role", pg_enum(ResidentRole, "resident_role"), nullable=False),
     Column(
-        "can_see_charges",
-        Boolean,
-        default=True,
-        server_default=true(),
-        nullable=False,
+        "can_see_charges", Boolean, default=True, server_default=true(), nullable=False
     ),
     Column("can_vote", Boolean, default=True, server_default=true(), nullable=False),
     Column("verified_at", DateTime(timezone=True), nullable=True),
@@ -47,11 +43,7 @@ residents_table = Table(
     ),
     Column("block_reason", String, nullable=True),
     Column(
-        "is_chairman",
-        Boolean,
-        default=False,
-        server_default=false(),
-        nullable=False,
+        "is_chairman", Boolean, default=False, server_default=false(), nullable=False
     ),
     UniqueConstraint("user_id", "house_id"),
 )
@@ -66,9 +58,7 @@ flat_verification_requests_table = Table(
     Column("account_no", String, nullable=False),
     Column("comment", String, nullable=True),
     Column(
-        "status",
-        pg_enum(VerificationStatus, "verification_status"),
-        nullable=False,
+        "status", pg_enum(VerificationStatus, "verification_status"), nullable=False
     ),
     Column("decided_by", BigInteger, ForeignKey("users.id"), nullable=True),
     Column("decided_at", DateTime(timezone=True), nullable=True),

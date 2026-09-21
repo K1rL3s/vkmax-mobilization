@@ -3,26 +3,26 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 
 from zheka.base import ZhekaType
-from zheka.core.enums import (
-    CATEGORY_RULES,
-    AnalyticsMetric,
-    MetricUnit,
-    RequestChannel,
+from zheka.core.enums import CATEGORY_RULES, AnalyticsMetric, MetricUnit, RequestChannel
+from zheka.core.errors import (
+    HOUSE_NOT_FOUND,
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
 )
-from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
 from zheka.core.ids import HouseId, OrgId
 from zheka.core.models import OrgSettings
 from zheka.core.services.readings import window_accepts, window_period
 from zheka.core.services.reminders import RemindersService
 from zheka.infra.database.repos.analytics import (
     AnalyticsRepo,
+    ChannelRow,
     ExecutorRow,
     SeasonCount,
 )
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 
-HOUSE_NOT_FOUND = "Дом не найден"
 ORG_NOT_FOUND = "Организация не найдена"
 WINDOW_CLOSED = "Прием показаний закрыт, напомнить можно только в окно подачи"
 WRONG_PERIOD = "Напомнить можно только о периоде, который принимается сейчас"
@@ -134,15 +134,9 @@ class Season(ZhekaType):
     is_empty: bool
 
 
-class ChannelItem(ZhekaType):
-    channel: RequestChannel
-    count: int
-    share: int
-
-
 class Channels(ZhekaType):
     total: int
-    items: list[ChannelItem]
+    items: list[ChannelRow]
     is_empty: bool
 
 
@@ -182,9 +176,7 @@ def _start_of(day: date) -> datetime:
 
 
 def _range(
-    date_from: date | None,
-    date_to: date | None,
-    now: datetime,
+    date_from: date | None, date_to: date | None, now: datetime
 ) -> tuple[date, date]:
     period_to = now.date() if date_to is None else date_to
     period_from = period_to - DEFAULT_PERIOD if date_from is None else date_from
@@ -296,12 +288,7 @@ class AnalyticsService:
             and not any(point.value for chart in charts for point in chart.points),
         )
 
-    async def season(
-        self,
-        org_id: OrgId,
-        period: date | None,
-        now: datetime,
-    ) -> Season:
+    async def season(self, org_id: OrgId, period: date | None, now: datetime) -> Season:
         settings = await self._orgs.get_settings(org_id)
         today = now.date()
         # период окна, а не календарный месяц: окно через конец месяца
@@ -311,16 +298,16 @@ class AnalyticsService:
         counts = await self._analytics.season(org_id, period)
         houses = []
         for house in await self._houses.list_for_org(org_id):
-            count = counts.get(HouseId(house.id), _NO_FLATS)
+            count = counts.get(house.id, _NO_FLATS)
             houses.append(
                 SeasonHouse(
-                    house_id=HouseId(house.id),
+                    house_id=house.id,
                     address=house.address,
                     flats_total=count.flats_total,
                     submitted=count.submitted,
                     not_submitted=count.flats_total - count.submitted,
                     percent=count.percent,
-                ),
+                )
             )
         window_from, window_to = _window(period, settings)
         return Season(
@@ -353,47 +340,29 @@ class AnalyticsService:
         if house_ids:
             await self._own_houses(org_id, house_ids)
         else:
-            house_ids = [
-                HouseId(house.id) for house in await self._houses.list_for_org(org_id)
-            ]
+            house_ids = [house.id for house in await self._houses.list_for_org(org_id)]
         return await self._reminders.remind_reading_laggards(house_ids, current, now)
 
     async def executors(
-        self,
-        org_id: OrgId,
-        date_from: date | None,
-        date_to: date | None,
-        now: datetime,
+        self, org_id: OrgId, date_from: date | None, date_to: date | None, now: datetime
     ) -> list[ExecutorRow]:
         period_from, period_to = _range(date_from, date_to, now)
         return await self._analytics.by_executor(
-            org_id,
-            _start_of(period_from),
-            _start_of(period_to + timedelta(days=1)),
+            org_id, _start_of(period_from), _start_of(period_to + timedelta(days=1))
         )
 
     async def channels(
-        self,
-        org_id: OrgId,
-        date_from: date | None,
-        date_to: date | None,
-        now: datetime,
+        self, org_id: OrgId, date_from: date | None, date_to: date | None, now: datetime
     ) -> Channels:
         period_from, period_to = _range(date_from, date_to, now)
         rows = {
             row.channel: row
             for row in await self._analytics.by_channel(
-                org_id,
-                _start_of(period_from),
-                _start_of(period_to + timedelta(days=1)),
+                org_id, _start_of(period_from), _start_of(period_to + timedelta(days=1))
             )
         }
         items = [
-            ChannelItem(
-                channel=channel,
-                count=0 if channel not in rows else rows[channel].count,
-                share=0 if channel not in rows else rows[channel].share,
-            )
+            rows.get(channel, ChannelRow(channel=channel, count=0, share=0))
             for channel in RequestChannel
         ]
         total = sum(item.count for item in items)
@@ -412,7 +381,6 @@ class AnalyticsService:
                 lower_is_better=spec.lower_is_better,
                 is_demo=org.is_demo,
                 since=since,
-                until=now,
                 now=now,
             )
             if rank is None:
@@ -429,14 +397,13 @@ class AnalyticsService:
                     platform_median=rank.median if comparable else None,
                     rank=rank.rank if comparable else None,
                     total=rank.total if comparable else None,
-                ),
+                )
             )
         cuts = await self._analytics.cuts(
             CUT_METRIC.metric,
             is_demo=org.is_demo,
             min_orgs=MIN_ORGS_FOR_CUT,
             since=since,
-            until=now,
             now=now,
         )
         unconnected = await self._analytics.unconnected_houses(UNCONNECTED_LIMIT)
@@ -454,9 +421,7 @@ class AnalyticsService:
             ],
             unconnected_houses=[
                 UnconnectedHouse(
-                    house_id=HouseId(house.id),
-                    address=house.address,
-                    waiting=waiting,
+                    house_id=house.id, address=house.address, waiting=waiting
                 )
                 for house, waiting in unconnected
             ],

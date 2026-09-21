@@ -3,8 +3,14 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core.enums import AppointmentStatus, EventType
-from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
-from zheka.core.ids import AppointmentId, FlatId, HouseId, OrgId, RequestId, UserId
+from zheka.core.errors import (
+    HOUSE_NOT_FOUND,
+    REQUEST_NOT_FOUND,
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+)
+from zheka.core.ids import AppointmentId, HouseId, OrgId, RequestId, UserId
 from zheka.core.models import Appointment, ReceptionWindow
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.houses import HousesRepo
@@ -21,9 +27,7 @@ LAST_WEEKDAY = 6
 MIN_SLOT_MINUTES = 5
 MAX_SLOT_MINUTES = 240
 
-HOUSE_NOT_FOUND = "Дом не найден"
 APPOINTMENT_NOT_FOUND = "Запись на прием не найдена"
-REQUEST_NOT_FOUND = "Заявка не найдена"
 SLOT_TAKEN = "Слот уже занят"
 SLOT_UNKNOWN = "Такого слота нет"
 ALREADY_DONE = "Прием уже состоялся"
@@ -63,20 +67,16 @@ def expand_slots(window: ReceptionWindow, day: date) -> list[datetime]:
     if window.slot_minutes <= 0:
         return []
     step = timedelta(minutes=window.slot_minutes)
-    ends_at = datetime.combine(day, window.time_to, tzinfo=UTC)
     starts_at = datetime.combine(day, window.time_from, tzinfo=UTC)
-    slots = []
+    ends_at = datetime.combine(day, window.time_to, tzinfo=UTC)
     # хвост окна короче слота не предлагается
-    while starts_at + step <= ends_at:
-        slots.append(starts_at)
-        starts_at += step
-    return slots
+    return [
+        starts_at + step * number for number in range((ends_at - starts_at) // step)
+    ]
 
 
 def slot_capacities(
-    windows: Sequence[ReceptionWindow],
-    date_from: date,
-    date_to: date,
+    windows: Sequence[ReceptionWindow], date_from: date, date_to: date
 ) -> dict[datetime, int]:
     # одно и то же время может попасть в два окна дня: мест в нем столько,
     # сколько дает самое просторное из них
@@ -136,10 +136,7 @@ class ReceptionService:
         self._events = events_service
 
     async def slots(
-        self,
-        house_id: HouseId,
-        date_from: date,
-        date_to: date,
+        self, house_id: HouseId, date_from: date, date_to: date
     ) -> list[ReceptionSlot]:
         house = await self._houses.get(house_id)
         if house is None:
@@ -148,7 +145,7 @@ class ReceptionService:
         # пустую сетку, как и у организации без часов приема
         if house.org_id is None:
             return []
-        org_id = OrgId(house.org_id)
+        org_id = house.org_id
         windows = await self._reception.list_windows(org_id)
         taken = await self._reception.taken_counts(org_id, date_from, date_to)
         capacities = slot_capacities(windows, date_from, date_to)
@@ -156,10 +153,7 @@ class ReceptionService:
         # прошедший слот не выбор, а полный - выбор чужой: его видно серым
         now = datetime.now(UTC)
         return [
-            ReceptionSlot(
-                starts_at=moment,
-                is_free=taken.get(moment, 0) < capacity,
-            )
+            ReceptionSlot(starts_at=moment, is_free=taken.get(moment, 0) < capacity)
             for moment, capacity in sorted(capacities.items())
             if moment > now
         ]
@@ -176,7 +170,7 @@ class ReceptionService:
             raise EntityNotFound(HOUSE_NOT_FOUND)
         if house.org_id is None:
             raise InvalidState(SLOT_UNKNOWN)
-        org_id = OrgId(house.org_id)
+        org_id = house.org_id
 
         moment = as_utc(starts_at)
         day = moment.date()
@@ -204,20 +198,16 @@ class ReceptionService:
                 raise EntityNotFound(REQUEST_NOT_FOUND)
 
         appointment = await self._reception.create_appointment(
-            org_id,
-            house_id,
-            user_id,
-            moment,
-            request_id,
+            org_id, house_id, user_id, moment, request_id
         )
         await self._events.record(
             EventType.APPOINTMENT_BOOKED,
             user_id=user_id,
-            appointment_id=AppointmentId(appointment.id),
+            appointment_id=appointment.id,
             has_request=request_id is not None,
         )
-        rows = await self._decorate([appointment], with_people=False)
-        return rows[0]
+        [row] = await self._decorate([appointment], with_people=False)
+        return row
 
     async def cancel(self, appointment_id: AppointmentId, user_id: UserId) -> None:
         appointment = await self._reception.get_for_user(appointment_id, user_id)
@@ -235,10 +225,7 @@ class ReceptionService:
         return await self._decorate(appointments, with_people=False)
 
     async def today(
-        self,
-        org_id: OrgId,
-        on_date: date | None,
-        house_id: HouseId | None,
+        self, org_id: OrgId, on_date: date | None, house_id: HouseId | None
     ) -> list[AppointmentData]:
         if (
             house_id is not None
@@ -253,9 +240,7 @@ class ReceptionService:
         return await self._reception.list_windows(org_id)
 
     async def set_windows(
-        self,
-        org_id: OrgId,
-        drafts: Sequence[ReceptionWindowDraft],
+        self, org_id: OrgId, drafts: Sequence[ReceptionWindowDraft]
     ) -> Sequence[ReceptionWindow]:
         # окна проверяются поодиночке: несколько окон в один день - это
         # обеденный перерыв, обычная форма работы кабинета
@@ -284,31 +269,29 @@ class ReceptionService:
         )
 
     async def _decorate(
-        self,
-        appointments: Sequence[Appointment],
-        *,
-        with_people: bool,
+        self, appointments: Sequence[Appointment], *, with_people: bool
     ) -> list[AppointmentData]:
         if not appointments:
             return []
-        house_ids = {HouseId(row.house_id) for row in appointments}
+        house_ids = {row.house_id for row in appointments}
         houses = {
-            HouseId(house.id): house
-            for house in await self._houses.list_by_ids(house_ids)
+            house.id: house for house in await self._houses.list_by_ids(house_ids)
         }
         orgs = {
-            OrgId(org.id): org
+            org.id: org
             for org in await self._orgs.list_by_ids(
-                {OrgId(row.org_id) for row in appointments},
+                {row.org_id for row in appointments}
             )
         }
-        names, flat_numbers = await self._people(appointments, with_people=with_people)
+        names, flat_numbers = (
+            await self._people(appointments) if with_people else ({}, {})
+        )
 
         rows = []
         for appointment in appointments:
-            house = houses[HouseId(appointment.house_id)]
-            org = orgs[OrgId(appointment.org_id)]
-            user_id = UserId(appointment.user_id)
+            house = houses[appointment.house_id]
+            org = orgs[appointment.org_id]
+            user_id = appointment.user_id
             rows.append(
                 AppointmentData(
                     appointment=appointment,
@@ -316,46 +299,33 @@ class ReceptionService:
                     org_address=org.address,
                     org_phone=org.phone,
                     user_name=names.get(user_id),
-                    flat_number=flat_numbers.get(
-                        (user_id, HouseId(appointment.house_id)),
-                    ),
-                ),
+                    flat_number=flat_numbers.get((user_id, appointment.house_id)),
+                )
             )
         return rows
 
     async def _people(
-        self,
-        appointments: Sequence[Appointment],
-        *,
-        with_people: bool,
+        self, appointments: Sequence[Appointment]
     ) -> tuple[dict[UserId, str], dict[tuple[UserId, HouseId], str | None]]:
-        if not with_people:
-            return {}, {}
-        user_ids = {UserId(row.user_id) for row in appointments}
-        house_ids = {HouseId(row.house_id) for row in appointments}
-        names = {
-            UserId(user.id): user.name
-            for user in await self._users.list_by_ids(user_ids)
-        }
-        residents = await self._residents.list_for_houses_and_users(
-            house_ids,
-            user_ids,
-        )
+        user_ids = {row.user_id for row in appointments}
+        house_ids = {row.house_id for row in appointments}
+        names = {user.id: user.name for user in await self._users.list_by_ids(user_ids)}
+        residents = await self._residents.list_for_houses_and_users(house_ids, user_ids)
         numbers = {
-            FlatId(flat.id): flat.number
+            flat.id: flat.number
             for flat in await self._houses.list_flats_by_ids(
                 {
-                    FlatId(resident.flat_id)
+                    resident.flat_id
                     for resident in residents
                     if resident.flat_id is not None
-                },
+                }
             )
         }
         # неподтвержденный житель называет квартиру строкой, и это все,
         # что о нем известно УК до подтверждения
         flat_numbers = {
-            (UserId(resident.user_id), HouseId(resident.house_id)): (
-                numbers.get(FlatId(resident.flat_id))
+            (resident.user_id, resident.house_id): (
+                numbers.get(resident.flat_id)
                 if resident.flat_id is not None
                 else resident.flat_number
             )

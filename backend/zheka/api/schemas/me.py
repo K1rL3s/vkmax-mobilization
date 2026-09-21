@@ -27,7 +27,7 @@ class MeResponse(BaseSchema):
     @classmethod
     def of(cls, view: MeView) -> Self:
         return cls(
-            user_id=UserId(view.user.id),
+            user_id=view.user.id,
             name=view.user.name,
             consent_at=view.user.consent_at,
             consent_version=view.user.consent_version,
@@ -57,7 +57,7 @@ class NotificationSettingsResponse(BaseSchema):
             settings=[
                 NotificationSettingItem(category=category, level=level)
                 for category, level in levels.items()
-            ],
+            ]
         )
 
 

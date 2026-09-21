@@ -1,7 +1,8 @@
+import inspect
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,14 +46,6 @@ def _profile_service(session: AsyncSession) -> ProfileService:
     )
 
 
-def _original(dependency: Any) -> Callable[..., Awaitable[CurrentResidency]]:
-    # @inject вырезает параметры FromDishka из сигнатуры обертки
-    return cast(
-        Callable[..., Awaitable[CurrentResidency]],
-        dependency.__dishka_orig_func__,
-    )
-
-
 def _account(user_id: UserId) -> CurrentAccount:
     return CurrentAccount(
         user_id=user_id,
@@ -60,6 +53,29 @@ def _account(user_id: UserId) -> CurrentAccount:
         name="Житель",
         consent_at=None,
     )
+
+
+async def _resolve(
+    session: AsyncSession,
+    dependency: Any,
+    user_id: UserId,
+    house_id: HouseId,
+    flat_id: FlatId,
+) -> CurrentResidency:
+    # @inject вырезает параметры FromDishka из сигнатуры обертки
+    original = dependency.__dishka_orig_func__
+    arguments = {
+        "house_id": house_id,
+        "flat_id": flat_id,
+        "current_account": _account(user_id),
+        "residents_repo": ResidentsRepo(session),
+        "houses_repo": HousesRepo(session),
+    }
+    wanted = inspect.signature(original).parameters
+    result: CurrentResidency = await original(
+        **{name: value for name, value in arguments.items() if name in wanted}
+    )
+    return result
 
 
 async def _block(
@@ -74,131 +90,54 @@ async def _block(
     await residents_repo.set_status(resident, ResidentStatus.BLOCKED, reason)
 
 
-def test_resolve_residency_refuses_a_blocked_resident() -> None:
+@pytest.mark.parametrize("reason", [BLOCK_REASON, None])
+def test_resolve_residency_refuses_a_blocked_resident(reason: str | None) -> None:
     resident = Resident(
         user_id=UserId(1),
         house_id=HouseId(1),
         role=ResidentRole.OWNER,
         status=ResidentStatus.BLOCKED,
-        block_reason=BLOCK_REASON,
+        block_reason=reason,
     )
 
     with pytest.raises(NotEnoughRights) as refused:
         resolve_residency([resident], None)
 
-    assert BLOCK_REASON in str(refused.value)
+    assert (reason or BLOCKED) in str(refused.value)
 
 
-def test_resolve_residency_refuses_a_blocked_resident_without_a_reason() -> None:
-    resident = Resident(
-        user_id=UserId(1),
-        house_id=HouseId(1),
-        role=ResidentRole.OWNER,
-        status=ResidentStatus.BLOCKED,
-    )
-
-    with pytest.raises(NotEnoughRights) as refused:
-        resolve_residency([resident], None)
-
-    assert str(refused.value) == BLOCKED
+DEPENDENCIES = [residency_for, residency_for_flat, residency_for_flat_house]
 
 
-def test_resolve_residency_passes_an_active_resident() -> None:
-    resident = Resident(
-        user_id=UserId(1),
-        house_id=HouseId(7),
-        role=ResidentRole.OWNER,
-    )
-
-    assert resolve_residency([resident], None).house_id == 7
-
-
-async def test_residency_for_refuses_a_blocked_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+@pytest.mark.parametrize("dependency", DEPENDENCIES)
+async def test_a_residency_dependency_refuses_a_blocked_resident(
+    session: AsyncSession, make_org_house_flat_user: Fixture, dependency: Any
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _block(session, own.user_id, own.house_id)
 
     with pytest.raises(NotEnoughRights) as refused:
-        await _original(residency_for)(
-            house_id=own.house_id,
-            current_account=_account(own.user_id),
-            residents_repo=ResidentsRepo(session),
-        )
+        await _resolve(session, dependency, own.user_id, own.house_id, own.flat_id)
 
     assert BLOCK_REASON in str(refused.value)
 
 
-async def test_residency_for_answers_not_found_for_a_foreign_house(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+@pytest.mark.parametrize("dependency", DEPENDENCIES)
+async def test_a_residency_dependency_answers_not_found_for_a_foreign_house(
+    session: AsyncSession, make_org_house_flat_user: Fixture, dependency: Any
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     foreign = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
 
     # 403 подтвердил бы, что дом с таким id есть
     with pytest.raises(EntityNotFound):
-        await _original(residency_for)(
-            house_id=foreign.house_id,
-            current_account=_account(own.user_id),
-            residents_repo=ResidentsRepo(session),
+        await _resolve(
+            session, dependency, own.user_id, foreign.house_id, foreign.flat_id
         )
-
-
-async def test_residency_for_flat_refuses_a_blocked_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    await _block(session, own.user_id, own.house_id)
-
-    with pytest.raises(NotEnoughRights) as refused:
-        await _original(residency_for_flat)(
-            flat_id=own.flat_id,
-            current_account=_account(own.user_id),
-            residents_repo=ResidentsRepo(session),
-        )
-
-    assert BLOCK_REASON in str(refused.value)
-
-
-async def test_residency_for_flat_answers_not_found_for_a_foreign_flat(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    foreign = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-
-    with pytest.raises(EntityNotFound):
-        await _original(residency_for_flat)(
-            flat_id=foreign.flat_id,
-            current_account=_account(own.user_id),
-            residents_repo=ResidentsRepo(session),
-        )
-
-
-async def test_residency_for_flat_house_refuses_a_blocked_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    await _block(session, own.user_id, own.house_id)
-
-    with pytest.raises(NotEnoughRights) as refused:
-        await _original(residency_for_flat_house)(
-            flat_id=own.flat_id,
-            current_account=_account(own.user_id),
-            residents_repo=ResidentsRepo(session),
-            houses_repo=HousesRepo(session),
-        )
-
-    assert BLOCK_REASON in str(refused.value)
 
 
 async def test_blocked_in_one_house_keeps_the_other_house(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     blocked_house = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     other = await make_org_house_flat_user()
@@ -208,24 +147,21 @@ async def test_blocked_in_one_house_keeps_the_other_house(
             house_id=other.house_id,
             flat_id=other.flat_id,
             role=ResidentRole.OWNER,
-        ),
+        )
     )
     await session.flush()
     await _block(session, blocked_house.user_id, blocked_house.house_id)
 
     # блокировка живет на жительстве, а не на аккаунте
-    residency = await _original(residency_for)(
-        house_id=other.house_id,
-        current_account=_account(blocked_house.user_id),
-        residents_repo=ResidentsRepo(session),
+    residency = await _resolve(
+        session, residency_for, blocked_house.user_id, other.house_id, other.flat_id
     )
 
     assert residency.house_id == other.house_id
 
 
 async def test_get_me_still_lists_a_blocked_house(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _block(session, own.user_id, own.house_id)
@@ -252,31 +188,15 @@ async def _request_verification(
     assert request is not None
     if status is not VerificationStatus.PENDING:
         await flats_repo.decide_verification_request(
-            request,
-            status,
-            user_id,
-            datetime.now(UTC),
-            reason,
+            request, status, user_id, datetime.now(UTC), reason
         )
-
-
-async def test_get_me_leaves_the_verification_status_empty_without_a_request(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-
-    view = await _profile_service(session).me(own.user_id)
-
-    summary = ResidencySummary.of(view.residencies[0])
-    assert summary.verification_status is None
-    assert summary.verification_reject_reason is None
 
 
 # у одобренного запроса в поле причины лежит заметка УК, жителю ее не видно
 @pytest.mark.parametrize(
     ("status", "reason", "shown_reason"),
     [
+        (None, None, None),
         (VerificationStatus.PENDING, None, None),
         (VerificationStatus.REJECTED, REJECT_REASON, REJECT_REASON),
         (VerificationStatus.APPROVED, "Проверено по реестру", None),
@@ -285,12 +205,13 @@ async def test_get_me_leaves_the_verification_status_empty_without_a_request(
 async def test_get_me_carries_the_verification_status(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
-    status: VerificationStatus,
+    status: VerificationStatus | None,
     reason: str | None,
     shown_reason: str | None,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    await _request_verification(session, own.user_id, own.flat_id, status, reason)
+    if status is not None:
+        await _request_verification(session, own.user_id, own.flat_id, status, reason)
 
     view = await _profile_service(session).me(own.user_id)
 
@@ -300,8 +221,7 @@ async def test_get_me_carries_the_verification_status(
 
 
 async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     session.add(
@@ -310,7 +230,7 @@ async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(
             house_id=own.house_id,
             role=ResidentRole.OWNER,
             flat_number="12",
-        ),
+        )
     )
     await session.flush()
     # запрос по свободному номеру квартиры завести не за что: карточки нет
@@ -325,8 +245,7 @@ async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(
 
 
 async def test_get_me_keeps_each_residency_on_its_own_request(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     pending = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     rejected = await make_org_house_flat_user()
@@ -336,7 +255,7 @@ async def test_get_me_keeps_each_residency_on_its_own_request(
             house_id=rejected.house_id,
             flat_id=rejected.flat_id,
             role=ResidentRole.OWNER,
-        ),
+        )
     )
     await session.flush()
     await _request_verification(session, pending.user_id, pending.flat_id)

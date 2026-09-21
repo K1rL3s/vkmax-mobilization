@@ -37,20 +37,16 @@ class AppointmentItem(BaseSchema):
     def of(cls, data: AppointmentData) -> Self:
         appointment = data.appointment
         return cls(
-            id=AppointmentId(appointment.id),
+            id=appointment.id,
             created_at=appointment.created_at,
-            org_id=OrgId(appointment.org_id),
-            house_id=HouseId(appointment.house_id),
+            org_id=appointment.org_id,
+            house_id=appointment.house_id,
             address=data.address,
             starts_at=appointment.starts_at,
             status=appointment.status,
             org_address=data.org_address,
             org_phone=data.org_phone,
-            request_id=(
-                None
-                if appointment.request_id is None
-                else RequestId(appointment.request_id)
-            ),
+            request_id=appointment.request_id,
             user_name=data.user_name,
             flat_number=data.flat_number,
         )

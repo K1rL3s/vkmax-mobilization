@@ -35,12 +35,11 @@ class DbConfig(ZhekaType):
     user: str
     password: str
     name: str
-    driver: str = "postgresql+psycopg"
 
     @property
     def url(self) -> URL:
         return URL.create(
-            drivername=self.driver,
+            drivername="postgresql+psycopg",
             username=self.user,
             password=self.password,
             host=self.host,
@@ -98,86 +97,49 @@ def load_config(env_path: str | None = None) -> Config:
     env = Env()
     env.read_env(env_path, recurse=True)
 
+    # без умолчания: молча работающий пустой секрет хуже ошибки на старте
+    org_register = env.str("DEEPLINK_ORG_REGISTER")
+    # secrets.compare_digest бросает TypeError на не-ASCII, то есть 500 на запросе
+    if not org_register.isascii():
+        raise ValueError("DEEPLINK_ORG_REGISTER должен состоять только из ASCII")
+
     config = Config(
-        log=_load_log(env),
-        api=_load_api(env),
-        db=_load_db(env),
-        redis=_load_redis(env),
-        max=_load_max(env),
-        files=_load_files(env),
-        deeplinks=_load_deeplinks(env),
-        yandex=_load_yandex(env),
+        log=LogConfig(
+            level=env.str("LOG_LEVEL", "INFO").upper(),
+            format=LogFormat(env.str("LOG_FORMAT", LogFormat.JSON).upper()),
+        ),
+        # адрес, порт и число воркеров читает gunicorn из своих флагов
+        api=ApiConfig(cors=tuple(env.list("API_CORS", []))),
+        db=DbConfig(
+            host=env.str("POSTGRES_HOST"),
+            port=env.int("POSTGRES_PORT", 5432),
+            user=env.str("POSTGRES_USER"),
+            password=env.str("POSTGRES_PASSWORD"),
+            name=env.str("POSTGRES_DB"),
+        ),
+        redis=RedisConfig(
+            host=env.str("REDIS_HOST"),
+            port=env.int("REDIS_PORT", 6379),
+            password=env.str("REDIS_PASSWORD", None),
+            db=env.int("REDIS_DB", 0),
+        ),
+        max=MaxConfig(
+            token=env.str("MAX_TOKEN"),
+            mode=BotMode(env.str("MAX_BOT_MODE", BotMode.POLLING).lower()),
+            webhook_url=env.str("MAX_WEBHOOK_URL", None),
+            secret_token=env.str("MAX_SECRET_TOKEN", None),
+        ),
+        files=FilesConfig(
+            dir=env.str("FILES_DIR", "/data/files"),
+            max_size_mb=env.int("FILES_MAX_SIZE_MB", 10),
+        ),
+        deeplinks=DeeplinksConfig(org_register=org_register),
+        yandex=YandexConfig(
+            api_key=env.str("YANDEX_API_KEY", None),
+            folder_id=env.str("YANDEX_FOLDER_ID", None),
+            model=env.str("YANDEX_MODEL", YANDEX_DEFAULT_MODEL),
+        ),
     )
     if config.max.mode is BotMode.WEBHOOK and not config.max.webhook_url:
         raise ValueError("MAX_WEBHOOK_URL обязателен при MAX_BOT_MODE=webhook")
     return config
-
-
-def _load_log(env: Env) -> LogConfig:
-    return LogConfig(
-        level=env.str("LOG_LEVEL", "INFO").upper(),
-        format=LogFormat(env.str("LOG_FORMAT", LogFormat.JSON).upper()),
-    )
-
-
-def _load_api(env: Env) -> ApiConfig:
-    # адрес, порт и число воркеров читает gunicorn из своих флагов, не приложение
-    with env.prefixed("API_"):
-        return ApiConfig(cors=tuple(env.list("CORS", [])))
-
-
-def _load_db(env: Env) -> DbConfig:
-    with env.prefixed("POSTGRES_"):
-        return DbConfig(
-            host=env.str("HOST"),
-            port=env.int("PORT", 5432),
-            user=env.str("USER"),
-            password=env.str("PASSWORD"),
-            name=env.str("DB"),
-        )
-
-
-def _load_redis(env: Env) -> RedisConfig:
-    with env.prefixed("REDIS_"):
-        return RedisConfig(
-            host=env.str("HOST"),
-            port=env.int("PORT", 6379),
-            password=env.str("PASSWORD", None),
-            db=env.int("DB", 0),
-        )
-
-
-def _load_max(env: Env) -> MaxConfig:
-    with env.prefixed("MAX_"):
-        return MaxConfig(
-            token=env.str("TOKEN"),
-            mode=BotMode(env.str("BOT_MODE", BotMode.POLLING).lower()),
-            webhook_url=env.str("WEBHOOK_URL", None),
-            secret_token=env.str("SECRET_TOKEN", None),
-        )
-
-
-def _load_files(env: Env) -> FilesConfig:
-    with env.prefixed("FILES_"):
-        return FilesConfig(
-            dir=env.str("DIR", "/data/files"),
-            max_size_mb=env.int("MAX_SIZE_MB", 10),
-        )
-
-
-def _load_deeplinks(env: Env) -> DeeplinksConfig:
-    with env.prefixed("DEEPLINK_"):
-        # без умолчания: молча работающий пустой секрет хуже ошибки на старте
-        org_register = env.str("ORG_REGISTER")
-    # secrets.compare_digest бросает TypeError на не-ASCII, то есть 500 на запросе
-    if not org_register.isascii():
-        raise ValueError("DEEPLINK_ORG_REGISTER должен состоять только из ASCII")
-    return DeeplinksConfig(org_register=org_register)
-
-
-def _load_yandex(env: Env) -> YandexConfig:
-    return YandexConfig(
-        api_key=env.str("YANDEX_API_KEY", None),
-        folder_id=env.str("YANDEX_FOLDER_ID", None),
-        model=env.str("YANDEX_MODEL", YANDEX_DEFAULT_MODEL),
-    )

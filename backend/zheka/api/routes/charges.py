@@ -45,11 +45,13 @@ async def list_house_tariffs(
     return [
         TariffItem.of(
             tariff,
-            None
-            if tariff.document_url is None
-            else FileRef(
-                name=tariff.document_url,
-                url=files_service.sign(tariff.document_url),
+            (
+                None
+                if tariff.document_url is None
+                else FileRef(
+                    name=tariff.document_url,
+                    url=files_service.sign(tariff.document_url),
+                )
             ),
         )
         for tariff in tariffs
@@ -66,7 +68,9 @@ async def list_flat_charges(
 ) -> Page[ChargeListItem]:
     _require_can_see_charges(residency)
     charges, total = await charges_service.list_for_flat(flat_id, limit, offset)
-    return Page(items=[ChargeListItem.of(charge) for charge in charges], total=total)
+    return Page(
+        items=[ChargeListItem.model_validate(charge) for charge in charges], total=total
+    )
 
 
 @router.get("/charges/{charge_id}", summary="Квитанция за период")
@@ -97,10 +101,7 @@ async def dispute_charge(
     body: DisputeChargeRequest,
 ) -> DisputeChargeResponse:
     request_id = await charges_service.dispute(
-        charge_id,
-        current_account.user_id,
-        body.comment,
-        body.service,
+        charge_id, current_account.user_id, body.comment, body.service
     )
     return DisputeChargeResponse(request_id=request_id)
 

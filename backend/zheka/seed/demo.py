@@ -67,10 +67,10 @@ DOCUMENTS = (
 # фото результата и заявки, работу по которым оно показывает
 RESULT_PHOTOS = {
     "fa678cbaf3614e0a95540b46f24227db.png": frozenset(
-        {RequestCategory.LEAK, RequestCategory.WATER_SUPPLY},
+        {RequestCategory.LEAK, RequestCategory.WATER_SUPPLY}
     ),
     "3c5c76b61ff14eb1a6cc5c56931d9dda.png": frozenset(
-        {RequestCategory.ELECTRICITY, RequestCategory.ENTRANCE},
+        {RequestCategory.ELECTRICITY, RequestCategory.ENTRANCE}
     ),
 }
 
@@ -197,14 +197,8 @@ DESCRIPTIONS = {
         "Не вывезли мусор с площадки",
         "Переполнены контейнеры у подъезда",
     ),
-    RequestCategory.HEATING: (
-        "Холодные батареи в комнате",
-        "Шумит стояк отопления",
-    ),
-    RequestCategory.WATER_SUPPLY: (
-        "Слабый напор холодной воды",
-        "Ржавая горячая вода",
-    ),
+    RequestCategory.HEATING: ("Холодные батареи в комнате", "Шумит стояк отопления"),
+    RequestCategory.WATER_SUPPLY: ("Слабый напор холодной воды", "Ржавая горячая вода"),
     RequestCategory.ELECTRICITY: (
         "Не горит свет на лестничной площадке",
         "Искрит розетка в щитке на этаже",
@@ -217,10 +211,7 @@ DESCRIPTIONS = {
         "Яма на проезде во дворе",
         "Сломана скамейка на детской площадке",
     ),
-    RequestCategory.OTHER: (
-        "Не работает домофон",
-        "Нужна справка о составе семьи",
-    ),
+    RequestCategory.OTHER: ("Не работает домофон", "Нужна справка о составе семьи"),
 }
 FIRST_NAMES = (
     "Анна",
@@ -274,10 +265,7 @@ class Plan(ZhekaType):
 
 
 async def seed(
-    session: AsyncSession,
-    demo: DemoService,
-    files_dir: Path,
-    today: date,
+    session: AsyncSession, demo: DemoService, files_dir: Path, today: date
 ) -> bool:
     stmt = select(func.pg_advisory_xact_lock(SEED_LOCK))
     await session.execute(stmt)
@@ -340,7 +328,7 @@ class Seeder:
             for city in profile.cities:
                 item = free[city].pop(0)
                 item.house.org_id = org.id
-                taken.add(HouseId(item.house.id))
+                taken.add(item.house.id)
                 await self._session.flush()
                 flats = await self._flats(item)
                 if profile.inn == DEMO_INN:
@@ -381,10 +369,7 @@ class Seeder:
         # у демо-организации окно подачи открыто весь месяц: проверяющий не
         # попадет мимо окна и увидит главную новую функцию
         self._session.add(
-            OrgSettings(
-                org_id=org.id,
-                meter_window_always_open=profile.inn == DEMO_INN,
-            ),
+            OrgSettings(org_id=org.id, meter_window_always_open=profile.inn == DEMO_INN)
         )
         await self._session.flush()
         return org
@@ -428,12 +413,7 @@ class Seeder:
         return flats
 
     async def _resident(
-        self,
-        user: User,
-        house: House,
-        flat: Flat,
-        role: ResidentRole,
-        staff: Staff,
+        self, user: User, house: House, flat: Flat, role: ResidentRole, staff: Staff
     ) -> Resident:
         is_owner = role is ResidentRole.OWNER
         resident = Resident(
@@ -451,17 +431,14 @@ class Seeder:
         return resident
 
     async def _owners(
-        self,
-        house: House,
-        flats: Sequence[Flat],
-        staff: Staff,
+        self, house: House, flats: Sequence[Flat], staff: Staff
     ) -> list[Author]:
         rng = Random(f"owners:{house.city}:{house.street}:{house.building}")
         authors = []
         for flat in rng.sample(list(flats), RESIDENTS_PER_HOUSE):
             user = await self._user()
             await self._resident(user, house, flat, ResidentRole.OWNER, staff)
-            authors.append(Author(user_id=UserId(user.id), flat_id=FlatId(flat.id)))
+            authors.append(Author(user_id=user.id, flat_id=flat.id))
         return authors
 
     async def _demo_house(
@@ -511,7 +488,7 @@ class Seeder:
             owners.append((user, resident))
             await self._demo.furnish(
                 flat,
-                UserId(user.id),
+                user.id,
                 self._today,
                 spike=scenario == "spike",
                 below=scenario == "below",
@@ -533,13 +510,13 @@ class Seeder:
                 (
                     user,
                     await self._resident(user, house, flat, ResidentRole.OWNER, staff),
-                ),
+                )
             )
         await self._poll(house, org, staff, owners)
         await self._reception(house, org, owners)
         await self._announcements(house, org, staff, len(owners) + 1)
         authors = [
-            Author(user_id=UserId(user.id), flat_id=FlatId(resident.flat_id))
+            Author(user_id=user.id, flat_id=resident.flat_id)
             for user, resident in owners[:DEMO_AUTHORS]
             if resident.flat_id is not None
         ]
@@ -617,60 +594,39 @@ class Seeder:
         await self._session.flush()
 
     async def _reception(
-        self,
-        house: House,
-        org: Organization,
-        owners: Sequence[tuple[User, Resident]],
+        self, house: House, org: Organization, owners: Sequence[tuple[User, Resident]]
     ) -> None:
         # прием хранит настенные часы как UTC, как и ReceptionService
         self._session.add_all(
-            [
-                ReceptionWindow(
-                    org_id=org.id,
-                    weekday=1,
-                    time_from=time(9),
-                    time_to=time(12),
-                    slot_minutes=30,
-                    capacity=2,
-                ),
-                ReceptionWindow(
-                    org_id=org.id,
-                    weekday=3,
-                    time_from=time(15),
-                    time_to=time(19),
-                    slot_minutes=30,
-                    capacity=2,
-                ),
-            ],
+            ReceptionWindow(
+                org_id=org.id,
+                weekday=weekday,
+                time_from=time(start),
+                time_to=time(end),
+                slot_minutes=30,
+                capacity=2,
+            )
+            for weekday, start, end in ((1, 9, 12), (3, 15, 19))
         )
         past = self._today - timedelta(days=(self._today.weekday() - 1) % 7 or 7)
         upcoming = self._today + timedelta(days=(3 - self._today.weekday()) % 7 or 7)
         self._session.add_all(
-            [
-                Appointment(
-                    org_id=org.id,
-                    house_id=house.id,
-                    user_id=owners[0][0].id,
-                    starts_at=datetime.combine(past, time(9, 30), UTC),
-                    status=AppointmentStatus.DONE,
-                ),
-                Appointment(
-                    org_id=org.id,
-                    house_id=house.id,
-                    user_id=owners[1][0].id,
-                    starts_at=datetime.combine(upcoming, time(16), UTC),
-                    status=AppointmentStatus.BOOKED,
-                ),
-            ],
+            Appointment(
+                org_id=org.id,
+                house_id=house.id,
+                user_id=user.id,
+                starts_at=datetime.combine(day, at, UTC),
+                status=status,
+            )
+            for (user, _resident), day, at, status in (
+                (owners[0], past, time(9, 30), AppointmentStatus.DONE),
+                (owners[1], upcoming, time(16), AppointmentStatus.BOOKED),
+            )
         )
         await self._session.flush()
 
     async def _announcements(
-        self,
-        house: House,
-        org: Organization,
-        staff: Staff,
-        recipients: int,
+        self, house: House, org: Organization, staff: Staff, recipients: int
     ) -> None:
         self._session.add_all(
             Announcement(
@@ -704,11 +660,7 @@ class Seeder:
         await self._session.flush()
 
     async def _requests(
-        self,
-        house: House,
-        profile: OrgProfile,
-        staff: Staff,
-        authors: Sequence[Author],
+        self, house: House, profile: OrgProfile, staff: Staff, authors: Sequence[Author]
     ) -> None:
         rng = Random(f"requests:{house.city}:{house.street}:{house.building}")
         moments = []
@@ -755,7 +707,7 @@ class Seeder:
                     categories[index],
                     author,
                     keep_open=index in overdue,
-                ),
+                )
             )
         if profile.inn == DEMO_INN:
             plans.extend(await self._group(rng, house, profile, staff, authors))
@@ -825,7 +777,7 @@ class Seeder:
                             "executor_user_id": request.executor_user_id,
                         },
                         created_at=plan.assigned_at,
-                    ),
+                    )
                 )
         if profile.inn == DEMO_INN:
             # фото результата у последней принятой жителем заявки той работы,
@@ -856,7 +808,7 @@ class Seeder:
                         kind=RequestPhotoKind.RESULT,
                         uploaded_by=executor,
                         created_at=reviewed_at,
-                    ),
+                    )
                 )
         await self._session.flush()
 
@@ -946,9 +898,9 @@ class Seeder:
             status=RequestStatus.NEW,
             at=created,
             by=staff.admin if author is None else author.user_id,
-            role=RequestActorRole.STAFF
-            if author is None
-            else RequestActorRole.RESIDENT,
+            role=(
+                RequestActorRole.STAFF if author is None else RequestActorRole.RESIDENT
+            ),
         )
         steps = [
             opened,
@@ -1005,9 +957,11 @@ class Seeder:
                     (RequestChannel.MINIAPP, RequestChannel.MINIAPP, RequestChannel.BOT)
                 )
             ),
-            caller_name=f"{rng.choice(FIRST_NAMES)} {rng.choice(INITIALS)}."
-            if author is None
-            else None,
+            caller_name=(
+                f"{rng.choice(FIRST_NAMES)} {rng.choice(INITIALS)}."
+                if author is None
+                else None
+            ),
             caller_phone="+7 (000) 000-00-00" if author is None else None,
             executor_user_id=executor if is_assigned else None,
             rating=rating,

@@ -9,11 +9,8 @@ task_id: ContextVar[str | None] = ContextVar("task_id", default=None)
 task_name: ContextVar[str | None] = ContextVar("task_name", default=None)
 
 COLUMNS: dict[str, ContextVar[Any]] = {
-    "trace_id": trace_id,
-    "update_id": update_id,
-    "max_user_id": max_user_id,
-    "task_id": task_id,
-    "task_name": task_name,
+    column.name: column
+    for column in (trace_id, update_id, max_user_id, task_id, task_name)
 }
 
 

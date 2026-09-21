@@ -107,10 +107,7 @@ ORG_FIELDS = ("inn", "name", "phone", "address")
 # региона один. В Москве их два, но московские номера в реестре все с кодом
 FULL_DIGITS = 11
 LOCAL_DIGITS = 7
-AREA_CODES = {
-    "город Санкт-Петербург": "812",
-    "Республика Татарстан": "843",
-}
+AREA_CODES = {"город Санкт-Петербург": "812", "Республика Татарстан": "843"}
 
 _last_request = 0.0
 
@@ -161,12 +158,11 @@ def _building_key(building: str) -> tuple[int, str]:
 
 
 def _card(source_id: str) -> tuple[int | None, str | None]:
-    raw = _cached(
-        f"card-{source_id}.html",
-        f"{REFORMA}/myhouse/profile/view/{source_id}",
-    )
-    entrances, manager = parse_card(raw.decode("utf-8"))
-    if manager is None and "Домом управляет" in raw.decode("utf-8"):
+    page = _cached(
+        f"card-{source_id}.html", f"{REFORMA}/myhouse/profile/view/{source_id}"
+    ).decode("utf-8")
+    entrances, manager = parse_card(page)
+    if manager is None and "Домом управляет" in page:
         log.info("карточка %s называет УК, но имя не разобрано", source_id)
     return entrances, manager
 
@@ -202,36 +198,33 @@ def _geocode(street: Street, building: str) -> tuple[str, str]:
             "limit": 1,
             "countrycodes": "ru",
             "addressdetails": 1,
-        },
+        }
     )
     safe = re.sub(r"\W+", "_", query)
     found = json.loads(_cached(f"geo-{safe}.json", f"{NOMINATIM}?{params}"))
     # только точное попадание в дом: соседний номер или улица целиком дали бы
     # координаты другого здания
-    if not found:
+    if not found or (
+        _house_number(found[0].get("address", {}).get("house_number", "")) != number
+    ):
         return "", ""
-    house = found[0]
-    if _house_number(house.get("address", {}).get("house_number", "")) != number:
-        return "", ""
-    return house["lat"], house["lon"]
+    return found[0]["lat"], found[0]["lon"]
 
 
 def _pick(street: Street) -> list[dict[str, str]]:
-    picked = []
-    for row in _export_rows(street.export_id):
-        address = row["address"]
-        if not address.startswith(street.prefix):
-            continue
-        if street.mun_obr and not row["mun_obr"].startswith(street.mun_obr):
-            continue
-        # части дома «(пар. 1-2)» дублируют адрес, а без house_id нет карточки
-        if "(" in address or not row["house_id"]:
-            continue
-        if not row["living_rooms_amount"] or int(row["living_rooms_amount"]) <= 0:
-            continue
-        if not row["number_floors_max"] or not row["owners_payment"]:
-            continue
-        picked.append(row)
+    # части дома «(пар. 1-2)» дублируют адрес, а без house_id нет карточки
+    picked = [
+        row
+        for row in _export_rows(street.export_id)
+        if row["address"].startswith(street.prefix)
+        and row["mun_obr"].startswith(street.mun_obr)
+        and "(" not in row["address"]
+        and row["house_id"]
+        and row["living_rooms_amount"]
+        and int(row["living_rooms_amount"]) > 0
+        and row["number_floors_max"]
+        and row["owners_payment"]
+    ]
     picked.sort(key=lambda row: _building_key(row["address"][len(street.prefix) :]))
     return picked[:HOUSES_PER_STREET]
 
@@ -277,8 +270,7 @@ def main() -> None:
                 matches = {
                     candidate["inn"]: candidate
                     for candidate in registry.get(
-                        (street.subject_rf, manager.lower()),
-                        [],
+                        (street.subject_rf, manager.lower()), []
                     )
                 }
                 # одноименные УК в регионе - не повод выбирать наугад
@@ -307,7 +299,7 @@ def main() -> None:
                     "lon": lon,
                     "org_inn": org_inn,
                     "source_id": row["house_id"],
-                },
+                }
             )
 
     with (DATA_DIR / "houses.csv").open("w", encoding="utf-8", newline="") as file:
@@ -315,9 +307,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(houses)
     with (DATA_DIR / "organizations.csv").open(
-        "w",
-        encoding="utf-8",
-        newline="",
+        "w", encoding="utf-8", newline=""
     ) as file:
         writer = csv.DictWriter(file, ORG_FIELDS, lineterminator="\n")
         writer.writeheader()

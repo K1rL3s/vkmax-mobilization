@@ -10,6 +10,8 @@ from zheka.core.enums import (
     VerificationStatus,
 )
 from zheka.core.errors import (
+    FLAT_NOT_FOUND,
+    INVITE_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
@@ -35,10 +37,8 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-# на карточке видны только последние цифры лицевого счета
 ACCOUNT_TAIL = 4
 
-VERIFIED_DETAIL = "Квартира подтверждена"
 ALREADY_VERIFIED_DETAIL = "Квартира уже подтверждена"
 MISMATCH_DETAIL = (
     "Лицевой счет не совпал. Отправьте запрос на подтверждение в управляющую компанию"
@@ -49,12 +49,6 @@ NO_ACCOUNT_DETAIL = (
 )
 MOVED_OUT = "Житель привязан к другой квартире, переезд оформляет УК"
 NOT_A_RESIDENT = "Вы не житель этой квартиры"
-TENANT_CANNOT_VERIFY = "Квартиру подтверждает собственник, а не арендатор"
-TENANT_CANNOT_INVITE = "Код приглашения выдает собственник, а не арендатор"
-UNVERIFIED_CANNOT_INVITE = "Сначала подтвердите квартиру"
-FLAT_NOT_FOUND = "Квартира не найдена"
-INVITE_NOT_FOUND = "Приглашение не найдено"
-INVITE_DEAD = "Код приглашения истек, отозван или исчерпан"
 
 
 def normalize_account(account_no: str) -> str:
@@ -136,35 +130,27 @@ class FlatsService:
         )
 
     async def verify(
-        self,
-        user_id: UserId,
-        flat_id: FlatId,
-        account_no: str,
+        self, user_id: UserId, flat_id: FlatId, account_no: str
     ) -> VerifyResult:
         flat, _ = await self._flat_and_house(flat_id)
-        resident = await self._resident_of_house(user_id, HouseId(flat.house_id))
+        resident = await self._resident_of_house(user_id, flat.house_id)
         if resident.role is ResidentRole.TENANT:
-            raise NotEnoughRights(TENANT_CANNOT_VERIFY)
+            raise NotEnoughRights("Квартиру подтверждает собственник, а не арендатор")
         self._ensure_not_moving(resident, flat_id)
 
         if resident.verified_at is not None:
             # повторное подтверждение той же квартиры ничего не меняет и не
             # попадает в воронку событий
             return VerifyResult(
-                verified=True,
-                detail=ALREADY_VERIFIED_DETAIL,
-                verification_status=None,
+                verified=True, detail=ALREADY_VERIFIED_DETAIL, verification_status=None
             )
 
         matched = flat.account_no is not None and normalize_account(
-            flat.account_no,
+            flat.account_no
         ) == normalize_account(account_no)
         if matched:
             await self._residents.set_verified(
-                resident,
-                flat_id,
-                datetime.now(UTC),
-                None,
+                resident, flat_id, datetime.now(UTC), None
             )
         await self._events.record(
             EventType.FLAT_VERIFICATION_REQUESTED,
@@ -184,30 +170,21 @@ class FlatsService:
             )
 
         await self._events.record(
-            EventType.FLAT_VERIFIED,
-            user_id=user_id,
-            flat_id=flat_id,
-            by="account",
+            EventType.FLAT_VERIFIED, user_id=user_id, flat_id=flat_id, by="account"
         )
         return VerifyResult(
-            verified=True,
-            detail=VERIFIED_DETAIL,
-            verification_status=None,
+            verified=True, detail="Квартира подтверждена", verification_status=None
         )
 
     async def request_verification(
-        self,
-        user_id: UserId,
-        flat_id: FlatId,
-        account_no: str,
-        comment: str | None,
+        self, user_id: UserId, flat_id: FlatId, account_no: str, comment: str | None
     ) -> VerificationRequestView:
         stated = account_no.strip()
         if not stated:
             raise InvalidRequest("Укажите лицевой счет")
 
         flat, house = await self._flat_and_house(flat_id)
-        resident = await self._resident_of_house(user_id, HouseId(flat.house_id))
+        resident = await self._resident_of_house(user_id, flat.house_id)
         self._ensure_not_moving(resident, flat_id)
         if resident.verified_at is not None:
             raise InvalidState(ALREADY_VERIFIED_DETAIL)
@@ -226,12 +203,7 @@ class FlatsService:
             flat_id=flat_id,
             method="admin",
         )
-        return VerificationRequestView(
-            request=request,
-            flat=flat,
-            house=house,
-            user=await self._user(user_id),
-        )
+        return await self._view(request, flat, house)
 
     async def verification_requests(
         self,
@@ -242,57 +214,35 @@ class FlatsService:
         offset: int,
     ) -> tuple[list[VerificationRequestView], int]:
         requests, total = await self._flats.list_verification_requests(
-            org_id,
-            status,
-            house_id,
-            limit,
-            offset,
+            org_id, status, house_id, limit, offset
         )
         return await self._request_views(requests), total
 
     async def approve_verification(
-        self,
-        org_id: OrgId,
-        verification_id: VerificationRequestId,
-        by: UserId,
+        self, org_id: OrgId, verification_id: VerificationRequestId, by: UserId
     ) -> VerificationRequestView:
         request, flat, house = await self._pending_request(org_id, verification_id)
-        resident = await self._residents.get_for_house(
-            UserId(request.user_id),
-            HouseId(flat.house_id),
-        )
+        resident = await self._residents.get_for_house(request.user_id, flat.house_id)
         # житель мог отвязаться от дома, пока запрос ждал решения
         if resident is None:
             raise EntityNotFound("Житель не найден")
-        flat_id = FlatId(flat.id)
+        flat_id = flat.id
         self._ensure_not_moving(resident, flat_id)
 
         now = datetime.now(UTC)
         await self._residents.set_verified(resident, flat_id, now, by)
         await self._flats.decide_verification_request(
-            request,
-            VerificationStatus.APPROVED,
-            by,
-            now,
-            None,
+            request, VerificationStatus.APPROVED, by, now, None
         )
         await self._events.record(
             EventType.FLAT_VERIFIED,
-            user_id=UserId(request.user_id),
+            user_id=request.user_id,
             flat_id=flat_id,
             by="admin",
             decided_by=by,
         )
-        self._notify(
-            UserId(request.user_id),
-            texts.flat_verified(flat.number, house.address),
-        )
-        return VerificationRequestView(
-            request=request,
-            flat=flat,
-            house=house,
-            user=await self._user(UserId(request.user_id)),
-        )
+        self._notify(request.user_id, texts.flat_verified(flat.number, house.address))
+        return await self._view(request, flat, house)
 
     async def reject_verification(
         self,
@@ -309,27 +259,16 @@ class FlatsService:
 
         request, flat, house = await self._pending_request(org_id, verification_id)
         await self._flats.decide_verification_request(
-            request,
-            VerificationStatus.REJECTED,
-            by,
-            datetime.now(UTC),
-            stated,
+            request, VerificationStatus.REJECTED, by, datetime.now(UTC), stated
         )
         self._notify(
-            UserId(request.user_id),
+            request.user_id,
             texts.flat_verification_rejected(flat.number, house.address, stated),
         )
-        return VerificationRequestView(
-            request=request,
-            flat=flat,
-            house=house,
-            user=await self._user(UserId(request.user_id)),
-        )
+        return await self._view(request, flat, house)
 
     async def list_residents(
-        self,
-        user_id: UserId,
-        flat_id: FlatId,
+        self, user_id: UserId, flat_id: FlatId
     ) -> list[FlatResidentView]:
         flat, _ = await self._flat_and_house(flat_id)
         await self._resident_of_flat(user_id, flat)
@@ -337,7 +276,7 @@ class FlatsService:
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [UserId(resident.user_id) for resident in residents],
+                [resident.user_id for resident in residents]
             )
         }
         return [
@@ -345,11 +284,7 @@ class FlatsService:
             for resident in residents
         ]
 
-    async def list_invites(
-        self,
-        user_id: UserId,
-        flat_id: FlatId,
-    ) -> list[FlatInvite]:
+    async def list_invites(self, user_id: UserId, flat_id: FlatId) -> list[FlatInvite]:
         flat, _ = await self._flat_and_house(flat_id)
         await self._resident_of_flat(user_id, flat)
         return list(await self._invites.list_for_flat(flat_id))
@@ -376,7 +311,7 @@ class FlatsService:
                 expires_at=expires_at,
                 max_activations=max_activations,
                 created_by=user_id,
-            ),
+            )
         )
         await self._events.record(
             EventType.FLAT_INVITE_CREATED,
@@ -393,7 +328,7 @@ class FlatsService:
         # в пути нет ничего о квартире кода, поэтому отказ по правам
         # превращается в 404: 403 подтвердил бы, что такой код существует
         try:
-            await self._verified_owner(user_id, FlatId(invite.flat_id))
+            await self._verified_owner(user_id, invite.flat_id)
         except NotEnoughRights as error:
             raise EntityNotFound(INVITE_NOT_FOUND) from error
         await self._invites.revoke_flat(invite, datetime.now(UTC))
@@ -403,47 +338,37 @@ class FlatsService:
         if invite is None:
             raise EntityNotFound(INVITE_NOT_FOUND)
 
-        flat_id = FlatId(invite.flat_id)
+        flat_id = invite.flat_id
         flat, house = await self._flat_and_house(flat_id)
-        house_id = HouseId(flat.house_id)
+        house_id = flat.house_id
         existing = await self._residents.get_for_house(user_id, house_id)
         if existing is not None and existing.flat_id == flat_id:
             # житель этой же квартиры не тратит активацию: код у него уже
             # сработал или он сам его и выдал
-            self._ensure_alive(invite)
+            if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):
+                raise InvalidState("Код приглашения истек или отозван")
             return await self._residency_view(existing, house, flat)
         if existing is not None and existing.flat_id is not None:
             raise InvalidState(MOVED_OUT)
 
         consumed = await self._invites.consume_flat(code)
         if consumed is None:
-            raise InvalidState(INVITE_DEAD)
+            raise InvalidState("Код приглашения истек, отозван или исчерпан")
 
         # роль арендатора снимает начисления и голос, это делает add_or_get
         resident, _ = await self._residents.add_or_get(
-            user_id,
-            house_id,
-            flat_id,
-            None,
-            ResidentRole.TENANT,
+            user_id, house_id, flat_id, None, ResidentRole.TENANT
         )
         await self._residents.set_verified(
-            resident,
-            flat_id,
-            datetime.now(UTC),
-            UserId(invite.created_by),
+            resident, flat_id, datetime.now(UTC), invite.created_by
         )
         await self._events.record(
             EventType.FLAT_INVITE_ACTIVATED,
             user_id=user_id,
             flat_id=flat_id,
-            invited_by=UserId(invite.created_by),
+            invited_by=invite.created_by,
         )
         return await self._residency_view(resident, house, flat)
-
-    def _ensure_alive(self, invite: FlatInvite) -> None:
-        if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):
-            raise InvalidState("Код приглашения истек или отозван")
 
     def _ensure_not_moving(self, resident: Resident, flat_id: FlatId) -> None:
         # переезд из подтвержденной квартиры оформляет УК, а до подтверждения
@@ -459,7 +384,7 @@ class FlatsService:
         flat = await self._houses.get_flat(flat_id)
         if flat is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
-        house = await self._houses.get(HouseId(flat.house_id))
+        house = await self._houses.get(flat.house_id)
         if house is None:
             raise EntityNotFound("Дом не найден")
         return flat, house
@@ -473,7 +398,7 @@ class FlatsService:
         return resident
 
     async def _resident_of_flat(self, user_id: UserId, flat: Flat) -> Resident:
-        resident = await self._resident_of_house(user_id, HouseId(flat.house_id))
+        resident = await self._resident_of_house(user_id, flat.house_id)
         if resident.flat_id != flat.id:
             raise NotEnoughRights(NOT_A_RESIDENT)
         return resident
@@ -482,39 +407,36 @@ class FlatsService:
         flat, _ = await self._flat_and_house(flat_id)
         resident = await self._resident_of_flat(user_id, flat)
         if resident.role is not ResidentRole.OWNER:
-            raise NotEnoughRights(TENANT_CANNOT_INVITE)
+            raise NotEnoughRights("Код приглашения выдает собственник, а не арендатор")
         if resident.verified_at is None:
-            raise NotEnoughRights(UNVERIFIED_CANNOT_INVITE)
+            raise NotEnoughRights("Сначала подтвердите квартиру")
         return resident
 
     async def _pending_request(
-        self,
-        org_id: OrgId,
-        verification_id: VerificationRequestId,
+        self, org_id: OrgId, verification_id: VerificationRequestId
     ) -> tuple[VerificationRequest, Flat, House]:
         request = await self._flats.get_verification_request(verification_id, org_id)
         if request is None:
             raise EntityNotFound("Запрос подтверждения не найден")
         if request.status is not VerificationStatus.PENDING:
             raise InvalidState("Запрос подтверждения уже рассмотрен")
-        flat, house = await self._flat_and_house(FlatId(request.flat_id))
+        flat, house = await self._flat_and_house(request.flat_id)
         return request, flat, house
 
-    async def _user(self, user_id: UserId) -> User:
-        user = await self._users.get_by_id(user_id)
+    async def _view(
+        self, request: VerificationRequest, flat: Flat, house: House
+    ) -> VerificationRequestView:
+        user = await self._users.get_by_id(request.user_id)
         if user is None:
             raise EntityNotFound("Пользователь не найден")
-        return user
+        return VerificationRequestView(
+            request=request, flat=flat, house=house, user=user
+        )
 
     async def _residency_view(
-        self,
-        resident: Resident,
-        house: House,
-        flat: Flat,
+        self, resident: Resident, house: House, flat: Flat
     ) -> ResidencyView:
-        org = (
-            None if house.org_id is None else await self._orgs.get(OrgId(house.org_id))
-        )
+        org = None if house.org_id is None else await self._orgs.get(house.org_id)
         return ResidencyView(
             resident=resident,
             house=house,
@@ -523,25 +445,24 @@ class FlatsService:
         )
 
     async def _request_views(
-        self,
-        requests: Sequence[VerificationRequest],
+        self, requests: Sequence[VerificationRequest]
     ) -> list[VerificationRequestView]:
         flats = {
             flat.id: flat
             for flat in await self._houses.list_flats_by_ids(
-                [FlatId(request.flat_id) for request in requests],
+                [request.flat_id for request in requests]
             )
         }
         houses = {
             house.id: house
             for house in await self._houses.list_by_ids(
-                [HouseId(flat.house_id) for flat in flats.values()],
+                [flat.house_id for flat in flats.values()]
             )
         }
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [UserId(request.user_id) for request in requests],
+                [request.user_id for request in requests]
             )
         }
         return [
@@ -558,8 +479,5 @@ class FlatsService:
         # решение по заявке на подтверждение житель ждет, поэтому оно
         # приходит при любых настройках
         self._notifications.notify_user(
-            user_id,
-            text,
-            category=NotificationCategory.REQUESTS,
-            mandatory=True,
+            user_id, text, category=NotificationCategory.REQUESTS, mandatory=True
         )

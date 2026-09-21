@@ -19,9 +19,7 @@ class ZhekaMessageManager(MessageManager):
             disable_link_preview = Omitted()
 
         attachments = await self._build_attachments(
-            bot,
-            new_message.keyboard,
-            new_message.media,
+            bot, new_message.keyboard, new_message.media
         )
         recipient = new_message.recipient
         chat_id = Omitted() if recipient.chat_id is None else recipient.chat_id
@@ -32,10 +30,7 @@ class ZhekaMessageManager(MessageManager):
             text=new_message.text,
             link=new_message.link_to,
             notify=dialog_notify.get(),
-            attachments=cast(
-                list[AttachmentsRequests | Attachments],
-                attachments,
-            ),
+            attachments=cast(list[AttachmentsRequests | Attachments], attachments),
             format=new_message.parse_mode,
             disable_link_preview=disable_link_preview,
         )

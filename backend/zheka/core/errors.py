@@ -24,6 +24,13 @@ class EntityNotFound(ZhekaError, LookupError):
         super().__init__(message)
 
 
+HOUSE_NOT_FOUND = "Дом не найден"
+FLAT_NOT_FOUND = "Квартира не найдена"
+REQUEST_NOT_FOUND = "Заявка не найдена"
+GROUP_NOT_FOUND = "Группа заявок не найдена"
+INVITE_NOT_FOUND = "Приглашение не найдено"
+
+
 class InvalidValue(ZhekaError, ValueError):
     def __init__(self, message: str = "Некорректное значение") -> None:
         super().__init__(message)

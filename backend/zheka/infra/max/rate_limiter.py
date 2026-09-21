@@ -6,11 +6,11 @@ from typing import Self
 
 
 class RateLimiter:
-    __slots__ = ("_calls", "_lock", "max_calls", "period")
+    # не больше max_calls вызовов за скользящую секунду
+    __slots__ = ("_calls", "_lock", "max_calls")
 
-    def __init__(self, max_calls: int, period: float = 1.0) -> None:
+    def __init__(self, max_calls: int) -> None:
         self.max_calls = max_calls
-        self.period = period
         self._calls: deque[float] = deque()
         self._lock = asyncio.Lock()
 
@@ -18,12 +18,12 @@ class RateLimiter:
         while True:
             async with self._lock:
                 now = time.monotonic()
-                while self._calls and now - self._calls[0] >= self.period:
+                while self._calls and now - self._calls[0] >= 1:
                     self._calls.popleft()
                 if len(self._calls) < self.max_calls:
                     self._calls.append(now)
                     return self
-                sleep_for = self._calls[0] + self.period - now
+                sleep_for = self._calls[0] + 1 - now
             await asyncio.sleep(sleep_for)
 
     async def __aexit__(

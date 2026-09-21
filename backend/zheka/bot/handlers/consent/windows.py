@@ -13,5 +13,5 @@ consent_dialog = Dialog(
         Const(CONSENT_TEXT),
         Button(Const("Согласен"), id="accept", on_click=on_accept),
         state=Consent.ask,
-    ),
+    )
 )

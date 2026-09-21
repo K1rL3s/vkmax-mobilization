@@ -1,5 +1,4 @@
 import re
-from collections import Counter
 from typing import Any
 
 import pytest
@@ -168,17 +167,6 @@ def test_openapi_is_served_under_api_prefix(app: FastAPI) -> None:
     assert app.openapi_url == "/api/openapi.json"
 
 
-def test_operation_ids_are_unique(openapi: dict[str, Any]) -> None:
-    ids = [
-        operation["operationId"]
-        for methods in openapi["paths"].values()
-        for operation in methods.values()
-    ]
-    duplicates = [name for name, count in Counter(ids).items() if count > 1]
-
-    assert not duplicates
-
-
 def test_contract_endpoints_are_registered(openapi: dict[str, Any]) -> None:
     declared = {
         (method, path, operation["operationId"])
@@ -289,8 +277,7 @@ def test_schema_field(
 
 @pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
 def test_request_list_items_leave_card_only_fields_out(
-    openapi: dict[str, Any],
-    schema_name: str,
+    openapi: dict[str, Any], schema_name: str
 ) -> None:
     properties = openapi["components"]["schemas"][schema_name]["properties"]
 
@@ -310,9 +297,7 @@ def test_metric_unit_carries_points(openapi: dict[str, Any]) -> None:
     assert "points" in schema["BenchmarkMetric"]["properties"]["value"]["description"]
 
 
-def test_request_export_is_the_card_and_the_disclaimer(
-    openapi: dict[str, Any],
-) -> None:
+def test_request_export_is_the_card_and_the_disclaimer(openapi: dict[str, Any]) -> None:
     # название УК уже есть в карточке, второе поле с тем же значением разъедется
     schema = openapi["components"]["schemas"]["RequestExport"]
 

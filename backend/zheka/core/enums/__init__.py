@@ -25,11 +25,7 @@ from zheka.core.enums.requests import (
     RequestStatus,
     ResponsibilityZone,
 )
-from zheka.core.enums.residents import (
-    ResidentRole,
-    ResidentStatus,
-    VerificationStatus,
-)
+from zheka.core.enums.residents import ResidentRole, ResidentStatus, VerificationStatus
 
 __all__ = (
     "CATEGORY_RULES",

@@ -9,11 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import BrokerMessage
 
-from tests.conftest import (
-    OrgHouseFlatUser,
-    RecordingBroker,
-    make_notifications_service,
-)
+from tests.conftest import OrgHouseFlatUser, RecordingBroker, make_notifications_service
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -29,7 +25,7 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
 )
-from zheka.core.ids import MaxUserId, RequestGroupId, RequestId, UserId
+from zheka.core.ids import MaxUserId, RequestGroupId, UserId
 from zheka.core.notifications import DEFAULT_LEVEL, resolve_notify
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
@@ -47,8 +43,6 @@ from zheka.infra.max import MaxSender
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
-# dummy token: the fake bot never starts and never reaches the network
-_DUMMY_TOKEN = "test-token"  # noqa: S105
 TEXT = "Проверка связи"
 
 
@@ -88,16 +82,13 @@ async def _add_user(session: AsyncSession, name: str = "Сосед") -> User:
     ],
 )
 def test_resolve_notify(
-    level: NotificationLevel,
-    mandatory: bool,
-    expected: bool | None,
+    level: NotificationLevel, mandatory: bool, expected: bool | None
 ) -> None:
     assert resolve_notify(level, mandatory=mandatory) is expected
 
 
 async def test_levels_fill_missing_categories_with_default(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     data = await make_org_house_flat_user()
 
@@ -108,19 +99,16 @@ async def test_levels_fill_missing_categories_with_default(
 
 
 async def test_update_records_event_only_for_a_real_change(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     data = await make_org_house_flat_user()
     service = make_notifications_service(session)
 
     await service.update(
-        data.user_id,
-        {NotificationCategory.REQUESTS: NotificationLevel.SOUND},
+        data.user_id, {NotificationCategory.REQUESTS: NotificationLevel.SOUND}
     )
     levels = await service.update(
-        data.user_id,
-        {NotificationCategory.REQUESTS: NotificationLevel.SOUND},
+        data.user_id, {NotificationCategory.REQUESTS: NotificationLevel.SOUND}
     )
 
     assert levels[NotificationCategory.REQUESTS] is NotificationLevel.SOUND
@@ -134,8 +122,7 @@ async def test_update_records_event_only_for_a_real_change(
 
 
 async def test_recipients_drop_bot_stopped_and_keep_muted(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     data = await make_org_house_flat_user()
     muted = await _add_user(session, "Заглушивший")
@@ -146,25 +133,19 @@ async def test_recipients_drop_bot_stopped_and_keep_muted(
     await session.flush()
 
     recipients = await NotificationsRepo(session).recipients(
-        [data.user_id, UserId(muted.id), UserId(stopped.id)],
-        NotificationCategory.ANNOUNCEMENTS,
+        [data.user_id, muted.id, stopped.id], NotificationCategory.ANNOUNCEMENTS
     )
 
-    assert {recipient.user_id for recipient in recipients} == {
-        data.user_id,
-        UserId(muted.id),
-    }
+    assert {recipient.user_id for recipient in recipients} == {data.user_id, muted.id}
 
 
 async def test_recipient_without_settings_row_is_silent(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     data = await make_org_house_flat_user()
 
     recipients = await NotificationsRepo(session).recipients(
-        [data.user_id],
-        NotificationCategory.REQUESTS,
+        [data.user_id], NotificationCategory.REQUESTS
     )
 
     assert [recipient.level for recipient in recipients] == [NotificationLevel.SILENT]
@@ -191,41 +172,27 @@ async def test_fan_out_sends_with_the_resolved_sound(
     sender = _FakeSender()
     category = NotificationCategory.REQUESTS.value
 
-    count = await _fan_out(
-        sender, repo, [data.user_id], TEXT, category, mandatory, None
-    )
+    count = await _fan_out(sender, repo, [data.user_id], TEXT, category, mandatory)
 
     assert count == len(sent)
     assert sender.sent == sent
 
 
 async def test_notify_user_reaches_the_broker(
-    session: AsyncSession,
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
+    session: AsyncSession, broker: RecordingBroker, publisher: TaskPublisher
 ) -> None:
     make_notifications_service(session, publisher).notify_user(
-        UserId(1),
-        TEXT,
-        category=NotificationCategory.REQUESTS,
-        mandatory=True,
+        UserId(1), TEXT, category=NotificationCategory.REQUESTS, mandatory=True
     )
 
     await publisher.flush()
     assert broker.enqueued(TaskName.SEND_TO_USER) == [
-        {
-            "user_id": 1,
-            "text": TEXT,
-            "category": "requests",
-            "mandatory": True,
-            "buttons": None,
-        },
+        {"user_id": 1, "text": TEXT, "category": "requests", "mandatory": True}
     ]
 
 
 def _admin_service(
-    session: AsyncSession,
-    publisher: TaskPublisher,
+    session: AsyncSession, publisher: TaskPublisher
 ) -> AdminRequestsService:
     return AdminRequestsService(
         RequestsRepo(session),
@@ -258,6 +225,18 @@ async def _add_request(
     return request
 
 
+async def _add_group(session: AsyncSession, data: OrgHouseFlatUser) -> RequestGroup:
+    group = RequestGroup(
+        house_id=data.house_id,
+        category=RequestCategory.LEAK,
+        window_started_at=datetime.now(UTC),
+        status=RequestGroupStatus.OPEN,
+    )
+    session.add(group)
+    await session.flush()
+    return group
+
+
 async def test_status_change_notifies_the_author_once(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
@@ -265,18 +244,13 @@ async def test_status_change_notifies_the_author_once(
     publisher: TaskPublisher,
 ) -> None:
     data = await make_org_house_flat_user(
-        org_role=OrgRole.ADMIN,
-        resident_role=ResidentRole.OWNER,
+        org_role=OrgRole.ADMIN, resident_role=ResidentRole.OWNER
     )
     request = await _add_request(session, data)
     service = _admin_service(session, publisher)
 
     await service.change_status(
-        data.org_id,
-        RequestId(request.id),
-        RequestStatus.ACCEPTED,
-        None,
-        data.user_id,
+        data.org_id, request.id, RequestStatus.ACCEPTED, None, data.user_id
     )
 
     await publisher.flush()
@@ -294,28 +268,16 @@ async def test_group_catch_up_notifies_the_author_once(
     publisher: TaskPublisher,
 ) -> None:
     data = await make_org_house_flat_user(
-        org_role=OrgRole.ADMIN,
-        resident_role=ResidentRole.OWNER,
+        org_role=OrgRole.ADMIN, resident_role=ResidentRole.OWNER
     )
-    group = RequestGroup(
-        house_id=data.house_id,
-        category=RequestCategory.LEAK,
-        window_started_at=datetime.now(UTC),
-        status=RequestGroupStatus.OPEN,
-    )
-    session.add(group)
-    await session.flush()
+    group = await _add_group(session, data)
     # опоздавший участник идет из NEW в IN_PROGRESS двумя шагами, а житель
     # просил один ответ, а не пачку пушей
-    request = await _add_request(session, data, RequestGroupId(group.id))
+    request = await _add_request(session, data, group.id)
     assert len(transition_path(request.status, RequestStatus.IN_PROGRESS)) == 2
 
     await _admin_service(session, publisher).change_group_status(
-        data.org_id,
-        RequestGroupId(group.id),
-        RequestStatus.IN_PROGRESS,
-        "Сделаем завтра",
-        data.user_id,
+        data.org_id, group.id, RequestStatus.IN_PROGRESS, "Сделаем завтра", data.user_id
     )
 
     await publisher.flush()
@@ -332,17 +294,13 @@ async def test_reply_reaches_the_author(
     publisher: TaskPublisher,
 ) -> None:
     data = await make_org_house_flat_user(
-        org_role=OrgRole.ADMIN,
-        resident_role=ResidentRole.OWNER,
+        org_role=OrgRole.ADMIN, resident_role=ResidentRole.OWNER
     )
     request = await _add_request(session, data)
     answer = "Слесарь придет во вторник"
 
     await _admin_service(session, publisher).reply(
-        data.org_id,
-        RequestId(request.id),
-        answer,
-        data.user_id,
+        data.org_id, request.id, answer, data.user_id
     )
 
     await publisher.flush()
@@ -367,8 +325,7 @@ class _FlakyBroker(RecordingBroker):
 
 
 async def test_flush_sends_each_task_once(
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
+    broker: RecordingBroker, publisher: TaskPublisher
 ) -> None:
     publisher.publish(TaskName.SEND_TO_USER, user_id=1)
 
@@ -400,26 +357,14 @@ async def test_group_catch_up_to_review_opens_one_card_per_member(
     # групповой переход - третья дорога на приемку: каждому автору по одной
     # карточке, и ни одного текста статуса с промежуточных шагов
     data = await make_org_house_flat_user(
-        org_role=OrgRole.ADMIN,
-        resident_role=ResidentRole.OWNER,
+        org_role=OrgRole.ADMIN, resident_role=ResidentRole.OWNER
     )
-    group = RequestGroup(
-        house_id=data.house_id,
-        category=RequestCategory.LEAK,
-        window_started_at=datetime.now(UTC),
-        status=RequestGroupStatus.OPEN,
-    )
-    session.add(group)
-    await session.flush()
-    first = await _add_request(session, data, RequestGroupId(group.id))
-    second = await _add_request(session, data, RequestGroupId(group.id))
+    group = await _add_group(session, data)
+    first = await _add_request(session, data, group.id)
+    second = await _add_request(session, data, group.id)
 
     await _admin_service(session, publisher).change_group_status(
-        data.org_id,
-        RequestGroupId(group.id),
-        RequestStatus.ON_REVIEW,
-        None,
-        data.user_id,
+        data.org_id, group.id, RequestStatus.ON_REVIEW, None, data.user_id
     )
 
     await publisher.flush()

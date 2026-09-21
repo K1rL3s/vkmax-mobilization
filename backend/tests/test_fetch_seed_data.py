@@ -49,8 +49,6 @@ def test_a_card_names_its_manager_in_both_layouts() -> None:
     ],
 )
 def test_a_registry_phone_is_dialable_or_empty(
-    raw: str,
-    area_code: str | None,
-    expected: str,
+    raw: str, area_code: str | None, expected: str
 ) -> None:
     assert SCRIPT.phone(raw, area_code) == expected

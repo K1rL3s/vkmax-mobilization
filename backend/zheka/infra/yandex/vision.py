@@ -57,13 +57,8 @@ class VisionClient:
             return None
 
         data = await self._call(content)
-        if data is None:
-            return None
-
-        text = _full_text(data)
-        if text is None:
-            return None
-        value = parse_reading(text)
+        text = None if data is None else _full_text(data)
+        value = None if text is None else parse_reading(text)
         if value is None:
             return None
         # OCR отдает одно число: счетчик с двумя зонами резидент правит руками

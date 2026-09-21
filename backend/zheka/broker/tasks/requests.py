@@ -60,10 +60,10 @@ async def send_executor_card(
         users_repo,
         notifications_service,
         sender,
-        UserId(recipient),
+        recipient,
         ExecutorCard.card,
         f"executor-{request_id}",
-        ExecutorCardData(request_id=int(request_id)).to_data(),
+        ExecutorCardData(request_id=request_id).to_data(),
         ShowMode.SEND if user_id is None else None,
     )
 
@@ -84,10 +84,10 @@ async def send_review_card(
         users_repo,
         notifications_service,
         sender,
-        UserId(request.author_user_id),
+        request.author_user_id,
         Review.card,
         f"review-{request_id}",
-        ReviewData(request_id=int(request_id)).to_data(),
+        ReviewData(request_id=request_id).to_data(),
         ShowMode.SEND,
     )
 
@@ -108,10 +108,7 @@ async def attach_result_photo(
     names = await save_photos(bot, files_service, photo_urls)
     try:
         await admin_requests_service.executor_advance(
-            user_id,
-            request_id,
-            RequestStatus.ON_REVIEW,
-            names,
+            user_id, request_id, RequestStatus.ON_REVIEW, names
         )
     except ZhekaError as error:
         # отказ ничего не записал, а карточку исполнитель все равно должен увидеть
@@ -128,21 +125,14 @@ async def open_card(
     state: State,
     stack_id: str,
     data: Data,
-    show_mode: ShowMode | None = None,
+    show_mode: ShowMode | None,
 ) -> None:
     user = await users_repo.get_by_id(user_id)
     if user is None:
         return
     levels = await notifications_service.levels(user_id)
     # карточка обязательна: при OFF гаснет только звук, None тут не бывает
-    notify = bool(
-        resolve_notify(levels[NotificationCategory.REQUESTS], mandatory=True),
-    )
+    notify = bool(resolve_notify(levels[NotificationCategory.REQUESTS], mandatory=True))
     await sender.start_dialog(
-        state,
-        user,
-        notify=notify,
-        data=data,
-        stack_id=stack_id,
-        show_mode=show_mode,
+        state, user, notify=notify, data=data, stack_id=stack_id, show_mode=show_mode
     )

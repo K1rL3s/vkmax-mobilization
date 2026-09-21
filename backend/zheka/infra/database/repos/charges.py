@@ -13,10 +13,7 @@ from zheka.infra.database.tables.charges import charges_table, tariffs_table
 
 class ChargesRepo(BaseAlchemyRepo):
     async def tariff_at(
-        self,
-        house_id: HouseId,
-        service: ServiceType,
-        on: date,
+        self, house_id: HouseId, service: ServiceType, on: date
     ) -> Tariff | None:
         stmt = (
             select(Tariff)
@@ -42,8 +39,7 @@ class ChargesRepo(BaseAlchemyRepo):
 
     async def get_by_period(self, flat_id: FlatId, period: date) -> Charge | None:
         stmt = select(Charge).where(
-            charges_table.c.flat_id == flat_id,
-            charges_table.c.period == period,
+            charges_table.c.flat_id == flat_id, charges_table.c.period == period
         )
         charge: Charge | None = await self._session.scalar(stmt)
         return charge
@@ -54,10 +50,7 @@ class ChargesRepo(BaseAlchemyRepo):
         return charge
 
     async def list_for_flat(
-        self,
-        flat_id: FlatId,
-        limit: int,
-        offset: int = 0,
+        self, flat_id: FlatId, limit: int, offset: int
     ) -> tuple[Sequence[Charge], int]:
         stmt = select(Charge).where(charges_table.c.flat_id == flat_id)
         total = await self._count(stmt)

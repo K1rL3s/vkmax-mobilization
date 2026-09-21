@@ -38,10 +38,7 @@ from zheka.infra.database.tables.organizations import (
     org_members_table,
     organizations_table,
 )
-from zheka.infra.database.tables.requests import (
-    request_photos_table,
-    requests_table,
-)
+from zheka.infra.database.tables.requests import request_photos_table, requests_table
 from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 from zheka.seed.demo import PROFILES, RESULT_PHOTOS, seed
@@ -78,8 +75,7 @@ async def seeded(engine: AsyncEngine) -> AsyncGenerator[AsyncConnection]:
     async with engine.connect() as conn:
         transaction = await conn.begin()
         async with AsyncSession(
-            bind=conn,
-            join_transaction_mode="create_savepoint",
+            bind=conn, join_transaction_mode="create_savepoint"
         ) as session:
             assert await seed(session, _demo(session), FILES, TODAY)
             await session.commit()
@@ -90,8 +86,7 @@ async def seeded(engine: AsyncEngine) -> AsyncGenerator[AsyncConnection]:
 @pytest_asyncio.fixture
 async def db(seeded: AsyncConnection) -> AsyncGenerator[AsyncSession]:
     async with AsyncSession(
-        bind=seeded,
-        join_transaction_mode="create_savepoint",
+        bind=seeded, join_transaction_mode="create_savepoint"
     ) as session:
         yield session
 
@@ -107,7 +102,7 @@ async def _counts(session: AsyncSession) -> dict[str, int]:
 async def _demo_org(session: AsyncSession) -> OrgId:
     org = await OrgsRepo(session).get_by_inn(DEMO_INN)
     assert org is not None
-    return OrgId(org.id)
+    return org.id
 
 
 async def test_a_second_seed_changes_nothing(db: AsyncSession) -> None:
@@ -143,7 +138,7 @@ async def test_the_five_organizations_rank_without_a_tie(db: AsyncSession) -> No
     for profile in PROFILES:
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
-        benchmark = await service.benchmark(OrgId(org.id), NOW)
+        benchmark = await service.benchmark(org.id, NOW)
         ranks.append({metric.key: metric.rank for metric in benchmark.metrics})
 
     for key in ranks[0]:
@@ -196,7 +191,7 @@ async def _positive_user(session: AsyncSession, *, consent: bool = True) -> User
     )
     session.add(user)
     await session.flush()
-    return UserId(user.id)
+    return user.id
 
 
 async def test_activation_twice_is_one_flat_and_the_month_is_open(
@@ -237,7 +232,7 @@ async def test_activation_twice_is_one_flat_and_the_month_is_open(
     assert len((await db.execute(charged)).scalars().all()) == 6
     periods = await _readings(db).periods(flat_id)
     assert [(option.period, option.is_open) for option in periods.options] == [
-        (this_month, True),
+        (this_month, True)
     ]
     assert this_month not in periods.submitted
 
@@ -306,8 +301,7 @@ async def test_a_reviewer_account_never_equals_a_seeded_one(db: AsyncSession) ->
     flat = access.residency.flat
     assert flat is not None
     stmt = select(flats_table.c.number, flats_table.c.account_no).where(
-        flats_table.c.house_id == flat.house_id,
-        flats_table.c.id != flat.id,
+        flats_table.c.house_id == flat.house_id, flats_table.c.id != flat.id
     )
     seeded = (await db.execute(stmt)).all()
 
@@ -321,8 +315,7 @@ async def test_a_reviewer_account_never_equals_a_seeded_one(db: AsyncSession) ->
 
 async def test_a_result_photo_shows_the_work_of_its_request(db: AsyncSession) -> None:
     stmt = select(request_photos_table.c.path, requests_table.c.category).join(
-        requests_table,
-        requests_table.c.id == request_photos_table.c.request_id,
+        requests_table, requests_table.c.id == request_photos_table.c.request_id
     )
     rows = (await db.execute(stmt)).all()
 

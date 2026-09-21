@@ -8,14 +8,8 @@ from zheka.api.schemas.files import FileRef
 from zheka.core.charges import ChargeLine as DomainChargeLine
 from zheka.core.enums import SERVICE_LABELS, ServiceType
 from zheka.core.ids import ChargeId, FlatId, MeterId, RequestId, TariffId
-from zheka.core.models import Charge, Tariff
-from zheka.core.services.charges import (
-    BreakdownData,
-    BreakdownLine,
-    ChargeCardData,
-    ConsumptionPoint as DomainConsumptionPoint,
-    ServiceConsumption as DomainServiceConsumption,
-)
+from zheka.core.models import Tariff
+from zheka.core.services.charges import BreakdownData, BreakdownLine, ChargeCardData
 
 _MONEY = "Сумма в копейках"
 _TARIFF = "Тариф в 1/10000 рубля за единицу"
@@ -72,24 +66,19 @@ class ChargeListItem(BaseSchema):
     is_closed: bool
     paid_at: datetime | None = None
 
-    @classmethod
-    def of(cls, charge: Charge) -> Self:
-        return cls.model_validate(charge)
-
 
 class ChargeCard(ChargeListItem):
     address: str
     flat_number: str
     lines: list[ChargeLine]
     flat_area: int | None = Field(
-        default=None,
-        description="Площадь в сотых долях квадратного метра",
+        default=None, description="Площадь в сотых долях квадратного метра"
     )
 
     @classmethod
     def of_card(cls, data: ChargeCardData) -> Self:
         return cls(
-            **ChargeListItem.of(data.charge).model_dump(),
+            **ChargeListItem.model_validate(data.charge).model_dump(),
             address=data.house.address,
             flat_number=data.flat.number,
             lines=[ChargeLine.of(line) for line in data.lines],
@@ -129,25 +118,12 @@ class ConsumptionPoint(BaseSchema):
     period: date
     consumption: int = Field(description=_VOLUME)
 
-    @classmethod
-    def of(cls, point: DomainConsumptionPoint) -> Self:
-        return cls.model_validate(point)
-
 
 class ServiceConsumption(BaseSchema):
     service: ServiceType
     meter_id: MeterId
     points: list[ConsumptionPoint]
     house_average: int | None = Field(default=None, description=_VOLUME)
-
-    @classmethod
-    def of(cls, data: DomainServiceConsumption) -> Self:
-        return cls(
-            service=data.service,
-            meter_id=data.meter_id,
-            points=[ConsumptionPoint.of(point) for point in data.points],
-            house_average=data.house_average,
-        )
 
 
 class ChargeBreakdown(BaseSchema):
@@ -165,14 +141,16 @@ class ChargeBreakdown(BaseSchema):
         charge = data.charge
         previous = data.previous_charge
         return cls(
-            charge_id=ChargeId(charge.id),
+            charge_id=charge.id,
             period=charge.period,
             total=charge.total,
             delta=data.delta,
             lines=[ChargeBreakdownLine.of(line) for line in data.lines],
             previous_period=None if previous is None else previous.period,
             previous_total=None if previous is None else previous.total,
-            consumption=[ServiceConsumption.of(item) for item in data.consumption],
+            consumption=[
+                ServiceConsumption.model_validate(item) for item in data.consumption
+            ],
         )
 
 
@@ -189,6 +167,5 @@ class PayChargeResponse(BaseSchema):
     charge_id: ChargeId
     paid_at: datetime
     is_demo: bool = Field(
-        default=True,
-        description="Демонстрация, платеж не проводится",
+        default=True, description="Демонстрация, платеж не проводится"
     )

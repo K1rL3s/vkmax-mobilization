@@ -1,6 +1,5 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from zheka.base import ZhekaType
 from zheka.core import texts
@@ -17,19 +16,15 @@ from zheka.core.enums import (
     ResidentStatus,
 )
 from zheka.core.errors import (
+    FLAT_NOT_FOUND,
+    GROUP_NOT_FOUND,
+    REQUEST_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import (
-    FlatId,
-    HouseId,
-    OrgId,
-    RequestGroupId,
-    RequestId,
-    UserId,
-)
+from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
 from zheka.core.models import (
     Flat,
     House,
@@ -69,9 +64,6 @@ MAX_RATING = 5
 
 BLOCKED = "Вы заблокированы в этом доме"
 NOT_A_RESIDENT = "Дом не найден"
-REQUEST_NOT_FOUND = "Заявка не найдена"
-FLAT_NOT_FOUND = "Квартира не найдена"
-GROUP_NOT_FOUND = "Группа заявок не найдена"
 GROUP_CLOSED = "Группа заявок уже закрыта"
 GROUP_OTHER_CATEGORY = "Группа заявок собрана по другой категории"
 EMPTY_DESCRIPTION = "Опишите проблему"
@@ -83,11 +75,6 @@ REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано пло
 ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
 REJECT_NOT_ON_REVIEW = "Работу возвращают только с приемки"
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
-# from - ключевое слово питона, поэтому пара едет в record распаковкой
-_CLOSED_FROM_REVIEW: dict[str, Any] = {
-    "from": RequestStatus.ON_REVIEW.value,
-    "to": RequestStatus.DONE.value,
-}
 
 
 class RequestDraft(ZhekaType):
@@ -232,7 +219,7 @@ class RequestsService:
         if not rejected_on_review and parent.status is not RequestStatus.DONE:
             raise InvalidState(REPEAT_NOT_DONE)
 
-        house_id = HouseId(parent.house_id)
+        house_id = parent.house_id
         await self._active_resident(user_id, house_id)
         house = await self._get_house(house_id)
         # описание и фото у повтора свои, остальное - копия родителя
@@ -249,17 +236,18 @@ class RequestsService:
                 parent,
                 user_id,
                 RequestCompletionReason.RESIDENT_REJECTED,
+                datetime.now(UTC),
             )
 
         request = await self._requests.create(
             house_id,
-            None if parent.flat_id is None else FlatId(parent.flat_id),
+            parent.flat_id,
             user_id,
             parent.category,
             text,
             channel,
             None,
-            RequestId(parent.id),
+            parent.id,
             is_staff_author=await self._is_staff(house, user_id),
         )
         await self._add_photos(request, checked, user_id)
@@ -272,21 +260,17 @@ class RequestsService:
             channel=channel.value,
             has_photo=bool(checked),
             is_repeat=True,
-            parent_request_id=RequestId(parent.id),
+            parent_request_id=parent.id,
         )
         return await self._built_card(request, house)
 
     async def rate(
-        self,
-        user_id: UserId,
-        request_id: RequestId,
-        rating: int,
-        feedback: str | None,
+        self, user_id: UserId, request_id: RequestId, rating: int, feedback: str | None
     ) -> RequestCardData:
         if not MIN_RATING <= rating <= MAX_RATING:
             raise InvalidRequest(RATING_OUT_OF_RANGE)
         request = await self._own_request(user_id, request_id)
-        await self._active_resident(user_id, HouseId(request.house_id))
+        await self._active_resident(user_id, request.house_id)
 
         if request.completion_reason is not RequestCompletionReason.RESIDENT_ACCEPTED:
             raise InvalidState(RATE_NOT_DONE)
@@ -304,13 +288,9 @@ class RequestsService:
         )
         return await self.get_card(user_id, request_id)
 
-    async def accept(
-        self,
-        user_id: UserId,
-        request_id: RequestId,
-    ) -> RequestCardData:
+    async def accept(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
-        await self._active_resident(user_id, HouseId(request.house_id))
+        await self._active_resident(user_id, request.house_id)
         if request.status is not RequestStatus.ON_REVIEW:
             raise InvalidState(ACCEPT_NOT_ON_REVIEW)
 
@@ -318,42 +298,20 @@ class RequestsService:
             request,
             user_id,
             RequestCompletionReason.RESIDENT_ACCEPTED,
+            datetime.now(UTC),
         )
         return await self.get_card(user_id, request_id)
 
     async def auto_close(self, now: datetime) -> int:
-        requests = await self._requests.list_reviewed_before(
-            now - AUTO_CLOSE_AFTER,
-        )
+        requests = await self._requests.list_reviewed_before(now - AUTO_CLOSE_AFTER)
         for request in requests:
-            await self._requests.set_status(
-                request,
-                RequestStatus.DONE,
-                now,
-                completion_reason=RequestCompletionReason.AUTO_CLOSED,
-            )
-            await self._requests.add_log(
-                RequestId(request.id),
-                RequestStatus.ON_REVIEW,
-                RequestStatus.DONE,
-                None,
-                RequestActorRole.SYSTEM.value,
-                now,
-            )
-            await self._events.record(
-                EventType.REQUEST_STATUS_CHANGED,
-                request_id=RequestId(request.id),
-                **_CLOSED_FROM_REVIEW,
-                by_role=RequestActorRole.SYSTEM.value,
-            )
-            await self._events.record(
-                EventType.REQUEST_AUTO_CLOSED,
-                request_id=RequestId(request.id),
+            await self._complete_review(
+                request, None, RequestCompletionReason.AUTO_CLOSED, now
             )
             if request.author_user_id is not None:
                 self._notifications.notify_user(
-                    UserId(request.author_user_id),
-                    texts.request_auto_closed(RequestId(request.id)),
+                    request.author_user_id,
+                    texts.request_auto_closed(request.id),
                     category=NotificationCategory.REQUESTS,
                     mandatory=True,
                 )
@@ -362,41 +320,45 @@ class RequestsService:
     async def _complete_review(
         self,
         request: Request,
-        user_id: UserId,
+        user_id: UserId | None,
         completion_reason: RequestCompletionReason,
+        at: datetime,
     ) -> None:
-        at = datetime.now(UTC)
+        auto = completion_reason is RequestCompletionReason.AUTO_CLOSED
+        by_role = RequestActorRole.SYSTEM if auto else RequestActorRole.RESIDENT
         await self._requests.set_status(
-            request,
-            RequestStatus.DONE,
-            at,
-            completion_reason=completion_reason,
+            request, RequestStatus.DONE, at, completion_reason=completion_reason
         )
         await self._requests.add_log(
-            RequestId(request.id),
+            request.id,
             RequestStatus.ON_REVIEW,
             RequestStatus.DONE,
             user_id,
-            RequestActorRole.RESIDENT.value,
+            by_role.value,
             at,
         )
         await self._events.record(
             EventType.REQUEST_STATUS_CHANGED,
             user_id=user_id,
-            request_id=RequestId(request.id),
-            **_CLOSED_FROM_REVIEW,
-            by_role=RequestActorRole.RESIDENT.value,
+            request_id=request.id,
+            **{"from": RequestStatus.ON_REVIEW.value, "to": RequestStatus.DONE.value},
+            by_role=by_role.value,
         )
+        if auto:
+            await self._events.record(
+                EventType.REQUEST_AUTO_CLOSED, request_id=request.id
+            )
+            return
         await self._events.record(
             EventType.REQUEST_REVIEWED,
             user_id=user_id,
-            request_id=RequestId(request.id),
+            request_id=request.id,
             accepted=completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED,
         )
 
     async def get_card(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
-        house = await self._get_house(HouseId(request.house_id))
+        house = await self._get_house(request.house_id)
         return await self._built_card(request, house)
 
     async def list_mine(
@@ -408,20 +370,13 @@ class RequestsService:
         offset: int,
     ) -> tuple[list[RequestRow], int]:
         requests, total = await self._requests.list_for_user(
-            user_id,
-            house_id,
-            status,
-            limit,
-            offset,
+            user_id, house_id, status, limit, offset
         )
         rows = await build_rows(self._requests, self._houses, self._users, requests)
         return rows, total
 
     async def similar(
-        self,
-        user_id: UserId,
-        house_id: HouseId,
-        category: RequestCategory,
+        self, user_id: UserId, house_id: HouseId, category: RequestCategory
     ) -> SimilarRequests:
         resident = await self._active_resident(user_id, house_id)
         return await self._grouping.similar(
@@ -429,45 +384,36 @@ class RequestsService:
             category,
             await self._rules(await self._get_house(house_id)),
             datetime.now(UTC),
-            None if resident.flat_id is None else FlatId(resident.flat_id),
+            resident.flat_id,
             user_id,
         )
 
     async def _group(
-        self,
-        request: Request,
-        house: House,
-        joined_group_id: RequestGroupId | None,
+        self, request: Request, house: House, joined_group_id: RequestGroupId | None
     ) -> None:
         # житель, нажавший «присоединиться», уже в группе - искать нечего
         if joined_group_id is not None:
             await self._grouping.joined(request, joined_group_id)
             return
         await self._grouping.attach(
-            request,
-            await self._rules(house),
-            datetime.now(UTC),
+            request, await self._rules(house), datetime.now(UTC)
         )
 
     async def _rules(self, house: House) -> GroupingRules:
-        if house.org_id is None:
-            return rules_of(None)
-        return rules_of(await self._orgs.get_settings(OrgId(house.org_id)))
+        org_id = house.org_id
+        return rules_of(
+            None if org_id is None else await self._orgs.get_settings(org_id)
+        )
 
     async def _built_card(self, request: Request, house: House) -> RequestCardData:
         return await build_card(
-            self._requests,
-            self._houses,
-            self._users,
-            self._orgs,
-            request,
-            house,
+            self._requests, self._houses, self._users, self._orgs, request, house
         )
 
     async def _open(self, request: Request, user_id: UserId) -> None:
         # ни один путь не меняет requests.status без строки в журнале, NEW тоже
         await self._requests.add_log(
-            RequestId(request.id),
+            request.id,
             None,
             RequestStatus.NEW,
             user_id,
@@ -476,17 +422,11 @@ class RequestsService:
         )
 
     async def _add_photos(
-        self,
-        request: Request,
-        photos: Sequence[str],
-        user_id: UserId,
+        self, request: Request, photos: Sequence[str], user_id: UserId
     ) -> None:
         for name in photos:
             await self._requests.add_photo(
-                RequestId(request.id),
-                name,
-                RequestPhotoKind.ISSUE,
-                user_id,
+                request.id, name, RequestPhotoKind.ISSUE, user_id
             )
 
     def _checked_photos(self, photos: Sequence[str]) -> Sequence[str]:
@@ -534,7 +474,7 @@ class RequestsService:
     async def _is_staff(self, house: House, user_id: UserId) -> bool:
         if house.org_id is None:
             return False
-        member = await self._orgs.get_member(OrgId(house.org_id), user_id)
+        member = await self._orgs.get_member(house.org_id, user_id)
         return member is not None
 
     async def _get_house(self, house_id: HouseId) -> House:
@@ -562,9 +502,7 @@ class RequestsService:
         card = await self.get_card(user_id, request_id)
         # каждое открытие печатной страницы - отдельная выгрузка
         await self._events.record(
-            EventType.REQUEST_EXPORTED,
-            user_id=user_id,
-            request_id=request_id,
+            EventType.REQUEST_EXPORTED, user_id=user_id, request_id=request_id
         )
         return card
 
@@ -574,9 +512,7 @@ class RequestsService:
         category = await self._classifier.classify(text)
         if category is not None:
             await self._events.record(
-                EventType.LLM_SUGGESTED,
-                user_id=user_id,
-                category=category.value,
+                EventType.LLM_SUGGESTED, user_id=user_id, category=category.value
             )
         return category
 
@@ -589,50 +525,37 @@ async def build_rows(
 ) -> list[RequestRow]:
     # один запрос на весь список, а не по одному на заявку
     photo_counts = await requests_repo.count_photos(
-        [RequestId(request.id) for request in requests],
+        [request.id for request in requests]
     )
     group_sizes = await requests_repo.count_by_group(
-        {
-            RequestGroupId(request.group_id)
-            for request in requests
-            if request.group_id is not None
-        },
+        {request.group_id for request in requests if request.group_id is not None}
     )
-    flats = {
-        FlatId(flat.id): flat
+    # ключ с None: у заявки без квартиры get отдает None без проверки
+    flats: dict[FlatId | None, Flat] = {
+        flat.id: flat
         for flat in await houses_repo.list_flats_by_ids(
-            [
-                FlatId(request.flat_id)
-                for request in requests
-                if request.flat_id is not None
-            ],
+            [request.flat_id for request in requests if request.flat_id is not None]
         )
     }
-    executors = {
-        UserId(user.id): user
+    executors: dict[UserId | None, User] = {
+        user.id: user
         for user in await users_repo.list_by_ids(
             [
-                UserId(request.executor_user_id)
+                request.executor_user_id
                 for request in requests
                 if request.executor_user_id is not None
-            ],
+            ]
         )
     }
     return [
         RequestRow(
             request=request,
-            flat=None if request.flat_id is None else flats.get(request.flat_id),
-            has_photos=photo_counts.get(RequestId(request.id), 0) > 0,
+            flat=flats.get(request.flat_id),
+            has_photos=photo_counts.get(request.id, 0) > 0,
             group_size=(
-                0
-                if request.group_id is None
-                else group_sizes.get(RequestGroupId(request.group_id), 0)
+                0 if request.group_id is None else group_sizes.get(request.group_id, 0)
             ),
-            executor=(
-                None
-                if request.executor_user_id is None
-                else executors.get(request.executor_user_id)
-            ),
+            executor=executors.get(request.executor_user_id),
         )
         for request in requests
     ]
@@ -646,31 +569,30 @@ async def build_card(
     request: Request,
     house: House,
 ) -> RequestCardData:
-    request_id = RequestId(request.id)
-    photos = await requests_repo.list_photos(request_id)
-    messages = await requests_repo.list_messages(request_id)
+    photos = await requests_repo.list_photos(request.id)
+    messages = await requests_repo.list_messages(request.id)
     authors = {
-        UserId(user.id): user
+        user.id: user
         for user in await users_repo.list_by_ids(
-            [UserId(message.author_user_id) for message in messages],
+            [message.author_user_id for message in messages]
         )
     }
     group_sizes = await requests_repo.count_by_group(
-        [] if request.group_id is None else [RequestGroupId(request.group_id)],
+        [] if request.group_id is None else [request.group_id]
     )
     executor = (
         None
         if request.executor_user_id is None
-        else await users_repo.get_by_id(UserId(request.executor_user_id))
+        else await users_repo.get_by_id(request.executor_user_id)
     )
     return RequestCardData(
         request=request,
         house=house,
-        org=None if house.org_id is None else await orgs_repo.get(OrgId(house.org_id)),
+        org=None if house.org_id is None else await orgs_repo.get(house.org_id),
         flat=(
             None
             if request.flat_id is None
-            else await houses_repo.get_flat(FlatId(request.flat_id))
+            else await houses_repo.get_flat(request.flat_id)
         ),
         issue_photos=[
             photo for photo in photos if photo.kind is RequestPhotoKind.ISSUE
@@ -678,19 +600,15 @@ async def build_card(
         result_photos=[
             photo for photo in photos if photo.kind is RequestPhotoKind.RESULT
         ],
-        timeline=await requests_repo.list_log(request_id),
+        timeline=await requests_repo.list_log(request.id),
         messages=[
             RequestMessageView(
-                message=message,
-                author=authors.get(UserId(message.author_user_id)),
+                message=message, author=authors.get(message.author_user_id)
             )
             for message in messages
         ],
-        group_size=(
-            0
-            if request.group_id is None
-            else group_sizes.get(RequestGroupId(request.group_id), 0)
-        ),
+        # у заявки не больше одной группы
+        group_size=sum(group_sizes.values()),
         executor=executor,
         can_review=request.status is RequestStatus.ON_REVIEW,
         can_rate=(

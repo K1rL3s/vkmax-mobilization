@@ -12,7 +12,7 @@ from zheka.core.enums import (
     NotificationCategory,
     ResidentStatus,
 )
-from zheka.core.ids import FlatId, HouseId, MaxChatId, PollId, UserId
+from zheka.core.ids import HouseId, UserId
 from zheka.core.models import OrgSettings
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
@@ -63,10 +63,7 @@ def reading_reminder(
         return ReadingReminder.OPEN
     # у окна короче трех дней канун закрытия приходится на день до открытия
     if today.day == closing and window_is_open(
-        today.day,
-        day_from,
-        day_to,
-        always_open=False,
+        today.day, day_from, day_to, always_open=False
     ):
         return ReadingReminder.CLOSING
     return None
@@ -75,7 +72,7 @@ def reading_reminder(
 _READING_TEXTS: dict[ReadingReminder, Callable[[], str]] = {
     ReadingReminder.OPEN: texts.reading_window_opened,
     ReadingReminder.CLOSING: lambda: texts.reading_window_closing(
-        READING_SECOND_REMINDER_DAYS,
+        READING_SECOND_REMINDER_DAYS
     ),
     ReadingReminder.MANUAL: texts.reading_reminder_manual,
 }
@@ -133,10 +130,7 @@ class RemindersService:
             # другому периоду дошло бы до тех, кто уже сдал
             period = window_period(today, settings)
             sent += await self._remind_house_readings(
-                house_id,
-                period,
-                kind,
-                queued[kind],
+                house_id, period, kind, queued[kind]
             )
         logger.info("Напоминание о показаниях: адресатов %s", sent)
         return sent
@@ -147,22 +141,18 @@ class RemindersService:
             # квартира проголосовала, если ее голос идет в кворум: голос
             # неподтвержденного совладельца не снимает напоминания с того, чей
             # голос засчитался бы. Сам проголосовавший не получает его никогда
-            voted = set(
-                await self._polls.voted_flat_ids(PollId(poll.id), verified_only=True),
-            )
-            voters = set(await self._polls.voter_ids(PollId(poll.id)))
+            voted = set(await self._polls.voted_flat_ids(poll.id, verified_only=True))
+            voters = set(await self._polls.voter_ids(poll.id))
             user_ids = [
-                UserId(resident.user_id)
-                for resident in await self._residents.list_for_house(
-                    HouseId(poll.house_id),
-                )
+                resident.user_id
+                for resident in await self._residents.list_for_house(poll.house_id)
                 if resident.can_vote
                 and resident.status is ResidentStatus.ACTIVE
                 and resident.flat_id is not None
-                and FlatId(resident.flat_id) not in voted
+                and resident.flat_id not in voted
                 and resident.user_id not in voters
             ]
-            chats = await self._chats.list_for_houses([HouseId(poll.house_id)])
+            chats = await self._chats.list_for_houses([poll.house_id])
             await self._polls.mark_reminded(poll, now)
             self._notifications.notify_users(
                 user_ids,
@@ -171,7 +161,7 @@ class RemindersService:
                 mandatory=False,
             )
             self._notifications.notify_chats(
-                [MaxChatId(chat.chat_id) for chat in chats],
+                [chat.chat_id for chat in chats],
                 texts.poll_chat_reminder(poll.title, poll.ends_at),
             )
         logger.info("Напоминание об опросах: опросов %s", len(polls))
@@ -199,12 +189,10 @@ class RemindersService:
                 text = texts.verification_soon(label, meter.serial, due)
             else:
                 continue
-            residents = await self._residents.list_verified_for_flats(
-                [FlatId(meter.flat_id)],
-            )
+            residents = await self._residents.list_verified_for_flats([meter.flat_id])
             await self._meters.mark_warned(meter, today)
             self._notifications.notify_users(
-                [UserId(resident.user_id) for resident in residents],
+                [resident.user_id for resident in residents],
                 text,
                 category=NotificationCategory.METERS,
                 mandatory=False,
@@ -217,21 +205,20 @@ class RemindersService:
         # прием хранит настенные часы как UTC, поэтому «завтра» считается
         # по той же дате starts_at, без перевода в пояс
         appointments = await self._reception.list_to_remind(
-            now.date() + timedelta(days=1),
+            now.date() + timedelta(days=1)
         )
         for appointment in appointments:
-            house = await self._houses.get(HouseId(appointment.house_id))
+            house = await self._houses.get(appointment.house_id)
             await self._reception.mark_reminded(appointment, now)
             await self._events.record(
                 EventType.APPOINTMENT_REMINDER_SENT,
-                user_id=UserId(appointment.user_id),
+                user_id=appointment.user_id,
                 appointment_id=appointment.id,
             )
             self._notifications.notify_user(
-                UserId(appointment.user_id),
+                appointment.user_id,
                 texts.appointment_reminder(
-                    appointment.starts_at,
-                    "" if house is None else house.address,
+                    appointment.starts_at, "" if house is None else house.address
                 ),
                 category=NotificationCategory.REQUESTS,
                 mandatory=True,
@@ -251,29 +238,23 @@ class RemindersService:
         residents = await self._residents.list_verified_for_flats(flat_ids)
         # у каждого дома свое окно: без дома отметка первого глушила бы
         # напоминание второго, открывшегося в другой день
-        stamp = {
-            "house_id": house_id,
-            "period": period.isoformat(),
-            "kind": kind.value,
-        }
+        stamp = {"house_id": house_id, "period": period.isoformat(), "kind": kind.value}
         # с since гасит любое напоминание о показаниях с этого момента, какого
         # угодно дома и вида
         reminded = await self._events_repo.users_with(
             EventType.READING_REMINDER_SENT,
-            [UserId(resident.user_id) for resident in residents],
+            [resident.user_id for resident in residents],
             stamp if since is None else {},
             since,
         )
         user_ids = [
-            UserId(resident.user_id)
+            resident.user_id
             for resident in residents
             if resident.user_id not in reminded
         ]
         for user_id in user_ids:
             await self._events.record(
-                EventType.READING_REMINDER_SENT,
-                user_id=user_id,
-                **stamp,
+                EventType.READING_REMINDER_SENT, user_id=user_id, **stamp
             )
         fresh = [user_id for user_id in user_ids if user_id not in queued]
         queued.update(fresh)
@@ -286,10 +267,7 @@ class RemindersService:
         return len(fresh)
 
     async def remind_reading_laggards(
-        self,
-        house_ids: Collection[HouseId],
-        period: date,
-        now: datetime,
+        self, house_ids: Collection[HouseId], period: date, now: datetime
     ) -> int:
         # кнопка УК: кто сегодня уже получил любое напоминание о показаниях,
         # второе не получит, поэтому десять нажатий - одно сообщение
@@ -298,11 +276,7 @@ class RemindersService:
         sent = 0
         for house_id in house_ids:
             sent += await self._remind_house_readings(
-                house_id,
-                period,
-                ReadingReminder.MANUAL,
-                queued,
-                since,
+                house_id, period, ReadingReminder.MANUAL, queued, since
             )
         logger.info("Ручное напоминание о показаниях: адресатов %s", sent)
         return sent

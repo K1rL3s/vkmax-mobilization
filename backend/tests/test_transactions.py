@@ -14,8 +14,7 @@ from dishka.integrations.taskiq import (
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import StreamingResponse
 from httpx import ASGITransport, AsyncClient
-from maxo import Dispatcher, Router
-from maxo.dialogs import BgManagerFactory
+from maxo import Router
 from maxo.integrations.dishka import inject as maxo_inject
 from maxo.routing.signals.update import MaxoUpdate
 from maxo.types import ChatTitleChanged, User as MaxUser
@@ -28,13 +27,14 @@ from tests.conftest import (
     PROBE_ROUTERS,
     RecordingBroker,
     RecordingBrokerProvider,
+    bot_context,
     empty_bot_setup,
 )
 
 from zheka.api.app import setup_middlewares
 from zheka.api.errors import ERROR_RESPONSES, exception_handlers
 from zheka.api.middlewares import TRACE_HEADER
-from zheka.api.routes import healthcheck_router
+from zheka.api.routes.healthcheck import router as healthcheck_router
 from zheka.bot import BotSetup
 from zheka.broker.middlewares import CommitMiddleware
 from zheka.broker.publisher import TaskPublisher
@@ -60,62 +60,6 @@ async def _write(session: AsyncSession, marker: MaxUserId) -> None:
     await session.flush()
 
 
-@probe_router.post("/probe/value-error")
-async def probe_value_error(
-    marker: int,
-    session: FromDishka[AsyncSession],
-) -> None:
-    await _write(session, MaxUserId(marker))
-    raise ValueError("конфликт состояния")
-
-
-@probe_router.post("/probe/unknown")
-async def probe_unknown(
-    marker: int,
-    session: FromDishka[AsyncSession],
-) -> None:
-    await _write(session, MaxUserId(marker))
-    raise RuntimeError("что-то сломалось")
-
-
-@probe_router.post("/probe/ok")
-async def probe_ok(marker: int, session: FromDishka[AsyncSession]) -> dict[str, bool]:
-    await _write(session, MaxUserId(marker))
-    return {"ok": True}
-
-
-@probe_router.post("/probe/publish-then-fail")
-async def probe_publish_then_fail(
-    marker: int,
-    session: FromDishka[AsyncSession],
-    notifications: FromDishka[NotificationsService],
-) -> None:
-    await _write(session, MaxUserId(marker))
-    notifications.notify_user(
-        UserId(marker),
-        "Уведомление о том, чего не случилось",
-        category=NotificationCategory.REQUESTS,
-        mandatory=True,
-    )
-    raise EntityNotFound("нет такого")
-
-
-@probe_router.post("/probe/publish-then-ok")
-async def probe_publish_then_ok(
-    marker: int,
-    session: FromDishka[AsyncSession],
-    notifications: FromDishka[NotificationsService],
-) -> dict[str, bool]:
-    await _write(session, MaxUserId(marker))
-    notifications.notify_user(
-        UserId(marker),
-        "Уведомление о том, что случилось",
-        category=NotificationCategory.REQUESTS,
-        mandatory=True,
-    )
-    return {"ok": True}
-
-
 @probe_router.get("/probe/no-database")
 async def probe_no_database() -> dict[str, bool]:
     return {"ok": True}
@@ -123,8 +67,7 @@ async def probe_no_database() -> dict[str, bool]:
 
 @probe_router.post("/probe/stream")
 async def probe_stream(
-    marker: int,
-    session: FromDishka[AsyncSession],
+    marker: int, session: FromDishka[AsyncSession]
 ) -> StreamingResponse:
     # как отдача файла: call_next возвращается раньше, чем уедет тело
     await _write(session, MaxUserId(marker))
@@ -136,6 +79,32 @@ async def probe_stream(
     return StreamingResponse(body(), media_type="application/octet-stream")
 
 
+_PROBE_ERRORS: dict[str, type[Exception]] = {
+    "not-found": EntityNotFound,
+    "value-error": ValueError,
+    "unknown": RuntimeError,
+}
+
+
+@probe_router.post("/probe/{outcome}")
+async def probe(
+    outcome: str,
+    marker: int,
+    session: FromDishka[AsyncSession],
+    notifications: FromDishka[NotificationsService],
+) -> dict[str, bool]:
+    await _write(session, MaxUserId(marker))
+    notifications.notify_user(
+        UserId(marker),
+        "Уведомление из пробного маршрута",
+        category=NotificationCategory.REQUESTS,
+        mandatory=True,
+    )
+    if outcome in _PROBE_ERRORS:
+        raise _PROBE_ERRORS[outcome]("проба")
+    return {"ok": True}
+
+
 @pytest_asyncio.fixture
 async def probe_container(
     database_url: str,  # noqa: ARG001
@@ -145,19 +114,14 @@ async def probe_container(
     container = make_container(
         RecordingBrokerProvider(broker),
         config=load_config(),
-        context={
-            Dispatcher: bot_setup.dp,
-            BgManagerFactory: bot_setup.bg_manager_factory,
-        },
+        context=bot_context(bot_setup),
     )
     yield container
     await container.close()
 
 
 @pytest_asyncio.fixture
-async def probe_client(
-    probe_container: AsyncContainer,
-) -> AsyncGenerator[AsyncClient]:
+async def probe_client(probe_container: AsyncContainer) -> AsyncGenerator[AsyncClient]:
     app = FastAPI(exception_handlers=exception_handlers)
     app.include_router(probe_router, responses=ERROR_RESPONSES)
     app.include_router(healthcheck_router, responses=ERROR_RESPONSES)
@@ -185,8 +149,7 @@ async def _committed(engine: AsyncEngine, marker: MaxUserId) -> int:
 
 
 @pytest.mark.parametrize(
-    ("path", "status"),
-    [("/probe/publish-then-fail", 404), ("/probe/value-error", 409)],
+    ("path", "status"), [("/probe/not-found", 404), ("/probe/value-error", 409)]
 )
 async def test_handled_error_rolls_back_and_delivers_nothing(
     probe_client: AsyncClient,
@@ -208,24 +171,18 @@ async def test_handled_error_rolls_back_and_delivers_nothing(
 
 
 async def test_unhandled_error_rolls_the_request_back(
-    probe_client: AsyncClient,
-    engine: AsyncEngine,
+    probe_client: AsyncClient, engine: AsyncEngine
 ) -> None:
     marker = _marker()
 
-    response = await probe_client.post(
-        "/probe/unknown",
-        params={"marker": marker},
-    )
+    response = await probe_client.post("/probe/unknown", params={"marker": marker})
 
     assert response.status_code == 500
     assert await _committed(engine, marker) == 0
 
 
 async def test_failing_commit_persists_nothing(
-    probe_client: AsyncClient,
-    engine: AsyncEngine,
-    monkeypatch: pytest.MonkeyPatch,
+    probe_client: AsyncClient, engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # коммит упал после обработчика: запись не доезжает ни через прослойку,
     # ни через провайдер
@@ -242,8 +199,7 @@ async def test_failing_commit_persists_nothing(
 
 
 async def test_streaming_response_commits_and_still_streams(
-    probe_client: AsyncClient,
-    engine: AsyncEngine,
+    probe_client: AsyncClient, engine: AsyncEngine
 ) -> None:
     marker = _marker()
 
@@ -255,8 +211,7 @@ async def test_streaming_response_commits_and_still_streams(
 
 
 async def test_request_without_database_work_passes_through(
-    probe_client: AsyncClient,
-    probe_container: AsyncContainer,
+    probe_client: AsyncClient, probe_container: AsyncContainer
 ) -> None:
     # прослойка берет сессию на каждом запросе, коммит нетронутой не ходит в базу
     response = await probe_client.get("/probe/no-database")
@@ -277,16 +232,11 @@ async def test_healthcheck_still_answers(probe_client: AsyncClient) -> None:
 
 
 async def test_successful_request_delivers_exactly_once(
-    probe_client: AsyncClient,
-    engine: AsyncEngine,
-    broker: RecordingBroker,
+    probe_client: AsyncClient, engine: AsyncEngine, broker: RecordingBroker
 ) -> None:
     marker = _marker()
 
-    response = await probe_client.post(
-        "/probe/publish-then-ok",
-        params={"marker": marker},
-    )
+    response = await probe_client.post("/probe/ok", params={"marker": marker})
 
     assert response.status_code == 200
     assert await _committed(engine, marker) == 1
@@ -296,8 +246,7 @@ async def test_successful_request_delivers_exactly_once(
 
 
 async def test_worker_flushes_after_its_own_commit(
-    probe_container: AsyncContainer,
-    broker: RecordingBroker,
+    probe_container: AsyncContainer, broker: RecordingBroker
 ) -> None:
     # порядок воркера: CommitMiddleware последний, taskiq зовет post_execute в
     # обратном порядке, и коммит с отправкой идут до закрытия контейнера
@@ -305,11 +254,7 @@ async def test_worker_flushes_after_its_own_commit(
     commit_middleware = CommitMiddleware()
     host = RecordingBroker().with_middlewares(container_middleware, commit_middleware)
     message = TaskiqMessage(
-        task_id="probe",
-        task_name="probe",
-        labels={},
-        args=[],
-        kwargs={},
+        task_id="probe", task_name="probe", labels={}, args=[], kwargs={}
     )
     message = await container_middleware.pre_execute(message)
     request_container = host.state[CONTAINER_REGISTRY][message.labels[CONTAINER_ID]]
@@ -317,8 +262,7 @@ async def test_worker_flushes_after_its_own_commit(
     publisher.publish(TaskName.SEND_TO_USER, user_id=1)
 
     await commit_middleware.post_execute(
-        message,
-        TaskiqResult(is_err=False, return_value=None, execution_time=0.0),
+        message, TaskiqResult(is_err=False, return_value=None, execution_time=0.0)
     )
 
     assert len(broker.enqueued(TaskName.SEND_TO_USER)) == 1
@@ -347,11 +291,8 @@ async def probe_bot_handler(
 
 
 def _delivered(broker: RecordingBroker, marker: MaxUserId) -> int:
-    return sum(
-        1
-        for kwargs in broker.enqueued(TaskName.SEND_TO_USER)
-        if kwargs["user_id"] == marker
-    )
+    enqueued = broker.enqueued(TaskName.SEND_TO_USER)
+    return [kwargs["user_id"] for kwargs in enqueued].count(marker)
 
 
 def _bot_update(marker: MaxUserId, title: str) -> MaxoUpdate[ChatTitleChanged]:
@@ -363,7 +304,7 @@ def _bot_update(marker: MaxUserId, title: str) -> MaxoUpdate[ChatTitleChanged]:
             title=title,
             # не метка: UserMiddleware заводит по отправителю свою строку users
             user=MaxUser(first_name="Житель", is_bot=False, user_id=_marker()),
-        ),
+        )
     )
 
 

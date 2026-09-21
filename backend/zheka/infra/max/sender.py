@@ -28,7 +28,7 @@ from zheka.infra.max.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-BOT_RATE_LIMIT = RateLimiter(max_calls=30, period=1.0)
+BOT_RATE_LIMIT = RateLimiter(max_calls=30)
 
 # звук окна диалога для ZhekaMessageManager, поднимает его только start_dialog
 dialog_notify: ContextVar[bool] = ContextVar("dialog_notify", default=False)
@@ -36,7 +36,7 @@ dialog_notify: ContextVar[bool] = ContextVar("dialog_notify", default=False)
 
 @lru_cache(maxsize=4096)
 def _chat_rate_limit(recipient: int) -> RateLimiter:  # noqa: ARG001
-    return RateLimiter(max_calls=2, period=1.0)
+    return RateLimiter(max_calls=2)
 
 
 @contextmanager
@@ -72,9 +72,7 @@ class MaxSender:
         attachments: list[AttachmentsRequests | Attachments] | None = None
         if keyboard is not None:
             attachments = [
-                InlineKeyboardAttachmentRequest.factory(
-                    [list(row) for row in keyboard]
-                ),
+                InlineKeyboardAttachmentRequest.factory([list(row) for row in keyboard])
             ]
 
         result: SendMessageResult | None = None
@@ -96,7 +94,6 @@ class MaxSender:
         *,
         notify: bool,
         data: Data = None,
-        mode: StartMode = StartMode.RESET_STACK,
         stack_id: str | None = None,
         show_mode: ShowMode | None = None,
     ) -> None:
@@ -131,7 +128,7 @@ class MaxSender:
                     await dialog_manager.start(
                         state,
                         data=data,
-                        mode=mode,
+                        mode=StartMode.RESET_STACK,
                         show_mode=show_mode,
                     )
         finally:

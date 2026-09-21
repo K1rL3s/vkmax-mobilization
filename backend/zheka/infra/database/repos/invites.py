@@ -107,10 +107,7 @@ class InvitesRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def _consume[InviteT](
-        self,
-        model: type[InviteT],
-        table: Table,
-        code: str,
+        self, model: type[InviteT], table: Table, code: str
     ) -> InviteT | None:
         # проверка и инкремент одним UPDATE: два параллельных запроса на
         # последнюю активацию иначе прошли бы лимит оба

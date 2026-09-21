@@ -1,7 +1,7 @@
 from zheka.core import texts
 from zheka.core.enums import EventType, NotificationCategory, ResidentStatus
 from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
-from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
+from zheka.core.ids import OrgId, ResidentId, UserId
 from zheka.core.models import Resident
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseResidentView
@@ -29,11 +29,7 @@ class ModerationService:
         self._events = events_service
 
     async def block(
-        self,
-        org_id: OrgId,
-        resident_id: ResidentId,
-        reason: str,
-        by: UserId,
+        self, org_id: OrgId, resident_id: ResidentId, reason: str, by: UserId
     ) -> HouseResidentView:
         stated = _require_reason(reason)
         resident = await self._get_resident(org_id, resident_id)
@@ -55,10 +51,7 @@ class ModerationService:
         return await self._view(resident)
 
     async def unblock(
-        self,
-        org_id: OrgId,
-        resident_id: ResidentId,
-        by: UserId,
+        self, org_id: OrgId, resident_id: ResidentId, by: UserId
     ) -> HouseResidentView:
         resident = await self._get_resident(org_id, resident_id)
         await self._residents.set_status(resident, ResidentStatus.ACTIVE, None)
@@ -72,11 +65,7 @@ class ModerationService:
         return await self._view(resident)
 
     async def revoke_verification(
-        self,
-        org_id: OrgId,
-        resident_id: ResidentId,
-        reason: str,
-        by: UserId,
+        self, org_id: OrgId, resident_id: ResidentId, reason: str, by: UserId
     ) -> HouseResidentView:
         stated = _require_reason(reason)
         resident = await self._get_resident(org_id, resident_id)
@@ -95,32 +84,29 @@ class ModerationService:
         return await self._view(resident)
 
     async def set_chairman(
-        self,
-        org_id: OrgId,
-        resident_id: ResidentId,
-        value: bool,
+        self, org_id: OrgId, resident_id: ResidentId, value: bool
     ) -> HouseResidentView:
         resident = await self._get_resident(org_id, resident_id)
         if value:
             if resident.verified_at is None:
                 raise InvalidState(
-                    "Председателем становится житель с подтвержденной квартирой",
+                    "Председателем становится житель с подтвержденной квартирой"
                 )
             # председатель в доме один, поэтому прошлый снимается той же
             # транзакцией
-            await self._residents.clear_chairman(HouseId(resident.house_id))
+            await self._residents.clear_chairman(resident.house_id)
         await self._residents.set_chairman(resident, value)
         return await self._view(resident)
 
     async def _address(self, resident: Resident) -> str:
-        house = await self._houses.get(HouseId(resident.house_id))
+        house = await self._houses.get(resident.house_id)
         return "" if house is None else house.address
 
     def _notify(self, resident: Resident, text: str) -> None:
         # закрытый и открытый доступ житель должен увидеть при любых
         # настройках, поэтому сообщение обязательное
         self._notifications.notify_user(
-            UserId(resident.user_id),
+            resident.user_id,
             text,
             category=NotificationCategory.REQUESTS,
             mandatory=True,
@@ -133,13 +119,13 @@ class ModerationService:
         return resident
 
     async def _view(self, resident: Resident) -> HouseResidentView:
-        user = await self._users.get_by_id(UserId(resident.user_id))
+        user = await self._users.get_by_id(resident.user_id)
         if user is None:
             raise EntityNotFound("Пользователь не найден")
         flat = (
             None
             if resident.flat_id is None
-            else await self._houses.get_flat(FlatId(resident.flat_id))
+            else await self._houses.get_flat(resident.flat_id)
         )
         return HouseResidentView(resident=resident, user=user, flat=flat)
 

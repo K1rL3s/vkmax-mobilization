@@ -34,7 +34,7 @@ chat_binding_dialog = Dialog(
                 type_factory=int,
                 items="houses",
                 on_click=on_house,
-            ),
+            )
         ),
         state=ChatBinding.house,
         getter=get_houses,
@@ -52,10 +52,6 @@ chat_binding_dialog = Dialog(
         state=ChatBinding.rights,
         getter=get_binding,
     ),
-    Window(
-        Format(BOUND_TEXT),
-        state=ChatBinding.done,
-        getter=get_binding,
-    ),
+    Window(Format(BOUND_TEXT), state=ChatBinding.done, getter=get_binding),
     on_start=on_start,
 )

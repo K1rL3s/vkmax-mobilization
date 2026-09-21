@@ -4,7 +4,7 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
 from zheka.core.ids import AccessRequestId, HouseId, MaxChatId, RequestId, UserId
-from zheka.core.notifications import DEFAULT_LEVEL, Buttons
+from zheka.core.notifications import DEFAULT_LEVEL
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
 
@@ -23,8 +23,7 @@ class NotificationsService:
         self._events = events_service
 
     async def levels(
-        self,
-        user_id: UserId,
+        self, user_id: UserId
     ) -> dict[NotificationCategory, NotificationLevel]:
         # мини-апп рисует все три переключателя, поэтому недостающие строки
         # добираются дефолтом, а не пропускаются
@@ -40,14 +39,13 @@ class NotificationsService:
         settings: Mapping[NotificationCategory, NotificationLevel],
     ) -> dict[NotificationCategory, NotificationLevel]:
         for category, level in settings.items():
-            if not await self._notifications.set_level(user_id, category, level):
-                continue
-            await self._events.record(
-                EventType.NOTIFICATION_SETTINGS_CHANGED,
-                user_id=user_id,
-                category=category.value,
-                level=level.value,
-            )
+            if await self._notifications.set_level(user_id, category, level):
+                await self._events.record(
+                    EventType.NOTIFICATION_SETTINGS_CHANGED,
+                    user_id=user_id,
+                    category=category.value,
+                    level=level.value,
+                )
         return await self.levels(user_id)
 
     def notify_user(
@@ -57,7 +55,6 @@ class NotificationsService:
         *,
         category: NotificationCategory,
         mandatory: bool,
-        buttons: Buttons | None = None,
     ) -> None:
         # уровень уведомления разрешает сама задача, на месте отправки: так в
         # очереди лежит только id, а настройки читаются в момент доставки
@@ -67,7 +64,6 @@ class NotificationsService:
             text=text,
             category=category.value,
             mandatory=mandatory,
-            buttons=buttons,
         )
 
     def notify_users(
@@ -77,7 +73,6 @@ class NotificationsService:
         *,
         category: NotificationCategory,
         mandatory: bool,
-        buttons: Buttons | None = None,
     ) -> None:
         if not user_ids:
             return
@@ -87,37 +82,23 @@ class NotificationsService:
             text=text,
             category=category.value,
             mandatory=mandatory,
-            buttons=buttons,
         )
 
-    def notify_chats(
-        self,
-        chat_ids: Sequence[MaxChatId],
-        text: str,
-        *,
-        buttons: Buttons | None = None,
-    ) -> None:
+    def notify_chats(self, chat_ids: Sequence[MaxChatId], text: str) -> None:
         if not chat_ids:
             return
         self._publisher.publish(
-            TaskName.BROADCAST_TO_CHATS,
-            chat_ids=list(chat_ids),
-            text=text,
-            buttons=buttons,
+            TaskName.BROADCAST_TO_CHATS, chat_ids=list(chat_ids), text=text
         )
 
     def open_executor_card(
-        self,
-        request_id: RequestId,
-        user_id: UserId | None = None,
+        self, request_id: RequestId, user_id: UserId | None = None
     ) -> None:
         # карточка - окно диалога, а не текст: получателя и его уровень
         # задача найдет сама, по заявке, уже после коммита. user_id - это
         # перерисовка для того, кто сам нажал, а не весть назначенному
         self._publisher.publish(
-            TaskName.SEND_EXECUTOR_CARD,
-            request_id=request_id,
-            user_id=user_id,
+            TaskName.SEND_EXECUTOR_CARD, request_id=request_id, user_id=user_id
         )
 
     def open_review_card(self, request_id: RequestId) -> None:
@@ -127,15 +108,12 @@ class NotificationsService:
         # ссылку на дом строит задача: имя бота знает только maxo, а core о
         # нем не знает
         self._publisher.publish(
-            TaskName.WELCOME_CHAT,
-            chat_id=chat_id,
-            house_id=house_id,
+            TaskName.WELCOME_CHAT, chat_id=chat_id, house_id=house_id
         )
 
     def open_access_slots(self, access_request_id: AccessRequestId) -> None:
         # адресатов и их уровень задача найдет сама, после коммита: окно
         # читает запрос из другой сессии
         self._publisher.publish(
-            TaskName.BROADCAST_ACCESS_REQUEST,
-            access_request_id=access_request_id,
+            TaskName.BROADCAST_ACCESS_REQUEST, access_request_id=access_request_id
         )

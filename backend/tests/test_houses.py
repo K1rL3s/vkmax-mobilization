@@ -83,11 +83,11 @@ async def _add_house(session: AsyncSession, org_id: OrgId, **fields: Any) -> Hou
             "cadastral_no": secrets.token_hex(8),
             "chat_binding_code": secrets.token_hex(4),
             **fields,
-        },
+        }
     )
     session.add(house)
     await session.flush()
-    return HouseId(house.id)
+    return house.id
 
 
 async def test_link_refuses_without_consent(
@@ -142,78 +142,32 @@ async def test_demand_signal_counts_a_user_once(
     assert (card.demand_count, card.demand_sent) == (1, True)
 
 
-async def test_search_by_query_ignores_word_order_and_case(
+async def test_search_by_query_or_by_address_parts(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
     fixture = await make_org_house_flat_user()
     wanted = await _add_house(
-        session,
-        fixture.org_id,
-        city="Казань",
-        street="Баумана",
-        building="12",
+        session, fixture.org_id, city="Казань", street="Баумана", building="12"
     )
     await _add_house(
-        session,
-        fixture.org_id,
-        city="Казань",
-        street="Кремлевская",
-        building="12",
+        session, fixture.org_id, city="Казань", street="Кремлевская", building="12"
     )
     await _add_house(
-        session,
-        fixture.org_id,
-        city="Москва",
-        street="Баумана",
-        building="3",
+        session, fixture.org_id, city="Москва", street="Баумана", building="3"
     )
     service = _make_service(session)
 
     for query in ("Баумана 12", "12 баумана", "  БАУМАНА   12 ", "казань баумана 12"):
         found, total = await service.search(
-            fixture.user_id,
-            None,
-            None,
-            None,
-            query,
-            20,
-            0,
+            fixture.user_id, None, None, None, query, 20, 0
         )
         assert [item.house.id for item in found] == [wanted], query
         assert total == 1
 
-
-async def test_search_by_city_keeps_working(
-    session: AsyncSession,
-    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
-) -> None:
-    fixture = await make_org_house_flat_user()
-    wanted = await _add_house(
-        session,
-        fixture.org_id,
-        city="Казань",
-        street="Баумана",
-        building="12",
+    found, total = await service.search(
+        fixture.user_id, "Казань", "Баумана", None, None, 20, 0
     )
-    await _add_house(
-        session,
-        fixture.org_id,
-        city="Москва",
-        street="Баумана",
-        building="12",
-    )
-
-    found, total = await _make_service(session).search(
-        fixture.user_id,
-        "Казань",
-        "Баумана",
-        "12",
-        None,
-        20,
-        0,
-    )
-
     assert [item.house.id for item in found] == [wanted]
     assert total == 1
 
@@ -228,13 +182,7 @@ async def test_search_without_city_and_query_is_refused(
 
     with pytest.raises(InvalidRequest):
         await _make_service(session).search(
-            fixture.user_id,
-            blank,
-            None,
-            None,
-            blank,
-            20,
-            0,
+            fixture.user_id, blank, None, None, blank, 20, 0
         )
 
 
@@ -253,11 +201,7 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     east_id = await _add_house(session, fixture.org_id, lat=lat, lon=lon + east)
 
     found = await _make_service(session).nearest(
-        fixture.user_id,
-        float(lat),
-        float(lon),
-        250,
-        20,
+        fixture.user_id, float(lat), float(lon), 250, 20
     )
 
     distances = {item.house.id: item.distance_m for item in found}
@@ -268,11 +212,7 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     # радиус из запроса доходит до базы целиком: потолка в сервисе нет
     far_id = await _add_house(session, fixture.org_id, lat=lat + north * 10, lon=lon)
     far = await _make_service(session).nearest(
-        fixture.user_id,
-        float(lat),
-        float(lon),
-        5000,
-        20,
+        fixture.user_id, float(lat), float(lon), 5000, 20
     )
     assert far_id in {item.house.id for item in far}
 
@@ -289,7 +229,7 @@ async def test_link_moves_an_unverified_residency_to_another_flat(
     await session.flush()
 
     first = await _link(session, fixture, fixture.flat_id)
-    moved = await _link(session, fixture, FlatId(other_flat.id))
+    moved = await _link(session, fixture, other_flat.id)
 
     assert moved.resident.id == first.resident.id
     assert moved.resident.flat_id == other_flat.id
@@ -297,6 +237,8 @@ async def test_link_moves_an_unverified_residency_to_another_flat(
 
     by_number = await _link(session, fixture, number="77")
     assert (by_number.resident.flat_id, by_number.resident.flat_number) == (None, "77")
+    summary = ResidencySummary.of(by_number)
+    assert (summary.flat_id, summary.flat_number) == (None, "77")
 
 
 async def test_link_refuses_to_move_a_verified_residency(
@@ -314,7 +256,7 @@ async def test_link_refuses_to_move_a_verified_residency(
     await session.flush()
 
     with pytest.raises(InvalidState):
-        await _link(session, fixture, FlatId(other_flat.id))
+        await _link(session, fixture, other_flat.id)
     with pytest.raises(InvalidState):
         await _link(session, fixture, number="77")
 
@@ -338,20 +280,6 @@ async def test_link_by_the_number_of_a_known_flat_takes_that_flat(
     assert (summary.flat_id, summary.flat_number) == (fixture.flat_id, "1")
 
 
-async def test_link_by_an_unknown_number_keeps_the_number_without_a_flat(
-    session: AsyncSession,
-    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
-) -> None:
-    fixture = await make_org_house_flat_user()
-    await _consent(session, fixture)
-
-    view = await _link(session, fixture, number="77")
-
-    assert view.flat is None
-    summary = ResidencySummary.of(view)
-    assert (summary.flat_id, summary.flat_number) == (None, "77")
-
-
 async def test_link_refuses_a_flat_id_together_with_a_number(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
@@ -370,8 +298,7 @@ async def test_admin_house_surface(
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
     own = await make_org_house_flat_user(
-        org_role=OrgRole.CREATOR,
-        resident_role=ResidentRole.OWNER,
+        org_role=OrgRole.CREATOR, resident_role=ResidentRole.OWNER
     )
     other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     houses_service = _make_service(session)
@@ -389,11 +316,7 @@ async def test_admin_house_surface(
     assert card.chairman_name is None
 
     residents, total = await houses_service.house_residents(
-        own.org_id,
-        own.house_id,
-        "Тест",
-        50,
-        0,
+        own.org_id, own.house_id, "Тест", 50, 0
     )
     assert total == 1
     assert residents[0].flat is not None
@@ -406,46 +329,27 @@ async def test_admin_house_surface(
         await houses_service.admin_card(own.org_id, other.house_id)
 
 
-async def test_flats_are_hidden_from_a_stranger(
+async def test_flats_are_listed_to_a_resident_and_hidden_from_a_stranger(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     stranger = await make_org_house_flat_user()
-
-    # is_taken выдает, где живут наши пользователи: чужой дом отвечает 404
-    with pytest.raises(EntityNotFound):
-        await _make_service(session).flats(
-            stranger.user_id,
-            own.house_id,
-            None,
-            None,
-            50,
-            0,
-        )
-
-
-async def test_flats_are_listed_to_a_resident_of_the_house(
-    session: AsyncSession,
-    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     free_flat = Flat(house_id=own.house_id, number="2")
     session.add(free_flat)
     await session.flush()
+    service = _make_service(session)
 
-    flats, total, taken = await _make_service(session).flats(
-        own.user_id,
-        own.house_id,
-        None,
-        None,
-        50,
-        0,
+    flats, total, taken = await service.flats(
+        own.user_id, own.house_id, None, None, 50, 0
     )
 
     assert total == 2
     assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
     assert taken == {own.flat_id}
+    # is_taken выдает, где живут наши пользователи: чужой дом отвечает 404
+    with pytest.raises(EntityNotFound):
+        await service.flats(stranger.user_id, own.house_id, None, None, 50, 0)
 
 
 async def test_a_chat_the_bot_was_removed_from_is_not_bound(
@@ -461,7 +365,7 @@ async def test_a_chat_the_bot_was_removed_from_is_not_bound(
             title="Дом",
             bound_at=datetime.now(UTC),
             status=ChatStatus.REMOVED,
-        ),
+        )
     )
     await session.flush()
     repo = HousesRepo(session)

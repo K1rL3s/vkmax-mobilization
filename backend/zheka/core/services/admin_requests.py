@@ -15,26 +15,17 @@ from zheka.core.enums import (
     RequestStatus,
 )
 from zheka.core.errors import (
+    FLAT_NOT_FOUND,
+    GROUP_NOT_FOUND,
+    HOUSE_NOT_FOUND,
+    REQUEST_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import (
-    FlatId,
-    HouseId,
-    OrgId,
-    RequestGroupId,
-    RequestId,
-    UserId,
-)
-from zheka.core.models import (
-    Flat,
-    House,
-    Request,
-    RequestGroup,
-    User,
-)
+from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
+from zheka.core.models import House, Request, RequestGroup, User
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
@@ -43,16 +34,17 @@ from zheka.core.services.request_groups import (
     rules_of,
 )
 from zheka.core.services.request_status import check_transition, transition_path
-from zheka.core.services.requests import RequestCardData, build_card, build_rows
+from zheka.core.services.requests import (
+    RequestCardData,
+    RequestRow,
+    build_card,
+    build_rows,
+)
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters, RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-REQUEST_NOT_FOUND = "Заявка не найдена"
-GROUP_NOT_FOUND = "Группа заявок не найдена"
-HOUSE_NOT_FOUND = "Дом не найден"
-FLAT_NOT_FOUND = "Квартира не найдена"
 EXECUTOR_NOT_FOUND = "Исполнитель не найден"
 NOT_AN_EXECUTOR = "Заявку ведет исполнитель, а не сотрудник кабинета"
 EMPTY_REPLY = "Напишите ответ жителю"
@@ -63,14 +55,9 @@ NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнит
 RESULT_PHOTO_REQUIRED = "Пришлите фото результата"
 
 
-class AdminRequestRow(ZhekaType):
-    request: Request
+class AdminRequestRow(RequestRow):
     house: House
-    flat: Flat | None
     author: User | None
-    executor: User | None
-    has_photos: bool
-    group_size: int
 
 
 class AdminRequestCardData(ZhekaType):
@@ -129,26 +116,14 @@ class AdminRequestsService:
         self._events = events_service
 
     async def inbox(
-        self,
-        org_id: OrgId,
-        filters: RequestFilters,
-        limit: int,
-        offset: int,
+        self, org_id: OrgId, filters: RequestFilters, limit: int, offset: int
     ) -> tuple[list[AdminRequestRow], int]:
         requests, total = await self._requests.list_for_org(
-            org_id,
-            filters,
-            datetime.now(UTC),
-            limit,
-            offset,
+            org_id, filters, datetime.now(UTC), limit, offset
         )
         return await self._rows(requests), total
 
-    async def card(
-        self,
-        org_id: OrgId,
-        request_id: RequestId,
-    ) -> AdminRequestCardData:
+    async def card(self, org_id: OrgId, request_id: RequestId) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
         return await self._card(request)
 
@@ -165,11 +140,7 @@ class AdminRequestsService:
         return await self._card(request)
 
     async def reply(
-        self,
-        org_id: OrgId,
-        request_id: RequestId,
-        text: str,
-        actor: UserId,
+        self, org_id: OrgId, request_id: RequestId, text: str, actor: UserId
     ) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
         stated = text.strip()
@@ -178,15 +149,9 @@ class AdminRequestsService:
 
         # ответ УК - транзакционное сообщение, его не выключают настройками
         await self._requests.add_message(
-            RequestId(request.id),
-            actor,
-            RequestActorRole.STAFF.value,
-            stated,
+            request.id, actor, RequestActorRole.STAFF.value, stated
         )
-        self._notify_author(
-            request,
-            texts.request_reply(RequestId(request.id), stated),
-        )
+        self._notify_author(request, texts.request_reply(request.id, stated))
         return await self._card(request)
 
     async def assign(
@@ -217,9 +182,7 @@ class AdminRequestsService:
         return await self._card(request)
 
     async def group_card(
-        self,
-        org_id: OrgId,
-        group_id: RequestGroupId,
+        self, org_id: OrgId, group_id: RequestGroupId
     ) -> RequestGroupCardData:
         group = await self._org_group(org_id, group_id)
         return await self._group_card(group)
@@ -233,7 +196,7 @@ class AdminRequestsService:
         actor: UserId,
     ) -> RequestGroupCardData:
         group = await self._org_group(org_id, group_id)
-        members = await self._requests.list_for_group(RequestGroupId(group.id))
+        members = await self._requests.list_for_group(group.id)
         # опоздавший участник идет через промежуточные статусы, с логом и
         # событием на каждый шаг. Обогнавший цель ломает вызов целиком:
         # transition_path поднимет InvalidState до первой записи
@@ -241,17 +204,25 @@ class AdminRequestsService:
         if all(not path for _, path in paths):
             raise InvalidState(GROUP_ALREADY_THERE)
 
+        # комментарий и уведомление - только у последнего шага, того, что
+        # попросил диспетчер, а не у каждого промежуточного
         for member, path in paths:
-            await self._move_through(member, path, comment, actor)
+            for step in path:
+                last = step is target
+                await self._move(
+                    member,
+                    step,
+                    comment if last else None,
+                    actor,
+                    RequestActorRole.STAFF,
+                    notify_author=last,
+                )
         if target is RequestStatus.DONE:
             await self._requests.set_group_status(group, RequestGroupStatus.CLOSED)
         return await self._group_card(group)
 
     async def create_phone(
-        self,
-        org_id: OrgId,
-        draft: PhoneRequestDraft,
-        actor: UserId,
+        self, org_id: OrgId, draft: PhoneRequestDraft, actor: UserId
     ) -> AdminRequestCardData:
         house = await self._houses.get_for_org(draft.house_id, org_id)
         if house is None:
@@ -285,7 +256,7 @@ class AdminRequestsService:
             caller_phone=caller_phone,
         )
         await self._requests.add_log(
-            RequestId(request.id),
+            request.id,
             None,
             RequestStatus.NEW,
             actor,
@@ -293,9 +264,7 @@ class AdminRequestsService:
             datetime.now(UTC),
         )
         await self._grouping.attach(
-            request,
-            rules_of(await self._orgs.get_settings(org_id)),
-            datetime.now(UTC),
+            request, rules_of(await self._orgs.get_settings(org_id)), datetime.now(UTC)
         )
         await self._events.record(
             EventType.REQUEST_CREATED,
@@ -311,14 +280,12 @@ class AdminRequestsService:
     async def executors(self, org_id: OrgId) -> list[ExecutorView]:
         members = await self._orgs.list_members(org_id)
         executor_ids = [
-            UserId(member.user_id)
-            for member in members
-            if member.role is OrgRole.EXECUTOR
+            member.user_id for member in members if member.role is OrgRole.EXECUTOR
         ]
         users = await self._users.list_by_ids(executor_ids)
         active = await self._requests.count_active_by_executor(org_id)
         return [
-            ExecutorView(user=user, active_requests=active.get(UserId(user.id), 0))
+            ExecutorView(user=user, active_requests=active.get(user.id, 0))
             for user in users
         ]
 
@@ -333,34 +300,21 @@ class AdminRequestsService:
     ) -> None:
         current = request.status
         check_transition(
-            current,
-            target,
-            by_role,
-            has_author=request.author_user_id is not None,
+            current, target, by_role, has_author=request.author_user_id is not None
         )
         at = datetime.now(UTC)
         await self._requests.set_status(request, target, at)
         await self._requests.add_log(
-            RequestId(request.id),
-            current,
-            target,
-            actor,
-            by_role.value,
-            at,
+            request.id, current, target, actor, by_role.value, at
         )
         stated = None if comment is None else comment.strip()
         if stated:
             # пояснение к статусу житель видит там же, где ответы УК
-            await self._requests.add_message(
-                RequestId(request.id),
-                actor,
-                by_role.value,
-                stated,
-            )
+            await self._requests.add_message(request.id, actor, by_role.value, stated)
         await self._events.record(
             EventType.REQUEST_STATUS_CHANGED,
             user_id=actor,
-            request_id=RequestId(request.id),
+            request_id=request.id,
             **{"from": current.value, "to": target.value},
             by_role=by_role.value,
         )
@@ -369,11 +323,10 @@ class AdminRequestsService:
         # на приемку заявку уводит только _move; карточка приемки заменяет
         # текст статуса. У заявки по звонку нет ни того, ни другого
         if target is RequestStatus.ON_REVIEW and request.author_user_id is not None:
-            self._notifications.open_review_card(RequestId(request.id))
+            self._notifications.open_review_card(request.id)
         else:
             self._notify_author(
-                request,
-                texts.request_status_changed(RequestId(request.id), target, stated),
+                request, texts.request_status_changed(request.id, target, stated)
             )
 
     def _notify_author(self, request: Request, text: str) -> None:
@@ -381,33 +334,11 @@ class AdminRequestsService:
         if request.author_user_id is None:
             return
         self._notifications.notify_user(
-            UserId(request.author_user_id),
+            request.author_user_id,
             text,
             category=NotificationCategory.REQUESTS,
             mandatory=True,
         )
-
-    async def _move_through(
-        self,
-        request: Request,
-        path: Sequence[RequestStatus],
-        comment: str | None,
-        actor: UserId,
-    ) -> None:
-        # комментарий и уведомление сопровождают только последний шаг - тот,
-        # что диспетчер действительно попросил; промежуточные шаги опоздавшего
-        # участника не плодят ни копий пояснения, ни пачки пушей автору
-        last = len(path) - 1
-        for index, target in enumerate(path):
-            is_last = index == last
-            await self._move(
-                request,
-                target,
-                comment if is_last else None,
-                actor,
-                RequestActorRole.STAFF,
-                notify_author=is_last,
-            )
 
     async def _card(self, request: Request) -> AdminRequestCardData:
         return AdminRequestCardData(
@@ -417,21 +348,21 @@ class AdminRequestsService:
                 self._users,
                 self._orgs,
                 request,
-                await self._house(HouseId(request.house_id)),
+                await self._house(request.house_id),
             ),
             author=(
                 None
                 if request.author_user_id is None
-                else await self._users.get_by_id(UserId(request.author_user_id))
+                else await self._users.get_by_id(request.author_user_id)
             ),
         )
 
     async def _group_card(self, group: RequestGroup) -> RequestGroupCardData:
-        members = await self._requests.list_for_group(RequestGroupId(group.id))
+        members = await self._requests.list_for_group(group.id)
         rows = await self._rows(members)
         return RequestGroupCardData(
             group=group,
-            house=await self._house(HouseId(group.house_id)),
+            house=await self._house(group.house_id),
             rows=rows,
             # тот же счет жалобщиков, что и у склейки
             flats_count=len(complaint_sources(members)),
@@ -439,37 +370,30 @@ class AdminRequestsService:
 
     async def _rows(self, requests: Sequence[Request]) -> list[AdminRequestRow]:
         base_rows = await build_rows(
-            self._requests,
-            self._houses,
-            self._users,
-            requests,
+            self._requests, self._houses, self._users, requests
         )
         houses = {
-            HouseId(house.id): house
+            house.id: house
             for house in await self._houses.list_by_ids(
-                [HouseId(request.house_id) for request in requests],
+                [request.house_id for request in requests]
             )
         }
-        authors = {
-            UserId(user.id): user
+        authors: dict[UserId | None, User] = {
+            user.id: user
             for user in await self._users.list_by_ids(
                 [
-                    UserId(request.author_user_id)
+                    request.author_user_id
                     for request in requests
                     if request.author_user_id is not None
-                ],
+                ]
             )
         }
         return [
             AdminRequestRow(
                 request=row.request,
-                house=houses[HouseId(row.request.house_id)],
+                house=houses[row.request.house_id],
                 flat=row.flat,
-                author=(
-                    None
-                    if row.request.author_user_id is None
-                    else authors.get(row.request.author_user_id)
-                ),
+                author=authors.get(row.request.author_user_id),
                 executor=row.executor,
                 has_photos=row.has_photos,
                 group_size=row.group_size,
@@ -483,11 +407,7 @@ class AdminRequestsService:
             raise EntityNotFound(REQUEST_NOT_FOUND)
         return request
 
-    async def _org_group(
-        self,
-        org_id: OrgId,
-        group_id: RequestGroupId,
-    ) -> RequestGroup:
+    async def _org_group(self, org_id: OrgId, group_id: RequestGroupId) -> RequestGroup:
         group = await self._requests.get_group_for_org(group_id, org_id)
         if group is None:
             raise EntityNotFound(GROUP_NOT_FOUND)
@@ -526,10 +446,7 @@ class AdminRequestsService:
 
         for name in photo_names:
             await self._requests.add_photo(
-                request_id,
-                name,
-                RequestPhotoKind.RESULT,
-                user_id,
+                request_id, name, RequestPhotoKind.RESULT, user_id
             )
         await self._move(request, target, None, user_id, RequestActorRole.EXECUTOR)
         await self._events.record(
@@ -540,9 +457,7 @@ class AdminRequestsService:
         )
 
     async def executor_card(
-        self,
-        user_id: UserId,
-        request_id: RequestId,
+        self, user_id: UserId, request_id: RequestId
     ) -> RequestCardData | None:
         # None, а не отказ: геттер, упавший на старой карточке, увел бы ее в меню
         request = await self._requests.get(request_id)
@@ -557,8 +472,8 @@ class AdminRequestsService:
         # остается в executor_user_id и с живой карточкой на руках
         if request.executor_user_id != user_id:
             return False
-        house = await self._house(HouseId(request.house_id))
+        house = await self._house(request.house_id)
         if house.org_id is None:
             return False
-        member = await self._orgs.get_member(OrgId(house.org_id), user_id)
+        member = await self._orgs.get_member(house.org_id, user_id)
         return member is not None and member.role is OrgRole.EXECUTOR

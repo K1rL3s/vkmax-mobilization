@@ -24,14 +24,11 @@ router = Router(name=__name__)
 # ни одного сервиса: ErrorMiddleware стоит снаружи DishkaMiddleware, и к
 # этому моменту сессия откачена, а запросный контейнер закрыт
 @router.exception(
-    ExceptionTypeFilter(UnknownIntent, OutdatedIntent, InvalidStackIdError),
+    ExceptionTypeFilter(UnknownIntent, OutdatedIntent, InvalidStackIdError)
 )
 async def stale_window_handler(
-    event: ErrorEvent[Any, Any],
-    dialog_manager: DialogManager,
+    event: ErrorEvent[Any, Any], dialog_manager: DialogManager
 ) -> None:
-    # нажатие на окно, чей стек уже не существует: перезапуск на середине
-    # потока, тридцатидневный TTL состояния или более свежий RESET_STACK
     await _notify(event, STALE_WINDOW)
     await dialog_manager.start(Menu.main, mode=StartMode.RESET_STACK)
 
@@ -43,10 +40,7 @@ async def domain_error_handler(event: ErrorEvent[ZhekaError, Any]) -> None:
 
 @router.exception()
 async def unexpected_error_handler(event: ErrorEvent[Any, Any]) -> None:
-    logger.error(
-        "Необработанная ошибка в боте",
-        exc_info=event.exception,
-    )
+    logger.error("Необработанная ошибка в боте", exc_info=event.exception)
     raise event.exception
 
 

@@ -21,10 +21,7 @@ async def main() -> None:
             session = await request_container.get(AsyncSession)
             demo = await request_container.get(DemoService)
             if await seed(
-                session,
-                demo,
-                Path(config.files.dir),
-                datetime.now(UTC).date(),
+                session, demo, Path(config.files.dir), datetime.now(UTC).date()
             ):
                 await session.commit()
     finally:

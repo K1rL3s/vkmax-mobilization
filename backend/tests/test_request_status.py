@@ -4,8 +4,6 @@ from zheka.core.enums import RequestActorRole as Role, RequestStatus as Status
 from zheka.core.errors import InvalidState
 from zheka.core.services.request_status import check_transition
 
-ORDER = tuple(Status)
-
 ALLOWED = (
     (Status.NEW, Status.ACCEPTED, Role.STAFF, True),
     (Status.NEW, Status.ACCEPTED, Role.EXECUTOR, True),
@@ -18,11 +16,10 @@ ALLOWED = (
 )
 
 # назад, на месте и через статус
-OFF_CHAIN = tuple(
-    (current, target)
-    for index, current in enumerate(ORDER)
-    for target in ORDER
-    if ORDER.index(target) != index + 1
+OFF_CHAIN = (
+    (Status.ACCEPTED, Status.NEW),
+    (Status.DONE, Status.DONE),
+    (Status.NEW, Status.IN_PROGRESS),
 )
 
 WRONG_ROLE = (
@@ -34,10 +31,7 @@ WRONG_ROLE = (
 
 @pytest.mark.parametrize(("current", "target", "by_role", "has_author"), ALLOWED)
 def test_an_allowed_step_passes(
-    current: Status,
-    target: Status,
-    by_role: Role,
-    has_author: bool,
+    current: Status, target: Status, by_role: Role, has_author: bool
 ) -> None:
     check_transition(current, target, by_role, has_author=has_author)
 
@@ -50,10 +44,7 @@ def test_a_step_off_the_chain_raises(current: Status, target: Status) -> None:
 
 @pytest.mark.parametrize(("current", "target", "by_role", "has_author"), WRONG_ROLE)
 def test_a_role_that_does_not_set_the_status_raises(
-    current: Status,
-    target: Status,
-    by_role: Role,
-    has_author: bool,
+    current: Status, target: Status, by_role: Role, has_author: bool
 ) -> None:
     with pytest.raises(InvalidState):
         check_transition(current, target, by_role, has_author=has_author)

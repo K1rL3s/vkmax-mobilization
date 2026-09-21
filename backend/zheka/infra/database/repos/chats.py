@@ -19,10 +19,7 @@ BOUND_CHAT = and_(
 
 
 class ChatsRepo(BaseAlchemyRepo):
-    async def list_for_houses(
-        self,
-        house_ids: Collection[HouseId],
-    ) -> Sequence[Chat]:
+    async def list_for_houses(self, house_ids: Collection[HouseId]) -> Sequence[Chat]:
         if not house_ids:
             return []
         # без прав администратора бот в чат MAX не пишет, и отправка туда
@@ -53,8 +50,7 @@ class ChatsRepo(BaseAlchemyRepo):
         }
         insert = pg_insert(chats_table).values(chat_id=chat_id, **fresh)
         stmt = insert.on_conflict_do_update(
-            index_elements=[chats_table.c.chat_id],
-            set_=fresh,
+            index_elements=[chats_table.c.chat_id], set_=fresh
         )
         await self._session.execute(stmt)
 

@@ -16,13 +16,8 @@ from zheka.di.yandex import YandexProvider
 
 
 def make_container(
-    *extra_providers: Provider,
-    config: Config,
-    **kwargs: Any,
+    *extra_providers: Provider, config: Config, context: dict[Any, Any] | None = None
 ) -> AsyncContainer:
-    context: dict[type[Any], Any] = kwargs.pop("context", {})
-    context[Config] = config
-
     return make_async_container(
         FastapiProvider(),
         TaskiqProvider(),
@@ -35,7 +30,6 @@ def make_container(
         BrokerProvider(),
         YandexProvider(),
         *extra_providers,
-        context=context,
+        context={**(context or {}), Config: config},
         validation_settings=STRICT_VALIDATION,
-        **kwargs,
     )

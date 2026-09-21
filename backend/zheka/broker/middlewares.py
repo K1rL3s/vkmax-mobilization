@@ -18,9 +18,7 @@ class ContextVarsMiddleware(TaskiqMiddleware):
 
 class CommitMiddleware(TaskiqMiddleware):
     async def post_execute(
-        self,
-        message: TaskiqMessage,
-        result: TaskiqResult[Any],
+        self, message: TaskiqMessage, result: TaskiqResult[Any]
     ) -> None:
         if result.is_err:
             return

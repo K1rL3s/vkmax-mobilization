@@ -60,7 +60,7 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
                     living_flats=int(row["living_flats"]),
                     living_area=int(row["living_area"]),
                     overhaul_rate=int(row["overhaul_rate"]),
-                ),
+                )
             )
     session.add_all(item.house for item in directory)
     await session.flush()

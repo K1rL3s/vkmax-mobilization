@@ -3,11 +3,7 @@ from zheka.api.dependencies.current_account import (
     CurrentAccountDep,
     RequireConsentDep,
 )
-from zheka.api.dependencies.current_org import (
-    AdminOrgDep,
-    CurrentOrg,
-    CurrentOrgDep,
-)
+from zheka.api.dependencies.current_org import AdminOrgDep, CurrentOrg, CurrentOrgDep
 from zheka.api.dependencies.current_residency import (
     CurrentResidency,
     CurrentResidencyDep,

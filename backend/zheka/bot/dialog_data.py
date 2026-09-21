@@ -12,9 +12,8 @@ from zheka.core.ids import HouseId
 
 
 class BaseDialogData(ZhekaMutableType, slots=True):
-    # ZhekaMutableType, а не ZhekaType(frozen=False): mypy не наследует
-    # frozen=False от базы и считает поля подклассов read-only. slots=True
-    # роняет присваивание в поле с опечаткой прямо в рантайме
+    # не ZhekaType(frozen=False): mypy не наследует frozen=False от базы.
+    # slots=True роняет присваивание в поле с опечаткой
     retort: ClassVar[Retort] = Retort()
 
     @classmethod
@@ -31,8 +30,7 @@ class BaseDialogData(ZhekaMutableType, slots=True):
 
     @classmethod
     def load_start(cls, dialog_manager: DialogManager) -> Self:
-        # без data окно стартует с None, а битые данные должны упасть, а не
-        # превратиться в значения по умолчанию
+        # битые данные должны упасть, а не стать значениями по умолчанию
         start_data = dialog_manager.start_data
         return cls.retort.load({} if start_data is None else start_data, cls)
 
@@ -67,7 +65,6 @@ class OnboardingData(BaseDialogData):
     source: EventSource = EventSource.DIRECT
 
     def chosen_house(self) -> HouseId:
-        # окно квартиры открывают только выбор дома и диплинк, и оба кладут дом
         if self.house_id is None:
             raise KeyError("house_id")
         return HouseId(self.house_id)
@@ -79,12 +76,10 @@ class NewRequestData(BaseDialogData):
     category: RequestCategory | None = None
     description: str = ""
     photos: list[str] = field(default_factory=list)
-    # номер заявки приносит задача, когда заявка создана
     request_id: int | None = None
 
 
 class ExecutorCardData(BaseDialogData):
-    # номер кладет задача, открывшая карточку; стек у карточки свой на заявку
     request_id: int
 
 
@@ -93,14 +88,12 @@ class ReviewData(BaseDialogData):
 
 
 class ChatBindingData(BaseDialogData):
-    # чат и его название кладет задача: окно, которое она открывает, рисует
-    # другая сессия, и строки chats, записанной этой задачей, оно не увидит
+    # окно рисует другая сессия и строку chats из задачи не увидит
     chat_id: int
     title: str
     notice: str | None = None
 
 
 class AccessSlotsData(BaseDialogData):
-    # запрос кладет задача рассылки; стек у окна свой на запрос
     access_request_id: int
     notice: str | None = None

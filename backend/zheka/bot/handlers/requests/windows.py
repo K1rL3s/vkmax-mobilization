@@ -85,10 +85,7 @@ request_dialog = Dialog(
             Format(CREATED_TEXT, when=F["request_id"]),
         ),
         Start(
-            Const("В меню"),
-            id="to_menu",
-            state=Menu.main,
-            mode=StartMode.RESET_STACK,
+            Const("В меню"), id="to_menu", state=Menu.main, mode=StartMode.RESET_STACK
         ),
         state=NewRequest.sent,
         getter=get_sent,

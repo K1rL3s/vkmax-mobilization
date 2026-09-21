@@ -29,24 +29,17 @@ from zheka.bot.states import Onboarding
 
 PAGE = 8
 
-METHOD_TEXT = "Как будем искать дом?"
-CITY_TEXT = "Выбери город"
-STREET_TEXT = "Выбери улицу"
-HOUSE_TEXT = "Выбери дом"
-NO_HOUSES_TEXT = "Рядом ничего не нашлось. Попробуй выбрать адрес вручную."
-GEO_TEXT = "Пришли геопозицию, и я поищу дома рядом"
-FLAT_TEXT = "{address}\n\nНапиши номер квартиры или пропусти этот шаг."
 
 onboarding_dialog = Dialog(
     Window(
-        Const(METHOD_TEXT),
+        Const("Как будем искать дом?"),
         SwitchTo(Const("Выбрать адрес"), id="by_address", state=Onboarding.city),
         SwitchTo(Const("По геолокации"), id="by_geo", state=Onboarding.geo),
         Cancel(Const("Отмена")),
         state=Onboarding.method,
     ),
     Window(
-        Const(CITY_TEXT),
+        Const("Выбери город"),
         ScrollingGroup(
             Select(
                 Format("{item}"),
@@ -63,7 +56,7 @@ onboarding_dialog = Dialog(
         getter=get_cities,
     ),
     Window(
-        Const(STREET_TEXT),
+        Const("Выбери улицу"),
         ScrollingGroup(
             Select(
                 Format("{item}"),
@@ -81,8 +74,11 @@ onboarding_dialog = Dialog(
         getter=get_streets,
     ),
     Window(
-        Const(HOUSE_TEXT, when=F["houses"]),
-        Const(NO_HOUSES_TEXT, when=~F["houses"]),
+        Const("Выбери дом", when=F["houses"]),
+        Const(
+            "Рядом ничего не нашлось. Попробуй выбрать адрес вручную.",
+            when=~F["houses"],
+        ),
         ScrollingGroup(
             Select(
                 Format("{item.title}"),
@@ -101,14 +97,14 @@ onboarding_dialog = Dialog(
         getter=get_houses,
     ),
     Window(
-        Const(GEO_TEXT),
+        Const("Пришли геопозицию, и я поищу дома рядом"),
         RequestLocation(Const("Отправить геопозицию")),
         MessageInput(on_location, content_types=[AttachmentType.LOCATION]),
         SwitchTo(Const("Выбрать адрес"), id="geo_to_address", state=Onboarding.city),
         state=Onboarding.geo,
     ),
     Window(
-        Format(FLAT_TEXT),
+        Format("{address}\n\nНапиши номер квартиры или пропусти этот шаг."),
         TextInput(id="flat_number", on_success=on_flat_number),
         Button(Const("Пропустить"), id="skip_flat", on_click=on_flat_skip),
         state=Onboarding.flat,

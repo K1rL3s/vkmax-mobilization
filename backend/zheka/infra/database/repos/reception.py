@@ -27,22 +27,19 @@ class ReceptionRepo(BaseAlchemyRepo):
             select(ReceptionWindow)
             .where(reception_windows_table.c.org_id == org_id)
             .order_by(
-                reception_windows_table.c.weekday,
-                reception_windows_table.c.time_from,
+                reception_windows_table.c.weekday, reception_windows_table.c.time_from
             )
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
     async def replace_windows(
-        self,
-        org_id: OrgId,
-        windows: Sequence[ReceptionWindow],
+        self, org_id: OrgId, windows: Sequence[ReceptionWindow]
     ) -> Sequence[ReceptionWindow]:
         # часы приема задаются целиком: редактируется вся сетка кабинета, и
         # сведение старых строк с новыми стоило бы дороже полной замены
         stmt = delete(reception_windows_table).where(
-            reception_windows_table.c.org_id == org_id,
+            reception_windows_table.c.org_id == org_id
         )
         await self._session.execute(stmt)
         self._session.add_all(windows)
@@ -50,10 +47,7 @@ class ReceptionRepo(BaseAlchemyRepo):
         return windows
 
     async def list_appointments(
-        self,
-        org_id: OrgId,
-        on_date: date,
-        house_id: HouseId | None,
+        self, org_id: OrgId, on_date: date, house_id: HouseId | None
     ) -> Sequence[Appointment]:
         stmt = select(Appointment).where(
             appointments_table.c.org_id == org_id,
@@ -76,10 +70,7 @@ class ReceptionRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def taken_counts(
-        self,
-        org_id: OrgId,
-        date_from: date,
-        date_to: date,
+        self, org_id: OrgId, date_from: date, date_to: date
     ) -> dict[datetime, int]:
         # весь горизонт одним запросом: по запросу на день это четырнадцать
         # обращений к базе на одно открытие экрана
@@ -97,9 +88,7 @@ class ReceptionRepo(BaseAlchemyRepo):
         return dict(result.tuples().all())
 
     async def lock_windows(
-        self,
-        org_id: OrgId,
-        weekday: int,
+        self, org_id: OrgId, weekday: int
     ) -> Sequence[ReceptionWindow]:
         # места в слоте держит блокировка окон этого дня недели, а не
         # уникальный индекс: в слот помещается столько жителей, сколько в
@@ -153,9 +142,7 @@ class ReceptionRepo(BaseAlchemyRepo):
         return appointment
 
     async def get_for_user(
-        self,
-        appointment_id: AppointmentId,
-        user_id: UserId,
+        self, appointment_id: AppointmentId, user_id: UserId
     ) -> Appointment | None:
         # id приходит из пути, поэтому запрос сужается до записей жителя:
         # чужая запись отвечает 404, а не 403
@@ -171,10 +158,7 @@ class ReceptionRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def has_booking(
-        self,
-        org_id: OrgId,
-        user_id: UserId,
-        starts_at: datetime,
+        self, org_id: OrgId, user_id: UserId, starts_at: datetime
     ) -> bool:
         # запрос сужен организацией, как и блокировка окон, внутри которой он
         # выполняется: прием в двух кабинетах разом житель все равно не берет
@@ -184,7 +168,7 @@ class ReceptionRepo(BaseAlchemyRepo):
                 appointments_table.c.user_id == user_id,
                 appointments_table.c.starts_at == starts_at,
                 appointments_table.c.status == AppointmentStatus.BOOKED,
-            ),
+            )
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()

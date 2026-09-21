@@ -5,8 +5,6 @@ from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.dialogs import ShowMode
 from maxo.errors import MaxBotApiError, MaxBotNetworkError
-from maxo.types.buttons import InlineButtons
-from maxo.types.link_button import LinkButton
 from taskiq import async_shared_broker
 
 from zheka.bot.dialog_data import ChatBindingData
@@ -16,7 +14,7 @@ from zheka.broker.tasks.chats import chat_stack
 from zheka.core.enums import NotificationCategory
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import MaxChatId, UserId
-from zheka.core.notifications import Buttons, resolve_notify
+from zheka.core.notifications import resolve_notify
 from zheka.core.services.chats import ChatsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -26,12 +24,6 @@ from zheka.infra.max.sender import is_chat_admin
 logger = logging.getLogger(__name__)
 
 
-def _keyboard(buttons: Buttons | None) -> list[list[InlineButtons]] | None:
-    if not buttons:
-        return None
-    return [[LinkButton(text=button["text"], url=button["url"])] for button in buttons]
-
-
 async def _fan_out(
     sender: MaxSender,
     notifications_repo: NotificationsRepo,
@@ -39,14 +31,11 @@ async def _fan_out(
     text: str,
     category: str,
     mandatory: bool,
-    buttons: Buttons | None,
 ) -> int:
     # уровень читается при доставке, а не при постановке в очередь
     recipients = await notifications_repo.recipients(
-        user_ids,
-        NotificationCategory(category),
+        user_ids, NotificationCategory(category)
     )
-    keyboard = _keyboard(buttons)
     logger.info("Рассылка %s: получателей %s", category, len(recipients))
 
     sent = 0
@@ -55,12 +44,7 @@ async def _fan_out(
         if notify is None:
             continue
         # недоступного получателя MaxSender проглатывает и возвращает None
-        await sender.send_message(
-            text,
-            user_id=recipient.max_user_id,
-            notify=notify,
-            keyboard=keyboard,
-        )
+        await sender.send_message(text, user_id=recipient.max_user_id, notify=notify)
         sent += 1
 
     logger.info("Рассылка %s: отправлено %s из %s", category, sent, len(recipients))
@@ -74,18 +58,11 @@ async def send_to_user(
     text: str,
     category: str,
     mandatory: bool,
-    buttons: Buttons | None,
     sender: FromDishka[MaxSender],
     notifications_repo: FromDishka[NotificationsRepo],
 ) -> int:
     return await _fan_out(
-        sender,
-        notifications_repo,
-        [user_id],
-        text,
-        category,
-        mandatory,
-        buttons,
+        sender, notifications_repo, [user_id], text, category, mandatory
     )
 
 
@@ -96,18 +73,11 @@ async def broadcast_to_users(
     text: str,
     category: str,
     mandatory: bool,
-    buttons: Buttons | None,
     sender: FromDishka[MaxSender],
     notifications_repo: FromDishka[NotificationsRepo],
 ) -> int:
     return await _fan_out(
-        sender,
-        notifications_repo,
-        user_ids,
-        text,
-        category,
-        mandatory,
-        buttons,
+        sender, notifications_repo, user_ids, text, category, mandatory
     )
 
 
@@ -116,23 +86,16 @@ async def broadcast_to_users(
 async def broadcast_to_chats(
     chat_ids: list[MaxChatId],
     text: str,
-    buttons: Buttons | None,
     sender: FromDishka[MaxSender],
     bot: FromDishka[Bot],
     chats_service: FromDishka[ChatsService],
     users_repo: FromDishka[UsersRepo],
 ) -> int:
     # у чата нет уровня, notify=False повторяет DEFAULT_LEVEL
-    keyboard = _keyboard(buttons)
     logger.info("Рассылка по чатам: чатов %s", len(chat_ids))
     sent = 0
     for chat_id in chat_ids:
-        result = await sender.send_message(
-            text,
-            chat_id=chat_id,
-            notify=False,
-            keyboard=keyboard,
-        )
+        result = await sender.send_message(text, chat_id=chat_id, notify=False)
         if result is not None:
             sent += 1
             continue
@@ -148,7 +111,7 @@ async def broadcast_to_chats(
         binder = (
             None
             if is_admin or chat.bound_by is None
-            else await users_repo.get_by_id(UserId(chat.bound_by))
+            else await users_repo.get_by_id(chat.bound_by)
         )
         if binder is None:
             continue

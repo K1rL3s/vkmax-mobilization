@@ -10,7 +10,7 @@ class JsonFormatter(logging.Formatter):
         payload = {
             "level": record.levelname,
             "time": datetime.fromtimestamp(record.created, tz=UTC).strftime(
-                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S.%f"
             ),
             "message": record.getMessage(),
             "logger_name": record.name,

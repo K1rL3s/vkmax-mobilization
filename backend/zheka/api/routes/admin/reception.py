@@ -28,8 +28,7 @@ router = APIRouter(tags=["Админка: прием и доступ"], route_cl
 
 @router.get("/admin/reception/windows", summary="Часы приема организации")
 async def list_reception_windows(
-    current_org: AdminOrgDep,
-    reception_service: FromDishka[ReceptionService],
+    current_org: AdminOrgDep, reception_service: FromDishka[ReceptionService]
 ) -> list[ReceptionWindowItem]:
     windows = await reception_service.windows(current_org.org_id)
     return [ReceptionWindowItem.of(window) for window in windows]

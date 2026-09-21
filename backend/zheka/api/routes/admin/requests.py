@@ -65,10 +65,7 @@ async def list_org_requests(
         limit,
         offset,
     )
-    return Page(
-        items=[AdminRequestListItem.of_admin(row) for row in rows],
-        total=total,
-    )
+    return Page(items=[AdminRequestListItem.of_admin(row) for row in rows], total=total)
 
 
 @router.get("/admin/requests/{request_id}", summary="Карточка заявки в админке")
@@ -91,11 +88,7 @@ async def change_request_status(
     body: ChangeRequestStatusRequest,
 ) -> AdminRequestCard:
     data = await admin_requests_service.change_status(
-        current_org.org_id,
-        request_id,
-        body.status,
-        body.comment,
-        current_org.user_id,
+        current_org.org_id, request_id, body.status, body.comment, current_org.user_id
     )
     return _card(data, files_service)
 
@@ -109,10 +102,7 @@ async def reply_to_request(
     body: ReplyToRequestRequest,
 ) -> AdminRequestCard:
     data = await admin_requests_service.reply(
-        current_org.org_id,
-        request_id,
-        body.text,
-        current_org.user_id,
+        current_org.org_id, request_id, body.text, current_org.user_id
     )
     return _card(data, files_service)
 
@@ -126,10 +116,7 @@ async def assign_request_executor(
     body: AssignExecutorRequest,
 ) -> AdminRequestCard:
     data = await admin_requests_service.assign(
-        current_org.org_id,
-        request_id,
-        body.user_id,
-        current_org.user_id,
+        current_org.org_id, request_id, body.user_id, current_org.user_id
     )
     return _card(data, files_service)
 
@@ -145,8 +132,7 @@ async def get_request_group(
 
 
 @router.post(
-    "/admin/request-groups/{group_id}/status",
-    summary="Сменить статус всей группе",
+    "/admin/request-groups/{group_id}/status", summary="Сменить статус всей группе"
 )
 async def change_request_group_status(
     group_id: RequestGroupId,
@@ -155,11 +141,7 @@ async def change_request_group_status(
     body: ChangeGroupStatusRequest,
 ) -> RequestGroupCard:
     data = await admin_requests_service.change_group_status(
-        current_org.org_id,
-        group_id,
-        body.status,
-        body.comment,
-        current_org.user_id,
+        current_org.org_id, group_id, body.status, body.comment, current_org.user_id
     )
     return RequestGroupCard.of(data)
 
@@ -188,8 +170,7 @@ async def create_phone_request(
 
 @router.get("/admin/executors", summary="Исполнители организации")
 async def list_org_executors(
-    current_org: CurrentOrgDep,
-    admin_requests_service: FromDishka[AdminRequestsService],
+    current_org: CurrentOrgDep, admin_requests_service: FromDishka[AdminRequestsService]
 ) -> list[ExecutorItem]:
     views = await admin_requests_service.executors(current_org.org_id)
     return [ExecutorItem.of(view) for view in views]

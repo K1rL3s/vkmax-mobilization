@@ -62,10 +62,7 @@ class HousesRepo(BaseAlchemyRepo):
             # каждое слово ищется по всему адресу отдельным условием, поэтому
             # «Баумана 12» и «12 Баумана» дают одну и ту же выдачу
             address = func.concat_ws(
-                " ",
-                houses_table.c.city,
-                houses_table.c.street,
-                houses_table.c.building,
+                " ", houses_table.c.city, houses_table.c.street, houses_table.c.building
             )
             for word in query.split():
                 stmt = stmt.where(address.ilike(f"%{word}%"))
@@ -108,9 +105,7 @@ class HousesRepo(BaseAlchemyRepo):
         return result.tuples().all()
 
     async def list_cities(
-        self,
-        region: str | None,
-        query: str | None,
+        self, region: str | None, query: str | None
     ) -> Sequence[tuple[str, str]]:
         stmt = select(houses_table.c.region, houses_table.c.city).distinct()
         if region is not None:
@@ -122,10 +117,7 @@ class HousesRepo(BaseAlchemyRepo):
         return result.tuples().all()
 
     async def list_streets(
-        self,
-        city: str,
-        region: str | None,
-        query: str | None,
+        self, city: str, region: str | None, query: str | None
     ) -> Sequence[str]:
         stmt = (
             select(houses_table.c.street).distinct().where(houses_table.c.city == city)
@@ -198,7 +190,7 @@ class HousesRepo(BaseAlchemyRepo):
                 index_elements=[
                     demand_signals_table.c.house_id,
                     demand_signals_table.c.user_id,
-                ],
+                ]
             )
         )
         await self._session.execute(stmt)
@@ -208,35 +200,25 @@ class HousesRepo(BaseAlchemyRepo):
             exists().where(
                 demand_signals_table.c.house_id == house_id,
                 demand_signals_table.c.user_id == user_id,
-            ),
+            )
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
     async def is_chat_bound(self, house_id: HouseId) -> bool:
-        stmt = select(
-            exists().where(
-                chats_table.c.house_id == house_id,
-                BOUND_CHAT,
-            ),
-        )
+        stmt = select(exists().where(chats_table.c.house_id == house_id, BOUND_CHAT))
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
     async def get_for_org(self, house_id: HouseId, org_id: OrgId) -> House | None:
         stmt = select(House).where(
-            houses_table.c.id == house_id,
-            houses_table.c.org_id == org_id,
+            houses_table.c.id == house_id, houses_table.c.org_id == org_id
         )
         house: House | None = await self._session.scalar(stmt)
         return house
 
     async def search_for_org(
-        self,
-        org_id: OrgId,
-        query: str | None,
-        limit: int,
-        offset: int,
+        self, org_id: OrgId, query: str | None, limit: int, offset: int
     ) -> tuple[Sequence[House], int]:
         stmt = select(House).where(houses_table.c.org_id == org_id)
         if query is not None:
@@ -244,7 +226,7 @@ class HousesRepo(BaseAlchemyRepo):
                 or_(
                     houses_table.c.street.ilike(f"%{query}%"),
                     houses_table.c.building.ilike(f"{query}%"),
-                ),
+                )
             )
 
         total = await self._count(stmt)
@@ -257,8 +239,7 @@ class HousesRepo(BaseAlchemyRepo):
         return result.scalars().all(), total
 
     async def count_flats_by_house(
-        self,
-        house_ids: Collection[HouseId],
+        self, house_ids: Collection[HouseId]
     ) -> dict[HouseId, int]:
         if not house_ids:
             return {}
@@ -271,8 +252,7 @@ class HousesRepo(BaseAlchemyRepo):
         return {HouseId(house_id): count for house_id, count in result.tuples().all()}
 
     async def count_open_requests_by_house(
-        self,
-        house_ids: Collection[HouseId],
+        self, house_ids: Collection[HouseId]
     ) -> dict[HouseId, int]:
         if not house_ids:
             return {}
@@ -288,8 +268,7 @@ class HousesRepo(BaseAlchemyRepo):
         return {HouseId(house_id): count for house_id, count in result.tuples().all()}
 
     async def bound_chat_titles(
-        self,
-        house_ids: Collection[HouseId],
+        self, house_ids: Collection[HouseId]
     ) -> dict[HouseId, str | None]:
         # ключ словаря и есть признак привязки: название чата может быть пустым.
         # ponytail: у дома бывает несколько чатов, и название берется у
@@ -297,8 +276,7 @@ class HousesRepo(BaseAlchemyRepo):
         if not house_ids:
             return {}
         stmt = select(chats_table.c.house_id, chats_table.c.title).where(
-            chats_table.c.house_id.in_(house_ids),
-            BOUND_CHAT,
+            chats_table.c.house_id.in_(house_ids), BOUND_CHAT
         )
         result = await self._session.execute(stmt)
         return {HouseId(house_id): title for house_id, title in result.tuples().all()}
@@ -308,9 +286,7 @@ class HousesRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def ids_for_org(
-        self,
-        house_ids: Collection[HouseId],
-        org_id: OrgId,
+        self, house_ids: Collection[HouseId], org_id: OrgId
     ) -> set[HouseId]:
         # дома приходят из тела запроса, поэтому выборка сужается тем же
         # единственным инструментом изоляции, а не проверкой на месте вызова
@@ -340,7 +316,7 @@ class HousesRepo(BaseAlchemyRepo):
                 houses_table.outerjoin(
                     org_settings_table,
                     org_settings_table.c.org_id == houses_table.c.org_id,
-                ),
+                )
             )
             .where(houses_table.c.org_id.is_not(None))
             .order_by(houses_table.c.id)
@@ -352,24 +328,15 @@ class HousesRepo(BaseAlchemyRepo):
         ]
 
     async def add_flat_or_get(
-        self,
-        house_id: HouseId,
-        number: str,
-        area: int | None,
-        account_no: str | None,
+        self, house_id: HouseId, number: str, area: int | None, account_no: str | None
     ) -> tuple[Flat, bool]:
         # второй элемент - завели ли квартиру этим вызовом: два параллельных
         # нажатия разводит уникальный индекс (house_id, number)
         stmt = (
             pg_insert(Flat)
-            .values(
-                house_id=house_id,
-                number=number,
-                area=area,
-                account_no=account_no,
-            )
+            .values(house_id=house_id, number=number, area=area, account_no=account_no)
             .on_conflict_do_nothing(
-                index_elements=[flats_table.c.house_id, flats_table.c.number],
+                index_elements=[flats_table.c.house_id, flats_table.c.number]
             )
             .returning(Flat)
         )

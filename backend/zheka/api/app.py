@@ -21,27 +21,29 @@ from zheka.api.middlewares import (
     transaction_middleware,
 )
 from zheka.api.routes import (
-    admin_analytics_router,
-    admin_announcements_router,
-    admin_houses_router,
-    admin_meters_router,
-    admin_orgs_router,
-    admin_polls_router,
-    admin_reception_router,
-    admin_requests_router,
-    announcements_router,
-    charges_router,
-    demo_router,
-    files_router,
-    flats_router,
-    healthcheck_router,
-    houses_router,
-    me_router,
-    meters_router,
-    orgs_router,
-    polls_router,
-    reception_router,
-    requests_router,
+    announcements,
+    charges,
+    demo,
+    files,
+    flats,
+    healthcheck,
+    houses,
+    me,
+    meters,
+    orgs,
+    polls,
+    reception,
+    requests,
+)
+from zheka.api.routes.admin import (
+    analytics as admin_analytics,
+    announcements as admin_announcements,
+    houses as admin_houses,
+    meters as admin_meters,
+    orgs as admin_orgs,
+    polls as admin_polls,
+    reception as admin_reception,
+    requests as admin_requests,
 )
 from zheka.bot import BotSetup, make_dispatcher, make_engine
 from zheka.config import BotMode, Config, load_config
@@ -76,8 +78,7 @@ _TAGS = {
 
 
 def app_factory(
-    config: Config | None = None,
-    bot_setup: BotSetup | None = None,
+    config: Config | None = None, bot_setup: BotSetup | None = None
 ) -> FastAPI:
     config = config or load_config()
     setup_logger(config.log)
@@ -88,10 +89,7 @@ def app_factory(
     dp = bot_setup.dp
     container = make_container(
         config=config,
-        context={
-            Dispatcher: dp,
-            BgManagerFactory: bot_setup.bg_manager_factory,
-        },
+        context={Dispatcher: dp, BgManagerFactory: bot_setup.bg_manager_factory},
     )
     setup_maxo_dishka(container, dp, auto_inject=True)
 
@@ -111,32 +109,32 @@ def app_factory(
         lifespan=_lifespan(config, dp, container),
     )
 
-    for router in (
-        healthcheck_router,
-        me_router,
-        houses_router,
-        flats_router,
-        requests_router,
-        meters_router,
-        charges_router,
-        polls_router,
-        announcements_router,
-        reception_router,
-        orgs_router,
-        demo_router,
-        admin_orgs_router,
-        admin_houses_router,
-        admin_requests_router,
-        admin_meters_router,
-        admin_announcements_router,
-        admin_polls_router,
-        admin_reception_router,
-        admin_analytics_router,
+    for module in (
+        healthcheck,
+        me,
+        houses,
+        flats,
+        requests,
+        meters,
+        charges,
+        polls,
+        announcements,
+        reception,
+        orgs,
+        demo,
+        admin_orgs,
+        admin_houses,
+        admin_requests,
+        admin_meters,
+        admin_announcements,
+        admin_polls,
+        admin_reception,
+        admin_analytics,
     ):
-        app.include_router(router, prefix=API_PREFIX, responses=ERROR_RESPONSES)
+        app.include_router(module.router, prefix=API_PREFIX, responses=ERROR_RESPONSES)
 
     # пути файлов зафиксированы целиком, nginx разводит /api/ и /files/ сам
-    app.include_router(files_router, responses=ERROR_RESPONSES)
+    app.include_router(files.router, responses=ERROR_RESPONSES)
 
     setup_middlewares(app, container, config.api.cors)
 
@@ -144,9 +142,7 @@ def app_factory(
 
 
 def setup_middlewares(
-    app: FastAPI,
-    container: AsyncContainer,
-    cors: Sequence[str],
+    app: FastAPI, container: AsyncContainer, cors: Sequence[str]
 ) -> None:
     # зарегистрированный последним оказывается снаружи. Транзакция стоит
     # внутри контейнера dishka и снаружи ExceptionMiddleware, чтобы видеть
@@ -168,9 +164,7 @@ def setup_middlewares(
 
 
 def _lifespan(
-    config: Config,
-    dp: Dispatcher,
-    container: AsyncContainer,
+    config: Config, dp: Dispatcher, container: AsyncContainer
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -186,7 +180,7 @@ def _lifespan(
             await engine.on_shutdown(app)
         else:
             polling = asyncio.create_task(
-                dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True),
+                dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True)
             )
             logger.info("Бот работает лонг-поллингом")
             yield

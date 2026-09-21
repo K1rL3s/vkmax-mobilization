@@ -9,7 +9,7 @@ from zheka.bot.dialog_data import AccessSlotsData
 from zheka.bot.states import AccessSlots
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.requests import open_card
-from zheka.core.ids import AccessRequestId, FlatId, UserId
+from zheka.core.ids import AccessRequestId
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.reminders import RemindersService
 from zheka.infra.database.repos.access import AccessRepo
@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 
 # крон планировщика taskiq сверяется с datetime.now(tz=UTC): время меток в UTC
 @async_shared_broker.task(
-    task_name=TaskName.REMIND_READINGS.value,
-    schedule=[{"cron": "0 10 * * *"}],
+    task_name=TaskName.REMIND_READINGS.value, schedule=[{"cron": "0 10 * * *"}]
 )
 @inject(patch_module=True)
 async def remind_readings(reminders_service: FromDishka[RemindersService]) -> int:
@@ -31,8 +30,7 @@ async def remind_readings(reminders_service: FromDishka[RemindersService]) -> in
 
 
 @async_shared_broker.task(
-    task_name=TaskName.REMIND_POLLS.value,
-    schedule=[{"cron": "0 10 * * *"}],
+    task_name=TaskName.REMIND_POLLS.value, schedule=[{"cron": "0 10 * * *"}]
 )
 @inject(patch_module=True)
 async def remind_polls(reminders_service: FromDishka[RemindersService]) -> int:
@@ -40,8 +38,7 @@ async def remind_polls(reminders_service: FromDishka[RemindersService]) -> int:
 
 
 @async_shared_broker.task(
-    task_name=TaskName.CLOSE_EXPIRED_POLLS.value,
-    schedule=[{"cron": "0 10 * * *"}],
+    task_name=TaskName.CLOSE_EXPIRED_POLLS.value, schedule=[{"cron": "0 10 * * *"}]
 )
 @inject(patch_module=True)
 async def close_expired_polls(reminders_service: FromDishka[RemindersService]) -> int:
@@ -49,8 +46,7 @@ async def close_expired_polls(reminders_service: FromDishka[RemindersService]) -
 
 
 @async_shared_broker.task(
-    task_name=TaskName.WARN_VERIFICATION.value,
-    schedule=[{"cron": "0 9 * * *"}],
+    task_name=TaskName.WARN_VERIFICATION.value, schedule=[{"cron": "0 9 * * *"}]
 )
 @inject(patch_module=True)
 async def warn_verification(reminders_service: FromDishka[RemindersService]) -> int:
@@ -59,8 +55,7 @@ async def warn_verification(reminders_service: FromDishka[RemindersService]) -> 
 
 # 16:00 UTC - 19:00 по Москве, вечер накануне приема
 @async_shared_broker.task(
-    task_name=TaskName.REMIND_APPOINTMENTS.value,
-    schedule=[{"cron": "0 16 * * *"}],
+    task_name=TaskName.REMIND_APPOINTMENTS.value, schedule=[{"cron": "0 16 * * *"}]
 )
 @inject(patch_module=True)
 async def remind_appointments(reminders_service: FromDishka[RemindersService]) -> int:
@@ -79,7 +74,7 @@ async def broadcast_access_request(
 ) -> int:
     targets = await access_repo.list_targets(access_request_id)
     residents = await residents_repo.list_verified_for_flats(
-        [FlatId(target.flat_id) for target in targets],
+        [target.flat_id for target in targets]
     )
     for resident in residents:
         # обязательное окно: без ответа жителя сбор доступа ничего не
@@ -88,15 +83,11 @@ async def broadcast_access_request(
             users_repo,
             notifications_service,
             sender,
-            UserId(resident.user_id),
+            resident.user_id,
             AccessSlots.pick,
             f"access-{access_request_id}",
             AccessSlotsData(access_request_id=int(access_request_id)).to_data(),
             ShowMode.SEND,
         )
-    logger.info(
-        "Запрос доступа %s: окон открыто %s",
-        access_request_id,
-        len(residents),
-    )
+    logger.info("Запрос доступа %s: окон открыто %s", access_request_id, len(residents))
     return len(residents)

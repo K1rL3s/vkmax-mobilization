@@ -47,8 +47,7 @@ def make_orgs_service(session: AsyncSession) -> OrgsService:
 
 
 def make_moderation_service(
-    session: AsyncSession,
-    publisher: TaskPublisher | None = None,
+    session: AsyncSession, publisher: TaskPublisher | None = None
 ) -> ModerationService:
     return ModerationService(
         ResidentsRepo(session),
@@ -166,13 +165,7 @@ async def test_register(
 
     with pytest.raises(NotEnoughRights):
         await orgs_service.register(
-            seeded.user_id,
-            "wrong",
-            org.inn,
-            None,
-            "УК",
-            "+7",
-            "адрес",
+            seeded.user_id, "wrong", org.inn, None, "УК", "+7", "адрес"
         )
 
     card = await orgs_service.register(
@@ -206,8 +199,7 @@ async def test_moderation(
     publisher: TaskPublisher,
 ) -> None:
     own = await make_org_house_flat_user(
-        org_role=OrgRole.CREATOR,
-        resident_role=ResidentRole.OWNER,
+        org_role=OrgRole.CREATOR, resident_role=ResidentRole.OWNER
     )
     resident = await ResidentsRepo(session).get_for_house(own.user_id, own.house_id)
     assert resident is not None
@@ -248,10 +240,7 @@ async def test_moderation(
         await moderation.block(own.org_id, resident.id, "причина", own.user_id)
 
     view = await moderation.revoke_verification(
-        own.org_id,
-        resident.id,
-        "нет подтверждения",
-        own.user_id,
+        own.org_id, resident.id, "нет подтверждения", own.user_id
     )
     assert view.resident.verified_at is None
     # председателем бывает только подтвержденный житель
@@ -271,10 +260,7 @@ async def test_foreign_resident_is_not_found_for_another_org(
     # что такой resident_id существует
     with pytest.raises(EntityNotFound):
         await make_moderation_service(session).block(
-            own.org_id,
-            foreign.id,
-            "причина",
-            own.user_id,
+            own.org_id, foreign.id, "причина", own.user_id
         )
 
 
@@ -335,10 +321,7 @@ async def test_update_settings_rejects_values_outside_the_limits(
         )
 
 
-@pytest.mark.parametrize(
-    ("expires_in_hours", "max_activations"),
-    [(0, 1), (72, 0)],
-)
+@pytest.mark.parametrize(("expires_in_hours", "max_activations"), [(0, 1), (72, 0)])
 async def test_create_invite_rejects_dead_limits(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],

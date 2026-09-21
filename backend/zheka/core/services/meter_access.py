@@ -3,17 +3,15 @@ from datetime import date
 from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.enums import ResidentStatus, TariffZone
-from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
-from zheka.core.models import Meter, Resident
+from zheka.core.errors import FLAT_NOT_FOUND, EntityNotFound, NotEnoughRights
+from zheka.core.ids import FlatId, MeterId, UserId
+from zheka.core.models import Flat, Meter, Resident
 from zheka.core.roles import is_staff
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-FLAT_NOT_FOUND = "Квартира не найдена"
-METER_NOT_FOUND = "Счетчик не найден"
 NOT_VERIFIED = "Подтвердите квартиру, чтобы работать со счетчиками"
 CANNOT_MANAGE_METER = (
     "Добавлять и редактировать счетчики может собственник или сотрудник УК"
@@ -51,18 +49,15 @@ class MeterAccess:
     async def get_meter(self, meter_id: MeterId) -> Meter:
         meter = await self._meters.get(meter_id)
         if meter is None:
-            raise EntityNotFound(METER_NOT_FOUND)
+            raise EntityNotFound("Счетчик не найден")
         return meter
 
     async def resident_of_flat(
-        self,
-        user_id: UserId,
-        flat_id: FlatId,
+        self, user_id: UserId, flat_id: FlatId
     ) -> Resident | None:
         residents = await self._residents.list_for_flat(flat_id)
         return next(
-            (resident for resident in residents if resident.user_id == user_id),
-            None,
+            (resident for resident in residents if resident.user_id == user_id), None
         )
 
     async def verified_resident(self, user_id: UserId, flat_id: FlatId) -> Resident:
@@ -84,12 +79,10 @@ class MeterAccess:
             if resident.verified_at is not None and resident.can_see_charges:
                 return
 
-        flat = await self._houses.get_flat(flat_id)
-        if flat is None:
-            raise EntityNotFound(FLAT_NOT_FOUND)
-        house = await self._houses.get(HouseId(flat.house_id))
+        flat = await self.get_flat(flat_id)
+        house = await self._houses.get(flat.house_id)
         if house is not None and house.org_id is not None:
-            member = await self._orgs.get_member(OrgId(house.org_id), user_id)
+            member = await self._orgs.get_member(house.org_id, user_id)
             if member is not None and is_staff(member.role):
                 return
 
@@ -98,7 +91,7 @@ class MeterAccess:
         raise EntityNotFound(FLAT_NOT_FOUND)
 
     async def meter_card(self, meter: Meter, today: date) -> MeterCard:
-        last = await self._meters.list_readings(MeterId(meter.id), 1)
+        last = await self._meters.list_readings(meter.id, 1)
         last_reading = last[0] if last else None
         expired = (
             meter.next_verification_date is not None
@@ -113,3 +106,9 @@ class MeterAccess:
                 None if last_reading is None else zones_of(last_reading.values)
             ),
         )
+
+    async def get_flat(self, flat_id: FlatId) -> Flat:
+        flat = await self._houses.get_flat(flat_id)
+        if flat is None:
+            raise EntityNotFound(FLAT_NOT_FOUND)
+        return flat

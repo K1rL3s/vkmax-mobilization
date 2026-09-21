@@ -23,6 +23,7 @@ from maxo.dialogs.test_tools.memory_storage import JsonMemoryStorage
 from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
 from maxo.routing.interfaces import BaseRouter
 from maxo.routing.signals import BeforeStartup
+from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from taskiq import AckableMessage, AsyncBroker, BrokerMessage, InMemoryBroker
 from taskiq.message import TaskiqMessage
@@ -73,11 +74,8 @@ os.environ.setdefault("DEEPLINK_ORG_REGISTER", "test-register-code")
 
 # testcontainers отпускает контейнер по строке в логе, которую печатает и
 # временный сервер initdb, когда порт снаружи еще закрыт
-POSTGRES_READY_TIMEOUT = 30.0
-
-
-def wait_for_postgres(url: str, timeout: float = POSTGRES_READY_TIMEOUT) -> None:
-    deadline = time.monotonic() + timeout
+def wait_for_postgres(url: str) -> None:
+    deadline = time.monotonic() + 30
     dsn = url.replace("postgresql+psycopg://", "postgresql://")
     while True:
         try:
@@ -101,12 +99,14 @@ def database_url() -> Generator[str]:
         os.environ["POSTGRES_DB"] = postgres.dbname
 
         wait_for_postgres(postgres.get_connection_url())
-
-        alembic_cfg = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
-        alembic_cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
-        command.upgrade(alembic_cfg, "head")
-
+        _migrate()
         yield postgres.get_connection_url()
+
+
+def _migrate() -> None:
+    alembic_cfg = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    command.upgrade(alembic_cfg, "head")
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -121,8 +121,7 @@ async def session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
     async with engine.connect() as conn:
         transaction = await conn.begin()
         async with AsyncSession(
-            bind=conn,
-            join_transaction_mode="create_savepoint",
+            bind=conn, join_transaction_mode="create_savepoint"
         ) as db_session:
             yield db_session
         await transaction.rollback()
@@ -140,9 +139,7 @@ async def make_org_house_flat_user(
     session: AsyncSession,
 ) -> Callable[..., Awaitable[OrgHouseFlatUser]]:
     async def _make(
-        *,
-        org_role: OrgRole | None = None,
-        resident_role: ResidentRole | None = None,
+        *, org_role: OrgRole | None = None, resident_role: ResidentRole | None = None
     ) -> OrgHouseFlatUser:
         unique = secrets.token_hex(4)
         org = Organization(
@@ -151,7 +148,8 @@ async def make_org_house_flat_user(
             phone="+70000000000",
             address="Тестовая область, Тестоград, Тестовая, 1",
         )
-        session.add(org)
+        user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Тест Тестов")
+        session.add_all([org, user])
         await session.flush()
 
         house = House(
@@ -170,10 +168,6 @@ async def make_org_house_flat_user(
         session.add(flat)
         await session.flush()
 
-        user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Тест Тестов")
-        session.add(user)
-        await session.flush()
-
         if org_role is not None:
             session.add(OrgMember(org_id=org.id, user_id=user.id, role=org_role))
         if resident_role is not None:
@@ -183,7 +177,7 @@ async def make_org_house_flat_user(
                     house_id=house.id,
                     flat_id=flat.id,
                     role=resident_role,
-                ),
+                )
             )
         await session.flush()
 
@@ -197,10 +191,6 @@ async def make_org_house_flat_user(
     return _make
 
 
-_DUMMY_DB_PASSWORD = "p"  # noqa: S105
-_DUMMY_MAX_TOKEN = "test-token"  # noqa: S105
-
-
 def make_config() -> Config:
     return Config(
         log=LogConfig(level="INFO", format=LogFormat.JSON),
@@ -209,19 +199,18 @@ def make_config() -> Config:
             host="localhost",
             port=5432,
             user="u",
-            password=_DUMMY_DB_PASSWORD,
+            password="p",  # noqa: S106
             name="d",
         ),
         redis=RedisConfig(host="localhost", port=6379, password=None, db=0),
         max=MaxConfig(
-            token=_DUMMY_MAX_TOKEN,
+            token="test-token",  # noqa: S106
             mode=BotMode.POLLING,
             webhook_url=None,
             secret_token=None,
         ),
         files=FilesConfig(
-            dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"),
-            max_size_mb=10,
+            dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"), max_size_mb=10
         ),
         deeplinks=DeeplinksConfig(org_register="test-register-code"),
         yandex=YandexConfig(api_key=None, folder_id=None),
@@ -260,8 +249,7 @@ def publisher(broker: RecordingBroker) -> TaskPublisher:
 
 
 def make_notifications_service(
-    session: AsyncSession,
-    publisher: TaskPublisher | None = None,
+    session: AsyncSession, publisher: TaskPublisher | None = None
 ) -> NotificationsService:
     return NotificationsService(
         NotificationsRepo(session),
@@ -297,19 +285,12 @@ def bot_database_url(database_url: str) -> str:
     main_db = os.environ["POSTGRES_DB"]
     os.environ["POSTGRES_DB"] = BOT_DB_NAME
     try:
-        alembic_cfg = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
-        alembic_cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
-        command.upgrade(alembic_cfg, "head")
+        _migrate()
     finally:
         os.environ["POSTGRES_DB"] = main_db
 
-    return (
-        dsn.rsplit("/", 1)[0].replace(
-            "postgresql://",
-            "postgresql+psycopg://",
-        )
-        + f"/{BOT_DB_NAME}"
-    )
+    url = make_url(database_url).set(database=BOT_DB_NAME)
+    return url.render_as_string(hide_password=False)
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -323,6 +304,10 @@ async def bot_engine(bot_database_url: str) -> AsyncGenerator[AsyncEngine]:
 async def bot_session(bot_engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
     async with AsyncSession(bind=bot_engine) as db_session:
         yield db_session
+
+
+def bot_context(setup: BotSetup) -> dict[Any, Any]:
+    return {Dispatcher: setup.dp, BgManagerFactory: setup.bg_manager_factory}
 
 
 def empty_bot_setup() -> BotSetup:
@@ -385,10 +370,7 @@ async def bot_container(
     container = make_container(
         RecordingBrokerProvider(bot_broker),
         config=make_bot_config(),
-        context={
-            Dispatcher: bot_setup.dp,
-            BgManagerFactory: bot_setup.bg_manager_factory,
-        },
+        context=bot_context(bot_setup),
     )
     setup_maxo_dishka(container, bot_setup.dp, auto_inject=True)
     # before_startup раскладывает inner-мидлвари по роутерам и инжектит dishka
@@ -423,14 +405,10 @@ async def task_broker(
         RecordingBrokerProvider(bot_broker),
         FakeBotProvider(fake_bot),
         config=make_bot_config(),
-        context={
-            Dispatcher: bot_setup.dp,
-            BgManagerFactory: bot_setup.bg_manager_factory,
-        },
+        context=bot_context(bot_setup),
     )
     broker = InMemoryBroker(await_inplace=True).with_middlewares(
-        ContainerMiddleware(container),
-        CommitMiddleware(),
+        ContainerMiddleware(container), CommitMiddleware()
     )
     yield broker
     await container.close()

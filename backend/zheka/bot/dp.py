@@ -46,8 +46,7 @@ PRIVATE_ONLY = MagicData(F.update_context.chat_type == ChatType.DIALOG)
 
 
 class BotSetup(ZhekaType):
-    # фабрику отдает setup_dialogs, и другого способа получить ту самую,
-    # с которой зарегистрированы мидлвари диалогов, нет
+    # фабрику отдает только setup_dialogs, другую собрать нельзя
     dp: Dispatcher
     bg_manager_factory: BgManagerFactory
 
@@ -60,7 +59,7 @@ def make_dispatcher(
     key_builder = DefaultKeyBuilder(with_destiny=True)
     events_isolation: BaseEventIsolation | None = None
     if storage is None:
-        redis_storage = RedisStorage.from_url(
+        storage = RedisStorage.from_url(
             config.url,
             key_builder=key_builder,
             state_ttl=STATE_TTL,
@@ -71,9 +70,8 @@ def make_dispatcher(
                 "retry_on_timeout": True,
             },
         )
-        storage = redis_storage
         # межпроцессная: два нажатия одного жителя попадают в разные воркеры
-        events_isolation = redis_storage.create_isolation()
+        events_isolation = storage.create_isolation()
 
     dp = Dispatcher(
         storage=storage,
@@ -86,8 +84,8 @@ def make_dispatcher(
     dp.update.middleware.outer(LoggingMiddleware())
     dp.message_created.middleware.outer(ThrottlingMiddleware())
     dp.message_callback.middleware.outer(ThrottlingMiddleware())
-    # inner, а не outer: DishkaMiddleware регистрируется позже, уже из
-    # setup_dishka, и outer-мидлварь отсюда оказалась бы снаружи контейнера
+    # inner: DishkaMiddleware регистрирует setup_dishka позже, outer был бы
+    # снаружи контейнера
     dp.update.middleware.inner(TransactionMiddleware())
     # после транзакции, чтобы апсерт попал внутрь той, которая его закоммитит
     dp.update.middleware.inner(UserMiddleware())
@@ -96,9 +94,8 @@ def make_dispatcher(
     private_router.message_created.filter(PRIVATE_ONLY)
     private_router.message_callback.filter(PRIVATE_ONLY)
     private_router.bot_started.filter(PRIVATE_ONLY)
-    # диплинки раньше команд: bot_started у ссылки и у чистого /start один и
-    # тот же, а maxo останавливается на первом ответившем обработчике.
-    # fallback последним: он отвечает на все, что не разобрали до него
+    # диплинки раньше команд: у ссылки и у /start один bot_started, а maxo
+    # останавливается на первом ответившем. fallback последним
     private_router.include(
         deeplinks_router,
         commands_router,

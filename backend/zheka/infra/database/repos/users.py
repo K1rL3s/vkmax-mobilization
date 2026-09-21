@@ -34,8 +34,7 @@ class UsersRepo(BaseAlchemyRepo):
                 # NULL оттуда навсегда отрезал бы жителя от окон, которые
                 # открывает задача: у нее нет другого адреса, кроме max_chat_id
                 "max_chat_id": func.coalesce(
-                    insert.excluded.max_chat_id,
-                    users_table.c.max_chat_id,
+                    insert.excluded.max_chat_id, users_table.c.max_chat_id
                 ),
                 # апдейт из личного диалога доказывает, что бот снова жив, а
                 # иначе однажды остановивший его житель не получил бы больше ни
@@ -53,8 +52,7 @@ class UsersRepo(BaseAlchemyRepo):
         # populate_existing: без него уже загруженный в identity map объект
         # не подхватит name/username, обновлённые веткой DO UPDATE
         result = await self._session.execute(
-            stmt,
-            execution_options={"populate_existing": True},
+            stmt, execution_options={"populate_existing": True}
         )
         return result.scalar_one()
 

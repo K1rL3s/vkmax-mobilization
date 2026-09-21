@@ -44,9 +44,7 @@ async def register_org(
 
 @router.post("/org-invites/{code}/activate", summary="Активировать код сотрудника")
 async def activate_org_invite(
-    code: str,
-    current_account: RequireConsentDep,
-    orgs_service: FromDishka[OrgsService],
+    code: str, current_account: RequireConsentDep, orgs_service: FromDishka[OrgsService]
 ) -> OrgMembership:
     membership = await orgs_service.activate_invite(current_account.user_id, code)
     return OrgMembership.of(membership)

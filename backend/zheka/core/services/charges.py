@@ -17,7 +17,12 @@ from zheka.core.enums import (
     RequestChannel,
     ServiceType,
 )
-from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
+from zheka.core.errors import (
+    FLAT_NOT_FOUND,
+    EntityNotFound,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import ChargeId, FlatId, HouseId, MeterId, RequestId, UserId
 from zheka.core.models import Charge, Flat, House, Tariff
 from zheka.core.services.events import EventsService
@@ -28,11 +33,8 @@ from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 
-FLAT_NOT_FOUND = "Квартира не найдена"
-CHARGE_NOT_FOUND = "Квитанция не найдена"
 NOT_VERIFIED = "Подтвердите квартиру, чтобы видеть начисления"
 CANNOT_SEE_CHARGES = "Начисления недоступны для вашей роли"
-ALREADY_PAID = "Квитанция уже оплачена"
 
 # сколько последних периодов расхода показывать рядом с разбором начисления
 CONSUMPTION_POINTS = 6
@@ -92,13 +94,8 @@ def _dispute_description(
     period_text = charge.period.strftime("%m.%Y")
     if service is not None:
         line = next((item for item in lines if item.service is service), None)
-        if line is None:
-            summary = f"По строке «{SERVICE_LABELS[service]}» за {period_text}."
-        else:
-            summary = (
-                f"По строке «{SERVICE_LABELS[service]}» за {period_text}: "
-                f"{_rubles(line.delta)} руб."
-            )
+        summary = f"По строке «{SERVICE_LABELS[service]}» за {period_text}"
+        summary += "." if line is None else f": {_rubles(line.delta)} руб."
     else:
         top = ", ".join(
             f"{SERVICE_LABELS[item.service]} {_rubles(item.delta)} руб"
@@ -145,30 +142,24 @@ class ChargesService:
         return await self._charges.list_tariffs(house_id)
 
     async def list_for_flat(
-        self,
-        flat_id: FlatId,
-        limit: int,
-        offset: int,
+        self, flat_id: FlatId, limit: int, offset: int
     ) -> tuple[Sequence[Charge], int]:
         return await self._charges.list_for_flat(flat_id, limit, offset)
 
     async def card(self, charge_id: ChargeId, user_id: UserId) -> ChargeCardData:
         charge = await self._verified_charge(charge_id, user_id)
-        flat = await self._get_flat(FlatId(charge.flat_id))
-        house = await self._houses.get(HouseId(flat.house_id))
+        flat = await self._access.get_flat(charge.flat_id)
+        house = await self._houses.get(flat.house_id)
         if house is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         return ChargeCardData(
-            charge=charge,
-            house=house,
-            flat=flat,
-            lines=parse_lines(charge.lines),
+            charge=charge, house=house, flat=flat, lines=parse_lines(charge.lines)
         )
 
     async def breakdown(self, charge_id: ChargeId, user_id: UserId) -> BreakdownData:
         charge = await self._verified_charge(charge_id, user_id)
-        flat_id = FlatId(charge.flat_id)
-        house_id = HouseId((await self._get_flat(flat_id)).house_id)
+        flat_id = charge.flat_id
+        house_id = (await self._access.get_flat(flat_id)).house_id
 
         current_lines, previous_lines, previous_charge = await self._diffed_lines(
             charge
@@ -189,9 +180,7 @@ class ChargesService:
         consumption = await self._consumption(user_id, flat_id, house_id, charge.period)
 
         await self._events.record(
-            EventType.CHARGE_BREAKDOWN_OPENED,
-            user_id=user_id,
-            charge_id=charge_id,
+            EventType.CHARGE_BREAKDOWN_OPENED, user_id=user_id, charge_id=charge_id
         )
         return BreakdownData(
             charge=charge,
@@ -209,19 +198,15 @@ class ChargesService:
         service: ServiceType | None,
     ) -> RequestId:
         charge = await self._verified_charge(charge_id, user_id)
-        flat_id = FlatId(charge.flat_id)
-        house_id = HouseId((await self._get_flat(flat_id)).house_id)
+        flat_id = charge.flat_id
+        house_id = (await self._access.get_flat(flat_id)).house_id
 
         current_lines, previous_lines, _previous_charge = await self._diffed_lines(
             charge
         )
         core = compute_breakdown(current_lines, previous_lines)
         description = _dispute_description(
-            charge,
-            core.lines,
-            core.delta,
-            comment,
-            service,
+            charge, core.lines, core.delta, comment, service
         )
         photos = await self._period_photos(flat_id, charge.period)
 
@@ -236,7 +221,7 @@ class ChargesService:
             ),
             channel=RequestChannel.MINIAPP,
         )
-        request_id = RequestId(card.request.id)
+        request_id = card.request.id
         await self._events.record(
             EventType.CHARGE_DISPUTED,
             user_id=user_id,
@@ -248,64 +233,48 @@ class ChargesService:
     async def pay_demo(self, charge_id: ChargeId, user_id: UserId) -> PaymentResult:
         charge = await self._verified_charge(charge_id, user_id)
         if charge.paid_at is not None:
-            raise InvalidState(ALREADY_PAID)
+            raise InvalidState("Квитанция уже оплачена")
         paid_at = datetime.now(UTC)
         await self._charges.mark_paid(charge, paid_at)
         return PaymentResult(charge_id=ChargeId(charge.id), paid_at=paid_at)
 
-    async def _verified_charge(
-        self,
-        charge_id: ChargeId,
-        user_id: UserId,
-    ) -> Charge:
+    async def _verified_charge(self, charge_id: ChargeId, user_id: UserId) -> Charge:
         charge = await self._charges.get(charge_id)
         if charge is None:
-            raise EntityNotFound(CHARGE_NOT_FOUND)
-        resident = await self._access.verified_resident(user_id, FlatId(charge.flat_id))
+            raise EntityNotFound("Квитанция не найдена")
+        resident = await self._access.verified_resident(user_id, charge.flat_id)
         if not resident.can_see_charges:
             raise NotEnoughRights(CANNOT_SEE_CHARGES)
         return charge
 
     async def _diffed_lines(
-        self,
-        charge: Charge,
+        self, charge: Charge
     ) -> tuple[list[ChargeLine], list[ChargeLine], Charge | None]:
         current_lines = parse_lines(charge.lines)
         previous_charge = await self._charges.get_by_period(
-            FlatId(charge.flat_id),
-            previous_period(charge.period),
+            charge.flat_id, previous_period(charge.period)
         )
         previous_lines = (
             [] if previous_charge is None else parse_lines(previous_charge.lines)
         )
         return current_lines, previous_lines, previous_charge
 
-    async def _get_flat(self, flat_id: FlatId) -> Flat:
-        flat = await self._houses.get_flat(flat_id)
-        if flat is None:
-            raise EntityNotFound(FLAT_NOT_FOUND)
-        return flat
-
     async def _period_photos(self, flat_id: FlatId, period: date) -> list[str]:
         meters = await self._meters.list_for_flat(flat_id)
         photos: list[str] = []
         for meter in meters:
-            reading = await self._meters.latest_reading(MeterId(meter.id), period)
+            reading = await self._meters.latest_reading(meter.id, period)
             if reading is not None:
                 photos.extend(reading.photo_paths)
         return photos
 
     async def _consumption(
-        self,
-        user_id: UserId,
-        flat_id: FlatId,
-        house_id: HouseId,
-        period: date,
+        self, user_id: UserId, flat_id: FlatId, house_id: HouseId, period: date
     ) -> list[ServiceConsumption]:
         meters = await self._meters.list_for_flat(flat_id)
         result: list[ServiceConsumption] = []
         for meter in meters:
-            history = await self._readings.history(user_id, MeterId(meter.id))
+            history = await self._readings.history(user_id, meter.id)
             by_period: dict[date, int] = {}
             for row in history:
                 if row.reading.period > period:
@@ -318,16 +287,14 @@ class ChargesService:
                 for recent in recent_periods
             ]
             house_average = await self._readings.house_average(
-                house_id,
-                meter.type,
-                period,
+                house_id, meter.type, period
             )
             result.append(
                 ServiceConsumption(
                     service=SERVICE_OF_METER[meter.type],
-                    meter_id=MeterId(meter.id),
+                    meter_id=meter.id,
                     points=points,
                     house_average=house_average,
-                ),
+                )
             )
         return result

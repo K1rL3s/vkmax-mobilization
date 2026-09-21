@@ -5,10 +5,7 @@ _FROZEN_ATTR = "__zheka_frozen__"
 _SLOTS_ATTR = "__zheka_slots__"
 
 
-@dataclass_transform(
-    frozen_default=True,
-    kw_only_default=True,
-)
+@dataclass_transform(frozen_default=True, kw_only_default=True)
 class _ZhekaTypeMetaClass(type):
     def __new__(
         cls,
@@ -32,17 +29,10 @@ class _ZhekaTypeMetaClass(type):
         if "__slots__" in namespace:
             return class_
 
-        return dataclass(
-            slots=slots,
-            frozen=frozen,
-            kw_only=True,
-        )(class_)
+        return dataclass(slots=slots, frozen=frozen, kw_only=True)(class_)
 
 
-@dataclass_transform(
-    frozen_default=False,
-    kw_only_default=True,
-)
+@dataclass_transform(frozen_default=False, kw_only_default=True)
 class _ZhekaMutableTypeMetaClass(_ZhekaTypeMetaClass):
     pass
 

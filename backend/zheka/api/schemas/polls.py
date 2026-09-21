@@ -48,7 +48,7 @@ class PollListItem(BaseSchema):
     voted_flats: int
 
     @classmethod
-    def of(cls, data: PollListItemData) -> Self:
+    def of(cls, data: PollListItemData | PollCardData) -> Self:
         poll = data.poll
         return cls(
             id=PollId(poll.id),
@@ -77,23 +77,12 @@ class PollCard(PollListItem):
     def of_card(cls, data: PollCardData) -> Self:
         poll = data.poll
         return cls(
-            id=PollId(poll.id),
-            title=poll.title,
-            status=data.status,
-            starts_at=poll.starts_at,
-            ends_at=poll.ends_at,
-            is_multiple=poll.is_multiple,
-            voted=data.voted,
-            voted_flats=data.voted_flats,
-            house_id=HouseId(poll.house_id),
+            **PollListItem.of(data).model_dump(),
+            house_id=poll.house_id,
             created_by_role=poll.created_by_role,
             can_vote=data.can_vote,
             options=[
-                PollOptionItem(
-                    id=PollOptionId(option.id),
-                    text=option.text,
-                    position=option.position,
-                )
+                PollOptionItem(id=option.id, text=option.text, position=option.position)
                 for option in data.options
             ],
             description=poll.description,
@@ -165,7 +154,7 @@ class PollResults(BaseSchema):
     def of(cls, data: PollResultsData) -> Self:
         forecast = data.forecast
         return cls(
-            poll_id=PollId(data.poll.id),
+            poll_id=data.poll.id,
             status=data.status,
             total_flats=forecast.total_flats,
             voted_flats=forecast.voted_flats,
@@ -190,9 +179,7 @@ class PollNonVoterItem(BaseSchema):
     @classmethod
     def of(cls, flat: Flat) -> Self:
         return cls(
-            flat_id=FlatId(flat.id),
-            flat_number=flat.number,
-            entrance=flat.entrance,
+            flat_id=FlatId(flat.id), flat_number=flat.number, entrance=flat.entrance
         )
 
 
@@ -204,6 +191,6 @@ class AdminPollListItem(PollListItem):
     def of_admin(cls, data: AdminPollListItemData) -> Self:
         return cls(
             **PollListItem.of(data.item).model_dump(),
-            house_id=HouseId(data.item.poll.house_id),
+            house_id=data.item.poll.house_id,
             address=data.address,
         )

@@ -18,11 +18,7 @@ class EventsService:
         self._events_repo = events_repo
 
     async def record(
-        self,
-        type: EventType,
-        *,
-        user_id: UserId | None = None,
-        **payload: Any,
+        self, type: EventType, *, user_id: UserId | None = None, **payload: Any
     ) -> None:
         # аналитика не валит бизнес-действие; default=str спасает datetime и UUID
         try:

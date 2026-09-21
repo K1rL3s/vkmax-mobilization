@@ -8,7 +8,6 @@ from zheka.bot.states import entry_state
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventSource, EventType
-from zheka.core.ids import UserId
 from zheka.core.models import User
 from zheka.core.services.events import EventsService
 
@@ -24,24 +23,22 @@ HELP_TEXT = (
 SEEDING_TEXT = "Заполняю демо-данные, это займет до минуты"
 
 
-@router.bot_started()
-async def bot_started_handler(
-    _update: BotStarted,
+async def start_handler(
+    _update: BotStarted | MessageCreated,
     dialog_manager: DialogManager,
     user: User,
     events_service: FromDishka[EventsService],
 ) -> None:
-    await open_entry_window(dialog_manager, user, events_service)
+    # единственное место BOT_START: апдейт без состояния - не старт, а геттер
+    # окна перерисовывается на каждое нажатие
+    await events_service.record(
+        EventType.BOT_START, user_id=user.id, source=EventSource.DIRECT.value
+    )
+    await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)
 
 
-@router.message_created(CommandStart())
-async def start_command_handler(
-    _update: MessageCreated,
-    dialog_manager: DialogManager,
-    user: User,
-    events_service: FromDishka[EventsService],
-) -> None:
-    await open_entry_window(dialog_manager, user, events_service)
+router.bot_started()(start_handler)
+router.message_created(CommandStart())(start_handler)
 
 
 @router.message_created(Command("help"))
@@ -49,30 +46,13 @@ async def help_handler(update: MessageCreated) -> None:
     await update.answer_text(HELP_TEXT, notify=False)
 
 
-async def open_entry_window(
-    dialog_manager: DialogManager,
-    user: User,
-    events_service: EventsService,
-) -> None:
-    # единственное место, где пишется BOT_START: у апдейта без состояния
-    # старта нет, а геттер окна перерисовывается на каждое нажатие
-    await events_service.record(
-        EventType.BOT_START,
-        user_id=UserId(user.id),
-        source=EventSource.DIRECT.value,
-    )
-    await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)
-
-
 # ponytail: нажать может кто угодно - сид трогает только базу без демо, но
 # первый нажавший на свежем деплое запускает 30-дневное окно аналитики.
 # Ограничить id владельца из конфига, если посторонний засеет раньше времени
 @router.message_created(Command("seed"))
 async def seed_handler(
-    update: MessageCreated,
-    user: User,
-    publisher: FromDishka[TaskPublisher],
+    update: MessageCreated, user: User, publisher: FromDishka[TaskPublisher]
 ) -> None:
-    # тысячи строк не укладываются в тридцать секунд вебхука: сеет задача
+    # тысячи строк не укладываются в 30 секунд вебхука
     publisher.publish(TaskName.SEED_DEMO, user_id=int(user.id))
     await update.answer_text(SEEDING_TEXT, notify=False)

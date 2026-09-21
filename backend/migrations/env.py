@@ -12,8 +12,7 @@ from zheka.infra.database.tables import metadata
 
 config = context.config
 config.set_main_option(
-    "sqlalchemy.url",
-    load_config().db.url.render_as_string(hide_password=False),
+    "sqlalchemy.url", load_config().db.url.render_as_string(hide_password=False)
 )
 
 if config.config_file_name is not None:
@@ -39,9 +38,7 @@ def run_migrations_offline() -> None:
 
 def do_run_migrations(connection: Connection) -> None:
     context.configure(
-        connection=connection,
-        target_metadata=target_metadata,
-        compare_type=True,
+        connection=connection, target_metadata=target_metadata, compare_type=True
     )
 
     with context.begin_transaction():

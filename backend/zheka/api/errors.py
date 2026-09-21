@@ -23,10 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def error_response(
-    request: Request,
-    status_code: int,
-    title: str,
-    detail: str,
+    request: Request, status_code: int, title: str, detail: str
 ) -> Response:
     return JSONResponse(
         status_code=status_code,
@@ -36,7 +33,7 @@ def error_response(
                 ok=False,
                 trace_id=request.state.trace_id,
                 error=BaseError(title=title, detail=detail),
-            ),
+            )
         ),
     )
 
@@ -51,28 +48,17 @@ def _domain_handler(status_code: int) -> Callable[[Request, Any], Awaitable[Resp
 
 async def value_error_handler(request: Request, exc: ValueError) -> Response:
     logger.debug("409_CONFLICT", exc_info=exc)
-    return error_response(
-        request,
-        status.HTTP_409_CONFLICT,
-        "ValueError",
-        str(exc),
-    )
+    return error_response(request, status.HTTP_409_CONFLICT, "ValueError", str(exc))
 
 
-async def validation_handler(
-    request: Request,
-    exc: RequestValidationError,
-) -> Response:
+async def validation_handler(request: Request, exc: RequestValidationError) -> Response:
     logger.debug("400_BAD_REQUEST", exc_info=exc)
     detail = "\n\n".join(
         f"Поле: {error['loc']}\nОшибка: {error['type']}: {error['msg']}"
         for error in exc.errors()
     )
     return error_response(
-        request,
-        status.HTTP_400_BAD_REQUEST,
-        "RequestValidationError",
-        detail,
+        request, status.HTTP_400_BAD_REQUEST, "RequestValidationError", detail
     )
 
 

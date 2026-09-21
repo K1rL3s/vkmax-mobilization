@@ -74,8 +74,7 @@ def test_resolve_org_infers_single_membership() -> None:
     ],
 )
 def test_resolve_org_refuses(
-    roles: list[tuple[int, OrgRole]],
-    header: OrgId | None,
+    roles: list[tuple[int, OrgRole]], header: OrgId | None
 ) -> None:
     memberships = [
         OrgMember(org_id=OrgId(org_id), user_id=UserId(1), role=role)
@@ -92,9 +91,7 @@ async def test_upsert_by_max_id_updates_existing_row(session: AsyncSession) -> N
 
     first = await users_repo.upsert_by_max_id(max_user_id, "Иван", "ivan")
     second = await users_repo.upsert_by_max_id(
-        max_user_id,
-        "Иван Переименованный",
-        None,
+        max_user_id, "Иван Переименованный", None
     )
 
     assert second.id == first.id
@@ -150,9 +147,7 @@ async def test_events_service_record_serializes_decimal_payload(
     ],
 )
 def test_can_remove_member(
-    actor_role: OrgRole,
-    target_role: OrgRole,
-    expected: bool,
+    actor_role: OrgRole, target_role: OrgRole, expected: bool
 ) -> None:
     assert can_remove_member(actor_role, target_role) is expected
 
@@ -169,9 +164,5 @@ def test_can_remove_member(
         (OrgRole.EXECUTOR, OrgRole.EXECUTOR, False),
     ],
 )
-def test_can_invite(
-    actor_role: OrgRole,
-    target_role: OrgRole,
-    expected: bool,
-) -> None:
+def test_can_invite(actor_role: OrgRole, target_role: OrgRole, expected: bool) -> None:
     assert can_invite(actor_role, target_role) is expected

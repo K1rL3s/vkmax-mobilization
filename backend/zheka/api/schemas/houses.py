@@ -39,15 +39,7 @@ class OrgContacts(BaseSchema):
 
     @classmethod
     def of(cls, org: Organization) -> Self:
-        return cls(
-            id=OrgId(org.id),
-            name=org.name,
-            phone=org.phone,
-            address=org.address,
-            license_no=org.license_no,
-            reception_note=org.reception_note,
-            is_demo=org.is_demo,
-        )
+        return cls.model_validate(org)
 
 
 class HouseListItem(BaseSchema):
@@ -65,7 +57,7 @@ class HouseListItem(BaseSchema):
     def of(cls, found: HouseFound) -> Self:
         house = found.house
         return cls(
-            id=HouseId(house.id),
+            id=house.id,
             address=house.address,
             city=house.city,
             street=house.street,
@@ -96,8 +88,8 @@ class ResidencySummary(BaseSchema):
     def of(cls, view: ResidencyView) -> Self:
         resident = view.resident
         return cls(
-            resident_id=ResidentId(resident.id),
-            house_id=HouseId(resident.house_id),
+            resident_id=resident.id,
+            house_id=resident.house_id,
             address=view.house.address,
             role=resident.role,
             status=resident.status,
@@ -106,7 +98,7 @@ class ResidencySummary(BaseSchema):
             can_see_charges=resident.can_see_charges,
             can_vote=resident.can_vote,
             is_connected=view.is_connected,
-            flat_id=None if view.flat is None else FlatId(view.flat.id),
+            flat_id=None if view.flat is None else view.flat.id,
             flat_number=(
                 resident.flat_number if view.flat is None else view.flat.number
             ),
@@ -161,7 +153,7 @@ class HouseCard(BaseSchema):
         residency = card.residency
         is_chairman = residency is not None and residency.resident.is_chairman
         return cls(
-            id=HouseId(house.id),
+            id=house.id,
             address=house.address,
             region=house.region,
             city=house.city,
@@ -275,8 +267,7 @@ class AdminHouseCard(BaseSchema):
     built_year: int | None = None
     floors: int | None = None
     area: int | None = Field(
-        default=None,
-        description="Площадь в сотых долях квадратного метра",
+        default=None, description="Площадь в сотых долях квадратного метра"
     )
     chairman_name: str | None = None
     chat_title: str | None = None
@@ -326,15 +317,15 @@ class HouseResidentItem(BaseSchema):
     def of(cls, view: HouseResidentView) -> Self:
         resident = view.resident
         return cls(
-            resident_id=ResidentId(resident.id),
-            user_id=UserId(resident.user_id),
+            resident_id=resident.id,
+            user_id=resident.user_id,
             created_at=resident.created_at,
             name=view.user.name,
             role=resident.role,
             status=resident.status,
             verified=resident.verified_at is not None,
             is_chairman=resident.is_chairman,
-            flat_id=None if view.flat is None else FlatId(view.flat.id),
+            flat_id=None if view.flat is None else view.flat.id,
             flat_number=(
                 resident.flat_number if view.flat is None else view.flat.number
             ),

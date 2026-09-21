@@ -57,13 +57,7 @@ async def search_houses(
     offset: Offset = 0,
 ) -> Page[HouseListItem]:
     found, total = await houses_service.search(
-        current_account.user_id,
-        city,
-        street,
-        building,
-        q,
-        limit,
-        offset,
+        current_account.user_id, city, street, building, q, limit, offset
     )
     return Page(items=[HouseListItem.of(item) for item in found], total=total)
 
@@ -78,11 +72,7 @@ async def search_houses_nearby(
     limit: Limit = 20,
 ) -> list[HouseListItem]:
     found = await houses_service.nearest(
-        current_account.user_id,
-        lat,
-        lon,
-        radius_m,
-        limit,
+        current_account.user_id, lat, lon, radius_m, limit
     )
     return [HouseListItem.of(item) for item in found]
 
@@ -154,14 +144,8 @@ async def list_house_flats(
     offset: Offset = 0,
 ) -> Page[FlatListItem]:
     flats, total, taken = await houses_service.flats(
-        residency.user_id,
-        house_id,
-        q,
-        entrance,
-        limit,
-        offset,
+        residency.user_id, house_id, q, entrance, limit, offset
     )
     return Page(
-        items=[FlatListItem.of(flat, flat.id in taken) for flat in flats],
-        total=total,
+        items=[FlatListItem.of(flat, flat.id in taken) for flat in flats], total=total
     )

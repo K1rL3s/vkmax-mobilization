@@ -28,10 +28,6 @@ appointments_table = Table(
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("request_id", BigInteger, ForeignKey("requests.id"), nullable=True),
     Column("starts_at", DateTime(timezone=True), nullable=False),
-    Column(
-        "status",
-        pg_enum(AppointmentStatus, "appointment_status"),
-        nullable=False,
-    ),
+    Column("status", pg_enum(AppointmentStatus, "appointment_status"), nullable=False),
     Column("reminder_sent_at", DateTime(timezone=True), nullable=True),
 )

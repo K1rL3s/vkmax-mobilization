@@ -13,7 +13,7 @@ from zheka.core.enums import (
     TariffZone,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
+from zheka.core.ids import UserId
 from zheka.core.models import Flat
 from zheka.core.services.houses import CONSENT_REQUIRED, ResidencyView
 from zheka.core.services.profile import OrgMembershipView
@@ -89,17 +89,13 @@ class DemoService:
         if org is None:
             raise EntityNotFound(NOT_SEEDED)
         # у демо-организации ровно один дом - демо-дом, так его кладет сид
-        houses = await self._houses.list_for_org(OrgId(org.id))
+        houses = await self._houses.list_for_org(org.id)
         if not houses:
             raise EntityNotFound(NOT_SEEDED)
         house = houses[0]
-        house_id = HouseId(house.id)
+        house_id = house.id
 
-        member = await self._orgs.add_member_or_get(
-            OrgId(org.id),
-            user_id,
-            OrgRole.EMPLOYEE,
-        )
+        member = await self._orgs.add_member_or_get(org.id, user_id, OrgRole.EMPLOYEE)
         now = datetime.now(UTC)
         rng = Random(f"demo-flat:{user_id}")
         flat, created = await self._houses.add_flat_or_get(
@@ -116,21 +112,14 @@ class DemoService:
             await self.furnish(flat, user_id, now.date(), verification_soon=True)
 
         resident, _created = await self._residents.add_or_get(
-            user_id,
-            house_id,
-            FlatId(flat.id),
-            None,
-            ResidentRole.OWNER,
+            user_id, house_id, flat.id, None, ResidentRole.OWNER
         )
         if resident.verified_at is None:
-            await self._residents.set_verified(resident, FlatId(flat.id), now, None)
+            await self._residents.set_verified(resident, flat.id, now, None)
         return DemoAccess(
             membership=OrgMembershipView(member=member, org=org),
             residency=ResidencyView(
-                resident=resident,
-                house=house,
-                flat=flat,
-                is_connected=True,
+                resident=resident, house=house, flat=flat, is_connected=True
             ),
         )
 
@@ -156,16 +145,17 @@ class DemoService:
         # по счетчику: показания по периодам и расход по периодам
         usage: dict[MeterType, list[dict[TariffZone, int]]] = {}
         for meter_type, monthly in _MONTHLY.items():
+            # горячая вода с поверкой через три недели - сценарий предупреждения бота
+            soon = verification_soon and meter_type is MeterType.HOT_WATER
             meter = await self._meters.add(
-                FlatId(flat.id),
+                flat.id,
                 meter_type,
                 len(monthly),
                 f"ДЕМО-{_SERIAL_CODES[meter_type]}-{flat.id:06d}",
-                self._verification_date(
-                    meter_type,
-                    today,
-                    rng,
-                    soon=verification_soon,
+                (
+                    today + VERIFICATION_SOON
+                    if soon
+                    else date(today.year + rng.randint(2, 6), today.month, 1)
                 ),
             )
             if meter is None:
@@ -189,7 +179,7 @@ class DemoService:
                 values = {zone: values[zone] + used[zone] for zone in values}
                 used_by_period.append(used)
                 await self._meters.add_reading(
-                    MeterId(meter.id),
+                    meter.id,
                     period,
                     values,
                     [],
@@ -219,7 +209,7 @@ class DemoService:
                 else issued + timedelta(days=rng.randint(2, 20))
             )
             await self._charges.add(
-                FlatId(flat.id),
+                flat.id,
                 period,
                 [dataclasses.asdict(line) for line in lines],
                 sum(line.amount for line in lines),
@@ -228,12 +218,9 @@ class DemoService:
             )
 
     async def _lines(
-        self,
-        flat: Flat,
-        period: date,
-        used: dict[MeterType, dict[TariffZone, int]],
+        self, flat: Flat, period: date, used: dict[MeterType, dict[TariffZone, int]]
     ) -> list[ChargeLine]:
-        house_id = HouseId(flat.house_id)
+        house_id = flat.house_id
         lines = []
         for meter_type, zones in used.items():
             service = SERVICE_OF_METER[meter_type]
@@ -248,13 +235,13 @@ class DemoService:
                 ChargeLine(
                     service=service,
                     amount=to_kopecks(
-                        sum(volume * tariff.value for volume in volumes.values()),
+                        sum(volume * tariff.value for volume in volumes.values())
                     ),
                     volume=sum(volumes.values()),
                     tariff=tariff.value,
                     unit=tariff.unit,
                     note=BELOW_NOTE if below else None,
-                ),
+                )
             )
         if flat.area is None:
             return lines
@@ -269,20 +256,6 @@ class DemoService:
                     tariff=tariff.value,
                     unit=tariff.unit,
                     note=f"Площадь {flat.area // 100},{flat.area % 100:02d} м²",
-                ),
+                )
             )
         return lines
-
-    def _verification_date(
-        self,
-        meter_type: MeterType,
-        today: date,
-        rng: Random,
-        *,
-        soon: bool,
-    ) -> date:
-        # горячая вода с поверкой через три недели - ровно сценарий
-        # предупреждения бота
-        if soon and meter_type is MeterType.HOT_WATER:
-            return today + VERIFICATION_SOON
-        return date(today.year + rng.randint(2, 6), today.month, 1)

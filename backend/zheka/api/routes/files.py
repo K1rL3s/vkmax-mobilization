@@ -31,10 +31,7 @@ async def upload_file(
     responses={HTTPStatus.OK: {"content": {"application/octet-stream": {}}}},
 )
 async def download_file(
-    name: str,
-    exp: int,
-    sig: str,
-    files_service: FromDishka[FilesService],
+    name: str, exp: int, sig: str, files_service: FromDishka[FilesService]
 ) -> FileResponse:
     # без current_account: тег <img> не может отправить заголовок initData,
     # право на файл уже проверено при выпуске подписанной ссылки

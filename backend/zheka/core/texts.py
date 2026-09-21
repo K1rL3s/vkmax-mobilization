@@ -1,33 +1,26 @@
 from collections.abc import Mapping
 from datetime import date, datetime
 from html import escape
-from types import MappingProxyType
 
 from zheka.core.enums import RequestStatus
 from zheka.core.ids import RequestId
 
 BLOCKED = "УК закрыла вам доступ к этому дому"
 
-REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = MappingProxyType(
-    {
-        RequestStatus.NEW: "Новая",
-        RequestStatus.ACCEPTED: "Принята",
-        RequestStatus.IN_PROGRESS: "В работе",
-        RequestStatus.ON_REVIEW: "На приемке",
-        RequestStatus.DONE: "Выполнена",
-    },
-)
+REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
+    RequestStatus.NEW: "Новая",
+    RequestStatus.ACCEPTED: "Принята",
+    RequestStatus.IN_PROGRESS: "В работе",
+    RequestStatus.ON_REVIEW: "На приемке",
+    RequestStatus.DONE: "Выполнена",
+}
 
-
-def _plain(value: str) -> str:
-    # бот шлет HTML, и незакрытая угловая скобка от УК или жителя роняет отправку
-    return escape(value)
+# бот шлет HTML, и незакрытая угловая скобка от УК или жителя роняет отправку
+_plain = escape
 
 
 def request_status_changed(
-    request_id: RequestId,
-    status: RequestStatus,
-    comment: str | None,
+    request_id: RequestId, status: RequestStatus, comment: str | None
 ) -> str:
     text = f"Заявка №{request_id}: {REQUEST_STATUS_LABELS[status]}"
     if comment:

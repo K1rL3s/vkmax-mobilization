@@ -3,8 +3,8 @@ from collections.abc import Sequence
 from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.enums import AnnouncementChannel, EventType, NotificationCategory
-from zheka.core.errors import EntityNotFound, InvalidRequest
-from zheka.core.ids import AnnouncementId, HouseId, MaxChatId, OrgId, UserId
+from zheka.core.errors import HOUSE_NOT_FOUND, EntityNotFound, InvalidRequest
+from zheka.core.ids import HouseId, MaxChatId, OrgId, UserId
 from zheka.core.models import Announcement
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
@@ -14,7 +14,6 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-HOUSE_NOT_FOUND = "Дом не найден"
 EMPTY_TEXT = "Напишите текст объявления"
 NO_HOUSES = "Выберите хотя бы один дом"
 NO_CHANNELS = "Выберите хотя бы один канал"
@@ -87,7 +86,7 @@ class AnnouncementsService:
             user_ids = await self._residents.active_user_ids(targets)
         if AnnouncementChannel.CHAT in picked:
             chats = await self._chats.list_for_houses(targets)
-            chat_ids = [MaxChatId(chat.chat_id) for chat in chats]
+            chat_ids = [chat.chat_id for chat in chats]
             bound = {chat.house_id for chat in chats}
             houses_without_chat = [
                 house_id for house_id in targets if house_id not in bound
@@ -96,19 +95,14 @@ class AnnouncementsService:
         org = await self._orgs.get(org_id)
         org_name = UNKNOWN_ORG if org is None else org.name
         announcement = await self._announcements.create(
-            org_id,
-            user_id,
-            targets,
-            stated,
-            picked,
-            len(user_ids) + len(chat_ids),
+            org_id, user_id, targets, stated, picked, len(user_ids) + len(chat_ids)
         )
 
         for channel in picked:
             await self._events.record(
                 EventType.ANNOUNCEMENT_SENT,
                 user_id=user_id,
-                announcement_id=AnnouncementId(announcement.id),
+                announcement_id=announcement.id,
                 channel=channel.value,
                 houses_count=len(targets),
             )
@@ -129,25 +123,16 @@ class AnnouncementsService:
         )
 
     async def list_for_resident(
-        self,
-        house_id: HouseId,
-        limit: int,
-        offset: int,
+        self, house_id: HouseId, limit: int, offset: int
     ) -> tuple[list[AnnouncementData], int]:
         # дом уже проверил CurrentResidency
         announcements, total = await self._announcements.list_for_house(
-            house_id,
-            limit,
-            offset,
+            house_id, limit, offset
         )
         return await self._with_org_names(announcements), total
 
     async def list_for_org(
-        self,
-        org_id: OrgId,
-        house_id: HouseId | None,
-        limit: int,
-        offset: int,
+        self, org_id: OrgId, house_id: HouseId | None, limit: int, offset: int
     ) -> tuple[list[AnnouncementData], int]:
         if (
             house_id is not None
@@ -155,27 +140,22 @@ class AnnouncementsService:
         ):
             raise EntityNotFound(HOUSE_NOT_FOUND)
         announcements, total = await self._announcements.list_for_org(
-            org_id,
-            house_id,
-            limit,
-            offset,
+            org_id, house_id, limit, offset
         )
         return await self._with_org_names(announcements), total
 
     async def _with_org_names(
-        self,
-        announcements: Sequence[Announcement],
+        self, announcements: Sequence[Announcement]
     ) -> list[AnnouncementData]:
         orgs = {
-            OrgId(org.id): org.name
+            org.id: org.name
             for org in await self._orgs.list_by_ids(
-                {OrgId(announcement.org_id) for announcement in announcements},
+                {announcement.org_id for announcement in announcements}
             )
         }
         return [
             AnnouncementData(
-                announcement=announcement,
-                org_name=orgs.get(OrgId(announcement.org_id)),
+                announcement=announcement, org_name=orgs.get(announcement.org_id)
             )
             for announcement in announcements
         ]

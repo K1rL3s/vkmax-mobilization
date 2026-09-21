@@ -11,17 +11,12 @@ from zheka.core.enums import (
     RequestCategory,
     TariffZone,
 )
-from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
+from zheka.core.errors import InvalidRequest, InvalidState
 from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
 from zheka.core.models import Meter, OrgSettings, Reading
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
-from zheka.core.services.meter_access import (
-    FLAT_NOT_FOUND,
-    MeterAccess,
-    MeterCard,
-    zones_of,
-)
+from zheka.core.services.meter_access import MeterAccess, MeterCard, zones_of
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
@@ -44,13 +39,9 @@ _SPIKE_FETCH_LIMIT = 20
 # отсечки - домов немного, а показание за период у каждого счетчика одно
 _HOUSE_AVERAGE_LIMIT = 10_000
 
-WRONG_ZONES = "Показания не соответствуют тарифным зонам счетчика"
-PHOTO_REQUIRED = "Приложите фото показаний"
-VERIFICATION_EXPIRED = "Срок поверки истек, начисление пойдет по нормативу"
-PERIOD_NOT_ALLOWED = "Этот период недоступен для подачи показаний"
+BELOW_PREVIOUS_WARNING = "Новое значение меньше предыдущего, уточните показание"
 PERIOD_HAS_CHARGE = "За этот период уже выставлена квитанция"
 WRONG_PERIOD = "Показания подаются за текущий период"
-BELOW_PREVIOUS_WARNING = "Новое значение меньше предыдущего, уточните показание"
 
 _ZONES_BY_COUNT: Mapping[int, frozenset[TariffZone]] = {
     1: frozenset({TariffZone.SINGLE}),
@@ -125,8 +116,7 @@ def available_periods(
 
 
 def consumption(
-    values: Mapping[TariffZone, int],
-    previous_values: Mapping[TariffZone, int] | None,
+    values: Mapping[TariffZone, int], previous_values: Mapping[TariffZone, int] | None
 ) -> dict[TariffZone, int]:
     # без предыдущего показания расход не посчитать: первая подача счетчика
     # не порождает начисление, а не мнимый расход от нуля
@@ -138,8 +128,7 @@ def consumption(
 
 
 def is_below_previous(
-    values: Mapping[TariffZone, int],
-    previous_values: Mapping[TariffZone, int] | None,
+    values: Mapping[TariffZone, int], previous_values: Mapping[TariffZone, int] | None
 ) -> bool:
     if previous_values is None:
         return False
@@ -152,11 +141,8 @@ def is_spike(current: int, history: Sequence[int]) -> bool:
     if len(history) < SPIKE_MIN_HISTORY:
         return False
     ordered = sorted(history)
-    mid = len(ordered) // 2
-    if len(ordered) % 2:
-        median = ordered[mid]
-    else:
-        median = (ordered[mid - 1] + ordered[mid]) // 2
+    # при нечетной длине оба индекса указывают на одну середину
+    median = (ordered[(len(ordered) - 1) // 2] + ordered[len(ordered) // 2]) // 2
     return current * 100 >= median * SPIKE_PERCENT
 
 
@@ -168,7 +154,7 @@ def _kopecks(consumption_map: Mapping[TariffZone, int], tariff_value: int) -> in
 def _checked_values(meter: Meter, values: Mapping[TariffZone, int]) -> None:
     expected = _ZONES_BY_COUNT.get(meter.tariff_zones)
     if expected is None or set(values) != expected:
-        raise InvalidRequest(WRONG_ZONES)
+        raise InvalidRequest("Показания не соответствуют тарифным зонам счетчика")
 
 
 class ReadingsService:
@@ -223,15 +209,14 @@ class ReadingsService:
             options = available_periods(today, closed)
 
         submitted = await self._submitted_periods(
-            flat_id,
-            {option.period for option in options},
+            flat_id, {option.period for option in options}
         )
         return PeriodsData(options=options, submitted=submitted)
 
     async def history(self, user_id: UserId, meter_id: MeterId) -> list[ReadingRow]:
         meter = await self._access.get_meter(meter_id)
-        resident = await self._access.verified_resident(user_id, FlatId(meter.flat_id))
-        house_id = await self._house_id_of_flat(FlatId(meter.flat_id))
+        resident = await self._access.verified_resident(user_id, meter.flat_id)
+        house_id = await self._house_id_of_flat(meter.flat_id)
         readings = await self._meters.list_readings(meter_id, HISTORY_LIMIT)
 
         previous_cache: dict[date, Reading | None] = {}
@@ -240,8 +225,7 @@ class ReadingsService:
         for reading in readings:
             if reading.period not in previous_cache:
                 previous_cache[reading.period] = await self._meters.previous_reading(
-                    meter_id,
-                    reading.period,
+                    meter_id, reading.period
                 )
             previous = previous_cache[reading.period]
             previous_values = None if previous is None else zones_of(previous.values)
@@ -252,9 +236,7 @@ class ReadingsService:
             if resident.can_see_charges:
                 if reading.period not in tariff_cache:
                     tariff = await self._charges.tariff_at(
-                        house_id,
-                        SERVICE_OF_METER[meter.type],
-                        reading.period,
+                        house_id, SERVICE_OF_METER[meter.type], reading.period
                     )
                     tariff_cache[reading.period] = (
                         None if tariff is None else tariff.value
@@ -270,24 +252,21 @@ class ReadingsService:
                     values=values_map,
                     consumption=consumption_map,
                     amount=amount,
-                ),
+                )
             )
         return rows
 
     async def submit(
-        self,
-        user_id: UserId,
-        meter_id: MeterId,
-        draft: SubmitDraft,
+        self, user_id: UserId, meter_id: MeterId, draft: SubmitDraft
     ) -> SubmitResult:
         meter = await self._access.get_meter(meter_id)
-        resident = await self._access.verified_resident(user_id, FlatId(meter.flat_id))
-        flat_id = FlatId(meter.flat_id)
+        resident = await self._access.verified_resident(user_id, meter.flat_id)
+        flat_id = meter.flat_id
         house_id = await self._house_id_of_flat(flat_id)
 
         _checked_values(meter, draft.values)
         if not draft.photos:
-            raise InvalidRequest(PHOTO_REQUIRED)
+            raise InvalidRequest("Приложите фото показаний")
         for name in draft.photos:
             self._files.path_of(name)
 
@@ -298,13 +277,13 @@ class ReadingsService:
             meter.next_verification_date is not None
             and meter.next_verification_date < today
         ):
-            raise InvalidState(VERIFICATION_EXPIRED)
+            raise InvalidState("Срок поверки истек, начисление пойдет по нормативу")
 
         settings = await self._window_settings(house_id)
         out_of_window = not window_accepts(today, settings)
         if out_of_window:
             if draft.period not in _candidate_periods(today):
-                raise InvalidState(PERIOD_NOT_ALLOWED)
+                raise InvalidState("Этот период недоступен для подачи показаний")
             charge = await self._charges.get_by_period(flat_id, draft.period)
             if charge is not None:
                 raise InvalidState(PERIOD_HAS_CHARGE)
@@ -365,15 +344,13 @@ class ReadingsService:
         )
 
     async def _submitted_periods(
-        self,
-        flat_id: FlatId,
-        periods: Collection[date],
+        self, flat_id: FlatId, periods: Collection[date]
     ) -> set[date]:
         meters = await self._meters.list_for_flat(flat_id)
         submitted: set[date] = set()
         for period in periods:
             for meter in meters:
-                reading = await self._meters.latest_reading(MeterId(meter.id), period)
+                reading = await self._meters.latest_reading(meter.id, period)
                 if reading is not None:
                     submitted.add(period)
                     break
@@ -386,22 +363,16 @@ class ReadingsService:
         return await self._orgs.get_settings(OrgId(house.org_id))
 
     async def house_average(
-        self,
-        house_id: HouseId,
-        meter_type: MeterType,
-        period: date,
+        self, house_id: HouseId, meter_type: MeterType, period: date
     ) -> int | None:
         readings, _total = await self._meters.list_house_readings(
-            house_id,
-            period=period,
-            meter_type=meter_type,
-            limit=_HOUSE_AVERAGE_LIMIT,
+            house_id, period=period, meter_type=meter_type, limit=_HOUSE_AVERAGE_LIMIT
         )
         # первое по meter_id и есть самое свежее: readings отсортированы по
         # submitted_at по убыванию, а повторная подача чинит именно значение
         latest_by_meter: dict[MeterId, Reading] = {}
         for reading in readings:
-            latest_by_meter.setdefault(MeterId(reading.meter_id), reading)
+            latest_by_meter.setdefault(reading.meter_id, reading)
 
         totals: list[int] = []
         for meter_id, reading in latest_by_meter.items():
@@ -431,10 +402,7 @@ class ReadingsService:
         return totals
 
     async def _house_id_of_flat(self, flat_id: FlatId) -> HouseId:
-        flat = await self._houses.get_flat(flat_id)
-        if flat is None:
-            raise EntityNotFound(FLAT_NOT_FOUND)
-        return HouseId(flat.house_id)
+        return (await self._access.get_flat(flat_id)).house_id
 
 
 def window_accepts(today: date, settings: OrgSettings | None) -> bool:

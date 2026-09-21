@@ -31,15 +31,12 @@ async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
 
 @inject
 async def get_slots(
-    dialog_manager: DialogManager,
-    access_service: FromDishka[AccessService],
-    **_: Any,
+    dialog_manager: DialogManager, access_service: FromDishka[AccessService], **_: Any
 ) -> dict[str, Any]:
     notice = AccessSlotsData.load(dialog_manager).notice
     try:
         view = await access_service.resident_view(
-            dialog_user_id(dialog_manager),
-            _access_request_id(dialog_manager),
+            dialog_user_id(dialog_manager), _access_request_id(dialog_manager)
         )
     except ZhekaError as error:
         # квартиру отвязали или заблокировали, пока окно висело: геттер,
@@ -80,6 +77,7 @@ async def on_slot(
     slot_id: int,
     access_service: FromDishka[AccessService],
 ) -> None:
+    notice = None
     try:
         await access_service.pick(
             dialog_user_id(dialog_manager),
@@ -89,8 +87,6 @@ async def on_slot(
     except ZhekaError as error:
         # окно заняли, пока клавиатура висела: отказ ничего не записал, и
         # следующий ход жителя - другое окно, а не роутер ошибок
-        with AccessSlotsData.proxy(dialog_manager) as data:
-            data.notice = str(error)
-        return
+        notice = str(error)
     with AccessSlotsData.proxy(dialog_manager) as data:
-        data.notice = None
+        data.notice = notice

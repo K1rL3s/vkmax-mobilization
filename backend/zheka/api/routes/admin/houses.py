@@ -6,10 +6,7 @@ from maxo.utils.deeplink import create_start_link
 
 from zheka.api.dependencies import AdminOrgDep
 from zheka.api.schemas.base import Limit, Offset, Page
-from zheka.api.schemas.flats import (
-    RejectVerificationRequest,
-    VerificationRequestItem,
-)
+from zheka.api.schemas.flats import RejectVerificationRequest, VerificationRequestItem
 from zheka.api.schemas.houses import (
     AdminHouseCard,
     AdminHouseListItem,
@@ -38,12 +35,7 @@ async def list_org_houses(
     limit: Limit = 50,
     offset: Offset = 0,
 ) -> Page[AdminHouseListItem]:
-    rows, total = await houses_service.org_houses(
-        current_org.org_id,
-        q,
-        limit,
-        offset,
-    )
+    rows, total = await houses_service.org_houses(current_org.org_id, q, limit, offset)
     return Page(items=[AdminHouseListItem.of(row) for row in rows], total=total)
 
 
@@ -68,8 +60,7 @@ async def get_admin_house_card(
 
 
 @router.post(
-    "/admin/houses/{house_id}/binding-code",
-    summary="Перевыпустить код привязки чата",
+    "/admin/houses/{house_id}/binding-code", summary="Перевыпустить код привязки чата"
 )
 async def rotate_house_binding_code(
     house_id: HouseId,
@@ -95,16 +86,9 @@ async def list_house_residents(
     offset: Offset = 0,
 ) -> Page[HouseResidentItem]:
     residents, total = await houses_service.house_residents(
-        current_org.org_id,
-        house_id,
-        q,
-        limit,
-        offset,
+        current_org.org_id, house_id, q, limit, offset
     )
-    return Page(
-        items=[HouseResidentItem.of(view) for view in residents],
-        total=total,
-    )
+    return Page(items=[HouseResidentItem.of(view) for view in residents], total=total)
 
 
 @router.post("/admin/residents/{resident_id}/block", summary="Заблокировать жителя")
@@ -115,10 +99,7 @@ async def block_resident(
     body: BlockResidentRequest,
 ) -> HouseResidentItem:
     view = await moderation_service.block(
-        current_org.org_id,
-        resident_id,
-        body.reason,
-        current_org.user_id,
+        current_org.org_id, resident_id, body.reason, current_org.user_id
     )
     return HouseResidentItem.of(view)
 
@@ -130,9 +111,7 @@ async def unblock_resident(
     moderation_service: FromDishka[ModerationService],
 ) -> HouseResidentItem:
     view = await moderation_service.unblock(
-        current_org.org_id,
-        resident_id,
-        current_org.user_id,
+        current_org.org_id, resident_id, current_org.user_id
     )
     return HouseResidentItem.of(view)
 
@@ -148,10 +127,7 @@ async def revoke_flat_verification(
     body: RevokeVerificationRequest,
 ) -> HouseResidentItem:
     view = await moderation_service.revoke_verification(
-        current_org.org_id,
-        resident_id,
-        body.reason,
-        current_org.user_id,
+        current_org.org_id, resident_id, body.reason, current_org.user_id
     )
     return HouseResidentItem.of(view)
 
@@ -166,9 +142,7 @@ async def set_chairman(
     body: SetChairmanRequest,
 ) -> HouseResidentItem:
     view = await moderation_service.set_chairman(
-        current_org.org_id,
-        resident_id,
-        body.is_chairman,
+        current_org.org_id, resident_id, body.is_chairman
     )
     return HouseResidentItem.of(view)
 
@@ -183,16 +157,9 @@ async def list_verification_requests(
     offset: Offset = 0,
 ) -> Page[VerificationRequestItem]:
     views, total = await flats_service.verification_requests(
-        current_org.org_id,
-        status,
-        house_id,
-        limit,
-        offset,
+        current_org.org_id, status, house_id, limit, offset
     )
-    return Page(
-        items=[VerificationRequestItem.of(view) for view in views],
-        total=total,
-    )
+    return Page(items=[VerificationRequestItem.of(view) for view in views], total=total)
 
 
 @router.post(
@@ -205,9 +172,7 @@ async def approve_verification_request(
     flats_service: FromDishka[FlatsService],
 ) -> VerificationRequestItem:
     view = await flats_service.approve_verification(
-        current_org.org_id,
-        verification_id,
-        current_org.user_id,
+        current_org.org_id, verification_id, current_org.user_id
     )
     return VerificationRequestItem.of(view)
 
@@ -223,9 +188,6 @@ async def reject_verification_request(
     body: RejectVerificationRequest,
 ) -> VerificationRequestItem:
     view = await flats_service.reject_verification(
-        current_org.org_id,
-        verification_id,
-        current_org.user_id,
-        body.reason,
+        current_org.org_id, verification_id, current_org.user_id, body.reason
     )
     return VerificationRequestItem.of(view)

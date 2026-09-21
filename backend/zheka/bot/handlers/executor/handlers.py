@@ -40,8 +40,7 @@ async def get_card(
     # автозакрытия следующее нажатие показывает правду, а не старые кнопки
     request_id = _request_id(dialog_manager)
     card = await admin_requests_service.executor_card(
-        dialog_user_id(dialog_manager),
-        request_id,
+        dialog_user_id(dialog_manager), request_id
     )
     if card is None:
         return {"request_id": request_id, "mine": False, "status": None, "photos": []}
@@ -83,15 +82,13 @@ async def on_advance(
 
 
 async def on_ready(
-    _callback: MessageCallback,
-    _button: Button,
-    dialog_manager: DialogManager,
+    _callback: MessageCallback, _button: Button, dialog_manager: DialogManager
 ) -> None:
     # фото спрашивается всегда: есть ли оно уже, решает сервис при переходе
     await ask_in_default_stack(
         dialog_manager,
         ExecutorCard.result_photo,
-        ExecutorCardData(request_id=int(_request_id(dialog_manager))).to_data(),
+        ExecutorCardData(request_id=_request_id(dialog_manager)).to_data(),
     )
 
 
@@ -111,8 +108,8 @@ async def on_result_photo(
     ]
     publisher.publish(
         TaskName.ATTACH_RESULT_PHOTO,
-        user_id=int(dialog_user_id(dialog_manager)),
-        request_id=int(_request_id(dialog_manager)),
+        user_id=dialog_user_id(dialog_manager),
+        request_id=_request_id(dialog_manager),
         photo_urls=urls[:MAX_PHOTOS],
     )
     await back_to_menu(dialog_manager, PHOTO_TAKEN)

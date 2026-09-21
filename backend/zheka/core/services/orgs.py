@@ -1,5 +1,6 @@
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from sqlalchemy.exc import IntegrityError
 
@@ -7,6 +8,7 @@ from zheka.base import ZhekaType
 from zheka.config import DeeplinksConfig
 from zheka.core.enums import EventType, OrgRole
 from zheka.core.errors import (
+    INVITE_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
@@ -30,8 +32,6 @@ MAX_METER_WINDOW_DAY = 28
 MIN_GROUP_THRESHOLD = 2
 MIN_GROUP_WINDOW_HOURS = 1
 MAX_GROUP_WINDOW_HOURS = 168
-
-INVITE_NOT_FOUND = "Приглашение не найдено"
 
 
 class OrgLookupView(ZhekaType):
@@ -78,18 +78,17 @@ class OrgsService:
         if (inn is None) == (license_no is None):
             raise InvalidRequest("Укажите или ИНН, или номер лицензии")
 
-        # ветки исчерпывают проверку выше, но mypy этого не знает
-        org: Organization | None = None
-        if inn is not None:
-            org = await self._orgs.get_by_inn(inn)
-        elif license_no is not None:
-            org = await self._orgs.get_by_license(license_no)
+        org = (
+            await self._orgs.get_by_inn(inn)
+            if inn is not None
+            else await self._orgs.get_by_license(cast("str", license_no))
+        )
         # это проба реестра, а не карточка: ненайденная УК отвечает флагом,
         # а не 404
         if org is None:
             return OrgLookupView(org=None, houses=[])
 
-        houses = await self._houses.list_for_org(OrgId(org.id))
+        houses = await self._houses.list_for_org(org.id)
         return OrgLookupView(
             org=org,
             houses=[
@@ -110,8 +109,7 @@ class OrgsService:
     ) -> OrgCardView:
         # скрытый код проверяется до любого обращения к базе
         if not deeplink_code.isascii() or not secrets.compare_digest(
-            deeplink_code,
-            self._deeplinks.org_register,
+            deeplink_code, self._deeplinks.org_register
         ):
             raise NotEnoughRights("Неверный код регистрации организации")
 
@@ -130,7 +128,7 @@ class OrgsService:
         org.phone = phone
         org.address = address
 
-        org_id = OrgId(org.id)
+        org_id = org.id
         await self._orgs.add_member(org_id, user_id, OrgRole.CREATOR)
         try:
             await self._orgs.add_settings(org_id)
@@ -139,10 +137,7 @@ class OrgsService:
             # org_settings: проигравший получает тот же ответ, что и опоздавший
             raise InvalidState("Организация уже зарегистрирована") from error
         await self._events.record(
-            EventType.ORG_REGISTERED,
-            user_id=user_id,
-            org_id=org_id,
-            inn=org.inn,
+            EventType.ORG_REGISTERED, user_id=user_id, org_id=org_id, inn=org.inn
         )
         return await self.card(org_id)
 
@@ -180,16 +175,16 @@ class OrgsService:
             if not MIN_METER_WINDOW_DAY <= day <= MAX_METER_WINDOW_DAY:
                 raise InvalidRequest(
                     f"День окна показаний - число от {MIN_METER_WINDOW_DAY} "
-                    f"до {MAX_METER_WINDOW_DAY}",
+                    f"до {MAX_METER_WINDOW_DAY}"
                 )
         if group_threshold < MIN_GROUP_THRESHOLD:
             raise InvalidRequest(
-                f"Порог склейки заявок - не меньше {MIN_GROUP_THRESHOLD}",
+                f"Порог склейки заявок - не меньше {MIN_GROUP_THRESHOLD}"
             )
         if not MIN_GROUP_WINDOW_HOURS <= group_window_hours <= MAX_GROUP_WINDOW_HOURS:
             raise InvalidRequest(
                 f"Окно склейки заявок - от {MIN_GROUP_WINDOW_HOURS} "
-                f"до {MAX_GROUP_WINDOW_HOURS} часов",
+                f"до {MAX_GROUP_WINDOW_HOURS} часов"
             )
 
         org = await self._get_org(org_id)
@@ -214,7 +209,7 @@ class OrgsService:
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [UserId(member.user_id) for member in members],
+                [member.user_id for member in members]
             )
         }
         return [
@@ -223,10 +218,7 @@ class OrgsService:
         ]
 
     async def remove_member(
-        self,
-        org_id: OrgId,
-        actor_role: OrgRole,
-        user_id: UserId,
+        self, org_id: OrgId, actor_role: OrgRole, user_id: UserId
     ) -> None:
         member = await self._orgs.get_member(org_id, user_id)
         if member is None:
@@ -264,13 +256,10 @@ class OrgsService:
                 expires_at=expires_at,
                 max_activations=max_activations,
                 created_by=user_id,
-            ),
+            )
         )
         await self._events.record(
-            EventType.STAFF_INVITED,
-            user_id=user_id,
-            org_id=org_id,
-            role=role.value,
+            EventType.STAFF_INVITED, user_id=user_id, org_id=org_id, role=role.value
         )
         return invite
 
@@ -285,17 +274,17 @@ class OrgsService:
         if invite is None:
             raise EntityNotFound(INVITE_NOT_FOUND)
 
-        org_id = OrgId(invite.org_id)
+        org_id = invite.org_id
         org = await self._get_org(org_id)
 
         # членство проверяется до списания: повышение роли уже нанятого
         # сотрудника не должно съедать активацию
         member = await self._orgs.get_member(org_id, user_id)
         if member is not None:
-            self._ensure_alive(invite)
+            if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):
+                raise InvalidState("Код приглашения истек или отозван")
             await self._orgs.set_member_role(
-                member,
-                higher_role(member.role, invite.role),
+                member, higher_role(member.role, invite.role)
             )
             return OrgMembershipView(member=member, org=org)
 
@@ -303,13 +292,8 @@ class OrgsService:
         if consumed is None:
             raise InvalidState("Код приглашения истек, отозван или исчерпан")
         return OrgMembershipView(
-            member=await self._orgs.add_member(org_id, user_id, consumed.role),
-            org=org,
+            member=await self._orgs.add_member(org_id, user_id, consumed.role), org=org
         )
-
-    def _ensure_alive(self, invite: OrgInvite) -> None:
-        if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):
-            raise InvalidState("Код приглашения истек или отозван")
 
     async def _get_org(self, org_id: OrgId) -> Organization:
         org = await self._orgs.get(org_id)

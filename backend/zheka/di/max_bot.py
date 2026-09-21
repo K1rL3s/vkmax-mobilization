@@ -21,9 +21,6 @@ class MaxBotProvider(Provider):
     # MaxoProvider ждет Bot из контекста, а мы собираем его из токена
     @provide(override=True)
     async def bot(self, config: MaxConfig) -> AsyncIterable[Bot]:
-        bot = Bot(
-            token=config.token,
-            defaults=BotDefaults(text_format=TextFormat.HTML),
-        )
+        bot = Bot(token=config.token, defaults=BotDefaults(text_format=TextFormat.HTML))
         async with bot:
             yield bot

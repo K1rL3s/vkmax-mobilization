@@ -1,13 +1,11 @@
-import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
-from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, make_config
+from tests.test_requests import _add_user, _events, _photo
 
 from zheka.config import YandexConfig
 from zheka.core.enums import (
@@ -26,7 +24,7 @@ from zheka.core.errors import (
     InvalidValue,
     NotEnoughRights,
 )
-from zheka.core.ids import FlatId, HouseId, MaxUserId, MeterId, OrgId, UserId
+from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
 from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
@@ -43,15 +41,7 @@ from zheka.core.services.readings import (
     window_is_open,
     window_period,
 )
-from zheka.infra.database.models import (
-    Charge,
-    Event,
-    Flat,
-    OrgSettings,
-    Resident,
-    Tariff,
-    User,
-)
+from zheka.infra.database.models import Charge, Flat, OrgSettings, Resident, Tariff
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -59,7 +49,6 @@ from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
-from zheka.infra.database.tables.events import events_table
 from zheka.infra.yandex.vision import VisionClient, parse_reading
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
@@ -92,15 +81,8 @@ def _make_meters_service(session: AsyncSession) -> MetersService:
 
 def _make_admin_service(session: AsyncSession) -> AdminReadingsService:
     return AdminReadingsService(
-        MetersRepo(session),
-        HousesRepo(session),
-        UsersRepo(session),
+        MetersRepo(session), HousesRepo(session), UsersRepo(session)
     )
-
-
-def _photo() -> str:
-    # ровно то, что отдает upload_file: uuid4().hex плюс известный суффикс
-    return f"{uuid4().hex}.jpg"
 
 
 def _period_back(months_back: int) -> date:
@@ -110,10 +92,7 @@ def _period_back(months_back: int) -> date:
 
 
 def _draft(
-    value: int = 1_000,
-    period: date | None = None,
-    *,
-    ocr: bool = False,
+    value: int = 1_000, period: date | None = None, *, ocr: bool = False
 ) -> SubmitDraft:
     return SubmitDraft(
         period=_period_back(0) if period is None else period,
@@ -122,13 +101,6 @@ def _draft(
         ocr_used=ocr,
         ocr_accepted=ocr,
     )
-
-
-async def _add_user(session: AsyncSession, name: str = "Сосед") -> UserId:
-    user = User(max_user_id=MaxUserId(secrets.randbits(48)), name=name)
-    session.add(user)
-    await session.flush()
-    return UserId(user.id)
 
 
 async def _add_resident(
@@ -156,11 +128,7 @@ async def _add_resident(
 
 
 async def _set_window(
-    session: AsyncSession,
-    org_id: OrgId,
-    *,
-    day_from: int,
-    day_to: int,
+    session: AsyncSession, org_id: OrgId, *, day_from: int, day_to: int
 ) -> None:
     orgs_repo = OrgsRepo(session)
     settings = await orgs_repo.get_settings(org_id)
@@ -187,22 +155,14 @@ async def _add_meter(
     next_verification_date: date | None = None,
 ) -> MeterId:
     meter = await MetersRepo(session).add(
-        flat_id,
-        meter_type,
-        tariff_zones,
-        "SN-0001",
-        next_verification_date,
+        flat_id, meter_type, tariff_zones, "SN-0001", next_verification_date
     )
     assert meter is not None
-    return MeterId(meter.id)
+    return meter.id
 
 
 async def _add_reading(
-    session: AsyncSession,
-    meter_id: MeterId,
-    period: date,
-    value: int,
-    user_id: UserId,
+    session: AsyncSession, meter_id: MeterId, period: date, value: int, user_id: UserId
 ) -> None:
     await MetersRepo(session).add_reading(
         meter_id,
@@ -225,7 +185,7 @@ async def _add_tariff(session: AsyncSession, house_id: HouseId, value: int) -> N
             value=value,
             unit="m3",
             valid_from=date(2020, 1, 1),
-        ),
+        )
     )
     await session.flush()
 
@@ -248,11 +208,6 @@ async def _owner_with_meter(
     return own, meter_id
 
 
-async def _events(session: AsyncSession, event_type: EventType) -> list[Event]:
-    stmt = select(Event).where(events_table.c.type == event_type)
-    return list((await session.execute(stmt)).scalars().all())
-
-
 @pytest.mark.parametrize(
     ("day", "day_from", "day_to", "always_open", "is_open"),
     [
@@ -271,11 +226,7 @@ async def _events(session: AsyncSession, event_type: EventType) -> list[Event]:
     ],
 )
 def test_window_is_open(
-    day: int,
-    day_from: int,
-    day_to: int,
-    always_open: bool,
-    is_open: bool,
+    day: int, day_from: int, day_to: int, always_open: bool, is_open: bool
 ) -> None:
     assert window_is_open(day, day_from, day_to, always_open=always_open) is is_open
 
@@ -301,8 +252,7 @@ def test_available_periods_marks_a_charged_period_closed_but_keeps_it() -> None:
     ],
 )
 def test_consumption(
-    previous: dict[TariffZone, int] | None,
-    delta: dict[TariffZone, int],
+    previous: dict[TariffZone, int] | None, delta: dict[TariffZone, int]
 ) -> None:
     assert consumption({TariffZone.SINGLE: 15_500}, previous) == delta
 
@@ -356,8 +306,7 @@ async def test_vision_client_returns_none_without_calling_ocr(
 
 
 async def test_readings_are_refused_to_an_unverified_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=False)
@@ -371,8 +320,7 @@ async def test_readings_are_refused_to_an_unverified_resident(
 
 
 @pytest.mark.parametrize(
-    ("role", "verified"),
-    [(ResidentRole.OWNER, False), (ResidentRole.TENANT, True)],
+    ("role", "verified"), [(ResidentRole.OWNER, False), (ResidentRole.TENANT, True)]
 )
 async def test_add_meter_needs_a_verified_owner(
     session: AsyncSession,
@@ -382,12 +330,7 @@ async def test_add_meter_needs_a_verified_owner(
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(
-        session,
-        own.user_id,
-        own.house_id,
-        own.flat_id,
-        role=role,
-        verified=verified,
+        session, own.user_id, own.house_id, own.flat_id, role=role, verified=verified
     )
 
     with pytest.raises(NotEnoughRights):
@@ -399,16 +342,11 @@ async def test_add_meter_needs_a_verified_owner(
 
 
 async def test_submit_allows_a_verified_tenant_but_hides_the_amount(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(
-        session,
-        own.user_id,
-        own.house_id,
-        own.flat_id,
-        role=ResidentRole.TENANT,
+        session, own.user_id, own.house_id, own.flat_id, role=ResidentRole.TENANT
     )
     meter_id = await _add_meter(session, own.flat_id)
     await _add_tariff(session, own.house_id, 100_000)
@@ -419,8 +357,7 @@ async def test_submit_allows_a_verified_tenant_but_hides_the_amount(
 
 
 async def test_add_meter_allows_org_staff_of_the_managing_org(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     employee_id = await _add_user(session, "Сотрудник УК")
@@ -436,8 +373,7 @@ async def test_add_meter_allows_org_staff_of_the_managing_org(
 
 
 async def test_a_foreign_meter_id_is_not_found(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(session, own.user_id, own.house_id, own.flat_id)
@@ -451,15 +387,12 @@ async def test_a_foreign_meter_id_is_not_found(
         await service.submit(own.user_id, other_meter_id, _draft())
     with pytest.raises(EntityNotFound):
         await _make_meters_service(session).update(
-            own.user_id,
-            other_meter_id,
-            MeterUpdateDraft(tariff_zones=1, serial="SN-2"),
+            own.user_id, other_meter_id, MeterUpdateDraft(tariff_zones=1, serial="SN-2")
         )
 
 
 async def test_admin_list_refuses_a_cross_org_house(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     other = await make_org_house_flat_user()
@@ -481,9 +414,7 @@ async def test_admin_list_refuses_a_cross_org_house(
     [
         # у двухзонного счетчика нет ключа "night"
         SubmitDraft(
-            period=date(2026, 1, 1),
-            values={TariffZone.DAY: 1_000},
-            photos=["a.jpg"],
+            period=date(2026, 1, 1), values={TariffZone.DAY: 1_000}, photos=["a.jpg"]
         ),
         SubmitDraft(
             period=date(2026, 1, 1),
@@ -493,9 +424,7 @@ async def test_admin_list_refuses_a_cross_org_house(
     ],
 )
 async def test_submit_rejects_wrong_zones_and_a_missing_photo(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-    draft: SubmitDraft,
+    session: AsyncSession, make_org_house_flat_user: Fixture, draft: SubmitDraft
 ) -> None:
     own, meter_id = await _owner_with_meter(
         session, make_org_house_flat_user, tariff_zones=2
@@ -506,8 +435,7 @@ async def test_submit_rejects_wrong_zones_and_a_missing_photo(
 
 
 async def test_submit_accepts_and_flags_a_value_below_the_previous_one(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     await _add_reading(session, meter_id, _period_back(12), 5_000, own.user_id)
@@ -519,13 +447,10 @@ async def test_submit_accepts_and_flags_a_value_below_the_previous_one(
 
 
 async def test_submit_blocks_an_expired_verification(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(
-        session,
-        make_org_house_flat_user,
-        next_verification_date=date(2000, 1, 1),
+        session, make_org_house_flat_user, next_verification_date=date(2000, 1, 1)
     )
 
     with pytest.raises(InvalidState):
@@ -533,8 +458,7 @@ async def test_submit_blocks_an_expired_verification(
 
 
 async def test_resubmission_wins_over_the_earlier_row(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -549,22 +473,18 @@ async def test_resubmission_wins_over_the_earlier_row(
 
 
 async def test_submit_rejects_a_period_other_than_the_current_one_inside_the_window(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
 
     with pytest.raises(InvalidState):
         await _make_service(session).submit(
-            own.user_id,
-            meter_id,
-            _draft(period=_period_back(12)),
+            own.user_id, meter_id, _draft(period=_period_back(12))
         )
 
 
 async def test_submit_out_of_window_uses_one_of_the_allowed_past_periods(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     await _close_window(session, own.org_id)
@@ -577,8 +497,7 @@ async def test_submit_out_of_window_uses_one_of_the_allowed_past_periods(
 
 
 async def test_submit_out_of_window_for_a_period_with_a_charge_raises(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     await _close_window(session, own.org_id)
@@ -589,7 +508,7 @@ async def test_submit_out_of_window_for_a_period_with_a_charge_raises(
             lines={},
             total=0,
             is_closed=True,
-        ),
+        )
     )
     await session.flush()
 
@@ -598,23 +517,19 @@ async def test_submit_out_of_window_for_a_period_with_a_charge_raises(
 
 
 async def test_submit_out_of_window_rejects_a_period_outside_periods_back(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     await _close_window(session, own.org_id)
 
     with pytest.raises(InvalidState):
         await _make_service(session).submit(
-            own.user_id,
-            meter_id,
-            _draft(period=_period_back(60)),
+            own.user_id, meter_id, _draft(period=_period_back(60))
         )
 
 
 async def test_submit_computes_consumption_and_the_exact_kopeck_amount(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     await _add_reading(session, meter_id, _period_back(12), 0, own.user_id)
@@ -628,16 +543,11 @@ async def test_submit_computes_consumption_and_the_exact_kopeck_amount(
 
 
 async def test_submit_records_the_reading_submitted_event(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
 
-    await _make_service(session).submit(
-        own.user_id,
-        meter_id,
-        _draft(ocr=True),
-    )
+    await _make_service(session).submit(own.user_id, meter_id, _draft(ocr=True))
 
     events = await _events(session, EventType.READING_SUBMITTED)
     assert len(events) == 1
@@ -651,8 +561,7 @@ async def test_submit_records_the_reading_submitted_event(
 
 
 async def test_submit_suggests_a_leak_request_on_a_consumption_spike(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     # ровный расход по 100 за каждый из трех шагов истории
@@ -665,8 +574,7 @@ async def test_submit_suggests_a_leak_request_on_a_consumption_spike(
 
 
 async def test_add_meter_rejects_a_second_meter_of_the_same_type(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, _ = await _owner_with_meter(session, make_org_house_flat_user)
 
@@ -679,15 +587,12 @@ async def test_add_meter_rejects_a_second_meter_of_the_same_type(
 
 
 async def test_update_meter_changes_serial_and_zones(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
 
     card = await _make_meters_service(session).update(
-        own.user_id,
-        meter_id,
-        MeterUpdateDraft(tariff_zones=2, serial="NEW-SERIAL"),
+        own.user_id, meter_id, MeterUpdateDraft(tariff_zones=2, serial="NEW-SERIAL")
     )
 
     assert card.meter.tariff_zones == 2
@@ -695,16 +600,15 @@ async def test_update_meter_changes_serial_and_zones(
 
 
 async def test_house_average_covers_flats_that_submitted_for_the_same_meter_type(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     neighbour = await _add_user(session, "Сосед")
     neighbour_flat = Flat(house_id=own.house_id, number="2")
     session.add(neighbour_flat)
     await session.flush()
-    await _add_resident(session, neighbour, own.house_id, FlatId(neighbour_flat.id))
-    neighbour_meter_id = await _add_meter(session, FlatId(neighbour_flat.id))
+    await _add_resident(session, neighbour, own.house_id, neighbour_flat.id)
+    neighbour_meter_id = await _add_meter(session, neighbour_flat.id)
     for meter, user in ((meter_id, own.user_id), (neighbour_meter_id, neighbour)):
         await _add_reading(session, meter, _period_back(1), 0, user)
     service = _make_service(session)
@@ -716,8 +620,7 @@ async def test_house_average_covers_flats_that_submitted_for_the_same_meter_type
 
 
 async def test_flats_without_reading_lists_flats_with_a_meter_and_no_submission(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_meter(session, own.flat_id)
@@ -736,8 +639,7 @@ async def test_flats_without_reading_lists_flats_with_a_meter_and_no_submission(
 
 
 async def test_admin_list_shows_the_whole_chain_and_the_below_previous_flag(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     await _add_reading(session, meter_id, _period_back(1), 5_000, own.user_id)
@@ -795,16 +697,13 @@ def _window(day_from: int, day_to: int, *, always_open: bool = False) -> OrgSett
     ],
 )
 def test_a_wrapping_window_is_one_period_the_month_it_opened(
-    today: date,
-    settings: OrgSettings | None,
-    period: date,
+    today: date, settings: OrgSettings | None, period: date
 ) -> None:
     assert window_period(today, settings) == period
 
 
 async def test_submit_in_the_tail_of_a_wrapping_window_goes_to_its_opening_month(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     # сегодня - последний день окна, открывшегося в прошлом месяце
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
@@ -815,11 +714,7 @@ async def test_submit_in_the_tail_of_a_wrapping_window_goes_to_its_opening_month
     periods = await service.periods(own.flat_id)
     with pytest.raises(InvalidState, match=WRONG_PERIOD):
         await service.submit(own.user_id, meter_id, _draft())
-    result = await service.submit(
-        own.user_id,
-        meter_id,
-        _draft(period=_period_back(1)),
-    )
+    result = await service.submit(own.user_id, meter_id, _draft(period=_period_back(1)))
 
     assert [option.period for option in periods.options] == [_period_back(1)]
     assert result.row.reading.period == _period_back(1)

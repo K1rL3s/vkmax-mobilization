@@ -35,7 +35,7 @@ class AnnouncementItem(BaseSchema):
     def of(cls, data: AnnouncementData) -> Self:
         announcement = data.announcement
         return cls(
-            id=AnnouncementId(announcement.id),
+            id=announcement.id,
             created_at=announcement.created_at,
             text=announcement.text,
             house_ids=list(announcement.house_ids),
@@ -53,5 +53,5 @@ class CreateAnnouncementRequest(BaseSchema):
     text: str
     # дефолт продукта - только домовой чат
     channels: list[AnnouncementChannel] = Field(
-        default_factory=lambda: [AnnouncementChannel.CHAT],
+        default_factory=lambda: [AnnouncementChannel.CHAT]
     )

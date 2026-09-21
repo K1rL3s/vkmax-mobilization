@@ -19,21 +19,16 @@ class Recipient(ZhekaType):
 
 class NotificationsRepo(BaseAlchemyRepo):
     async def get_levels(
-        self,
-        user_id: UserId,
+        self, user_id: UserId
     ) -> dict[NotificationCategory, NotificationLevel]:
         stmt = select(
-            notification_settings_table.c.category,
-            notification_settings_table.c.level,
+            notification_settings_table.c.category, notification_settings_table.c.level
         ).where(notification_settings_table.c.user_id == user_id)
         result = await self._session.execute(stmt)
         return dict(result.tuples().all())
 
     async def set_level(
-        self,
-        user_id: UserId,
-        category: NotificationCategory,
-        level: NotificationLevel,
+        self, user_id: UserId, category: NotificationCategory, level: NotificationLevel
     ) -> bool:
         # хранится только то, что житель менял руками, отсюда апсерт. Ветка
         # DO UPDATE отсечена по тому же уровню, поэтому пустой RETURNING и
@@ -55,9 +50,7 @@ class NotificationsRepo(BaseAlchemyRepo):
         return result.scalar_one_or_none() is not None
 
     async def recipients(
-        self,
-        user_ids: Collection[UserId],
-        category: NotificationCategory,
+        self, user_ids: Collection[UserId], category: NotificationCategory
     ) -> Sequence[Recipient]:
         # уровень приезжает тем же запросом: у жителя, который настройки не
         # трогал, строки нет, и за него отвечает DEFAULT_LEVEL

@@ -11,7 +11,6 @@ from zheka.bot.dialog_data import ConsentData, MenuData, OnboardingData
 from zheka.bot.states import Consent, Menu, Onboarding
 from zheka.core.deeplinks import Deeplink, DeeplinkKind, parse_deeplink
 from zheka.core.enums import EventSource, EventType
-from zheka.core.ids import UserId
 from zheka.core.models import User
 from zheka.core.services.demo import DemoService, demo_flat_number
 from zheka.core.services.events import EventsService
@@ -32,14 +31,9 @@ DEMO_RESIDENT_NOTICE = (
     "месяц в приложении, кабинет УК там же"
 )
 
-_SOURCE_BY_KIND = {
+_HOUSE_SOURCES = {
     DeeplinkKind.HOUSE: EventSource.CHAT,
     DeeplinkKind.ENTRANCE_QR: EventSource.QR,
-    DeeplinkKind.ORG_INVITE: EventSource.DEEPLINK,
-    DeeplinkKind.FLAT_INVITE: EventSource.DEEPLINK,
-    DeeplinkKind.ORG_REGISTER: EventSource.DEEPLINK,
-    DeeplinkKind.DEMO_STAFF: EventSource.DEEPLINK,
-    DeeplinkKind.DEMO_RESIDENT: EventSource.DEEPLINK,
 }
 
 
@@ -63,10 +57,9 @@ async def deeplink_handler(
     if deeplink is None:
         return UNHANDLED
 
+    source = _HOUSE_SOURCES.get(deeplink.kind, EventSource.DEEPLINK)
     await events_service.record(
-        EventType.BOT_START,
-        user_id=UserId(user.id),
-        source=_SOURCE_BY_KIND[deeplink.kind].value,
+        EventType.BOT_START, user_id=user.id, source=source.value
     )
     await open_deeplink(
         deeplink,
@@ -89,8 +82,7 @@ async def open_deeplink(
     flats_service: FlatsService,
     demo_service: DemoService,
 ) -> None:
-    # согласие первее любой дороги в дом, а сама ссылка едет в start_data,
-    # чтобы после нажатия «Согласен» житель попал туда, куда шел
+    # ссылка едет в start_data, чтобы после «Согласен» житель попал куда шел
     if user.consent_at is None:
         await dialog_manager.start(
             Consent.ask,
@@ -99,7 +91,7 @@ async def open_deeplink(
         )
         return
 
-    user_id = UserId(user.id)
+    user_id = user.id
     if deeplink.kind is DeeplinkKind.ORG_INVITE:
         membership = await orgs_service.activate_invite(user_id, deeplink.value)
         await _menu(dialog_manager, ORG_JOINED.format(name=membership.org.name))
@@ -109,24 +101,19 @@ async def open_deeplink(
     elif deeplink.kind is DeeplinkKind.ORG_REGISTER:
         # фронт по startParam не роутит, поэтому код вводится в приложении руками
         await _menu(dialog_manager, REGISTER_NOTICE)
-    elif deeplink.kind is DeeplinkKind.DEMO_STAFF:
-        access = await demo_service.activate(user_id)
-        await _menu(
-            dialog_manager,
-            DEMO_STAFF_NOTICE.format(org=access.membership.org.name),
-        )
-    elif deeplink.kind is DeeplinkKind.DEMO_RESIDENT:
-        # обе ссылки выдают обе роли, вид меняет только то, куда указать
-        access = await demo_service.activate(user_id)
-        await _menu(
-            dialog_manager,
-            DEMO_RESIDENT_NOTICE.format(
-                flat=demo_flat_number(user_id),
-                address=access.residency.house.address,
-            ),
-        )
-    else:
+    elif deeplink.kind in _HOUSE_SOURCES:
         await _start_house(deeplink, dialog_manager)
+    else:
+        # обе демо-ссылки выдают обе роли, вид меняет только текст
+        access = await demo_service.activate(user_id)
+        notice = (
+            DEMO_STAFF_NOTICE.format(org=access.membership.org.name)
+            if deeplink.kind is DeeplinkKind.DEMO_STAFF
+            else DEMO_RESIDENT_NOTICE.format(
+                flat=demo_flat_number(user_id), address=access.residency.house.address
+            )
+        )
+        await _menu(dialog_manager, notice)
 
 
 async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> None:
@@ -142,7 +129,7 @@ async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> Non
         data=OnboardingData(
             house_id=int(house_id),
             entrance=int(entrance) if entrance.isdigit() else None,
-            source=_SOURCE_BY_KIND[deeplink.kind],
+            source=_HOUSE_SOURCES[deeplink.kind],
         ).to_data(),
         mode=StartMode.RESET_STACK,
     )
@@ -150,7 +137,5 @@ async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> Non
 
 async def _menu(dialog_manager: DialogManager, notice: str) -> None:
     await dialog_manager.start(
-        Menu.main,
-        data=MenuData(notice=notice).to_data(),
-        mode=StartMode.RESET_STACK,
+        Menu.main, data=MenuData(notice=notice).to_data(), mode=StartMode.RESET_STACK
     )

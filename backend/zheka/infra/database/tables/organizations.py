@@ -48,11 +48,7 @@ org_settings_table = Table(
         nullable=False,
     ),
     Column(
-        "meter_window_day_to",
-        Integer,
-        default=25,
-        server_default="25",
-        nullable=False,
+        "meter_window_day_to", Integer, default=25, server_default="25", nullable=False
     ),
     Column(
         "meter_window_always_open",
@@ -63,11 +59,7 @@ org_settings_table = Table(
     ),
     Column("group_threshold", Integer, default=3, server_default="3", nullable=False),
     Column(
-        "group_window_hours",
-        Integer,
-        default=24,
-        server_default="24",
-        nullable=False,
+        "group_window_hours", Integer, default=24, server_default="24", nullable=False
     ),
 )
 

@@ -14,13 +14,7 @@ org_invites_table = Table(
     Column("role", pg_enum(OrgRole, "org_role"), nullable=False),
     Column("expires_at", DateTime(timezone=True), nullable=False),
     Column("max_activations", Integer, nullable=False),
-    Column(
-        "activations_used",
-        Integer,
-        default=0,
-        server_default="0",
-        nullable=False,
-    ),
+    Column("activations_used", Integer, default=0, server_default="0", nullable=False),
     Column("created_by", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("revoked_at", DateTime(timezone=True), nullable=True),
 )
@@ -34,12 +28,6 @@ flat_invites_table = Table(
     Column("created_by", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("expires_at", DateTime(timezone=True), nullable=False),
     Column("max_activations", Integer, nullable=False),
-    Column(
-        "activations_used",
-        Integer,
-        default=0,
-        server_default="0",
-        nullable=False,
-    ),
+    Column("activations_used", Integer, default=0, server_default="0", nullable=False),
     Column("revoked_at", DateTime(timezone=True), nullable=True),
 )

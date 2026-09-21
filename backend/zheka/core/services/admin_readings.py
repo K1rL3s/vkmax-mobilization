@@ -3,15 +3,13 @@ from datetime import date
 from zheka.base import ZhekaType
 from zheka.core.enums import MeterType, TariffZone
 from zheka.core.errors import EntityNotFound
-from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
+from zheka.core.ids import HouseId, MeterId, OrgId
 from zheka.core.models import Meter, Reading, User
 from zheka.core.services.meter_access import zones_of
 from zheka.core.services.readings import consumption
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.users import UsersRepo
-
-HOUSE_NOT_FOUND = "Дом не найден"
 
 
 class AdminReadingRow(ZhekaType):
@@ -27,10 +25,7 @@ class AdminReadingsService:
     __slots__ = ("_houses", "_meters", "_users")
 
     def __init__(
-        self,
-        meters_repo: MetersRepo,
-        houses_repo: HousesRepo,
-        users_repo: UsersRepo,
+        self, meters_repo: MetersRepo, houses_repo: HousesRepo, users_repo: UsersRepo
     ) -> None:
         self._meters = meters_repo
         self._houses = houses_repo
@@ -49,7 +44,7 @@ class AdminReadingsService:
     ) -> tuple[list[AdminReadingRow], int]:
         house = await self._houses.get_for_org(house_id, org_id)
         if house is None:
-            raise EntityNotFound(HOUSE_NOT_FOUND)
+            raise EntityNotFound("Дом не найден")
 
         readings, total = await self._meters.list_house_readings(
             house_id,
@@ -60,29 +55,29 @@ class AdminReadingsService:
             offset=offset,
         )
         meters = {
-            MeterId(meter.id): meter
+            meter.id: meter
             for meter in await self._meters.list_by_ids(
-                {MeterId(reading.meter_id) for reading in readings},
+                {reading.meter_id for reading in readings}
             )
         }
         flats = {
-            FlatId(flat.id): flat
+            flat.id: flat
             for flat in await self._houses.list_flats_by_ids(
-                {FlatId(meter.flat_id) for meter in meters.values()},
+                {meter.flat_id for meter in meters.values()}
             )
         }
         users = {
-            UserId(user.id): user
+            user.id: user
             for user in await self._users.list_by_ids(
-                {UserId(reading.submitted_by) for reading in readings},
+                {reading.submitted_by for reading in readings}
             )
         }
 
         previous_cache: dict[tuple[MeterId, date], Reading | None] = {}
         rows = []
         for reading in readings:
-            meter = meters[MeterId(reading.meter_id)]
-            key = (MeterId(reading.meter_id), reading.period)
+            meter = meters[reading.meter_id]
+            key = (reading.meter_id, reading.period)
             if key not in previous_cache:
                 previous_cache[key] = await self._meters.previous_reading(*key)
             previous = previous_cache[key]
@@ -92,10 +87,10 @@ class AdminReadingsService:
                 AdminReadingRow(
                     reading=reading,
                     meter=meter,
-                    flat_number=flats[FlatId(meter.flat_id)].number,
+                    flat_number=flats[meter.flat_id].number,
                     values=values_map,
                     consumption=consumption(values_map, previous_values),
-                    submitted_by=users[UserId(reading.submitted_by)],
-                ),
+                    submitted_by=users[reading.submitted_by],
+                )
             )
         return rows, total

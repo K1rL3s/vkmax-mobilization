@@ -45,7 +45,7 @@ async def verify_flat(
     body: VerifyFlatRequest,
 ) -> VerifyFlatResponse:
     result = await flats_service.verify(residency.user_id, flat_id, body.account_no)
-    return VerifyFlatResponse.of(result)
+    return VerifyFlatResponse.model_validate(result)
 
 
 @router.post(
@@ -59,10 +59,7 @@ async def request_flat_verification(
     body: FlatVerificationRequest,
 ) -> VerificationRequestItem:
     view = await flats_service.request_verification(
-        residency.user_id,
-        flat_id,
-        body.account_no,
-        body.comment,
+        residency.user_id, flat_id, body.account_no, body.comment
     )
     return VerificationRequestItem.of(view)
 
@@ -86,14 +83,10 @@ async def create_flat_invite(
     body: CreateFlatInviteRequest,
 ) -> FlatInviteItem:
     invite = await flats_service.create_invite(
-        residency.user_id,
-        flat_id,
-        body.expires_in_hours,
-        body.max_activations,
+        residency.user_id, flat_id, body.expires_in_hours, body.max_activations
     )
     return FlatInviteItem.of(
-        invite,
-        create_start_link(bot, flat_invite_payload(invite.code)),
+        invite, create_start_link(bot, flat_invite_payload(invite.code))
     )
 
 
@@ -107,8 +100,7 @@ async def list_flat_invites(
     invites = await flats_service.list_invites(residency.user_id, flat_id)
     return [
         FlatInviteItem.of(
-            invite,
-            create_start_link(bot, flat_invite_payload(invite.code)),
+            invite, create_start_link(bot, flat_invite_payload(invite.code))
         )
         for invite in invites
     ]

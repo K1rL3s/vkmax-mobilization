@@ -9,7 +9,7 @@ from zheka.bot.dialog_data import ChatBindingData
 from zheka.bot.states import ChatBinding
 from zheka.broker.task_names import TaskName
 from zheka.core.deeplinks import house_payload
-from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
+from zheka.core.ids import HouseId, MaxChatId, MaxUserId
 from zheka.core.services.chats import ChatsService
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
@@ -46,7 +46,7 @@ async def on_bot_added(
         await bot.leave_chat(chat_id=chat_id)
         return
 
-    user_id = UserId(user.id)
+    user_id = user.id
     if await chats_service.bindable_houses(user_id):
         state, stack_id = ChatBinding.house, chat_stack(chat_id)
     elif await chats_service.is_resident(user_id):
@@ -89,6 +89,6 @@ async def welcome_chat(
                 LinkButton(
                     text=JOIN_HOUSE, url=create_start_link(bot, house_payload(house_id))
                 )
-            ],
+            ]
         ],
     )

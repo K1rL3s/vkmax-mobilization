@@ -9,7 +9,7 @@ from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.meters import AdminReadingItem
 from zheka.core.enums import MeterType
-from zheka.core.ids import FlatId, HouseId, MeterId, ReadingId
+from zheka.core.ids import HouseId
 from zheka.core.services.admin_readings import AdminReadingRow, AdminReadingsService
 from zheka.core.services.files import FilesService
 
@@ -18,11 +18,11 @@ router = APIRouter(tags=["Админка: счетчики"], route_class=Dishka
 
 def _admin_item(row: AdminReadingRow, files_service: FilesService) -> AdminReadingItem:
     return AdminReadingItem(
-        id=ReadingId(row.reading.id),
-        meter_id=MeterId(row.reading.meter_id),
+        id=row.reading.id,
+        meter_id=row.reading.meter_id,
         meter_type=row.meter.type,
         serial=row.meter.serial,
-        flat_id=FlatId(row.meter.flat_id),
+        flat_id=row.meter.flat_id,
         flat_number=row.flat_number,
         period=row.reading.period,
         values=row.values,

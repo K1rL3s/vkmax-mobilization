@@ -20,7 +20,7 @@ from zheka.api.schemas.meters import (
     UpdateMeterRequest,
 )
 from zheka.core.errors import NotEnoughRights
-from zheka.core.ids import FlatId, MeterId, ReadingId
+from zheka.core.ids import FlatId, MeterId
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import NOT_VERIFIED
 from zheka.core.services.meters import MeterDraft, MeterUpdateDraft, MetersService
@@ -37,8 +37,8 @@ def _require_verified(residency: CurrentResidency) -> None:
 
 def _reading_item(row: ReadingRow, files_service: FilesService) -> ReadingItem:
     return ReadingItem(
-        id=ReadingId(row.reading.id),
-        meter_id=MeterId(row.reading.meter_id),
+        id=row.reading.id,
+        meter_id=row.reading.meter_id,
         period=row.reading.period,
         values=row.values,
         consumption=row.consumption,
@@ -98,15 +98,7 @@ async def submit_reading(
     body: SubmitReadingRequest,
 ) -> SubmitReadingResponse:
     result = await readings_service.submit(
-        current_account.user_id,
-        meter_id,
-        SubmitDraft(
-            period=body.period,
-            values=body.values,
-            photos=body.photos,
-            ocr_used=body.ocr_used,
-            ocr_accepted=body.ocr_accepted,
-        ),
+        current_account.user_id, meter_id, SubmitDraft(**body.model_dump())
     )
     return SubmitReadingResponse(
         reading=_reading_item(result.row, files_service),
@@ -134,14 +126,7 @@ async def add_meter(
     body: AddMeterRequest,
 ) -> MeterItem:
     card = await meters_service.add(
-        current_account.user_id,
-        flat_id,
-        MeterDraft(
-            type=body.type,
-            tariff_zones=body.tariff_zones,
-            serial=body.serial,
-            next_verification_date=body.next_verification_date,
-        ),
+        current_account.user_id, flat_id, MeterDraft(**body.model_dump())
     )
     return MeterItem.of(card)
 
@@ -154,12 +139,6 @@ async def update_meter(
     body: UpdateMeterRequest,
 ) -> MeterItem:
     card = await meters_service.update(
-        current_account.user_id,
-        meter_id,
-        MeterUpdateDraft(
-            tariff_zones=body.tariff_zones,
-            serial=body.serial,
-            next_verification_date=body.next_verification_date,
-        ),
+        current_account.user_id, meter_id, MeterUpdateDraft(**body.model_dump())
     )
     return MeterItem.of(card)

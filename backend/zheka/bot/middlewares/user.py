@@ -22,13 +22,10 @@ class UserMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
     __slots__ = ()
 
     async def __call__(
-        self,
-        update: MaxoUpdate[Any],
-        ctx: Ctx,
-        next: NextMiddleware[MaxoUpdate[Any]],
+        self, update: MaxoUpdate[Any], ctx: Ctx, next: NextMiddleware[MaxoUpdate[Any]]
     ) -> Any:
-        context: UpdateContext | None = ctx.get(UPDATE_CONTEXT_KEY)
-        if context is None or context.user is None:
+        context: UpdateContext = ctx[UPDATE_CONTEXT_KEY]
+        if context.user is None:
             return await next(ctx)
 
         container: AsyncContainer = ctx[CONTAINER_NAME]
@@ -54,4 +51,4 @@ class UserMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
 
 def dialog_user_id(dialog_manager: DialogManager) -> UserId:
     user: User = dialog_manager.middleware_data[USER_KEY]
-    return UserId(user.id)
+    return user.id

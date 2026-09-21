@@ -15,15 +15,12 @@ _AREA_DIVISOR = 10_000
 
 LineDeltaKind = Literal["changed", "appeared", "disappeared"]
 
-UNKNOWN_SERVICE = "Неизвестная услуга в начислении"
-
 
 def to_kopecks(product: int, *, is_area: bool = False) -> int:
     # единственная функция проекта, которая делит деньги: произведение двух
     # масштабированных целых переводится в копейки округлением вверх-от-половины
     divisor = _AREA_DIVISOR if is_area else _VOLUME_DIVISOR
-    half = divisor // 2
-    return (product + half) // divisor
+    return (product + divisor // 2) // divisor
 
 
 class ChargeLine(ZhekaType):
@@ -53,7 +50,9 @@ def parse_line(raw: Mapping[str, Any]) -> ChargeLine:
     try:
         service = ServiceType(raw_service)
     except ValueError as error:
-        raise InvalidValue(f"{UNKNOWN_SERVICE}: {raw_service!r}") from error
+        raise InvalidValue(
+            f"Неизвестная услуга в начислении: {raw_service!r}"
+        ) from error
     return ChargeLine(
         service=service,
         amount=raw["amount"],
@@ -97,45 +96,28 @@ def _changed_line(current: ChargeLine, previous: ChargeLine) -> LineDelta:
     )
 
 
-def _appeared_line(current: ChargeLine) -> LineDelta:
+def _whole_line(service: ServiceType, delta: int, kind: LineDeltaKind) -> LineDelta:
     return LineDelta(
-        service=current.service,
-        delta=current.amount,
-        tariff_effect=0,
-        volume_effect=current.amount,
-        kind="appeared",
-    )
-
-
-def _disappeared_line(previous: ChargeLine) -> LineDelta:
-    delta = -previous.amount
-    return LineDelta(
-        service=previous.service,
-        delta=delta,
-        tariff_effect=0,
-        volume_effect=delta,
-        kind="disappeared",
+        service=service, delta=delta, tariff_effect=0, volume_effect=delta, kind=kind
     )
 
 
 def breakdown(
-    current: Sequence[ChargeLine],
-    previous: Sequence[ChargeLine],
+    current: Sequence[ChargeLine], previous: Sequence[ChargeLine]
 ) -> ChargeBreakdown:
     current_by_service = {line.service: line for line in current}
     previous_by_service = {line.service: line for line in previous}
-    services = dict.fromkeys([*current_by_service, *previous_by_service])
 
     lines: list[LineDelta] = []
-    for service in services:
+    for service in dict.fromkeys([*current_by_service, *previous_by_service]):
         now = current_by_service.get(service)
         before = previous_by_service.get(service)
         if now is not None and before is not None:
             lines.append(_changed_line(now, before))
         elif now is not None:
-            lines.append(_appeared_line(now))
+            lines.append(_whole_line(service, now.amount, "appeared"))
         elif before is not None:
-            lines.append(_disappeared_line(before))
+            lines.append(_whole_line(service, -before.amount, "disappeared"))
 
     lines.sort(key=lambda line: abs(line.delta), reverse=True)
     return ChargeBreakdown(delta=sum(line.delta for line in lines), lines=lines)

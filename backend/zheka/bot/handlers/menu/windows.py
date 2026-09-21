@@ -14,11 +14,7 @@ MENU_TEXT = (
 
 menu_dialog = Dialog(
     Window(
-        Multi(
-            Format("{notice}", when=F["notice"]),
-            Const(MENU_TEXT),
-            sep="\n\n",
-        ),
+        Multi(Format("{notice}", when=F["notice"]), Const(MENU_TEXT), sep="\n\n"),
         Start(Const("Найти дом"), id="find_house", state=Onboarding.method),
         Start(Const("Подать заявку"), id="new_request", state=NewRequest.category),
         WebApp(
@@ -28,5 +24,5 @@ menu_dialog = Dialog(
         ),
         state=Menu.main,
         getter=get_menu,
-    ),
+    )
 )

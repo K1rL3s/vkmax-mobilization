@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from taskiq import InMemoryBroker
 
 from tests.conftest import RecordingBroker, make_config
+from tests.test_bot import _run
 from tests.test_seed import FILES, TODAY, _demo
 
 from zheka.bot import BotSetup
@@ -30,12 +31,6 @@ from zheka.seed.demo import SEED_LOCK, seed
 # держатель блокировки не отпускает ее, пока второй сид не встанет в очередь;
 # без блокировки второй сид проходит целиком, и ждать дальше незачем
 WAITER_TIMEOUT = 30.0
-
-
-async def _run(broker: InMemoryBroker, task: Any, **kwargs: Any) -> None:
-    sent = await task.kicker().with_broker(broker).kiq(**kwargs)
-    result = await sent.wait_result(timeout=5)
-    assert not result.is_err, result.error
 
 
 def _recording(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> list[Any]:
@@ -61,10 +56,7 @@ async def test_seed_command_queues_the_task_and_answers_at_once(
     sent = _recording(fake_bot, monkeypatch)
     max_user_id = MaxUserId(secrets.randbits(40))
     client = BotClient(
-        bot_setup.dp,
-        user_id=max_user_id,
-        chat_id=max_user_id,
-        bot=fake_bot,
+        bot_setup.dp, user_id=max_user_id, chat_id=max_user_id, bot=fake_bot
     )
 
     await client.send("/seed")
@@ -109,18 +101,15 @@ async def test_the_task_seeds_today_and_tells_the_caller(
         "text": reply,
         "category": NotificationCategory.ANNOUNCEMENTS.value,
         "mandatory": True,
-        "buttons": None,
     }
 
 
 async def _waits_on_the_lock(
-    engine: AsyncEngine,
-    pid: int,
-    pending: asyncio.Task[bool],
+    engine: AsyncEngine, pid: int, pending: asyncio.Task[bool]
 ) -> bool:
     stmt = text(
         "SELECT count(*) FROM pg_locks"
-        " WHERE locktype = 'advisory' AND NOT granted AND pid = :pid",
+        " WHERE locktype = 'advisory' AND NOT granted AND pid = :pid"
     ).bindparams(pid=pid)
     async with engine.connect() as observer, asyncio.timeout(WAITER_TIMEOUT):
         while not pending.done():
@@ -141,8 +130,7 @@ async def test_a_second_seed_waits_for_the_first(engine: AsyncEngine) -> None:
         pid_stmt = select(func.pg_backend_pid())
         pid = (await second.execute(pid_stmt)).scalar_one()
         async with AsyncSession(
-            bind=second,
-            join_transaction_mode="create_savepoint",
+            bind=second, join_transaction_mode="create_savepoint"
         ) as session:
             pending = asyncio.create_task(seed(session, _demo(session), FILES, TODAY))
             try:
@@ -166,10 +154,7 @@ def test_the_worker_import_registers_every_task() -> None:
         "print(sorted(name for name in TaskName if name.value not in registered))\n"
     )
     result = subprocess.run(  # noqa: S603
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        check=True,
+        [sys.executable, "-c", script], capture_output=True, text=True, check=True
     )
 
     assert result.stdout.strip() == "[]"

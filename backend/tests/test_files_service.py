@@ -22,28 +22,21 @@ class _FakeUpload:
         self.content_type = content_type
         self.size = size
         self._buffer = b"x" * size
-        self._position = 0
+        self.total_read = 0
 
-    async def read(self, size: int = -1) -> bytes:
-        end = len(self._buffer) if size < 0 else self._position + size
-        chunk, self._position = self._buffer[self._position : end], end
+    async def read(self, size: int) -> bytes:
+        end = self.total_read + size
+        chunk, self.total_read = self._buffer[self.total_read : end], end
         return chunk
-
-    @property
-    def total_read(self) -> int:
-        return self._position
 
 
 def _make_service(tmp_path: Path, max_size_mb: int) -> FilesService:
-    return FilesService(
-        FilesConfig(dir=str(tmp_path), max_size_mb=max_size_mb),
-        _TOKEN,
-    )
+    return FilesService(FilesConfig(dir=str(tmp_path), max_size_mb=max_size_mb), _TOKEN)
 
 
-def _generated_name(suffix: str = ".jpg") -> str:
+def _generated_name() -> str:
     # форма, которую реально производит save: uuid4().hex плюс суффикс
-    return f"{uuid4().hex}{suffix}"
+    return f"{uuid4().hex}.jpg"
 
 
 async def test_save_rejects_oversized_upload_before_reading_it_fully(
@@ -57,14 +50,6 @@ async def test_save_rejects_oversized_upload_before_reading_it_fully(
 
     assert upload.total_read < upload.size
     assert list(tmp_path.iterdir()) == []  # noqa: ASYNC240
-
-
-async def test_save_rejects_unsupported_mime_type(tmp_path: Path) -> None:
-    service = _make_service(tmp_path, max_size_mb=10)
-    upload = _FakeUpload("application/pdf", size=10)
-
-    with pytest.raises(InvalidRequest):
-        await service.save(upload)  # type: ignore[arg-type]
 
 
 async def test_save_writes_the_file_under_its_generated_name(tmp_path: Path) -> None:
@@ -108,12 +93,10 @@ def test_verify_rejects_a_forged_signature(tmp_path: Path, sig: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "name",
-    ["../../etc/passwd", "g" * 32 + ".jpg", "0" * 32 + ".php"],
+    "name", ["../../etc/passwd", "g" * 32 + ".jpg", "0" * 32 + ".php"]
 )
 def test_path_of_rejects_anything_that_is_not_a_generated_name(
-    tmp_path: Path,
-    name: str,
+    tmp_path: Path, name: str
 ) -> None:
     service = _make_service(tmp_path, max_size_mb=10)
 

@@ -21,9 +21,7 @@ SENT_TEXT = "Принял, оформляю"
 
 @inject
 async def get_category(
-    dialog_manager: DialogManager,
-    profile_service: FromDishka[ProfileService],
-    **_: Any,
+    dialog_manager: DialogManager, profile_service: FromDishka[ProfileService], **_: Any
 ) -> dict[str, Any]:
     me = await profile_service.me(dialog_user_id(dialog_manager))
     if not me.residencies:
@@ -33,8 +31,8 @@ async def get_category(
     # который он завел последним: выбор дома живет в мини-аппе
     residency = max(me.residencies, key=lambda item: item.resident.created_at)
     with NewRequestData.proxy(dialog_manager) as data:
-        data.house_id = int(residency.house.id)
-        data.flat_id = None if residency.flat is None else int(residency.flat.id)
+        data.house_id = residency.house.id
+        data.flat_id = None if residency.flat is None else residency.flat.id
     return {
         "address": residency.house.address,
         "categories": [
@@ -47,9 +45,9 @@ async def get_category(
 async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
     data = NewRequestData.load(dialog_manager)
     return {
-        "category": None
-        if data.category is None
-        else CATEGORY_RULES[data.category].label,
+        "category": (
+            None if data.category is None else CATEGORY_RULES[data.category].label
+        ),
         "description": data.description,
         "photos": len(data.photos),
     }
@@ -84,9 +82,7 @@ async def on_description(
 
 
 async def on_photo(
-    update: MessageCreated,
-    _widget: MessageInput,
-    dialog_manager: DialogManager,
+    update: MessageCreated, _widget: MessageInput, dialog_manager: DialogManager
 ) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
         for attach in update.message.body.attachments or []:
@@ -105,7 +101,7 @@ async def on_send(
     data = NewRequestData.load(dialog_manager)
     publisher.publish(
         TaskName.CREATE_BOT_REQUEST,
-        user_id=int(dialog_user_id(dialog_manager)),
+        user_id=dialog_user_id(dialog_manager),
         house_id=data.house_id,
         flat_id=data.flat_id,
         category=data.category,

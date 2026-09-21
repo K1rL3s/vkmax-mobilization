@@ -16,12 +16,7 @@ from zheka.core.errors import InvalidValue
 
 @pytest.mark.parametrize(
     ("product", "is_area", "kopecks"),
-    [
-        (149_999, False, 1),
-        (150_000, False, 2),
-        (4_999, True, 0),
-        (5_000, True, 1),
-    ],
+    [(149_999, False, 1), (150_000, False, 2), (4_999, True, 0), (5_000, True, 1)],
 )
 def test_to_kopecks_rounds_half_up(product: int, is_area: bool, kopecks: int) -> None:
     assert to_kopecks(product, is_area=is_area) == kopecks
@@ -77,14 +72,10 @@ def test_effects_always_sum_to_the_line_delta_even_where_naive_rounding_breaks_i
     ],
 )
 def test_a_line_without_a_tariff_effect_puts_the_delta_into_volume(
-    current: ChargeLine | None,
-    previous: ChargeLine | None,
-    kind: str,
-    delta: int,
+    current: ChargeLine | None, previous: ChargeLine | None, kind: str, delta: int
 ) -> None:
     result = breakdown(
-        [] if current is None else [current],
-        [] if previous is None else [previous],
+        [] if current is None else [current], [] if previous is None else [previous]
     )
 
     line = result.lines[0]
