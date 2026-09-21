@@ -1,5 +1,6 @@
 import secrets
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import func, select
@@ -59,9 +60,19 @@ async def _bind_chat(
     session: AsyncSession,
     house_id: HouseId,
     status: ChatStatus = ChatStatus.ACTIVE,
+    *,
+    bot_is_admin: bool = True,
 ) -> MaxChatId:
     chat_id = MaxChatId(secrets.randbits(48))
-    session.add(Chat(chat_id=chat_id, house_id=house_id, status=status))
+    session.add(
+        Chat(
+            chat_id=chat_id,
+            house_id=house_id,
+            status=status,
+            bound_at=datetime.now(UTC),
+            bot_is_admin=bot_is_admin,
+        ),
+    )
     await session.flush()
     return chat_id
 
@@ -320,3 +331,26 @@ async def test_org_list_filters_by_house_of_the_same_org(
 
     with pytest.raises(EntityNotFound):
         await service.list_for_org(mine.org_id, foreign.house_id, 20, 0)
+
+
+async def test_a_chat_without_admin_rights_is_not_a_target(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    # бот без прав администратора в чат MAX не пишет
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    await _bind_chat(session, data.house_id, bot_is_admin=False)
+
+    created = await _service(session, publisher).create(
+        data.org_id,
+        data.user_id,
+        [data.house_id],
+        TEXT,
+        [AnnouncementChannel.CHAT],
+    )
+
+    await publisher.flush()
+    assert list(created.houses_without_chat) == [data.house_id]
+    assert broker.enqueued(TaskName.BROADCAST_TO_CHATS) == []

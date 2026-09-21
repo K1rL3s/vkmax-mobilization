@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
-from zheka.core.ids import MaxChatId, RequestId, UserId
+from zheka.core.ids import HouseId, MaxChatId, RequestId, UserId
 from zheka.core.notifications import DEFAULT_LEVEL, Buttons
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
@@ -122,3 +122,12 @@ class NotificationsService:
 
     def open_review_card(self, request_id: RequestId) -> None:
         self._publisher.publish(TaskName.SEND_REVIEW_CARD, request_id=request_id)
+
+    def welcome_chat(self, chat_id: MaxChatId, house_id: HouseId) -> None:
+        # ссылку на дом строит задача: имя бота знает только maxo, а core о
+        # нем не знает
+        self._publisher.publish(
+            TaskName.WELCOME_CHAT,
+            chat_id=chat_id,
+            house_id=house_id,
+        )

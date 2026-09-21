@@ -90,3 +90,11 @@ class ExecutorCardData(BaseDialogData):
 
 class ReviewData(BaseDialogData):
     request_id: int
+
+
+class ChatBindingData(BaseDialogData):
+    # чат и его название кладет задача: окно, которое она открывает, рисует
+    # другая сессия, и строки chats, записанной этой задачей, оно не увидит
+    chat_id: int
+    title: str
+    notice: str | None = None

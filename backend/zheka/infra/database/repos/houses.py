@@ -8,6 +8,7 @@ from zheka.core.enums import RequestStatus
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.infra.database.models import DemandSignal, Flat, House
 from zheka.infra.database.repos.base import BaseAlchemyRepo
+from zheka.infra.database.repos.chats import BOUND_CHAT
 from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
@@ -214,7 +215,7 @@ class HousesRepo(BaseAlchemyRepo):
         stmt = select(
             exists().where(
                 chats_table.c.house_id == house_id,
-                chats_table.c.bound_at.is_not(None),
+                BOUND_CHAT,
             ),
         )
         result = await self._session.execute(stmt)
@@ -289,12 +290,14 @@ class HousesRepo(BaseAlchemyRepo):
         self,
         house_ids: Collection[HouseId],
     ) -> dict[HouseId, str | None]:
-        # ключ словаря и есть признак привязки: название чата может быть пустым
+        # ключ словаря и есть признак привязки: название чата может быть пустым.
+        # ponytail: у дома бывает несколько чатов, и название берется у
+        # последнего в выдаче; выбрать один явно, когда карточка покажет все
         if not house_ids:
             return {}
         stmt = select(chats_table.c.house_id, chats_table.c.title).where(
             chats_table.c.house_id.in_(house_ids),
-            chats_table.c.bound_at.is_not(None),
+            BOUND_CHAT,
         )
         result = await self._session.execute(stmt)
         return {HouseId(house_id): title for house_id, title in result.tuples().all()}
@@ -319,3 +322,8 @@ class HousesRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return {HouseId(house_id) for house_id in result.scalars().all()}
+
+    async def get_by_binding_code(self, code: str) -> House | None:
+        stmt = select(House).where(houses_table.c.chat_binding_code == code)
+        house: House | None = await self._session.scalar(stmt)
+        return house

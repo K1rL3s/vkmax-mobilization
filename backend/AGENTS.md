@@ -110,15 +110,24 @@ review finding.
   `dp.update`, so by the time an exception reaches the router the session is
   rolled back and the request container is closed. It follows that the menu
   window renders without a single service - the error router restarts it.
-- `zheka/bot/middlewares/user.py` upserts the `users` row from every update
-  and puts the `User` into the middleware data under `user`, so no handler or
-  getter repeats it. It is `inner` on `dp.update` and after
-  `TransactionMiddleware`. Two rules it must keep: the chat id is written only
-  when the update comes from `ChatType.DIALOG`, and `upsert_by_max_id` keeps
-  the old one with `coalesce` - a message from a house chat would otherwise
-  wipe it and every task would silently stop opening windows for that user.
-  On a `DialogUpdateEvent` the user is a `FakeUser` built from ids with an
-  empty name, so there the middleware only reads the row.
+- `zheka/bot/middlewares/user.py` upserts the `users` row from every private
+  update and puts the `User` into the middleware data under `user`, so no
+  handler or getter repeats it. It is `inner` on `dp.update` and after
+  `TransactionMiddleware`. It upserts only on `ChatType.DIALOG`: an admin bot
+  receives every message of a house chat, and an upsert there would create a
+  row, name and username, for every member who writes - none of whom gave
+  consent. On any other chat type it only reads the row, and the same goes for
+  a `DialogUpdateEvent`, whose user is a `FakeUser` built from ids with an
+  empty name. `upsert_by_max_id` keeps the old chat id with `coalesce`, and
+  that is load-bearing: the mini-app upsert in `api/dependencies/current_account.py`
+  passes no chat id on every request and would otherwise wipe `max_chat_id`,
+  cutting the resident off from every window a task opens. It clears
+  `bot_stopped_at` whenever it is given a chat id: a private update proves the
+  dialog is alive, and without that a resident who stopped the bot once would
+  never get a window or a broadcast again. A mini-app request is no such proof
+  and keeps the mark.
+  `BotStopped` is itself a private update, so the middleware clears the mark
+  and the `bot_stopped` handler sets it again in the same transaction.
 - `BOT_START` is recorded once, in the `/start` and `bot_started` handler. Not
   in the fallback router - an update with no state is not a start - and not in
   a window getter, which re-runs on every re-render.
@@ -144,8 +153,9 @@ review finding.
   them. Never write either string at the call site.
 - `RequestChannel.CHAT` is written nowhere yet: nothing but the mini-app and
   the bot dialog can open a request, and the dialog knows only that it is the
-  bot. The task already takes `channel`, so the seam is there for Task 17,
-  where a house chat becomes a place a request can start from.
+  bot. The task already takes `channel`, so the seam is there for when the
+  product gives a chat a way to start a request. The spec has none: a house
+  chat gets announcements and one link button, and no interaction.
 - `HousesService` records `HOUSE_SEARCH` and `HOUSE_LINKED` itself, in `search`,
   `nearest` and `link`. A bot handler's whole job for those two is to pass the
   right `source: EventSource` and `entrance` into `link()`; recording them a
@@ -344,6 +354,37 @@ review finding.
   `task.kicker().with_broker(task_broker).kiq(...)`. It commits and flushes
   like the worker, and whatever the task publishes lands in `bot_broker`
   instead of running, so a test runs the follow-up itself.
+- A chat is bound when `house_id IS NOT NULL`, `bound_at IS NOT NULL` and
+  `status == ACTIVE` - `BOUND_CHAT` in `infra/database/repos/chats.py`, the one
+  expression the house card and the announcement fan-out share. A bot removed
+  from a chat keeps `bound_at`, so `bound_at` alone would call a chat nobody can
+  reach bound. The fan-out also needs `bot_is_admin`: a non-admin bot cannot
+  write into a MAX chat.
+- Every `bot_added` is a fresh binding: `ChatsRepo.upsert_added` clears
+  `house_id`, `bound_by`, `bound_at` and `bot_is_admin`, because whoever re-adds
+  the bot may not be the one who bound it, and an inherited binding would skip
+  the check of their rights. That check lives in `ChatsService.bind`: staff of
+  the house's org (`is_staff`, so not an executor) or its active chairman,
+  otherwise `NotEnoughRights`; the house arrives as the raw `Select` string.
+- The chat handlers (`bot/handlers/chats/router.py`) and the lifecycle
+  handlers (`bot/handlers/lifecycle.py`) sit outside `private_router`. The
+  `bot_added` handler only queues `on_bot_added`; the task reads the title,
+  leaves a channel or a chat whose initiator the bot cannot reach privately or
+  who is neither staff, chairman nor an active resident, and opens the binding
+  window. `ChatBinding.house` and `rights` live in the derived stack
+  `chat-{chat_id}`; `ChatBinding.code` waits for text and therefore opens on
+  the default stack. No binding window reads the `chats` row: the title and the
+  chat id ride in `ChatBindingData`, because the window is rendered in another
+  session than the task that wrote the row.
+- MAX sends no event when the bot's rights change, so they are asked for:
+  `is_chat_admin` in `infra/max/sender.py`, on the "Готово" tap and after every
+  failed send in `broadcast_to_chats`. `ChatsService.set_admin` records
+  `CHAT_ADMIN_GRANTED` and queues the welcome only on the `false -> true` edge.
+  A failed chat send whose re-check finds no rights opens `ChatBinding.rights`
+  for `bound_by` with sound, since a bot without rights silences the house.
+  `is_chat_admin` goes through `BOT_RATE_LIMIT`, because the broadcast calls it
+  once per failed chat; `get_chat` and `leave_chat` in `on_bot_added` bypass it
+  on purpose - one call per add, the same weight as a handler's own answer.
 
 ## Orientation
 
@@ -360,18 +401,19 @@ the next agent does not pay for them again.
   json in `startParam` so a deeplink can land on a mini-app screen). It waits
   for its frontend half and blocks no backend block; block 16 has no mini-app
   screen to route to.
-- The forty-five `EventType` members divide with nothing left over: 32 + 1 + 2
-  + 10. Thirty-two are recorded **inside** `core/services/`, so a bot handler
-  or a route that records one of those again doubles the statistic - pass the
-  service the right `source` or `method` and let it write. `BOT_START` is
-  recorded in `bot/handlers/commands/start.py`. `MINIAPP_OPEN` and
-  `ANNOUNCEMENT_CLICK` are recorded by `POST /me/events`, where the client
-  sends the type in the body, so no `EventType.MINIAPP_OPEN` appears at any
-  `record` call and grep alone will tell you they are written nowhere; the
-  `Literal` in `TrackEventRequest` is the whitelist, and those two are the
-  only events a client may send. The remaining ten have no writer yet and
-  get one in their own block: `BOT_MUTED`, `BOT_UNMUTED`, `BOT_STOPPED`,
-  `CHAT_BOUND`, `CHAT_ADMIN_GRANTED`, `READING_REMINDER_SENT`,
+- The forty-five `EventType` members divide with nothing left over: 34 + 4
+  + 2 + 5. Thirty-four are recorded **inside** `core/services/`, so a bot
+  handler or a route that records one of those again doubles the statistic -
+  pass the service the right `source` or `method` and let it write; `CHAT_BOUND`
+  and `CHAT_ADMIN_GRANTED` are among them, in `ChatsService`. Four are recorded
+  in bot handlers: `BOT_START` in `bot/handlers/commands/start.py`,
+  `BOT_STOPPED`, `BOT_MUTED` and `BOT_UNMUTED` in `bot/handlers/lifecycle.py`.
+  `MINIAPP_OPEN` and `ANNOUNCEMENT_CLICK` are recorded by `POST /me/events`,
+  where the client sends the type in the body, so no `EventType.MINIAPP_OPEN`
+  appears at any `record` call and grep alone will tell you they are written
+  nowhere; the `Literal` in `TrackEventRequest` is the whitelist, and those two
+  are the only events a client may send. The remaining five have no writer yet
+  and get one in their own block: `READING_REMINDER_SENT`,
   `APPOINTMENT_REMINDER_SENT`, `REQUEST_EXPORTED`, `LLM_SUGGESTED`,
   `LLM_ACCEPTED`.
 - The truth about maxo is in the installed sources,

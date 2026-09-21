@@ -14,12 +14,18 @@ from maxo.dialogs.context.media_storage import MediaIdStorage
 from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.dialogs.test_tools.keyboard import InlineButtonTextLocator
-from maxo.enums import ChatType
+from maxo.enums import ChatStatus as MaxChatStatus, ChatType
+from maxo.errors import MaxBotForbiddenError
 from maxo.omit import Omittable, Omitted
 from maxo.routing.filters import Command
 from maxo.routing.signals import MaxoUpdate
 from maxo.types import (
+    BotAddedToChat,
+    BotRemovedFromChat,
     BotStarted,
+    BotStopped,
+    DialogMuted,
+    DialogUnmuted,
     Message,
     MessageBody,
     MessageCreated,
@@ -29,7 +35,11 @@ from maxo.types import (
     Recipient,
     SendMessageResult,
 )
+from maxo.types.chat import Chat as MaxChat
+from maxo.types.link_button import LinkButton
+from maxo.types.simple_query_result import SimpleQueryResult
 from maxo.types.update_context import UpdateContext
+from maxo.utils.deeplink import create_start_link
 from sqlalchemy import Row, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import InMemoryBroker
@@ -37,6 +47,8 @@ from taskiq import InMemoryBroker
 from tests.conftest import PROBE_ROUTERS, RecordingBroker
 
 from zheka.bot import BotSetup
+from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
+from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
 from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
 from zheka.bot.handlers.menu.windows import MENU_TEXT
@@ -46,6 +58,8 @@ from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.middlewares.user import private_chat_id
 from zheka.bot.states import Consent, Menu
 from zheka.broker.task_names import TaskName
+from zheka.broker.tasks.chats import JOIN_HOUSE, on_bot_added, welcome_chat
+from zheka.broker.tasks.notifications import broadcast_to_chats
 from zheka.broker.tasks.requests import (
     attach_result_photo,
     send_executor_card,
@@ -55,6 +69,7 @@ from zheka.core.consent import CONSENT_TEXT
 from zheka.core.deeplinks import house_payload, org_invite_payload
 from zheka.core.enums import (
     CATEGORY_RULES,
+    ChatStatus,
     EventSource,
     EventType,
     OrgRole,
@@ -63,20 +78,25 @@ from zheka.core.enums import (
     RequestCompletionReason,
     RequestStatus,
     ResidentRole,
+    ResidentStatus,
 )
 from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, OrgId, RequestId, UserId
 from zheka.core.models import User
+from zheka.core.services.chats import CHAT_NOT_BOUND, CHAT_TAKEN, WRONG_CODE
 from zheka.core.services.orgs import INVITE_NOT_FOUND
 from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
 from zheka.core.texts import REQUEST_STATUS_LABELS
 from zheka.infra.database.models import (
+    Chat,
     House,
     OrgMember,
     Organization,
     Request,
     Resident,
 )
+from zheka.infra.database.repos.chats import ChatsRepo
+from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
@@ -84,7 +104,7 @@ from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
-from zheka.infra.max.sender import _chat_rate_limit, dialog_notify
+from zheka.infra.max.sender import _chat_rate_limit, dialog_notify, is_chat_admin
 
 
 class _RecordingBot(FakeBot):
@@ -211,35 +231,11 @@ async def test_a_message_from_a_house_chat_starts_nothing(
     assert message_manager.sent_messages == []
 
 
-async def test_a_message_from_a_house_chat_keeps_the_private_chat_id(
-    bot_container: AsyncContainer,  # noqa: ARG001
-    bot_setup: BotSetup,
-    fake_bot: FakeBot,
-    client: BotClient,
-    bot_session: AsyncSession,
-) -> None:
-    await client.send("/start")
-    max_user_id = MaxUserId(client.user.id)
-    group = BotClient(
-        bot_setup.dp,
-        user_id=max_user_id,
-        chat_id=MaxUserId(secrets.randbits(40)),
-        chat_type=ChatType.CHAT,
-        bot=fake_bot,
-    )
-
-    await group.send("привет соседям")
-
-    user = await _saved(bot_session, max_user_id)
-    assert user is not None
-    assert user.max_chat_id == MaxChatId(client.chat.chat_id)
-
-
 async def test_upsert_keeps_the_chat_id_when_the_update_brings_none(
     session: AsyncSession,
 ) -> None:
-    # прямая проверка coalesce: сообщение из чата дома приходит без id личного
-    # диалога, и затертый max_chat_id навсегда отрезал бы жителя от окон
+    # прямая проверка coalesce: мини-апп апсертит без id личного диалога на
+    # каждом запросе, и затертый max_chat_id навсегда отрезал бы жителя от окон
     repo = UsersRepo(session)
     max_user_id = _max_id()
 
@@ -934,7 +930,9 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
 ACCEPT_WORK = InlineButtonTextLocator("Принять")
 TOP_RATING = InlineButtonTextLocator(str(MAX_RATING))
 
-Show = tuple[ShowMode, str | None, int | None]
+# режим, текст, чат и звук: звук start_dialog кладет в ContextVar вокруг fg(),
+# и на входе в менеджер сообщений он еще виден
+Show = tuple[ShowMode, str | None, int | None, bool]
 
 
 @pytest.fixture
@@ -949,7 +947,12 @@ def shows(
 
     async def recording(bot: Any, new_message: Any, old_message: Any) -> Any:
         recorded.append(
-            (new_message.show_mode, new_message.text, new_message.recipient.chat_id),
+            (
+                new_message.show_mode,
+                new_message.text,
+                new_message.recipient.chat_id,
+                dialog_notify.get(),
+            ),
         )
         return await original(bot, new_message, old_message)
 
@@ -1015,7 +1018,7 @@ async def test_cards_announcing_something_new_are_sent_not_edited(
     await _run(task_broker, send_executor_card, request_id=request_id)
     await _run(task_broker, send_executor_card, request_id=request_id)
 
-    cards = [mode for mode, text, _ in shows if f"№{request_id}:" in (text or "")]
+    cards = [mode for mode, text, *_ in shows if f"№{request_id}:" in (text or "")]
     assert cards == [ShowMode.SEND, ShowMode.SEND]
 
 
@@ -1027,7 +1030,7 @@ async def test_the_review_card_is_sent_to_the_author(
 ) -> None:
     await _reviewing(bot_session, client, task_broker)
 
-    mode, _, chat_id = shows[-1]
+    mode, _, chat_id, _ = shows[-1]
     assert mode is ShowMode.SEND
     assert chat_id == client.chat.chat_id
 
@@ -1161,9 +1164,610 @@ async def test_a_refused_photo_rerenders_the_card_for_the_sender(
     enqueued = bot_broker.enqueued(TaskName.SEND_EXECUTOR_CARD)[-1]
     assert enqueued == {"request_id": request_id, "user_id": sender_id}
     await _run(task_broker, send_executor_card, **enqueued)
-    _, text, chat_id = shows[-1]
+    _, text, chat_id, _ = shows[-1]
     assert HANDED_OVER_TEXT.format(request_id=request_id) in (text or "")
     assert chat_id == client.chat.chat_id
     assert (await _status(bot_session, request_id)).status is (
         RequestStatus.IN_PROGRESS
     )
+
+
+async def _bot_stopped(client: BotClient) -> None:
+    await client.dp.feed_update(
+        MaxoUpdate(
+            update=BotStopped(
+                chat_id=client.chat.chat_id,
+                user=client.user,
+                timestamp=datetime.now(UTC),
+            ).as_(client.bot),
+        ),
+        client.bot,
+    )
+
+
+async def test_a_private_update_after_a_stop_revives_the_bot(
+    client: BotClient,
+    bot_session: AsyncSession,
+) -> None:
+    await client.send("/start")
+    max_user_id = MaxUserId(client.user.id)
+    await _bot_stopped(client)
+    stopped = await _saved(bot_session, max_user_id)
+    assert stopped is not None
+    assert stopped.bot_stopped_at is not None
+
+    await client.send("/start")
+
+    bot_session.expire_all()
+    revived = await _saved(bot_session, max_user_id)
+    assert revived is not None
+    assert revived.bot_stopped_at is None
+
+
+class _ChatApi:
+    # то, что MAX знает о чате дома: название, выход бота и его права
+    def __init__(self) -> None:
+        self.left: list[int] = []
+        self.is_admin = False
+
+    async def leave_chat(self, *, chat_id: int, **_: Any) -> SimpleQueryResult:
+        self.left.append(chat_id)
+        return SimpleQueryResult(success=True)
+
+    async def get_chat(self, *, chat_id: int, **_: Any) -> MaxChat:
+        return MaxChat(
+            chat_id=chat_id,
+            type=ChatType.CHAT,
+            status=MaxChatStatus.ACTIVE,
+            last_event_time=datetime.now(UTC),
+            is_public=False,
+            participants_count=3,
+            title=CHAT_TITLE,
+        )
+
+    async def get_membership(self, *, chat_id: int, **_: Any) -> Any:  # noqa: ARG002
+        return type("Membership", (), {"is_admin": self.is_admin})()
+
+
+CHAT_TITLE = "Соседи"
+
+
+@pytest.fixture
+def chat_api(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> _ChatApi:
+    api = _ChatApi()
+    for name in ("leave_chat", "get_chat", "get_membership"):
+        monkeypatch.setattr(fake_bot, name, getattr(api, name))
+    return api
+
+
+def _chat_id() -> MaxChatId:
+    return MaxChatId(-secrets.randbits(40))
+
+
+async def _added_by(broker: InMemoryBroker, chat_id: MaxChatId, **kwargs: Any) -> None:
+    await _run(
+        broker,
+        on_bot_added,
+        chat_id=chat_id,
+        **{"is_channel": False, **kwargs},
+    )
+
+
+async def test_the_bot_leaves_a_chat_added_by_a_stranger(
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=_max_id())
+
+    assert chat_api.left == [chat_id]
+    assert await ChatsRepo(bot_session).get(chat_id) is None
+
+
+async def _staff(session: AsyncSession, client: BotClient) -> HouseId:
+    user_id = await _started(session, client)
+    org_id, house_id = await _org_house(session)
+    session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.ADMIN))
+    await session.commit()
+    return house_id
+
+
+async def test_the_bot_leaves_a_channel(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    await _staff(bot_session, client)
+    chat_id = _chat_id()
+
+    await _added_by(
+        task_broker,
+        chat_id,
+        is_channel=True,
+        initiator_max_user_id=client.user.id,
+    )
+
+    assert chat_api.left == [chat_id]
+
+
+async def test_the_bot_leaves_when_it_cannot_reach_the_initiator(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    await _staff(bot_session, client)
+    await _bot_stopped(client)
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
+
+    assert chat_api.left == [chat_id]
+
+
+async def test_the_bot_leaves_when_the_initiator_never_started_it(
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    # строку users без личного чата заводит мини-апп: окно открыть некуда
+    max_user_id = _max_id()
+    user = User(max_user_id=max_user_id, name="Из мини-аппа")
+    bot_session.add(user)
+    await bot_session.flush()
+    user_id = user.id
+    org_id, _ = await _org_house(bot_session)
+    bot_session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.ADMIN))
+    await bot_session.commit()
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=max_user_id)
+
+    assert chat_api.left == [chat_id]
+
+
+async def test_the_bot_leaves_a_chat_added_by_a_user_of_no_house(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    await _started(bot_session, client)
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
+
+    assert chat_api.left == [chat_id]
+
+
+async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    shows: list[Show],
+) -> None:
+    house_id = await _staff(bot_session, client)
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
+    window = message_manager.last_message()
+    assert HOUSE_TEXT.format(title=CHAT_TITLE) in (window.body.text or "")
+    assert _shown(shows, HOUSE_TEXT.format(title=CHAT_TITLE))[0] is ShowMode.SEND
+    await client.click(window, InlineButtonTextLocator(house.address))
+    await client.click(message_manager.last_message(), READY)
+    assert NO_RIGHTS_YET in (message_manager.last_message().body.text or "")
+    chat_api.is_admin = True
+    await client.click(message_manager.last_message(), READY)
+
+    # окно дома живет в стеке чата: там «Готово» ведет на done, а в стеке по
+    # умолчанию увело бы в меню
+    text = message_manager.last_message().body.text or ""
+    assert BOUND_TEXT.format(title=CHAT_TITLE) in text
+    assert MENU_TEXT not in text
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.house_id == house_id
+    assert chat.bot_is_admin is True
+    assert bot_broker.enqueued(TaskName.WELCOME_CHAT)[-1] == {
+        "chat_id": chat_id,
+        "house_id": house_id,
+    }
+    assert chat_api.left == []
+
+
+async def test_a_resident_binds_the_chat_by_code(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    user_id = await _started(bot_session, client)
+    _, house_id = await _org_house(bot_session)
+    bot_session.add(
+        Resident(user_id=user_id, house_id=house_id, role=ResidentRole.OWNER)
+    )
+    await bot_session.commit()
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    code = house.chat_binding_code
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
+    assert CODE_TEXT.format(title=CHAT_TITLE) in (
+        message_manager.last_message().body.text or ""
+    )
+    assert _shown(shows, CODE_TEXT.format(title=CHAT_TITLE))[0] is ShowMode.SEND
+    await client.send("не тот код")
+    assert WRONG_CODE in (message_manager.last_message().body.text or "")
+    await client.send(code)
+    chat_api.is_admin = True
+    await client.click(message_manager.last_message(), READY)
+
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert BOUND_TEXT.format(title=CHAT_TITLE) in text
+    bot_session.expire_all()
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.house_id == house_id
+
+
+async def test_a_house_chat_event_creates_no_user(
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
+    fake_bot: FakeBot,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    # из чата дома в users не пишется никто: согласия там никто не давал, а
+    # бот-админ получает каждое сообщение
+    stranger = BotClient(bot_setup.dp, user_id=_max_id(), bot=fake_bot).user
+    chat_id = _chat_id()
+
+    await bot_setup.dp.feed_update(
+        MaxoUpdate(
+            update=BotAddedToChat(
+                chat_id=chat_id,
+                is_channel=False,
+                user=stranger,
+                timestamp=datetime.now(UTC),
+            ).as_(fake_bot),
+        ),
+        fake_bot,
+    )
+
+    assert await _saved(bot_session, MaxUserId(stranger.id)) is None
+    assert bot_broker.enqueued(TaskName.ON_BOT_ADDED)[-1] == {
+        "chat_id": chat_id,
+        "is_channel": False,
+        "initiator_max_user_id": stranger.id,
+    }
+
+
+async def test_a_bot_that_is_no_longer_in_the_chat_is_not_its_admin(
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def forbidden(**_: Any) -> Any:
+        raise MaxBotForbiddenError(code="chat.denied", error="", message="")
+
+    monkeypatch.setattr(fake_bot, "get_membership", forbidden)
+
+    assert await is_chat_admin(fake_bot, _chat_id()) is False
+
+
+async def _bound_chat(session: AsyncSession, client: BotClient) -> MaxChatId:
+    house_id = await _staff(session, client)
+    user = await _saved(session, MaxUserId(client.user.id))
+    assert user is not None
+    chat_id = _chat_id()
+    session.add(
+        Chat(
+            chat_id=chat_id,
+            house_id=house_id,
+            title=CHAT_TITLE,
+            bound_by=user.id,
+            bound_at=datetime.now(UTC),
+            bot_is_admin=True,
+            status=ChatStatus.ACTIVE,
+        ),
+    )
+    await session.commit()
+    return chat_id
+
+
+@pytest.fixture
+def refusing_chats(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def forbidden(**_: Any) -> Any:
+        raise MaxBotForbiddenError(code="chat.denied", error="", message="")
+
+    monkeypatch.setattr(fake_bot, "send_message", forbidden)
+
+
+async def _broadcast(broker: InMemoryBroker, chat_id: MaxChatId) -> int:
+    # Any, как в _run: по сигнатуре kiq требует и то, что подставит dishka
+    task: Any = broadcast_to_chats
+    sent = (
+        await task.kicker()
+        .with_broker(broker)
+        .kiq(
+            chat_ids=[chat_id],
+            text="Отключат воду",
+            buttons=None,
+        )
+    )
+    result = await sent.wait_result(timeout=5)
+    assert not result.is_err, result.error
+    return cast(int, result.return_value)
+
+
+@pytest.mark.usefixtures("refusing_chats")
+async def test_a_failed_chat_send_asks_the_binder_for_the_rights_again(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,  # noqa: ARG001
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+
+    assert await _broadcast(task_broker, chat_id) == 0
+
+    bot_session.expire_all()
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.bot_is_admin is False
+    mode, _, recipient, notify = _shown(shows, RIGHTS_TEXT.format(title=CHAT_TITLE))
+    assert mode is ShowMode.SEND
+    assert recipient == client.chat.chat_id
+    # бот без прав глушит весь дом, пока привязавший не нажмет
+    assert notify is True
+
+
+@pytest.mark.usefixtures("refusing_chats")
+async def test_a_failed_send_to_a_chat_with_rights_calls_nobody(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    chat_api.is_admin = True
+    chat_id = await _bound_chat(bot_session, client)
+
+    await _broadcast(task_broker, chat_id)
+
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.bot_is_admin is True
+    rights = RIGHTS_TEXT.format(title=CHAT_TITLE)
+    assert not [show for show in shows if rights in (show[1] or "")]
+
+
+async def _bot_removed(client: BotClient, chat_id: MaxChatId) -> None:
+    await client.dp.feed_update(
+        MaxoUpdate(
+            update=BotRemovedFromChat(
+                chat_id=chat_id,
+                is_channel=False,
+                user=client.user,
+                timestamp=datetime.now(UTC),
+            ).as_(client.bot),
+        ),
+        client.bot,
+    )
+
+
+async def _code_window(
+    session: AsyncSession,
+    client: BotClient,
+    broker: InMemoryBroker,
+) -> tuple[MaxChatId, str]:
+    user_id = await _started(session, client)
+    _, house_id = await _org_house(session)
+    session.add(Resident(user_id=user_id, house_id=house_id, role=ResidentRole.OWNER))
+    await session.commit()
+    house = await HousesRepo(session).get(house_id)
+    assert house is not None
+    code = house.chat_binding_code
+    chat_id = _chat_id()
+    await _added_by(broker, chat_id, initiator_max_user_id=client.user.id)
+    return chat_id, code
+
+
+@pytest.mark.usefixtures("chat_api")
+async def test_a_code_for_a_chat_the_bot_left_ends_on_the_menu(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    # окно кода живет в стеке по умолчанию: оставленное там, оно глотало бы
+    # каждое сообщение жителя
+    chat_id, code = await _code_window(bot_session, client, task_broker)
+    await _bot_removed(client, chat_id)
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.status == ChatStatus.REMOVED
+
+    await client.send(code)
+
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert CHAT_TAKEN in text
+
+
+@pytest.mark.usefixtures("chat_api")
+async def test_rights_for_a_chat_the_bot_left_end_on_the_menu(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, code = await _code_window(bot_session, client, task_broker)
+    await client.send(code)
+    await _bot_removed(client, chat_id)
+
+    await client.click(message_manager.last_message(), READY)
+
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert CHAT_NOT_BOUND in text
+
+
+async def _feed(client: BotClient, update: Any) -> None:
+    await client.dp.feed_update(MaxoUpdate(update=update.as_(client.bot)), client.bot)
+
+
+async def _events_of(
+    session: AsyncSession,
+    user_id: UserId,
+    event: EventType,
+) -> int:
+    stmt = select(events_table).where(
+        events_table.c.type == event,
+        events_table.c.user_id == user_id,
+    )
+    return len((await session.execute(stmt)).all())
+
+
+async def test_mute_is_recorded(client: BotClient, bot_session: AsyncSession) -> None:
+    user_id = await _started(bot_session, client)
+
+    await _feed(
+        client,
+        DialogMuted(
+            chat_id=client.chat.chat_id,
+            muted_until=datetime.now(UTC),
+            user=client.user,
+            timestamp=datetime.now(UTC),
+        ),
+    )
+
+    assert await _events_of(bot_session, user_id, EventType.BOT_MUTED) == 1
+
+
+async def test_unmute_is_recorded(client: BotClient, bot_session: AsyncSession) -> None:
+    user_id = await _started(bot_session, client)
+
+    await _feed(
+        client,
+        DialogUnmuted(
+            chat_id=client.chat.chat_id,
+            user=client.user,
+            timestamp=datetime.now(UTC),
+        ),
+    )
+
+    assert await _events_of(bot_session, user_id, EventType.BOT_UNMUTED) == 1
+
+
+async def test_the_welcome_carries_the_link_to_the_house(
+    task_broker: InMemoryBroker,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent: list[dict[str, Any]] = []
+
+    async def recording(**kwargs: Any) -> Any:
+        sent.append(kwargs)
+        return None
+
+    monkeypatch.setattr(fake_bot, "send_message", recording)
+    chat_id = _chat_id()
+    house_id = HouseId(secrets.randbits(20))
+
+    await _run(task_broker, welcome_chat, chat_id=chat_id, house_id=house_id)
+
+    [message] = sent
+    assert message["chat_id"] == chat_id
+    assert message["notify"] is False
+    [attachment] = message["attachments"]
+    assert attachment.payload.buttons == [
+        [
+            LinkButton(
+                text=JOIN_HOUSE,
+                url=create_start_link(fake_bot, house_payload(house_id)),
+            ),
+        ],
+    ]
+
+
+async def test_the_bot_leaves_a_chat_added_by_an_executor(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    # исполнитель не сотрудник: ни домов для привязки, ни кода
+    user_id = await _started(bot_session, client)
+    org_id, _ = await _org_house(bot_session)
+    bot_session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.EXECUTOR))
+    await bot_session.commit()
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
+
+    assert chat_api.left == [chat_id]
+
+
+@pytest.mark.parametrize("chairman", [False, True])
+async def test_the_bot_leaves_a_chat_added_by_a_blocked_resident(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+    chairman: bool,
+) -> None:
+    # заблокированному жителю окно кода не положено: bind_by_code проверяет
+    # только код, и с ним он привязал бы чат
+    user_id = await _started(bot_session, client)
+    _, house_id = await _org_house(bot_session)
+    bot_session.add(
+        Resident(
+            user_id=user_id,
+            house_id=house_id,
+            role=ResidentRole.OWNER,
+            status=ResidentStatus.BLOCKED,
+            is_chairman=chairman,
+        ),
+    )
+    await bot_session.commit()
+    chat_id = _chat_id()
+
+    await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
+
+    assert chat_api.left == [chat_id]
+
+
+@pytest.mark.usefixtures("chat_api")
+async def test_a_delivered_chat_message_is_counted(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+
+    assert await _broadcast(task_broker, chat_id) == 1
+
+
+async def test_a_mini_app_upsert_keeps_the_stop_mark(session: AsyncSession) -> None:
+    # запрос мини-аппа не доказывает, что личный диалог с ботом снова жив
+    repo = UsersRepo(session)
+    max_user_id = _max_id()
+    await repo.upsert_by_max_id(max_user_id, "Житель", None, MaxChatId(777))
+    await repo.set_bot_stopped(max_user_id, datetime.now(UTC))
+
+    user = await repo.upsert_by_max_id(max_user_id, "Житель", None, None)
+
+    assert user.bot_stopped_at is not None

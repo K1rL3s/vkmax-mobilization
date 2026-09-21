@@ -2,16 +2,26 @@ import logging
 from collections.abc import Sequence
 
 from dishka.integrations.taskiq import FromDishka, inject
+from maxo import Bot
+from maxo.dialogs import ShowMode
+from maxo.errors import MaxBotApiError, MaxBotNetworkError
 from maxo.types.buttons import InlineButtons
 from maxo.types.link_button import LinkButton
 from taskiq import async_shared_broker
 
+from zheka.bot.dialog_data import ChatBindingData
+from zheka.bot.states import ChatBinding
 from zheka.broker.task_names import TaskName
+from zheka.broker.tasks.chats import chat_stack
 from zheka.core.enums import NotificationCategory
+from zheka.core.errors import ZhekaError
 from zheka.core.ids import MaxChatId, UserId
 from zheka.core.notifications import Buttons, resolve_notify
+from zheka.core.services.chats import ChatsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
+from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
+from zheka.infra.max.sender import is_chat_admin
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +120,9 @@ async def broadcast_to_chats(
     text: str,
     buttons: Buttons | None,
     sender: FromDishka[MaxSender],
+    bot: FromDishka[Bot],
+    chats_service: FromDishka[ChatsService],
+    users_repo: FromDishka[UsersRepo],
 ) -> int:
     # у чата нет ни настроек уровня, ни получателя, чей уровень можно
     # разрешить, поэтому здесь стоит продуктовый дефолт - тот же, что в
@@ -117,12 +130,44 @@ async def broadcast_to_chats(
     # строку
     keyboard = _keyboard(buttons)
     logger.info("Рассылка по чатам: чатов %s", len(chat_ids))
+    sent = 0
     for chat_id in chat_ids:
-        await sender.send_message(
+        result = await sender.send_message(
             text,
             chat_id=chat_id,
             notify=False,
             keyboard=keyboard,
         )
-    logger.info("Рассылка по чатам: отправлено %s", len(chat_ids))
-    return len(chat_ids)
+        if result is not None:
+            sent += 1
+            continue
+
+        # события о смене прав MAX не шлет: не ушло - перепроверяем права и
+        # зовем того, кто привязывал, на единственную кнопку, которая это чинит
+        try:
+            is_admin = await is_chat_admin(bot, chat_id)
+            chat = await chats_service.set_admin(chat_id, is_admin)
+        except (MaxBotApiError, MaxBotNetworkError, ZhekaError):
+            logger.exception("Права бота в чате %s не перепроверены", chat_id)
+            continue
+        binder = (
+            None
+            if is_admin or chat.bound_by is None
+            else await users_repo.get_by_id(UserId(chat.bound_by))
+        )
+        if binder is None:
+            continue
+        # со звуком: бот без прав глушит весь дом, пока кто-то не нажмет
+        await sender.start_dialog(
+            ChatBinding.rights,
+            binder,
+            notify=True,
+            data=ChatBindingData(
+                chat_id=int(chat_id), title=chat.title or ""
+            ).to_data(),
+            stack_id=chat_stack(chat_id),
+            show_mode=ShowMode.SEND,
+        )
+
+    logger.info("Рассылка по чатам: отправлено %s из %s", sent, len(chat_ids))
+    return sent

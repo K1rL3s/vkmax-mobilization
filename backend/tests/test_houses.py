@@ -10,17 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.conftest import OrgHouseFlatUser
 
 from zheka.api.schemas.houses import ResidencySummary
-from zheka.core.enums import EventSource, OrgRole, ResidentRole
+from zheka.core.enums import ChatStatus, EventSource, OrgRole, ResidentRole
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import FlatId, HouseId, OrgId, UserId
+from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService
-from zheka.infra.database.models import Flat, House
+from zheka.infra.database.models import Chat, Flat, House
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -592,3 +592,25 @@ async def test_flats_are_listed_to_a_resident_of_the_house(
     assert total == 2
     assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
     assert taken == {own.flat_id}
+
+
+async def test_a_chat_the_bot_was_removed_from_is_not_bound(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    # удаленный из чата бот оставляет bound_at, а написать туда уже нельзя
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    session.add(
+        Chat(
+            chat_id=MaxChatId(secrets.randbits(48)),
+            house_id=data.house_id,
+            title="Дом",
+            bound_at=datetime.now(UTC),
+            status=ChatStatus.REMOVED,
+        ),
+    )
+    await session.flush()
+    repo = HousesRepo(session)
+
+    assert await repo.is_chat_bound(data.house_id) is False
+    assert await repo.bound_chat_titles([data.house_id]) == {}

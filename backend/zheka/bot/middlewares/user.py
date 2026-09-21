@@ -38,9 +38,11 @@ class UserMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
         users_repo = await container.get(UsersRepo)
         max_user = context.user
 
-        if isinstance(max_user, FakeUser):
+        if isinstance(max_user, FakeUser) or context.chat_type is not ChatType.DIALOG:
             # окно, которое открыла задача: FakeUser собран из одних id, имя в
-            # нем пустое, и апсерт затер бы им настоящее
+            # нем пустое, и апсерт затер бы им настоящее. Из чата дома бот-админ
+            # получает каждое сообщение, и апсерт завел бы строку users всем,
+            # кто там пишет, хотя согласия никто из них не давал
             user = await users_repo.get_by_max_id(MaxUserId(max_user.id))
         else:
             user = await users_repo.upsert_by_max_id(

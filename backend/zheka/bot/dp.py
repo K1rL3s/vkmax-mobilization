@@ -14,12 +14,15 @@ from maxo.integrations.magic_filter import MagicData
 
 from zheka.base import ZhekaType
 from zheka.bot.handlers import (
+    chat_binding_dialog,
+    chats_router,
     commands_router,
     consent_dialog,
     deeplinks_router,
     error_router,
     executor_dialog,
     fallback_router,
+    lifecycle_router,
     menu_dialog,
     onboarding_dialog,
     request_dialog,
@@ -113,10 +116,14 @@ def make_dispatcher(
         request_dialog,
         executor_dialog,
         review_dialog,
+        chat_binding_dialog,
         fallback_router,
     )
 
-    dp.include(error_router, private_router)
+    # остановка и звук приходят из лички, добавление и удаление бота - из
+    # чата дома. Ни то ни другое не окна личного потока, и фильтр
+    # private_router висит не на их обсерверах
+    dp.include(error_router, lifecycle_router, chats_router, private_router)
 
     media_id_storage = MediaIdStorage()
     factory = setup_dialogs(

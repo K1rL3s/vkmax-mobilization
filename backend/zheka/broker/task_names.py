@@ -12,3 +12,5 @@ class TaskName(StrEnum):
     SEND_EXECUTOR_CARD = "send_executor_card"
     SEND_REVIEW_CARD = "send_review_card"
     ATTACH_RESULT_PHOTO = "attach_result_photo"
+    ON_BOT_ADDED = "on_bot_added"
+    WELCOME_CHAT = "welcome_chat"

@@ -1,7 +1,7 @@
 from zheka.core.enums.analytics import MetricUnit
 from zheka.core.enums.announcements import AnnouncementChannel
 from zheka.core.enums.appointments import AppointmentStatus
-from zheka.core.enums.chats import ChatStatus
+from zheka.core.enums.chats import ChatBinder, ChatStatus
 from zheka.core.enums.events import EventSource, EventType
 from zheka.core.enums.meters import (
     SERVICE_LABELS,
@@ -38,6 +38,7 @@ __all__ = (
     "AnnouncementChannel",
     "AppointmentStatus",
     "CategoryRule",
+    "ChatBinder",
     "ChatStatus",
     "EventSource",
     "EventType",

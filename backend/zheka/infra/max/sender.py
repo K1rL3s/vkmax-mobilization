@@ -148,3 +148,16 @@ class MaxSender:
             logger.exception("MAX отказал в отправке сообщения")
         finally:
             dialog_notify.reset(token)
+
+
+async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:
+    # события о смене прав бота в MAX нет, поэтому права спрашиваются сами.
+    # 403 и 404 значат, что бота в чате уже нет, а сбой сети или сервера
+    # ничего о правах не говорит и поднимается дальше
+    # под потолком бота: рассылка по чатам зовет это на каждый недошедший чат
+    try:
+        async with BOT_RATE_LIMIT:
+            member = await bot.get_membership(chat_id=chat_id)
+    except (MaxBotForbiddenError, MaxBotNotFoundError):
+        return False
+    return member.is_admin

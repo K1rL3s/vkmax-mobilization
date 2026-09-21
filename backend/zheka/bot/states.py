@@ -43,3 +43,10 @@ class Review(StatesGroup):
     card = State()
     rating = State()
     rejection = State()
+
+
+class ChatBinding(StatesGroup):
+    house = State()
+    code = State()
+    rights = State()
+    done = State()

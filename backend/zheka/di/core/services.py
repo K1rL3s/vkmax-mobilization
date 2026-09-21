@@ -7,6 +7,7 @@ from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.charges import ChargesService
+from zheka.core.services.chats import ChatsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
@@ -349,5 +350,24 @@ class ServicesProvider(Provider):
             access_repo,
             houses_repo,
             residents_repo,
+            events_service,
+        )
+
+    @provide
+    def chats_service(
+        self,
+        chats_repo: ChatsRepo,
+        houses_repo: HousesRepo,
+        orgs_repo: OrgsRepo,
+        residents_repo: ResidentsRepo,
+        notifications_service: NotificationsService,
+        events_service: EventsService,
+    ) -> ChatsService:
+        return ChatsService(
+            chats_repo,
+            houses_repo,
+            orgs_repo,
+            residents_repo,
+            notifications_service,
             events_service,
         )
