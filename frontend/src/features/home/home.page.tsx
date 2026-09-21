@@ -9,6 +9,7 @@ import {
 } from "@maxhub/max-ui";
 import { generatePath, Link, useNavigate } from "react-router-dom";
 
+import { confirmationCaption } from "@/features/flat-confirmation";
 import { useHouseCard } from "@/features/house";
 import { useReadingsHint } from "@/features/meters";
 import {
@@ -24,10 +25,10 @@ import { cn } from "@/shared/lib/css";
 import { useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 import { Card } from "@/shared/ui/card";
+import { Chevron } from "@/shared/ui/chevron";
 import {
   alertIcon,
   buildingIcon,
-  chevronSmallIcon,
   homeIcon,
   Icon,
   megaphoneIcon,
@@ -48,10 +49,6 @@ const NEWS_ICON: Record<NewsKind, { src: string; className: string }> = {
   alert: { src: alertIcon, className: styles.NewsIconAlert },
   announcement: { src: megaphoneIcon, className: styles.NewsIconAnnouncement },
 };
-
-const Chevron = () => (
-  <Icon src={chevronSmallIcon} size={12} className={styles.Chevron} />
-);
 
 const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
   const navigate = useNavigate();
@@ -160,7 +157,7 @@ const HomePage = () => {
       <Flex asChild align="center" gap={12}>
         <Tappable
           className={styles.HouseCard}
-          onClick={() => void navigate(Routes.RESIDENCIES)}
+          onClick={() => void navigate(Routes.FLAT)}
         >
           <IconTile icon={homeIcon} tone="card" size="large" />
           <Flex
@@ -179,7 +176,7 @@ const HomePage = () => {
             </Typography.Text>
             <Typography.Text variant="description" color="secondary">
               {house.city}
-              {residency?.verified && " · квартира подтверждена"}
+              {residency && ` · ${confirmationCaption(residency)}`}
             </Typography.Text>
           </Flex>
           <Chevron />

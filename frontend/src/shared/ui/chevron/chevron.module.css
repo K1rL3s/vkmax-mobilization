@@ -1,0 +1,4 @@
+.Chevron {
+  /* в SVG из макета уже заложена прозрачность 28% */
+  color: var(--text-primary);
+}

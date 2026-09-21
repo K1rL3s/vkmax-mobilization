@@ -991,6 +991,50 @@ export const flatListItem = (flat: MockFlat): Schemas["FlatListItem"] => ({
   is_taken: TAKEN_FLAT_IDS.has(flat.id),
 });
 
+export const flatCard = (
+  flat: MockFlat,
+  residency: MockResidency,
+): Schemas["FlatCard"] => {
+  const house = findHouse(flat.house_id);
+  const canSeeCharges = residency.role === "owner";
+
+  return {
+    id: flat.id,
+    house_id: flat.house_id,
+    address: house ? address(house) : "",
+    number: flat.number,
+    role: residency.role,
+    verified: residency.verified,
+    can_see_charges: canSeeCharges,
+    can_vote: canSeeCharges,
+    meters_count: flatMeters(flat.id).length,
+    residents_count: state.residencies.filter(
+      (item) => item.flat_id === flat.id,
+    ).length,
+    entrance: flat.entrance,
+    area: flat.area,
+    // хвост лицевого счета видит только подтвержденный житель с доступом к
+    // начислениям: арендатору счет не показывают вовсе
+    account_no:
+      residency.verified && canSeeCharges ? flat.account_no.slice(-4) : null,
+    verification_status: latestVerification(flat.id)?.status ?? null,
+  };
+};
+
+export const removeResidency = (residentId: number): boolean => {
+  const next = state.residencies.filter(
+    (residency) => residency.resident_id !== residentId,
+  );
+
+  if (next.length === state.residencies.length) {
+    return false;
+  }
+
+  state.residencies = next;
+
+  return true;
+};
+
 export function residencySummary(
   residency: MockResidency,
 ): Schemas["ResidencySummary"] {

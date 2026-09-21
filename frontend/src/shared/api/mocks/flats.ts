@@ -2,6 +2,8 @@ import { badRequest, conflict, forbidden, notFound, ok, route } from "./reply";
 import {
   addVerification,
   findFlat,
+  flatCard,
+  residencies,
   latestVerification,
   residencyForHouse,
   setVerified,
@@ -34,6 +36,24 @@ const resolve = (rawFlatId: string) => {
 };
 
 export const flatsConfigs = [
+  {
+    path: "/flats/:flat_id" as const,
+    method: "get" as const,
+    routes: [
+      route((request) => {
+        const flat = findFlat(Number(request.params.flat_id));
+        // карточку открывает житель именно этой квартиры, а не дома: до
+        // подтверждения flat_id у привязки пустой, и открывать нечего
+        const residency = residencies().find(
+          (item) => item.flat_id === flat?.id,
+        );
+
+        return flat && residency
+          ? ok(flatCard(flat, residency))
+          : notFound(FLAT_NOT_FOUND);
+      }),
+    ],
+  },
   {
     path: "/flats/:flat_id/verify" as const,
     method: "post" as const,

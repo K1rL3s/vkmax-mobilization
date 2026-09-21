@@ -75,6 +75,10 @@ const router = createBrowserRouter([
             element: <PushedPage fallback={Routes.HOME} />,
             children: [
               {
+                path: Routes.FLAT,
+                lazy: () => import("@/features/flat/flat.page"),
+              },
+              {
                 path: Routes.METERS,
                 lazy: () => import("@/features/meters/meters.page"),
               },

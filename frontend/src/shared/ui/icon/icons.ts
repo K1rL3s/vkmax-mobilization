@@ -5,6 +5,7 @@ import cameraIcon from "./camera.svg";
 import checkIcon from "./check.svg";
 import chevronSmallIcon from "./chevron-small.svg";
 import clockIcon from "./clock.svg";
+import closeIcon from "./close.svg";
 import dropletIcon from "./droplet.svg";
 import elevatorIcon from "./elevator.svg";
 import flameIcon from "./flame.svg";
@@ -19,6 +20,7 @@ import navMeetingsIcon from "./nav-meetings.svg";
 import navProfileIcon from "./nav-profile.svg";
 import navRequestsIcon from "./nav-requests.svg";
 import phoneIcon from "./phone.svg";
+import plusIcon from "./plus.svg";
 import pollIcon from "./poll.svg";
 import receiptIcon from "./receipt.svg";
 import searchOutlineIcon from "./search-outline.svg";
@@ -37,6 +39,7 @@ export {
   checkIcon,
   chevronSmallIcon,
   clockIcon,
+  closeIcon,
   dropletIcon,
   elevatorIcon,
   flameIcon,
@@ -51,6 +54,7 @@ export {
   navProfileIcon,
   navRequestsIcon,
   phoneIcon,
+  plusIcon,
   pollIcon,
   receiptIcon,
   searchOutlineIcon,

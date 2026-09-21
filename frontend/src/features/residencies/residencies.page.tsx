@@ -1,77 +1,116 @@
 import {
   Button,
-  CellList,
+  CellAction,
   CellSimple,
+  IconButton,
   Panel,
   Typography,
 } from "@maxhub/max-ui";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
+import { confirmationCaption } from "@/features/flat-confirmation";
+import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
-import { useSession, type Residency } from "@/shared/model/session";
-import { checkIcon, homeIcon, Icon } from "@/shared/ui/icon";
+import { type Residency } from "@/shared/model/session";
+import { closeIcon, homeIcon, Icon, plusIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
+
+import { UnlinkDialog } from "./unlink-dialog";
+import { useResidencySwitcher } from "./use-residency-switcher";
+import { useUnlink } from "./use-unlink";
 
 import styles from "./residencies.module.css";
 
 const flatOf = (residency: Residency) => {
+  const caption = confirmationCaption(residency);
+
   if (residency.flat_number === null || residency.flat_number === undefined) {
-    return "Квартира не выбрана";
+    return caption;
   }
 
-  return `кв. ${residency.flat_number} · ${residency.verified ? "подтверждена" : "нужно подтвердить"}`;
+  return `кв. ${residency.flat_number} · ${caption}`;
 };
 
 const ResidenciesPage = () => {
   const navigate = useNavigate();
-  const { residencies, currentResidency, select } = useSession();
-
-  const open = async (residency: Residency) => {
-    if (residency.resident_id !== currentResidency?.resident_id) {
-      await select(residency.resident_id);
-    }
-
-    await navigate(Routes.HOME);
-  };
+  const switcher = useResidencySwitcher();
+  const unlink = useUnlink();
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <CellList mode="island">
-        {residencies.map((residency) => {
-          const isCurrent =
-            residency.resident_id === currentResidency?.resident_id;
+      <div className={styles.Content}>
+        <div className={styles.Panel}>
+          {switcher.residencies.map((residency, index) => {
+            const isMarked = switcher.isMarked(residency);
 
-          return (
-            <CellSimple
-              key={residency.resident_id}
-              before={
-                <IconTile
-                  icon={homeIcon}
-                  tone={isCurrent ? "themed" : "neutral"}
-                />
-              }
-              title={residency.address}
-              subtitle={flatOf(residency)}
-              after={
-                isCurrent && <Icon src={checkIcon} className={styles.Check} />
-              }
-              onClick={() => void open(residency)}
-            />
-          );
-        })}
-      </CellList>
+            return (
+              <CellSimple
+                key={residency.resident_id}
+                className={cn(isMarked && styles.marked)}
+                separator={index > 0}
+                before={
+                  <IconTile
+                    icon={homeIcon}
+                    tone={isMarked ? "themed" : "neutral"}
+                  />
+                }
+                title={residency.address}
+                subtitle={flatOf(residency)}
+                after={
+                  <IconButton
+                    size="xsmall"
+                    variant="ghost"
+                    aria-label={`Отвязаться от дома ${residency.address}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      unlink.ask(residency);
+                    }}
+                  >
+                    <Icon src={closeIcon} size={18} className={styles.Close} />
+                  </IconButton>
+                }
+                onClick={() => switcher.mark(residency)}
+              />
+            );
+          })}
 
-      <Button asChild size="large" variant="secondary" stretched>
-        <Link to={Routes.ONBOARDING_HOUSE}>Добавить дом</Link>
-      </Button>
+          <CellAction
+            mode="primary"
+            before={<Icon src={plusIcon} />}
+            onClick={() => void navigate(Routes.ONBOARDING_HOUSE)}
+          >
+            Добавить дом
+          </CellAction>
+        </div>
 
-      <Typography.Text
-        variant="description"
-        color="tertiary"
-        className={styles.Note}
-      >
-        Заявки, показания и собрания кабинет показывает для выбранного адреса
-      </Typography.Text>
+        <Typography.Text
+          variant="description"
+          color="tertiary"
+          className={styles.Note}
+        >
+          Заявки, показания и собрания кабинет показывает для выбранного адреса
+        </Typography.Text>
+      </div>
+
+      <div className={styles.Footer}>
+        <Button
+          size="large"
+          stretched
+          loading={switcher.isSwitching}
+          disabled={!switcher.marked}
+          onClick={() => void switcher.confirm()}
+        >
+          Подтвердить
+        </Button>
+      </div>
+
+      <UnlinkDialog
+        target={unlink.target}
+        isPending={unlink.isPending}
+        isFailed={unlink.isFailed}
+        onConfirm={unlink.submit}
+        onClose={unlink.cancel}
+      />
     </Panel>
   );
 };

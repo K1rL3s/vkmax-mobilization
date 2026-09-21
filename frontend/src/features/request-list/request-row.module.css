@@ -20,11 +20,6 @@
   white-space: nowrap;
 }
 
-.Chevron {
-  /* в SVG из макета уже заложена прозрачность 28% */
-  color: var(--text-primary);
-}
-
 .StatusPill {
   flex-shrink: 0;
   padding: 2px 8px;

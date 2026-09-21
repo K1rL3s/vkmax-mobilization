@@ -16,6 +16,7 @@ import {
   houseCard,
   houseFlats,
   houseListItem,
+  removeResidency,
   residencySummary,
   residencyForHouse,
   searchHouses,
@@ -118,6 +119,17 @@ export const housesConfigs = [
 
         return ok(residencySummary(residency));
       }),
+    ],
+  },
+  {
+    path: "/residencies/:resident_id" as const,
+    method: "delete" as const,
+    routes: [
+      route((request) =>
+        removeResidency(Number(request.params.resident_id))
+          ? ok({ ok: true })
+          : notFound("Привязка к дому не найдена"),
+      ),
     ],
   },
   {

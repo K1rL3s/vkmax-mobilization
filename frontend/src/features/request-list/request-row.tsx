@@ -13,7 +13,7 @@ import {
 import { cn } from "@/shared/lib/css";
 import { formatDay, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
-import { chevronSmallIcon, Icon } from "@/shared/ui/icon";
+import { Chevron } from "@/shared/ui/chevron";
 import { IconTile } from "@/shared/ui/icon-tile";
 
 import styles from "./request-row.module.css";
@@ -106,7 +106,7 @@ export const RequestRow = ({ request }: { request: RequestListItem }) => {
         )}
       </Flex>
 
-      <Icon src={chevronSmallIcon} size={12} className={styles.Chevron} />
+      <Chevron />
     </Tappable>
   );
 };

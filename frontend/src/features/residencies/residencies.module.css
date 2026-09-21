@@ -1,13 +1,39 @@
 .Page {
+  display: flex;
   flex: 1;
-  gap: 16px;
-  padding: 16px 16px 24px;
+  flex-direction: column;
 
-  .Check {
-    color: var(--icon-themed);
+  .Content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 16px 24px;
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Close {
+    color: var(--icon-tertiary);
+  }
+
+  .marked {
+    background-color: color-mix(
+      in srgb,
+      var(--button-primary) 10%,
+      transparent
+    );
   }
 
   .Note {
     text-align: center;
+  }
+
+  .Footer {
+    padding: 12px 16px;
   }
 }
