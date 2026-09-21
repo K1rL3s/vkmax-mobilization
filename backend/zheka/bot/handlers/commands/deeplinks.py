@@ -53,16 +53,14 @@ async def deeplink_handler(
     flats_service: FromDishka[FlatsService],
     demo_service: FromDishka[DemoService],
 ) -> Any:
-    # роутер стоит раньше commands_router, а maxo останавливается на первом
-    # обработчике, вернувшем не UNHANDLED. Поэтому разобранная ссылка съедает
-    # апдейт и пишет BOT_START со своим источником, а неразобранная обязана
-    # вернуть UNHANDLED: вернув None, она оставила бы жителя с немым ботом
+    # неразобранная ссылка обязана вернуть UNHANDLED и провалиться в /start:
+    # None съел бы апдейт и оставил жителя с немым ботом
     payload = update.payload
     if is_not_defined(payload) or not payload:
         return UNHANDLED
 
     deeplink = parse_deeplink(payload)
-    if deeplink is None or deeplink.kind not in _SOURCE_BY_KIND:
+    if deeplink is None:
         return UNHANDLED
 
     await events_service.record(
@@ -109,9 +107,7 @@ async def open_deeplink(
         await flats_service.activate_invite(user_id, deeplink.value)
         await _menu(dialog_manager, FLAT_JOINED)
     elif deeplink.kind is DeeplinkKind.ORG_REGISTER:
-        # OpenAppButton умеет нести payload, но во фронте на startParam ничего
-        # не роутится - он только классифицирует источник открытия, поэтому
-        # код пока вводится в приложении руками
+        # фронт по startParam не роутит, поэтому код вводится в приложении руками
         await _menu(dialog_manager, REGISTER_NOTICE)
     elif deeplink.kind is DeeplinkKind.DEMO_STAFF:
         access = await demo_service.activate(user_id)
@@ -134,9 +130,8 @@ async def open_deeplink(
 
 
 async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> None:
-    # qr_<дом>_<подъезд>: parse_deeplink режет строку один раз, подъезд остается
-    # внутри value. Смазанная цифра на печатном коде не должна ронять вход -
-    # такая ссылка вырождается в обычный вход в дом
+    # в value qr-ссылки лежит и подъезд. Смазанная цифра на печатном коде
+    # не роняет вход, а вырождается в обычный вход в дом
     house_id, _, entrance = deeplink.value.partition("_")
     if not house_id.isdigit():
         await dialog_manager.start(Onboarding.method, mode=StartMode.RESET_STACK)

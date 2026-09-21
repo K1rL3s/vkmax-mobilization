@@ -74,8 +74,6 @@ async def save_photos(
     files_service: FilesService,
     photo_urls: Sequence[str],
 ) -> list[str]:
-    # фото скачиваются в задаче, а не в обработчике: у вебхука тридцать
-    # секунд, а у загрузки неизвестной длины гарантий нет
     photos = []
     for url in photo_urls:
         try:

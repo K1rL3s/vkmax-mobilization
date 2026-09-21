@@ -25,9 +25,7 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-# ИНН демо-организации не проходит контрольную сумму: такого ИНН нет ни у
-# одной настоящей организации, и он не столкнется ни с реестром, ни с
-# настоящей регистрацией
+# ИНН не проходит контрольную сумму и не столкнется ни с одной настоящей УК
 DEMO_INN = "9900000001"
 NOT_SEEDED = "Демо-доступ еще не готов: демо-данные не загружены"
 
@@ -63,10 +61,6 @@ def demo_flat_number(user_id: UserId) -> str:
     return f"Д{user_id}"
 
 
-def _line_json(line: ChargeLine) -> dict[str, object]:
-    return dataclasses.asdict(line)
-
-
 class DemoService:
     __slots__ = ("_charges", "_houses", "_meters", "_orgs", "_residents", "_users")
 
@@ -87,9 +81,7 @@ class DemoService:
         self._users = users_repo
 
     async def activate(self, user_id: UserId) -> DemoAccess:
-        # обе ссылки дают обе роли: один аккаунт видит продукт целиком.
-        # Согласие проверяется и здесь, как в HousesService.link: маршрут и
-        # бот до сервиса без него не пускают, но житель заводится не через link
+        # согласие проверяется и здесь: житель заводится не через HousesService.link
         user = await self._users.get_by_id(user_id)
         if user is None or user.consent_at is None:
             raise NotEnoughRights(CONSENT_REQUIRED)
@@ -156,10 +148,10 @@ class DemoService:
         # Текущий период остается открытым: подать его - то, ради чего
         # проверяющий пришел
         rng = Random(f"flat:{flat.house_id}:{flat.number}")
-        periods = [current_period(today)]
+        months = [current_period(today)]
         for _ in range(CHARGED_MONTHS + 1):
-            periods.insert(0, previous_period(periods[0]))
-        periods.pop()
+            months.insert(0, previous_period(months[0]))
+        periods = months[:-1]
 
         # по счетчику: показания по периодам и расход по периодам
         usage: dict[MeterType, list[dict[TariffZone, int]]] = {}
@@ -219,13 +211,7 @@ class DemoService:
                 period,
                 {meter_type: used[index] for meter_type, used in usage.items()},
             )
-            issued = datetime.combine(
-                periods[index + 1]
-                if index + 1 < len(periods)
-                else current_period(today),
-                time(6),
-                UTC,
-            )
+            issued = datetime.combine(months[index + 1], time(6), UTC)
             # оплачены все, кроме последней: демо-оплате есть что оплатить
             paid_at = (
                 None
@@ -235,7 +221,7 @@ class DemoService:
             await self._charges.add(
                 FlatId(flat.id),
                 period,
-                [_line_json(line) for line in lines],
+                [dataclasses.asdict(line) for line in lines],
                 sum(line.amount for line in lines),
                 issued,
                 paid_at,

@@ -16,7 +16,7 @@ from zheka.core.enums import (
     ResponsibilityZone,
 )
 from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
-from zheka.core.models import Request, RequestStatusLog
+from zheka.core.models import RequestStatusLog
 from zheka.core.services.admin_requests import (
     AdminRequestCardData,
     AdminRequestRow,
@@ -51,13 +51,6 @@ class RequestCategoryItem(BaseSchema):
         )
 
 
-def deadline_of(request: Request) -> datetime:
-    # норматив реакции по категории, от момента подачи: фронт красит просрочку
-    # сам, поэтому отдается срок, а не флаг
-    hours = CATEGORY_RULES[request.category].normative_hours
-    return request.created_at + timedelta(hours=hours)
-
-
 class RequestListItem(BaseSchema):
     id: RequestId
     created_at: datetime
@@ -78,11 +71,12 @@ class RequestListItem(BaseSchema):
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
         request = row.request
+        rule = CATEGORY_RULES[request.category]
         return cls(
             id=RequestId(request.id),
             created_at=request.created_at,
             category=request.category,
-            category_label=CATEGORY_RULES[request.category].label,
+            category_label=rule.label,
             description=request.description,
             status=request.status,
             channel=request.channel,
@@ -94,7 +88,8 @@ class RequestListItem(BaseSchema):
             ),
             executor_name=None if row.executor is None else row.executor.name,
             rating=request.rating,
-            deadline_at=deadline_of(request),
+            # фронт красит просрочку сам, поэтому отдается срок, а не флаг
+            deadline_at=request.created_at + timedelta(hours=rule.normative_hours),
             completion_reason=request.completion_reason,
         )
 
@@ -158,23 +153,17 @@ class RequestCard(RequestListItem):
         result_photos: list[FileRef],
     ) -> Self:
         request = card.request
-        return cls(
-            id=RequestId(request.id),
-            created_at=request.created_at,
-            category=request.category,
-            category_label=CATEGORY_RULES[request.category].label,
-            description=request.description,
-            status=request.status,
-            channel=request.channel,
-            has_photos=bool(photos),
-            group_size=card.group_size,
-            flat_number=None if card.flat is None else card.flat.number,
-            group_id=(
-                None if request.group_id is None else RequestGroupId(request.group_id)
+        base = RequestListItem.of_row(
+            RequestRow(
+                request=request,
+                flat=card.flat,
+                has_photos=bool(photos),
+                group_size=card.group_size,
+                executor=card.executor,
             ),
-            executor_name=None if card.executor is None else card.executor.name,
-            rating=request.rating,
-            deadline_at=deadline_of(request),
+        )
+        return cls(
+            **base.model_dump(),
             house_id=HouseId(request.house_id),
             address=card.house.address,
             org_name=None if card.org is None else card.org.name,
@@ -192,7 +181,6 @@ class RequestCard(RequestListItem):
                 else RequestId(request.parent_request_id)
             ),
             flat_id=None if request.flat_id is None else FlatId(request.flat_id),
-            completion_reason=request.completion_reason,
             auto_close_at=card.auto_close_at,
         )
 

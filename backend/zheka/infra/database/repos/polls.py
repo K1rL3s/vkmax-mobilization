@@ -60,8 +60,7 @@ class PollsRepo(BaseAlchemyRepo):
 
     async def get(self, poll_id: PollId) -> Poll | None:
         stmt = select(Poll).where(polls_table.c.id == poll_id)
-        # аннотация обязательна: Poll отображен императивно, и scalar()
-        # для такой сущности возвращает Any
+        # scalar() для императивно отображенной сущности возвращает Any
         poll: Poll | None = await self._session.scalar(stmt)
         return poll
 
@@ -74,20 +73,8 @@ class PollsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
-    async def list_for_house(
-        self,
-        house_id: HouseId,
-        status: PollStatus | None,
-    ) -> Sequence[Poll]:
-        # status фильтрует по сырому значению колонки. PollsService.list_polls
-        # запрашивает весь список (status=None) и сам решает, что показать,
-        # потому что строка может быть еще не переведена в CLOSED задачей
-        # close_expired_polls, а его ends_at уже прошел - "не врать"
-        # разбирает эффективный статус, не хранимый
+    async def list_for_house(self, house_id: HouseId) -> Sequence[Poll]:
         stmt = select(Poll).where(polls_table.c.house_id == house_id)
-        if status is not None:
-            stmt = stmt.where(polls_table.c.status == status)
-        stmt = stmt.order_by(polls_table.c.created_at.desc())
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
@@ -95,17 +82,11 @@ class PollsRepo(BaseAlchemyRepo):
         self,
         org_id: OrgId,
         house_id: HouseId | None,
-        status: PollStatus | None,
     ) -> Sequence[Poll]:
-        # polls.org_id проставляется только опросам от УК (у опроса
-        # председателя он пустой), поэтому это и есть граница организации -
-        # джойн через дом (scoped_to_org) здесь не нужен
+        # org_id есть только у опроса от УК, поэтому scoped_to_org не нужен
         stmt = select(Poll).where(polls_table.c.org_id == org_id)
         if house_id is not None:
             stmt = stmt.where(polls_table.c.house_id == house_id)
-        if status is not None:
-            stmt = stmt.where(polls_table.c.status == status)
-        stmt = stmt.order_by(polls_table.c.created_at.desc())
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
@@ -118,8 +99,6 @@ class PollsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def count_votes(self, poll_id: PollId) -> Sequence[PollVote]:
-        # агрегация (по опции, по квартире) - забота сервиса: там же лежит
-        # площадь квартир и чистая формула процента
         stmt = select(PollVote).where(poll_votes_table.c.poll_id == poll_id)
         result = await self._session.execute(stmt)
         return result.scalars().all()
@@ -134,9 +113,7 @@ class PollsRepo(BaseAlchemyRepo):
         *,
         counted_by_area: bool,
     ) -> Sequence[PollVote]:
-        # один голос на человека - это уникальный индекс (poll_id, user_id,
-        # option_id), а не чтение перед записью: весь выбор multiple-choice
-        # вставляется одним запросом, ON CONFLICT DO NOTHING гасит повтор
+        # повтор гасит уникальный индекс (poll_id, user_id, option_id)
         stmt = (
             pg_insert(PollVote)
             .values(
@@ -170,9 +147,8 @@ class PollsRepo(BaseAlchemyRepo):
         *,
         verified_only: bool,
     ) -> Sequence[FlatId]:
-        # counted_by_area читается с самой строки голоса, а не джойном на
-        # residents: резидент мог отвязаться от дома уже после голосования,
-        # и джойн молча вычеркнул бы его квартиру из кворума
+        # не джойн на residents: отвязавшийся после голоса житель выпал бы
+        # из кворума
         stmt = (
             select(poll_votes_table.c.flat_id)
             .where(
@@ -186,13 +162,7 @@ class PollsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return [FlatId(flat_id) for flat_id in result.scalars().all()]
 
-    async def close(self, poll_id: PollId) -> None:
-        # get() возвращает тот же объект из identity map сессии, что уже
-        # держит вызывающий сервис - мутация атрибута видна ему без
-        # повторного чтения, как у ResidentsRepo.set_status
-        poll = await self.get(poll_id)
-        if poll is None:
-            return
+    async def close(self, poll: Poll) -> None:
         poll.status = PollStatus.CLOSED
         await self._session.flush()
 

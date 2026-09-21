@@ -13,19 +13,9 @@ from zheka.api.schemas.polls import (
 )
 from zheka.core.enums import PollStatus
 from zheka.core.ids import HouseId, PollId
-from zheka.core.services.polls import PollDraft, PollsService
+from zheka.core.services.polls import PollsService
 
 router = APIRouter(tags=["Опросы"], route_class=DishkaRoute)
-
-
-def _draft(body: CreatePollRequest) -> PollDraft:
-    return PollDraft(
-        title=body.title,
-        description=body.description,
-        options=body.options,
-        ends_at=body.ends_at,
-        is_multiple=body.is_multiple,
-    )
 
 
 @router.get("/houses/{house_id}/polls", summary="Опросы дома")
@@ -49,7 +39,7 @@ async def create_poll(
     card = await polls_service.create(
         residency.user_id,
         house_id,
-        _draft(body),
+        body.draft(),
         org_id=None,
     )
     return PollCard.of_card(card)

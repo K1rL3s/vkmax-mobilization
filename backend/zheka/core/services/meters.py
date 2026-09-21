@@ -56,8 +56,6 @@ class MetersService:
         _checked_zone_count(draft.tariff_zones)
         serial = _stated_serial(draft.serial)
 
-        # ON CONFLICT вместо read-then-write: два параллельных нажатия иначе
-        # оба прошли бы проверку и оба вставили бы свою строку
         meter = await self._meters.add(
             flat_id,
             draft.type,

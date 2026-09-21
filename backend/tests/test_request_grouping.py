@@ -1,11 +1,10 @@
-import secrets
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, make_config, make_notifications_service
+from tests.conftest import OrgHouseFlatUser
+from tests.test_requests import _age, _complain, _events, _make_service, _neighbour
 
 from zheka.core.enums import (
     EventType,
@@ -14,122 +13,23 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
 )
-from zheka.core.ids import (
-    FlatId,
-    HouseId,
-    MaxUserId,
-    RequestGroupId,
-    RequestId,
-    UserId,
-)
+from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
 from zheka.core.models import Request
-from zheka.core.services.events import EventsService
-from zheka.core.services.files import FilesService
 from zheka.core.services.request_groups import (
     DEFAULT_GROUP_THRESHOLD,
     DEFAULT_GROUP_WINDOW_HOURS,
-    GroupingService,
     complaint_sources,
-    group_window_start,
-    should_form_group,
 )
-from zheka.core.services.requests import RequestDraft, RequestsService
-from zheka.infra.database.models import Event, Flat, RequestGroup, Resident, User
-from zheka.infra.database.repos.events import EventsRepo
-from zheka.infra.database.repos.houses import HousesRepo
-from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.models import RequestGroup
 from zheka.infra.database.repos.requests import RequestsRepo
-from zheka.infra.database.repos.residents import ResidentsRepo
-from zheka.infra.database.repos.users import UsersRepo
-from zheka.infra.database.tables.events import events_table
-from zheka.infra.database.tables.requests import request_groups_table, requests_table
-from zheka.infra.yandex import YandexClassifier
+from zheka.infra.database.tables.requests import request_groups_table
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
-
-
-def _make_service(session: AsyncSession) -> RequestsService:
-    return RequestsService(
-        RequestsRepo(session),
-        HousesRepo(session),
-        ResidentsRepo(session),
-        UsersRepo(session),
-        OrgsRepo(session),
-        FilesService(make_config().files, "test-token"),
-        GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
-        make_notifications_service(session),
-        EventsService(EventsRepo(session)),
-        YandexClassifier(make_config().yandex),
-    )
-
-
-async def _neighbour(
-    session: AsyncSession,
-    house_id: HouseId,
-    number: str,
-) -> UserId:
-    user = User(max_user_id=MaxUserId(secrets.randbits(48)), name=f"Сосед {number}")
-    flat = Flat(house_id=house_id, number=number)
-    session.add_all([user, flat])
-    await session.flush()
-    session.add(
-        Resident(
-            user_id=user.id,
-            house_id=house_id,
-            flat_id=flat.id,
-            role=ResidentRole.OWNER,
-        ),
-    )
-    await session.flush()
-    return UserId(user.id)
-
-
-async def _complain(
-    session: AsyncSession,
-    user_id: UserId,
-    house_id: HouseId,
-    category: RequestCategory = RequestCategory.LEAK,
-) -> Request:
-    service = _make_service(session)
-    card = await service.create(
-        user_id,
-        house_id,
-        RequestDraft(category=category, description="Течет стояк"),
-    )
-    return card.request
-
-
-async def _age(session: AsyncSession, request_id: RequestId, hours: int) -> None:
-    stmt = (
-        update(requests_table)
-        .where(requests_table.c.id == request_id)
-        .values(created_at=datetime.now(UTC) - timedelta(hours=hours))
-    )
-    await session.execute(stmt)
-    await session.flush()
 
 
 async def _groups(session: AsyncSession, house_id: HouseId) -> list[RequestGroup]:
     stmt = select(RequestGroup).where(request_groups_table.c.house_id == house_id)
     return list((await session.execute(stmt)).scalars().all())
-
-
-async def _events(session: AsyncSession, type_: EventType) -> list[Event]:
-    stmt = select(Event).where(events_table.c.type == type_)
-    return list((await session.execute(stmt)).scalars().all())
-
-
-def test_group_window_start_counts_back_from_now() -> None:
-    now = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
-
-    assert group_window_start(now, 24) == datetime(2026, 9, 16, 12, 0, tzinfo=UTC)
-
-
-def test_should_form_group_triggers_on_the_threshold_itself() -> None:
-    assert should_form_group(DEFAULT_GROUP_THRESHOLD, DEFAULT_GROUP_THRESHOLD) is True
-    assert should_form_group(DEFAULT_GROUP_THRESHOLD - 1, DEFAULT_GROUP_THRESHOLD) is (
-        False
-    )
 
 
 def test_complaint_sources_count_complainants_and_not_requests() -> None:

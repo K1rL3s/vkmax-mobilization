@@ -12,10 +12,6 @@ from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-# доступ к счетчику - общая забота ReadingsService (читает/подает показания)
-# и MetersService (заводит/правит счетчики): обе идут через квартиру и ее
-# резидентов, поэтому проверка и MeterCard живут в одном месте, а не по копии
-# на сервис
 FLAT_NOT_FOUND = "Квартира не найдена"
 METER_NOT_FOUND = "Счетчик не найден"
 NOT_VERIFIED = "Подтвердите квартиру, чтобы работать со счетчиками"
@@ -98,7 +94,6 @@ class MeterAccess:
                 return
 
         if resident is not None:
-            # свой житель квартиры, но не подтвержден или арендатор
             raise NotEnoughRights(CANNOT_MANAGE_METER)
         raise EntityNotFound(FLAT_NOT_FOUND)
 

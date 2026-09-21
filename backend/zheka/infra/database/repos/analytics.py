@@ -49,9 +49,8 @@ _R = requests_table.c
 
 
 def share(part: Any, whole: Any) -> ColumnElement[int]:
-    # доля в сотых процента и одно округление в конце. Оператор / в
-    # SQLAlchemy 2 - истинное деление: делитель уходит в numeric, а // был бы
-    # целочисленным. Пустое целое дает NULL, а не деление на ноль
+    # / в SQLAlchemy 2 - истинное деление в numeric, // округлил бы вниз.
+    # Пустое целое дает NULL, а не деление на ноль
     return cast(func.round(part * 10000 / func.nullif(whole, 0)), Integer)
 
 
@@ -141,7 +140,7 @@ class ExecutorRow(ZhekaType):
     user_id: UserId
     name: str
     closed: int
-    repeat_share: int | None
+    repeat_share: int
     median_time: int | None
     rating: int | None
 
@@ -326,7 +325,7 @@ class AnalyticsRepo(BaseAlchemyRepo):
                 users_table.c.id,
                 users_table.c.name,
                 func.coalesce(per_executor.c.closed, 0),
-                per_executor.c.repeat_share,
+                func.coalesce(per_executor.c.repeat_share, 0),
                 per_executor.c.median_time,
                 per_executor.c.rating,
             )

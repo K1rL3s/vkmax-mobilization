@@ -37,14 +37,6 @@ def rules_of(settings: OrgSettings | None) -> GroupingRules:
     )
 
 
-def group_window_start(now: datetime, hours: int) -> datetime:
-    return now - timedelta(hours=hours)
-
-
-def should_form_group(open_flat_count: int, threshold: int) -> bool:
-    return open_flat_count >= threshold
-
-
 def complaint_sources(requests: Sequence[Request]) -> set[tuple[str, int]]:
     # склейка считает жалобщиков, а не заявки: три жалобы из одной квартиры -
     # это одна протечка. Квартира важнее автора, потому что жильцы одной
@@ -79,13 +71,13 @@ class GroupingService:
     ) -> RequestGroupId | None:
         # склейка считается на записи, до того как житель увидит заявку:
         # иначе вместо кнопки «присоединиться» ему нечего показать
-        since = group_window_start(now, rules.window_hours)
+        since = now - timedelta(hours=rules.window_hours)
         house_id = HouseId(request.house_id)
         group = await self._requests.find_open_group(house_id, request.category, since)
         if group is not None:
             group_id = RequestGroupId(group.id)
             await self._requests.attach_to_group([request], group_id)
-            await self._joined(request, group_id)
+            await self.joined(request, group_id)
             return group_id
 
         open_requests = await self._requests.list_open_in_window(
@@ -94,7 +86,7 @@ class GroupingService:
             since,
         )
         sources = complaint_sources(open_requests)
-        if not should_form_group(len(sources), rules.threshold):
+        if len(sources) < rules.threshold:
             return None
 
         # окно группы начинается с самой ранней из собранных заявок, а не
@@ -112,9 +104,6 @@ class GroupingService:
         )
         return group_id
 
-    async def joined(self, request: Request, group_id: RequestGroupId) -> None:
-        await self._joined(request, group_id)
-
     async def similar(
         self,
         house_id: HouseId,
@@ -125,7 +114,7 @@ class GroupingService:
         exclude_user_id: UserId | None = None,
     ) -> SimilarRequests:
         # тот же набор, что считает склейка, но ничего не пишет
-        since = group_window_start(now, rules.window_hours)
+        since = now - timedelta(hours=rules.window_hours)
         group = await self._requests.find_open_group(house_id, category, since)
         open_requests = await self._requests.list_open_in_window(
             house_id,
@@ -144,15 +133,11 @@ class GroupingService:
             window_started_at=(
                 group.window_started_at
                 if group is not None
-                else (
-                    min(item.created_at for item in open_requests)
-                    if open_requests
-                    else None
-                )
+                else min((item.created_at for item in open_requests), default=None)
             ),
         )
 
-    async def _joined(self, request: Request, group_id: RequestGroupId) -> None:
+    async def joined(self, request: Request, group_id: RequestGroupId) -> None:
         sizes = await self._requests.count_by_group([group_id])
         await self._events.record(
             EventType.REQUEST_JOINED,

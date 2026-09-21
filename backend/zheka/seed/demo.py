@@ -108,11 +108,8 @@ class OrgProfile(ZhekaType):
     overdue: int
 
 
-# организации с историей все придуманы, и по имени это видно; ИНН каждой не
-# проходит контрольную сумму. Все пять стоят в Москве, городе федерального
-# значения: разрезы города и региона бенчмарк показывает, только когда
-# каждая организация с данными есть и в них. Качество истории у всех разное,
-# иначе места в рейтинге делились бы поровну
+# все пять в Москве: там регион и город совпадают, и оба разреза бенчмарка
+# видны. Профили разные на каждой метрике, иначе места делились бы поровну
 PROFILES = (
     OrgProfile(
         name="Демо-УК «Жэка Коммуналкин»",
@@ -555,50 +552,26 @@ class Seeder:
         raised = previous_period(current)
         since = date(current.year - 1, current.month, 1)
         rows = [
-            (ServiceType.COLD_WATER, "м³", 590_000, 660_500),
-            (ServiceType.HOT_WATER, "м³", 2_850_000, 3_190_000),
-            (ServiceType.ELECTRICITY, "кВт·ч", 79_900, 89_300),
+            (ServiceType.COLD_WATER, "м³", 590_000, since),
+            (ServiceType.COLD_WATER, "м³", 660_500, raised),
+            (ServiceType.HOT_WATER, "м³", 2_850_000, since),
+            (ServiceType.HOT_WATER, "м³", 3_190_000, raised),
+            (ServiceType.ELECTRICITY, "кВт·ч", 79_900, since),
+            (ServiceType.ELECTRICITY, "кВт·ч", 89_300, raised),
+            # содержание - модельное, взнос на капремонт - настоящий, из КР 1.1
+            (ServiceType.MAINTENANCE, "м²", 350_000, since),
+            (ServiceType.OVERHAUL, "м²", overhaul_rate, since),
         ]
-        tariffs = []
-        for service, unit, before, after in rows:
-            tariffs.append(
-                Tariff(
-                    house_id=house.id,
-                    service=service,
-                    value=before,
-                    unit=unit,
-                    valid_from=since,
-                ),
-            )
-            tariffs.append(
-                Tariff(
-                    house_id=house.id,
-                    service=service,
-                    value=after,
-                    unit=unit,
-                    valid_from=raised,
-                ),
-            )
-        # содержание - модельное, взнос на капремонт - настоящий, из КР 1.1
-        tariffs.append(
+        self._session.add_all(
             Tariff(
                 house_id=house.id,
-                service=ServiceType.MAINTENANCE,
-                value=350_000,
-                unit="м²",
-                valid_from=since,
-            ),
+                service=service,
+                value=value,
+                unit=unit,
+                valid_from=valid_from,
+            )
+            for service, unit, value, valid_from in rows
         )
-        tariffs.append(
-            Tariff(
-                house_id=house.id,
-                service=ServiceType.OVERHAUL,
-                value=overhaul_rate,
-                unit="м²",
-                valid_from=since,
-            ),
-        )
-        self._session.add_all(tariffs)
         await self._session.flush()
 
     async def _poll(

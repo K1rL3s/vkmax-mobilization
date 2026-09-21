@@ -50,7 +50,6 @@ from zheka.core.services.request_groups import (
     SimilarRequests,
     rules_of,
 )
-from zheka.core.services.request_status import check_transition
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -178,13 +177,16 @@ class RequestsService:
         resident = await self._active_resident(user_id, house_id)
         house = await self._get_house(house_id)
         description = _stated(draft.description)
-        flat = await self._author_flat(resident, draft.flat_id)
+        # заявку про свою квартиру житель подает по своей квартире, про общее
+        # имущество - без квартиры вовсе
+        if draft.flat_id is not None and resident.flat_id != draft.flat_id:
+            raise EntityNotFound(FLAT_NOT_FOUND)
         photos = self._checked_photos(draft.photos)
         group_id = await self._checked_group(draft.group_id, house_id, draft.category)
 
         request = await self._requests.create(
             house_id,
-            None if flat is None else FlatId(flat.id),
+            draft.flat_id,
             user_id,
             draft.category,
             description,
@@ -215,7 +217,7 @@ class RequestsService:
                 house_id=house_id,
                 category=draft.category.value,
             )
-        return await self._built_card(request, house, flat)
+        return await self._built_card(request, house)
 
     async def repeat(
         self,
@@ -233,23 +235,15 @@ class RequestsService:
         house_id = HouseId(parent.house_id)
         await self._active_resident(user_id, house_id)
         house = await self._get_house(house_id)
-        # описание и фото у повтора свои, остальное - копия родителя: житель
-        # жалуется на ту же проблему в той же квартире
+        # описание и фото у повтора свои, остальное - копия родителя
         if rejected_on_review:
-            # отказ от результата должен объяснить исполнителю, почему работа
-            # вернулась: это описание становится первым текстом повтора
-            comment = "" if description is None else description.strip()
-            if not comment:
+            # отказ объясняет исполнителю, почему работа вернулась
+            text = (description or "").strip()
+            if not text:
                 raise InvalidRequest(REJECTION_COMMENT_REQUIRED)
-            text = comment
         else:
             text = _stated(parent.description if description is None else description)
         checked = self._checked_photos(photos)
-        flat = (
-            None
-            if parent.flat_id is None
-            else await self._houses.get_flat(FlatId(parent.flat_id))
-        )
         if rejected_on_review:
             await self._complete_review(
                 parent,
@@ -280,7 +274,7 @@ class RequestsService:
             is_repeat=True,
             parent_request_id=RequestId(parent.id),
         )
-        return await self._built_card(request, house, flat)
+        return await self._built_card(request, house)
 
     async def rate(
         self,
@@ -299,7 +293,8 @@ class RequestsService:
         if request.rating is not None:
             raise InvalidState(RATED_ALREADY)
 
-        await self._requests.set_rating(request, rating, _stated_or_none(feedback))
+        feedback = (feedback or "").strip() or None
+        await self._requests.set_rating(request, rating, feedback)
         await self._events.record(
             EventType.REQUEST_RATED,
             user_id=user_id,
@@ -331,12 +326,6 @@ class RequestsService:
             now - AUTO_CLOSE_AFTER,
         )
         for request in requests:
-            check_transition(
-                request.status,
-                RequestStatus.DONE,
-                RequestActorRole.SYSTEM,
-                has_author=request.author_user_id is not None,
-            )
             await self._requests.set_status(
                 request,
                 RequestStatus.DONE,
@@ -376,13 +365,6 @@ class RequestsService:
         user_id: UserId,
         completion_reason: RequestCompletionReason,
     ) -> None:
-        check_transition(
-            request.status,
-            RequestStatus.DONE,
-            RequestActorRole.RESIDENT,
-            has_author=True,
-        )
-
         at = datetime.now(UTC)
         await self._requests.set_status(
             request,
@@ -415,12 +397,7 @@ class RequestsService:
     async def get_card(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
         house = await self._get_house(HouseId(request.house_id))
-        flat = (
-            None
-            if request.flat_id is None
-            else await self._houses.get_flat(FlatId(request.flat_id))
-        )
-        return await self._built_card(request, house, flat)
+        return await self._built_card(request, house)
 
     async def list_mine(
         self,
@@ -477,24 +454,18 @@ class RequestsService:
             return rules_of(None)
         return rules_of(await self._orgs.get_settings(OrgId(house.org_id)))
 
-    async def _built_card(
-        self,
-        request: Request,
-        house: House,
-        flat: Flat | None,
-    ) -> RequestCardData:
+    async def _built_card(self, request: Request, house: House) -> RequestCardData:
         return await build_card(
             self._requests,
+            self._houses,
             self._users,
             self._orgs,
             request,
             house,
-            flat,
         )
 
     async def _open(self, request: Request, user_id: UserId) -> None:
-        # статус NEW - такая же запись в журнале, как и любая следующая:
-        # ни один путь не меняет requests.status без строки в логе
+        # ни один путь не меняет requests.status без строки в журнале, NEW тоже
         await self._requests.add_log(
             RequestId(request.id),
             None,
@@ -543,26 +514,12 @@ class RequestsService:
             raise EntityNotFound(REQUEST_NOT_FOUND)
         return request
 
-    async def _author_flat(
-        self,
-        resident: Resident,
-        flat_id: FlatId | None,
-    ) -> Flat | None:
-        # заявку про свою квартиру житель подает по своей квартире, про общее
-        # имущество - без квартиры вовсе. Чужой номер тут не нужен никому
-        if flat_id is None:
-            return None
-        if resident.flat_id != flat_id:
-            raise EntityNotFound(FLAT_NOT_FOUND)
-        return await self._houses.get_flat(flat_id)
-
     async def _checked_group(
         self,
         group_id: RequestGroupId | None,
         house_id: HouseId,
         category: RequestCategory,
     ) -> RequestGroupId | None:
-        # склейку собирает блок 9, здесь только присоединение к готовой группе
         if group_id is None:
             return None
         group = await self._requests.get_group(group_id)
@@ -630,9 +587,7 @@ async def build_rows(
     users_repo: UsersRepo,
     requests: Sequence[Request],
 ) -> list[RequestRow]:
-    # общий для кабинета жителя (list_mine) и кабинета УК (inbox) шаг:
-    # посчитать фото и размер группы и подтянуть квартиры с исполнителями
-    # одним запросом на весь список, а не по одному на заявку
+    # один запрос на весь список, а не по одному на заявку
     photo_counts = await requests_repo.count_photos(
         [RequestId(request.id) for request in requests],
     )
@@ -685,14 +640,12 @@ async def build_rows(
 
 async def build_card(
     requests_repo: RequestsRepo,
+    houses_repo: HousesRepo,
     users_repo: UsersRepo,
     orgs_repo: OrgsRepo,
     request: Request,
     house: House,
-    flat: Flat | None,
 ) -> RequestCardData:
-    # карточку собирают обе стороны: кабинет жителя и кабинет УК. Отличаются
-    # они правами на входе, а не содержимым заявки
     request_id = RequestId(request.id)
     photos = await requests_repo.list_photos(request_id)
     messages = await requests_repo.list_messages(request_id)
@@ -714,7 +667,11 @@ async def build_card(
         request=request,
         house=house,
         org=None if house.org_id is None else await orgs_repo.get(OrgId(house.org_id)),
-        flat=flat,
+        flat=(
+            None
+            if request.flat_id is None
+            else await houses_repo.get_flat(FlatId(request.flat_id))
+        ),
         issue_photos=[
             photo for photo in photos if photo.kind is RequestPhotoKind.ISSUE
         ],
@@ -754,10 +711,3 @@ def _stated(text: str) -> str:
     if not stripped:
         raise InvalidRequest(EMPTY_DESCRIPTION)
     return stripped
-
-
-def _stated_or_none(text: str | None) -> str | None:
-    if text is None:
-        return None
-    stripped = text.strip()
-    return stripped or None

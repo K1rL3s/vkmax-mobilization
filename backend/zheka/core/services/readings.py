@@ -3,7 +3,7 @@ from collections.abc import Collection, Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 
 from zheka.base import ZhekaType
-from zheka.core.charges import to_kopecks
+from zheka.core.charges import previous_period, to_kopecks
 from zheka.core.enums import (
     SERVICE_OF_METER,
     EventType,
@@ -61,7 +61,6 @@ _ZONES_BY_COUNT: Mapping[int, frozenset[TariffZone]] = {
 class PeriodOption(ZhekaType):
     period: date
     is_open: bool
-    # почему период закрыт, если закрыт
     reason: str | None = None
 
 
@@ -86,10 +85,6 @@ class ReadingRow(ZhekaType):
     amount: int | None
 
 
-class HistoryData(ZhekaType):
-    rows: list[ReadingRow]
-
-
 class SubmitResult(ZhekaType):
     row: ReadingRow
     house_average: int | None
@@ -102,8 +97,6 @@ def window_is_open(day: int, day_from: int, day_to: int, *, always_open: bool) -
         return True
     if day_from <= day_to:
         return day_from <= day <= day_to
-    # окно переваливает через конец месяца: сегодня попадает в него, если
-    # день не меньше начала или не больше конца
     return day >= day_from or day <= day_to
 
 
@@ -111,15 +104,11 @@ def current_period(today: date) -> date:
     return date(today.year, today.month, 1)
 
 
-def _shift_months(today: date, months_back: int) -> date:
-    month_index = today.year * 12 + (today.month - 1) - months_back
-    year, month = divmod(month_index, 12)
-    return date(year, month + 1, 1)
-
-
 def _candidate_periods(today: date) -> list[date]:
-    # текущий месяц и PERIODS_BACK - 1 предыдущих, от новых к старым
-    return [_shift_months(today, back) for back in range(PERIODS_BACK)]
+    periods = [current_period(today)]
+    while len(periods) < PERIODS_BACK:
+        periods.append(previous_period(periods[-1]))
+    return periods
 
 
 def available_periods(
@@ -172,8 +161,6 @@ def is_spike(current: int, history: Sequence[int]) -> bool:
 
 
 def _kopecks(consumption_map: Mapping[TariffZone, int], tariff_value: int) -> int:
-    # деление денег живет в core/charges.py - здесь только сумма произведения
-    # по зонам перед округлением
     total = sum(value * tariff_value for value in consumption_map.values())
     return to_kopecks(total)
 
@@ -228,11 +215,11 @@ class ReadingsService:
                 PeriodOption(period=window_period(today, settings), is_open=True)
             ]
         else:
-            closed: set[date] = set()
-            for period in _candidate_periods(today):
-                charge = await self._charges.get_by_period(flat_id, period)
-                if charge is not None:
-                    closed.add(period)
+            closed = {
+                period
+                for period in _candidate_periods(today)
+                if await self._charges.get_by_period(flat_id, period) is not None
+            }
             options = available_periods(today, closed)
 
         submitted = await self._submitted_periods(
@@ -241,7 +228,7 @@ class ReadingsService:
         )
         return PeriodsData(options=options, submitted=submitted)
 
-    async def history(self, user_id: UserId, meter_id: MeterId) -> HistoryData:
+    async def history(self, user_id: UserId, meter_id: MeterId) -> list[ReadingRow]:
         meter = await self._access.get_meter(meter_id)
         resident = await self._access.verified_resident(user_id, FlatId(meter.flat_id))
         house_id = await self._house_id_of_flat(FlatId(meter.flat_id))
@@ -285,7 +272,7 @@ class ReadingsService:
                     amount=amount,
                 ),
             )
-        return HistoryData(rows=rows)
+        return rows
 
     async def submit(
         self,
@@ -471,5 +458,5 @@ def window_period(today: date, settings: OrgSettings | None) -> date:
         and settings.meter_window_day_from > settings.meter_window_day_to
         and today.day <= settings.meter_window_day_to
     ):
-        return _shift_months(today, 1)
+        return previous_period(today)
     return current_period(today)

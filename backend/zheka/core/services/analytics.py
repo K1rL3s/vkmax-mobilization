@@ -10,11 +10,15 @@ from zheka.core.enums import (
     RequestChannel,
 )
 from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
-from zheka.core.ids import HouseId, OrgId, UserId
+from zheka.core.ids import HouseId, OrgId
 from zheka.core.models import OrgSettings
 from zheka.core.services.readings import window_accepts, window_period
 from zheka.core.services.reminders import RemindersService
-from zheka.infra.database.repos.analytics import AnalyticsRepo
+from zheka.infra.database.repos.analytics import (
+    AnalyticsRepo,
+    ExecutorRow,
+    SeasonCount,
+)
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 
@@ -26,10 +30,9 @@ WRONG_PERIOD = "Напомнить можно только о периоде, к
 DEFAULT_PERIOD = timedelta(days=30)
 WEEKS = 12
 UNCONNECTED_LIMIT = 50
+_NO_FLATS = SeasonCount(flats_total=0, submitted=0, percent=0)
 
-# разрез, где организаций с данными меньше трех, выдает чужое число: регион с
-# одной УК называет ее не хуже имени, а платформа из двух дает свое значение,
-# медиану и «1 из 2», откуда второе значение получается вычитанием
+# разрез из меньшего числа организаций с данными выдает чужое значение
 MIN_ORGS_FOR_CUT = 3
 
 
@@ -129,15 +132,6 @@ class Season(ZhekaType):
     not_submitted: int
     houses: list[SeasonHouse]
     is_empty: bool
-
-
-class ExecutorStats(ZhekaType):
-    user_id: UserId
-    name: str
-    closed: int
-    repeat_share: int
-    median_time: int | None
-    rating: int | None
 
 
 class ChannelItem(ZhekaType):
@@ -317,17 +311,15 @@ class AnalyticsService:
         counts = await self._analytics.season(org_id, period)
         houses = []
         for house in await self._houses.list_for_org(org_id):
-            count = counts.get(HouseId(house.id))
-            total = 0 if count is None else count.flats_total
-            submitted = 0 if count is None else count.submitted
+            count = counts.get(HouseId(house.id), _NO_FLATS)
             houses.append(
                 SeasonHouse(
                     house_id=HouseId(house.id),
                     address=house.address,
-                    flats_total=total,
-                    submitted=submitted,
-                    not_submitted=total - submitted,
-                    percent=0 if count is None else count.percent,
+                    flats_total=count.flats_total,
+                    submitted=count.submitted,
+                    not_submitted=count.flats_total - count.submitted,
+                    percent=count.percent,
                 ),
             )
         window_from, window_to = _window(period, settings)
@@ -372,24 +364,13 @@ class AnalyticsService:
         date_from: date | None,
         date_to: date | None,
         now: datetime,
-    ) -> list[ExecutorStats]:
+    ) -> list[ExecutorRow]:
         period_from, period_to = _range(date_from, date_to, now)
-        rows = await self._analytics.by_executor(
+        return await self._analytics.by_executor(
             org_id,
             _start_of(period_from),
             _start_of(period_to + timedelta(days=1)),
         )
-        return [
-            ExecutorStats(
-                user_id=row.user_id,
-                name=row.name,
-                closed=row.closed,
-                repeat_share=row.repeat_share or 0,
-                median_time=row.median_time,
-                rating=row.rating,
-            )
-            for row in rows
-        ]
 
     async def channels(
         self,

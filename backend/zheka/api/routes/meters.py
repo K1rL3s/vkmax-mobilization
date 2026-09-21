@@ -85,8 +85,8 @@ async def list_meter_readings(
     readings_service: FromDishka[ReadingsService],
     files_service: FromDishka[FilesService],
 ) -> list[ReadingItem]:
-    data = await readings_service.history(current_account.user_id, meter_id)
-    return [_reading_item(row, files_service) for row in data.rows]
+    rows = await readings_service.history(current_account.user_id, meter_id)
+    return [_reading_item(row, files_service) for row in rows]
 
 
 @router.post("/meters/{meter_id}/readings", summary="Передать показание")
@@ -122,7 +122,7 @@ async def recognize_reading(
     vision_client: FromDishka[VisionClient],
     body: RecognizeReadingRequest,
 ) -> RecognizeReadingResponse:
-    values = await vision_client.recognize(body.photo_path, body.meter_type)
+    values = await vision_client.recognize(body.photo_path)
     return RecognizeReadingResponse(values=values)
 
 

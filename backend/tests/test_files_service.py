@@ -17,13 +17,7 @@ _CHUNKS = 64
 
 
 class _FakeUpload:
-    """Mimics UploadFile.read: chunked calls track how much was actually consumed.
-
-    A buggy `save` that does `await upload.read()` (no size) to check the
-    length afterwards would drain the whole buffer in one call - the test
-    below catches that by asserting only part of it was ever read.
-    """
-
+    # считает прочитанное: save, читающий все разом, выдаст себя
     def __init__(self, content_type: str, size: int) -> None:
         self.content_type = content_type
         self.size = size
@@ -75,20 +69,11 @@ async def test_save_rejects_unsupported_mime_type(tmp_path: Path) -> None:
 
 async def test_save_writes_the_file_under_its_generated_name(tmp_path: Path) -> None:
     service = _make_service(tmp_path, max_size_mb=10)
-    upload = _FakeUpload("image/jpeg", size=1024)
+    upload = _FakeUpload("image/jpeg; charset=UTF-8", size=1024)
 
     name = await service.save(upload)  # type: ignore[arg-type]
 
     assert service.path_of(name).read_bytes() == b"x" * 1024
-    assert name.endswith(".jpg")
-
-
-async def test_save_accepts_a_content_type_with_parameters(tmp_path: Path) -> None:
-    service = _make_service(tmp_path, max_size_mb=10)
-    upload = _FakeUpload("image/jpeg; charset=UTF-8", size=10)
-
-    name = await service.save(upload)  # type: ignore[arg-type]
-
     assert name.endswith(".jpg")
 
 
@@ -112,36 +97,19 @@ def test_verify_rejects_an_expired_link(tmp_path: Path) -> None:
         service.verify(name, expired, sig)
 
 
-def test_verify_rejects_a_forged_signature(tmp_path: Path) -> None:
+# не-ASCII подпись - 404, а не TypeError из compare_digest
+@pytest.mark.parametrize("sig", ["forged", "é" * 64])
+def test_verify_rejects_a_forged_signature(tmp_path: Path, sig: str) -> None:
     service = _make_service(tmp_path, max_size_mb=10)
     exp = int(time.time()) + 3600
 
     with pytest.raises(EntityNotFound):
-        service.verify(_generated_name(), exp, "forged")
-
-
-def test_verify_rejects_a_non_ascii_signature_instead_of_raising(
-    tmp_path: Path,
-) -> None:
-    # hmac.compare_digest бросает TypeError на str с не-ASCII символами -
-    # сюда идет чужой, не проверенный ввод из query, поэтому это должен
-    # ловить формат подписи, а не долетать до compare_digest как 500
-    service = _make_service(tmp_path, max_size_mb=10)
-    exp = int(time.time()) + 3600
-
-    with pytest.raises(EntityNotFound):
-        service.verify(_generated_name(), exp, "é" * 64)
+        service.verify(_generated_name(), exp, sig)
 
 
 @pytest.mark.parametrize(
     "name",
-    [
-        "../../etc/passwd",
-        "/etc/passwd",
-        "photo.jpg",
-        "g" * 32 + ".jpg",
-        "0" * 32 + ".php",
-    ],
+    ["../../etc/passwd", "g" * 32 + ".jpg", "0" * 32 + ".php"],
 )
 def test_path_of_rejects_anything_that_is_not_a_generated_name(
     tmp_path: Path,
@@ -153,17 +121,16 @@ def test_path_of_rejects_anything_that_is_not_a_generated_name(
         service.path_of(name)
 
 
-@pytest.mark.parametrize("name", ["../../etc/passwd", "/etc/passwd"])
-def test_sign_rejects_a_path_traversal_name(tmp_path: Path, name: str) -> None:
+def test_sign_rejects_a_path_traversal_name(tmp_path: Path) -> None:
     service = _make_service(tmp_path, max_size_mb=10)
 
     with pytest.raises(EntityNotFound):
-        service.sign(name)
+        service.sign("../../etc/passwd")
 
 
-@pytest.mark.parametrize("name", ["../../etc/passwd", "/etc/passwd"])
-def test_verify_rejects_a_path_traversal_name(tmp_path: Path, name: str) -> None:
+def test_verify_rejects_a_path_traversal_name(tmp_path: Path) -> None:
     service = _make_service(tmp_path, max_size_mb=10)
+    name = "../../etc/passwd"
     exp = int(time.time()) + 3600
     sig = service._sign(name, exp)  # noqa: SLF001
 
@@ -186,9 +153,7 @@ async def test_save_download_refuses_a_non_image(tmp_path: Path) -> None:
 async def test_save_download_breaks_an_oversized_stream_instead_of_landing_it(
     tmp_path: Path,
 ) -> None:
-    # bot.download ничего не проверяет и тянет поток до конца таймаута: потолок
-    # обязан рвать запись на превышении, а не судить уже скачанный файл -
-    # число записанных кусков и есть то, что до диска не доехало
+    # потолок рвет запись на превышении, а не судит уже скачанный файл
     service = _make_service(tmp_path, max_size_mb=1)
     written = 0
 

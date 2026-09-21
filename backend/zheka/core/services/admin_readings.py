@@ -17,10 +17,10 @@ HOUSE_NOT_FOUND = "Дом не найден"
 class AdminReadingRow(ZhekaType):
     reading: Reading
     meter: Meter
-    flat_number: str | None
+    flat_number: str
     values: dict[TariffZone, int]
     consumption: dict[TariffZone, int]
-    submitted_by: User | None
+    submitted_by: User
 
 
 class AdminReadingsService:
@@ -59,9 +59,6 @@ class AdminReadingsService:
             limit=limit,
             offset=offset,
         )
-        if not readings:
-            return [], total
-
         meters = {
             MeterId(meter.id): meter
             for meter in await self._meters.list_by_ids(
@@ -84,25 +81,21 @@ class AdminReadingsService:
         previous_cache: dict[tuple[MeterId, date], Reading | None] = {}
         rows = []
         for reading in readings:
-            meter = meters.get(MeterId(reading.meter_id))
-            if meter is None:
-                continue
+            meter = meters[MeterId(reading.meter_id)]
             key = (MeterId(reading.meter_id), reading.period)
             if key not in previous_cache:
                 previous_cache[key] = await self._meters.previous_reading(*key)
             previous = previous_cache[key]
             previous_values = None if previous is None else zones_of(previous.values)
             values_map = zones_of(reading.values)
-            consumption_map = consumption(values_map, previous_values)
-            flat = flats.get(FlatId(meter.flat_id))
             rows.append(
                 AdminReadingRow(
                     reading=reading,
                     meter=meter,
-                    flat_number=None if flat is None else flat.number,
+                    flat_number=flats[FlatId(meter.flat_id)].number,
                     values=values_map,
-                    consumption=consumption_map,
-                    submitted_by=users.get(UserId(reading.submitted_by)),
+                    consumption=consumption(values_map, previous_values),
+                    submitted_by=users[UserId(reading.submitted_by)],
                 ),
             )
         return rows, total

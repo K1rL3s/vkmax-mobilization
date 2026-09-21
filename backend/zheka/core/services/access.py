@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 from zheka.base import ZhekaType
@@ -51,7 +52,7 @@ class AccessRequestData(ZhekaType):
     slots: list[AccessSlotData]
     responded_count: int
     targets_count: int
-    # заполняет только список жителя
+    # только в ответах жителю
     my_flat_id: FlatId | None = None
     my_slot_id: AccessSlotId | None = None
 
@@ -170,11 +171,7 @@ class AccessService:
         self._notifications.open_access_slots(access_request_id)
 
         grid = await self.grid(org_id, access_request_id)
-        return AccessGridData(
-            request=grid.request,
-            targets=grid.targets,
-            flats_without_residents=skipped,
-        )
+        return replace(grid, flats_without_residents=skipped)
 
     async def grid(
         self,
@@ -197,7 +194,7 @@ class AccessService:
             targets=[
                 AccessTargetData(
                     target=target,
-                    flat_number=numbers.get(FlatId(target.flat_id), ""),
+                    flat_number=numbers[FlatId(target.flat_id)],
                 )
                 for target in targets
             ],
@@ -228,11 +225,7 @@ class AccessService:
                 slot_id=slot_id,
             )
 
-        request = await self._access.get(access_request_id)
-        if request is None:
-            raise EntityNotFound(REQUEST_NOT_FOUND)
-        rows = await self._decorate([request], {access_request_id: target})
-        return rows[0]
+        return await self._view(access_request_id, target)
 
     async def list_for_org(
         self,
@@ -279,13 +272,12 @@ class AccessService:
         rows = []
         for request in requests:
             request_id = AccessRequestId(request.id)
-            house = houses.get(HouseId(request.house_id))
             responded, total = counters.get(request_id, (0, 0))
             target = mine.get(request_id)
             rows.append(
                 AccessRequestData(
                     request=request,
-                    address="" if house is None else house.address,
+                    address=houses[HouseId(request.house_id)].address,
                     slots=[
                         AccessSlotData(
                             slot=slot,
@@ -312,11 +304,7 @@ class AccessService:
         access_request_id: AccessRequestId,
     ) -> AccessRequestData:
         target = await self._target(user_id, access_request_id)
-        request = await self._access.get(access_request_id)
-        if request is None:
-            raise EntityNotFound(REQUEST_NOT_FOUND)
-        rows = await self._decorate([request], {access_request_id: target})
-        return rows[0]
+        return await self._view(access_request_id, target)
 
     async def _target(
         self,
@@ -341,3 +329,12 @@ class AccessService:
         if resident.status is ResidentStatus.BLOCKED:
             raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
         return target
+
+    async def _view(
+        self,
+        access_request_id: AccessRequestId,
+        target: AccessTarget,
+    ) -> AccessRequestData:
+        request = await self._access.get(access_request_id)
+        rows = await self._decorate([request], {access_request_id: target})
+        return rows[0]

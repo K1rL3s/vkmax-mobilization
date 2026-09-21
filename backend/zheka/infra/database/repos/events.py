@@ -18,9 +18,7 @@ class EventsRepo(BaseAlchemyRepo):
         user_id: UserId | None,
         payload: dict[str, Any],
     ) -> None:
-        # savepoint: если запись события не проходит (нарушение FK,
-        # несериализуемый payload), откатывается только она, а не вся
-        # бизнес-транзакция вызывающего кода
+        # savepoint: неудачная запись события не откатывает транзакцию вызывающего
         async with self._session.begin_nested():
             self._session.add(Event(user_id=user_id, type=type.value, payload=payload))
 
@@ -31,8 +29,6 @@ class EventsRepo(BaseAlchemyRepo):
         payload: dict[str, Any],
         since: datetime | None = None,
     ) -> set[UserId]:
-        # кому из user_ids событие с таким payload уже записано: отметка
-        # напоминания, а не только аналитика
         if not user_ids:
             return set()
         stmt = select(events_table.c.user_id).where(

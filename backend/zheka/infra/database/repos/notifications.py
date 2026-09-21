@@ -61,8 +61,6 @@ class NotificationsRepo(BaseAlchemyRepo):
     ) -> Sequence[Recipient]:
         # уровень приезжает тем же запросом: у жителя, который настройки не
         # трогал, строки нет, и за него отвечает DEFAULT_LEVEL
-        if not user_ids:
-            return []
         joined = users_table.outerjoin(
             notification_settings_table,
             and_(

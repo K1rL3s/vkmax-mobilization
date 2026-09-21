@@ -14,8 +14,7 @@ reception_windows_table = Table(
     Column("time_from", Time, nullable=False),
     Column("time_to", Time, nullable=False),
     Column("slot_minutes", Integer, nullable=False),
-    # сколько жителей УК принимает в один слот: сотрудников в кабинете
-    # может быть несколько, и по дням недели их число разное
+    # сколько жителей принимают в один слот
     Column("capacity", Integer, nullable=False, server_default="1"),
 )
 

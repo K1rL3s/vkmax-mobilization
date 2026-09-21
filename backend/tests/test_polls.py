@@ -1,6 +1,7 @@
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,6 @@ from zheka.core.ids import (
     FlatId,
     HouseId,
     MaxUserId,
-    OrgId,
     PollId,
     PollOptionId,
     UserId,
@@ -74,20 +74,6 @@ async def _add_user(session: AsyncSession, name: str = "Сосед") -> UserId:
     return UserId(user.id)
 
 
-async def _add_flat(
-    session: AsyncSession,
-    house_id: HouseId,
-    number: str,
-    *,
-    entrance: int | None = None,
-    area: int | None = None,
-) -> FlatId:
-    flat = Flat(house_id=house_id, number=number, entrance=entrance, area=area)
-    session.add(flat)
-    await session.flush()
-    return FlatId(flat.id)
-
-
 async def _add_resident(
     session: AsyncSession,
     user_id: UserId,
@@ -118,23 +104,12 @@ async def _add_resident(
     return resident
 
 
-async def _add_org_member(
-    session: AsyncSession,
-    org_id: OrgId,
-    user_id: UserId,
-    role: OrgRole,
-) -> OrgMember:
-    member = OrgMember(org_id=org_id, user_id=user_id, role=role)
-    session.add(member)
-    await session.flush()
-    return member
-
-
 async def _chairman_setup(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    org_role: OrgRole | None = None,
 ) -> tuple[OrgHouseFlatUser, UserId]:
-    base = await make_org_house_flat_user()
+    base = await make_org_house_flat_user(org_role=org_role)
     chairman_id = await _add_user(session, "Председатель")
     await _add_resident(
         session,
@@ -199,43 +174,27 @@ async def test_create_poll_refuses_a_plain_resident(
         await service.create(resident_id, base.house_id, _draft(), org_id=None)
 
 
-async def test_create_poll_refuses_an_end_date_in_the_past(
+@pytest.mark.parametrize(
+    ("draft", "error"),
+    [
+        (_draft(ends_at=datetime.now(UTC) - timedelta(days=1)), InvalidValue),
+        (_draft(options=["Один вариант"]), InvalidRequest),
+        (_draft(options=["Да", "Да", ""]), InvalidRequest),
+    ],
+)
+async def test_create_poll_refuses_a_bad_draft(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    draft: PollDraft,
+    error: type[Exception],
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
-    service = _make_service(session)
-    past = datetime.now(UTC) - timedelta(days=1)
 
-    with pytest.raises(InvalidValue):
-        await service.create(
+    with pytest.raises(error):
+        await _make_service(session).create(
             chairman_id,
             base.house_id,
-            _draft(ends_at=past),
-            org_id=None,
-        )
-
-
-async def test_create_poll_requires_two_distinct_non_empty_options(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
-    service = _make_service(session)
-
-    with pytest.raises(InvalidRequest):
-        await service.create(
-            chairman_id,
-            base.house_id,
-            _draft(options=["Один вариант"]),
-            org_id=None,
-        )
-
-    with pytest.raises(InvalidRequest):
-        await service.create(
-            chairman_id,
-            base.house_id,
-            _draft(options=["Да", "Да", ""]),
+            draft,
             org_id=None,
         )
 
@@ -260,53 +219,29 @@ async def test_create_org_poll_refuses_a_foreign_house(
 # ---- голосование ----
 
 
-async def test_vote_refuses_a_tenant(
+@pytest.mark.parametrize(
+    "resident",
+    [
+        {"role": ResidentRole.TENANT},
+        {"status": ResidentStatus.BLOCKED, "block_reason": "долг"},
+    ],
+    ids=["tenant", "blocked"],
+)
+async def test_vote_refuses_a_tenant_and_a_blocked_resident(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    resident: dict[str, Any],
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
     card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
-
-    tenant_id = await _add_user(session, "Арендатор")
-    await _add_resident(
-        session,
-        tenant_id,
-        base.house_id,
-        base.flat_id,
-        role=ResidentRole.TENANT,
-    )
+    voter_id = await _add_user(session)
+    await _add_resident(session, voter_id, base.house_id, base.flat_id, **resident)
 
     with pytest.raises(NotEnoughRights):
         await service.vote(
             PollId(card.poll.id),
-            tenant_id,
-            [PollOptionId(card.options[0].id)],
-        )
-
-
-async def test_vote_refuses_a_blocked_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
-    service = _make_service(session)
-    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
-
-    blocked_id = await _add_user(session, "Заблокирован")
-    await _add_resident(
-        session,
-        blocked_id,
-        base.house_id,
-        base.flat_id,
-        status=ResidentStatus.BLOCKED,
-        block_reason="долг",
-    )
-
-    with pytest.raises(NotEnoughRights):
-        await service.vote(
-            PollId(card.poll.id),
-            blocked_id,
+            voter_id,
             [PollOptionId(card.options[0].id)],
         )
 
@@ -317,8 +252,7 @@ async def test_vote_refuses_after_the_poll_has_ended(
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
-    # опрос заведен напрямую через репозиторий, минуя проверку "в будущем"
-    # сервиса - тест бьет именно по границе окончания голосования
+    # через репозиторий: сервис не заведет опрос с прошедшей датой
     polls_repo = PollsRepo(session)
     past = datetime.now(UTC) - timedelta(hours=1)
     poll = await polls_repo.create(
@@ -390,35 +324,7 @@ async def test_multiple_choice_vote_stores_one_row_per_option(
         await service.vote(PollId(card.poll.id), chairman_id, chosen)
 
 
-async def test_single_choice_poll_refuses_more_than_one_option(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
-    service = _make_service(session)
-    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
-
-    with pytest.raises(InvalidRequest):
-        await service.vote(
-            PollId(card.poll.id),
-            chairman_id,
-            [PollOptionId(card.options[0].id), PollOptionId(card.options[1].id)],
-        )
-
-
-async def test_vote_with_an_empty_option_list_raises_invalid_request(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
-    service = _make_service(session)
-    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
-
-    with pytest.raises(InvalidRequest):
-        await service.vote(PollId(card.poll.id), chairman_id, [])
-
-
-async def test_vote_with_an_option_from_another_poll_raises_invalid_request(
+async def test_vote_refuses_a_bad_option_choice(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
@@ -426,13 +332,11 @@ async def test_vote_with_an_option_from_another_poll_raises_invalid_request(
     service = _make_service(session)
     card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
     other_card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
+    own = [PollOptionId(option.id) for option in card.options]
 
-    with pytest.raises(InvalidRequest):
-        await service.vote(
-            PollId(card.poll.id),
-            chairman_id,
-            [PollOptionId(other_card.options[0].id)],
-        )
+    for choice in ([], own, [PollOptionId(other_card.options[0].id)]):
+        with pytest.raises(InvalidRequest):
+            await service.vote(PollId(card.poll.id), chairman_id, choice)
 
 
 async def test_vote_of_a_house_the_user_does_not_live_in_is_not_found(
@@ -563,8 +467,9 @@ async def test_flats_without_area_are_reported_and_excluded_from_sums(
     make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
-    # base.flat_id по умолчанию заведена без area (см. conftest)
-    await _add_flat(session, base.house_id, "2", area=5000)
+    # base.flat_id заведена без area
+    session.add(Flat(house_id=base.house_id, number="2", area=5000))
+    await session.flush()
     service = _make_service(session)
     card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
 
@@ -609,7 +514,10 @@ async def test_non_voters_available_to_org_staff_for_org_polls(
     )
 
     other_staff_id = await _add_user(session, "Другой сотрудник")
-    await _add_org_member(session, base.org_id, other_staff_id, OrgRole.EMPLOYEE)
+    session.add(
+        OrgMember(org_id=base.org_id, user_id=other_staff_id, role=OrgRole.EMPLOYEE),
+    )
+    await session.flush()
 
     non_voters = await service.non_voters(PollId(card.poll.id), other_staff_id)
     assert any(flat.id == base.flat_id for flat in non_voters)
@@ -755,22 +663,17 @@ async def test_list_org_polls_only_shows_this_orgs_own_polls(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    base = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    base, chairman_id = await _chairman_setup(
+        session,
+        make_org_house_flat_user,
+        OrgRole.ADMIN,
+    )
     service = _make_service(session)
     org_card = await service.create(
         base.user_id,
         base.house_id,
         _draft(),
         org_id=base.org_id,
-    )
-
-    chairman_id = await _add_user(session, "Председатель")
-    await _add_resident(
-        session,
-        chairman_id,
-        base.house_id,
-        base.flat_id,
-        is_chairman=True,
     )
     chairman_card = await service.create(
         chairman_id,

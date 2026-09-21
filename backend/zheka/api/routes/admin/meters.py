@@ -15,8 +15,6 @@ from zheka.core.services.files import FilesService
 
 router = APIRouter(tags=["Админка: счетчики"], route_class=DishkaRoute)
 
-UNKNOWN_RESIDENT = "Пользователь"
-
 
 def _admin_item(row: AdminReadingRow, files_service: FilesService) -> AdminReadingItem:
     return AdminReadingItem(
@@ -25,7 +23,7 @@ def _admin_item(row: AdminReadingRow, files_service: FilesService) -> AdminReadi
         meter_type=row.meter.type,
         serial=row.meter.serial,
         flat_id=FlatId(row.meter.flat_id),
-        flat_number=row.flat_number or "",
+        flat_number=row.flat_number,
         period=row.reading.period,
         values=row.values,
         consumption=row.consumption,
@@ -36,9 +34,7 @@ def _admin_item(row: AdminReadingRow, files_service: FilesService) -> AdminReadi
         is_below_previous=row.reading.is_below_previous,
         ocr_used=row.reading.ocr_used,
         submitted_at=row.reading.submitted_at,
-        submitted_by_name=UNKNOWN_RESIDENT
-        if row.submitted_by is None
-        else row.submitted_by.name,
+        submitted_by_name=row.submitted_by.name,
     )
 
 

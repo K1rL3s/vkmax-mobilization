@@ -48,9 +48,8 @@ async def send_executor_card(
     sender: FromDishka[MaxSender],
     user_id: UserId | None = None,
 ) -> None:
-    # без user_id это весть назначенному: новое сообщение, а не правка старой
-    # карточки где-то выше в истории. С user_id - перерисовка для того, кто
-    # только что нажал сам, даже если заявку уже передали другому
+    # без user_id - новость назначенному, с user_id - перерисовка для того,
+    # кто нажал сам, даже если заявку уже передали другому
     request = await requests_repo.get(request_id)
     if request is None:
         return
@@ -63,8 +62,6 @@ async def send_executor_card(
         sender,
         UserId(recipient),
         ExecutorCard.card,
-        # стек выводится из заявки: повторная карточка ложится в тот же,
-        # а не заводит вторую живую копию рядом
         f"executor-{request_id}",
         ExecutorCardData(request_id=int(request_id)).to_data(),
         ShowMode.SEND if user_id is None else None,
@@ -117,11 +114,9 @@ async def attach_result_photo(
             names,
         )
     except ZhekaError as error:
-        # второе фото после первого, переназначение, все фото отбиты: отказ
-        # ничего не записал, а карточку исполнитель все равно должен увидеть
+        # отказ ничего не записал, а карточку исполнитель все равно должен увидеть
         logger.warning("Результат по заявке %s не принят: %s", request_id, error)
-    # окно рисует другая сессия, поэтому карточку перерисовывает задача после
-    # коммита этой - иначе она показала бы статус до перехода
+    # геттер окна читает в другой сессии и до коммита увидел бы старый статус
     notifications_service.open_executor_card(request_id, user_id)
 
 

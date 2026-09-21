@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import Table, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import OrgRole
@@ -42,8 +42,6 @@ class InvitesRepo(BaseAlchemyRepo):
 
     async def get(self, code: str) -> OrgInvite | None:
         stmt = select(OrgInvite).where(org_invites_table.c.code == code)
-        # аннотация обязательна: OrgInvite отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         invite: OrgInvite | None = await self._session.scalar(stmt)
         return invite
 
@@ -57,22 +55,7 @@ class InvitesRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def consume(self, code: str) -> OrgInvite | None:
-        # проверка и инкремент одним UPDATE: два параллельных запроса на
-        # последнюю активацию иначе прошли бы лимит оба
-        stmt = (
-            update(OrgInvite)
-            .where(
-                org_invites_table.c.code == code,
-                org_invites_table.c.revoked_at.is_(None),
-                org_invites_table.c.expires_at > func.now(),
-                org_invites_table.c.activations_used
-                < org_invites_table.c.max_activations,
-            )
-            .values(activations_used=org_invites_table.c.activations_used + 1)
-            .returning(OrgInvite)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return await self._consume(OrgInvite, org_invites_table, code)
 
     async def revoke(self, invite: OrgInvite, at: datetime) -> None:
         invite.revoked_at = at
@@ -104,8 +87,6 @@ class InvitesRepo(BaseAlchemyRepo):
 
     async def get_flat(self, code: str) -> FlatInvite | None:
         stmt = select(FlatInvite).where(flat_invites_table.c.code == code)
-        # аннотация обязательна: FlatInvite отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         invite: FlatInvite | None = await self._session.scalar(stmt)
         return invite
 
@@ -119,23 +100,31 @@ class InvitesRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def consume_flat(self, code: str) -> FlatInvite | None:
-        # проверка и инкремент одним UPDATE: два параллельных запроса на
-        # последнюю активацию иначе прошли бы лимит оба
-        stmt = (
-            update(FlatInvite)
-            .where(
-                flat_invites_table.c.code == code,
-                flat_invites_table.c.revoked_at.is_(None),
-                flat_invites_table.c.expires_at > func.now(),
-                flat_invites_table.c.activations_used
-                < flat_invites_table.c.max_activations,
-            )
-            .values(activations_used=flat_invites_table.c.activations_used + 1)
-            .returning(FlatInvite)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return await self._consume(FlatInvite, flat_invites_table, code)
 
     async def revoke_flat(self, invite: FlatInvite, at: datetime) -> None:
         invite.revoked_at = at
         await self._session.flush()
+
+    async def _consume[InviteT](
+        self,
+        model: type[InviteT],
+        table: Table,
+        code: str,
+    ) -> InviteT | None:
+        # проверка и инкремент одним UPDATE: два параллельных запроса на
+        # последнюю активацию иначе прошли бы лимит оба
+        stmt = (
+            update(model)
+            .where(
+                table.c.code == code,
+                table.c.revoked_at.is_(None),
+                table.c.expires_at > func.now(),
+                table.c.activations_used < table.c.max_activations,
+            )
+            .values(activations_used=table.c.activations_used + 1)
+            .returning(model)
+        )
+        result = await self._session.execute(stmt)
+        invite: InviteT | None = result.scalar_one_or_none()
+        return invite

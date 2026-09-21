@@ -1,6 +1,7 @@
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select
@@ -59,8 +60,8 @@ def _service(
 async def _bind_chat(
     session: AsyncSession,
     house_id: HouseId,
-    status: ChatStatus = ChatStatus.ACTIVE,
     *,
+    status: ChatStatus = ChatStatus.ACTIVE,
     bot_is_admin: bool = True,
 ) -> MaxChatId:
     chat_id = MaxChatId(secrets.randbits(48))
@@ -156,13 +157,26 @@ async def test_empty_text_or_channels_are_rejected(
         )
 
 
-async def test_house_without_bound_chat_is_reported_back(
+@pytest.mark.parametrize(
+    "chat",
+    [
+        None,
+        {"status": ChatStatus.REMOVED},
+        # бот без прав администратора в чат MAX не пишет
+        {"bot_is_admin": False},
+    ],
+    ids=["no-chat", "removed", "not-admin"],
+)
+async def test_house_without_a_reachable_chat_is_reported_back(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
     broker: RecordingBroker,
     publisher: TaskPublisher,
+    chat: dict[str, Any] | None,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    if chat is not None:
+        await _bind_chat(session, data.house_id, **chat)
 
     created = await _service(session, publisher).create(
         data.org_id,
@@ -202,28 +216,6 @@ async def test_bound_chat_gets_the_announcement(
     assert len(enqueued) == 1
     assert enqueued[0]["chat_ids"] == [chat_id]
     assert TEXT in enqueued[0]["text"]
-
-
-async def test_removed_chat_is_not_a_target(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
-) -> None:
-    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
-    await _bind_chat(session, data.house_id, ChatStatus.REMOVED)
-
-    created = await _service(session, publisher).create(
-        data.org_id,
-        data.user_id,
-        [data.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT],
-    )
-
-    await publisher.flush()
-    assert list(created.houses_without_chat) == [data.house_id]
-    assert broker.enqueued(TaskName.BROADCAST_TO_CHATS) == []
 
 
 async def test_direct_channel_reaches_active_residents_only(
@@ -331,26 +323,3 @@ async def test_org_list_filters_by_house_of_the_same_org(
 
     with pytest.raises(EntityNotFound):
         await service.list_for_org(mine.org_id, foreign.house_id, 20, 0)
-
-
-async def test_a_chat_without_admin_rights_is_not_a_target(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
-) -> None:
-    # бот без прав администратора в чат MAX не пишет
-    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
-    await _bind_chat(session, data.house_id, bot_is_admin=False)
-
-    created = await _service(session, publisher).create(
-        data.org_id,
-        data.user_id,
-        [data.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT],
-    )
-
-    await publisher.flush()
-    assert list(created.houses_without_chat) == [data.house_id]
-    assert broker.enqueued(TaskName.BROADCAST_TO_CHATS) == []

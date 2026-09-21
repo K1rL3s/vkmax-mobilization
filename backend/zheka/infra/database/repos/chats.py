@@ -10,9 +10,7 @@ from zheka.infra.database.models import Chat
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.chats import chats_table
 
-# одно определение на карточку дома и рассылку: бот, которого удалили из чата,
-# оставляет bound_at, и по одному bound_at карточка звала бы привязанным чат,
-# куда никто не может написать
+# удаленный из чата бот оставляет bound_at, поэтому одного bound_at мало
 BOUND_CHAT = and_(
     chats_table.c.house_id.is_not(None),
     chats_table.c.bound_at.is_not(None),
@@ -39,15 +37,12 @@ class ChatsRepo(BaseAlchemyRepo):
 
     async def get(self, chat_id: MaxChatId) -> Chat | None:
         stmt = select(Chat).where(chats_table.c.chat_id == chat_id)
-        # аннотация обязательна: Chat отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         chat: Chat | None = await self._session.scalar(stmt)
         return chat
 
     async def upsert_added(self, chat_id: MaxChatId, title: str) -> None:
-        # каждое добавление - новая привязка: вернувший бота человек может
-        # быть не тем, кто привязывал в прошлый раз, и унаследованная
-        # привязка обошла бы проверку его прав
+        # каждое добавление - новая привязка: вернувший бота может быть не тем,
+        # кто привязывал, и унаследованная привязка обошла бы проверку его прав
         fresh = {
             "title": title,
             "status": ChatStatus.ACTIVE,

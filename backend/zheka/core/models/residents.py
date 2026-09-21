@@ -42,7 +42,6 @@ class VerificationRequest(ZhekaMutableType):
     flat_id: FlatId
     user_id: UserId
     account_no: str
-    # пояснение жителя к запросу и причина отказа УК: оба видны в админке
     comment: str | None = None
     status: VerificationStatus
     decided_by: UserId | None = None

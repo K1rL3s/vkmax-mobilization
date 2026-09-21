@@ -14,10 +14,8 @@ from zheka.infra.database.tables.houses import flats_table
 from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 
-# заблокированный житель не адресат: рассылка его уже не видит
-# (active_user_ids), и после блокировки он не отвечает ни на что, так что
-# запрос доступа к его квартире некому было бы закрыть. Это же правило
-# ReadingsService.submit держит в MeterAccess.verified_resident
+# заблокированный житель не адресат: запрос доступа к его квартире некому
+# было бы закрыть. То же правило держит MeterAccess.verified_resident
 VERIFIED_RESIDENT = and_(
     residents_table.c.verified_at.is_not(None),
     residents_table.c.status != ResidentStatus.BLOCKED,
@@ -26,9 +24,8 @@ VERIFIED_RESIDENT = and_(
 
 class ResidentsRepo(BaseAlchemyRepo):
     async def list_for_user(self, user_id: UserId) -> Sequence[Resident]:
-        # порядок задан явно: без него это порядок выдачи базы, а он меняется
-        # после любого обновления строки, и вызывающий, который берет из списка
-        # один дом, начинает брать разные
+        # без явного порядка выдача меняется после любого обновления строки,
+        # и вызывающий, берущий из списка один дом, брал бы разные
         stmt = (
             select(Resident)
             .where(residents_table.c.user_id == user_id)
@@ -39,8 +36,6 @@ class ResidentsRepo(BaseAlchemyRepo):
 
     async def get(self, resident_id: ResidentId) -> Resident | None:
         stmt = select(Resident).where(residents_table.c.id == resident_id)
-        # аннотация обязательна: Resident отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         resident: Resident | None = await self._session.scalar(stmt)
         return resident
 
@@ -82,9 +77,8 @@ class ResidentsRepo(BaseAlchemyRepo):
         flat_number: str | None,
         role: ResidentRole,
     ) -> tuple[Resident, bool]:
-        # идемпотентность привязки держит уникальный индекс (user_id, house_id),
-        # а не чтение перед записью: два параллельных запроса прошли бы его оба.
-        # Второй элемент кортежа - завели ли жителя этим вызовом
+        # идемпотентность держит уникальный индекс (user_id, house_id), а не
+        # чтение перед записью. Второй элемент - завели ли жителя этим вызовом
         is_owner = role is ResidentRole.OWNER
         stmt = (
             pg_insert(Resident)
@@ -115,16 +109,14 @@ class ResidentsRepo(BaseAlchemyRepo):
         if existing is None:
             raise EntityNotFound("Житель не найден")
         # квартира из повторной привязки перебивает прежнюю, право на это
-        # проверяет вызывающий: диплинк из домового чата вообще приходит без
-        # квартиры, и она выбирается уже потом
+        # проверяет вызывающий
         if flat_id is not None:
             existing.flat_id = flat_id
             existing.flat_number = None
         elif flat_number is not None:
             existing.flat_id = None
             existing.flat_number = flat_number
-        # повторная привязка не молчит о роли: иначе тот, кто однажды вошел
-        # арендатором, навсегда остался бы без начислений и голоса
+        # иначе вошедший однажды арендатором остался бы без начислений и голоса
         existing.role = role
         existing.can_see_charges = is_owner
         existing.can_vote = is_owner
@@ -142,8 +134,7 @@ class ResidentsRepo(BaseAlchemyRepo):
         resident_id: ResidentId,
         org_id: OrgId,
     ) -> Resident | None:
-        # resident_id приходит из пути, поэтому запрос сужается до домов
-        # организации: чужой житель отвечает 404, а не 403
+        # resident_id приходит из пути: чужой житель отвечает 404, а не 403
         stmt = scoped_to_org(
             select(Resident).where(residents_table.c.id == resident_id),
             residents_table.c.house_id,
@@ -266,8 +257,7 @@ class ResidentsRepo(BaseAlchemyRepo):
         self,
         house_ids: Collection[HouseId],
     ) -> Sequence[UserId]:
-        # один житель может стоять в нескольких домах рассылки, поэтому
-        # distinct: иначе он получит одно объявление дважды
+        # житель нескольких домов рассылки иначе получил бы объявление дважды
         if not house_ids:
             return []
         stmt = (
@@ -286,8 +276,6 @@ class ResidentsRepo(BaseAlchemyRepo):
         house_ids: Collection[HouseId],
         user_ids: Collection[UserId],
     ) -> Sequence[Resident]:
-        # список записей на прием берет квартиру и имя одним запросом на весь
-        # день, а не по запросу на запись
         if not house_ids or not user_ids:
             return []
         stmt = select(Resident).where(

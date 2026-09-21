@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
@@ -19,6 +21,7 @@ from zheka.api.schemas.requests import (
 )
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
+from zheka.core.models import RequestPhoto
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
@@ -26,17 +29,20 @@ from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
 router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
 
 
+def signed(
+    photos: Sequence[RequestPhoto],
+    files_service: FilesService,
+) -> list[FileRef]:
+    return [
+        FileRef(name=photo.path, url=files_service.sign(photo.path)) for photo in photos
+    ]
+
+
 def _card(card: RequestCardData, files_service: FilesService) -> RequestCard:
     return RequestCard.of(
         card,
-        [
-            FileRef(name=photo.path, url=files_service.sign(photo.path))
-            for photo in card.issue_photos
-        ],
-        [
-            FileRef(name=photo.path, url=files_service.sign(photo.path))
-            for photo in card.result_photos
-        ],
+        signed(card.issue_photos, files_service),
+        signed(card.result_photos, files_service),
     )
 
 

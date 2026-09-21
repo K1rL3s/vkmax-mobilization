@@ -24,8 +24,7 @@ UNKNOWN_ORG = "УК"
 class AnnouncementData(ZhekaType):
     announcement: Announcement
     org_name: str | None
-    # заполняет только create: списки отдают объявления, у которых момент
-    # отправки давно прошел
+    # только у только что созданного объявления
     houses_without_chat: Sequence[HouseId] = ()
 
 
@@ -114,10 +113,6 @@ class AnnouncementsService:
                 houses_count=len(targets),
             )
 
-        # объявление к этому моменту только сброшено во flush, но не
-        # закоммичено: .kiq() кладет задачу в редис сразу, а транзакция
-        # закрывается позже, на выходе из запроса. Откат после этой строки
-        # разошлет сообщение о строке, которой в базе не будет
         message = texts.announcement(org_name, stated)
         self._notifications.notify_users(
             user_ids,
@@ -139,7 +134,7 @@ class AnnouncementsService:
         limit: int,
         offset: int,
     ) -> tuple[list[AnnouncementData], int]:
-        # дом житель уже подтвердил зависимостью CurrentResidency
+        # дом уже проверил CurrentResidency
         announcements, total = await self._announcements.list_for_house(
             house_id,
             limit,

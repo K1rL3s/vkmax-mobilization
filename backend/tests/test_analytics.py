@@ -772,7 +772,7 @@ async def test_another_organizations_requests_stay_out(session: AsyncSession) ->
 
     assert dashboard.is_empty is True
     assert channels.total == 0
-    assert row.closed == 0
+    assert (row.closed, row.repeat_share) == (0, 0)
 
 
 async def test_a_median_half_rounds_away_from_zero(session: AsyncSession) -> None:

@@ -11,7 +11,7 @@ from zheka.core.enums import (
     NotificationCategory,
     NotificationLevel,
 )
-from zheka.core.ids import AnnouncementId, OrgId, UserId
+from zheka.core.ids import AnnouncementId, UserId
 from zheka.core.services.profile import MeView
 
 
@@ -34,15 +34,7 @@ class MeResponse(BaseSchema):
             residencies=[
                 ResidencySummary.of(residency) for residency in view.residencies
             ],
-            orgs=[
-                OrgMembership(
-                    org_id=OrgId(membership.org.id),
-                    name=membership.org.name,
-                    role=membership.member.role,
-                    is_demo=membership.org.is_demo,
-                )
-                for membership in view.orgs
-            ],
+            orgs=[OrgMembership.of(membership) for membership in view.orgs],
             is_demo=view.is_demo,
         )
 

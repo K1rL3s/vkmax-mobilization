@@ -60,8 +60,6 @@ class UsersRepo(BaseAlchemyRepo):
 
     async def get_by_id(self, user_id: UserId) -> User | None:
         stmt = select(User).where(users_table.c.id == user_id)
-        # аннотация обязательна: User отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         user: User | None = await self._session.scalar(stmt)
         return user
 

@@ -28,8 +28,7 @@ ALLOWED_TRANSITIONS: Mapping[RequestStatus, frozenset[RequestStatus]] = (
 _ROLES_BY_TARGET: Mapping[RequestStatus, frozenset[RequestActorRole]] = (
     MappingProxyType(
         {
-            # исполнитель принимает заявку, которую ему назначили из NEW:
-            # реакция все равно УК, он ее сотрудник
+            # исполнитель, которому назначили NEW, принимает ее сам
             RequestStatus.ACCEPTED: frozenset(
                 {RequestActorRole.STAFF, RequestActorRole.EXECUTOR},
             ),
@@ -77,11 +76,7 @@ def transition_path(
     current: RequestStatus,
     target: RequestStatus,
 ) -> tuple[RequestStatus, ...]:
-    # опоздавший участник склейки идет от своего статуса до цели группы тем
-    # же путем, что и обычный шаг вперед - по одному следующему статусу за
-    # раз. Пустой путь значит "уже там"; цель позади current недостижима тем
-    # же способом, каким check_transition ловит обратный ход - цепочка
-    # уходит в DONE и там обрывается, ни разу не встретив target
+    # по одному шагу вперед; пустой путь - уже там, цель позади - InvalidState
     path: list[RequestStatus] = []
     step = current
     while step is not target:

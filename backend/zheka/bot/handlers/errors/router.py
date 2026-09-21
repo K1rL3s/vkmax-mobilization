@@ -21,12 +21,8 @@ STALE_WINDOW = "Это окно устарело, открываю меню за
 router = Router(name=__name__)
 
 
-# роутер ошибок живет снаружи private_router: событие ошибки - это другой
-# обсервер, а под фильтром лички в групповом чате все равно ничего не бежит.
-# Ни одного сервиса и ни одной записи: maxo вешает ErrorMiddleware первой
-# outer-мидлварью dp.update, то есть снаружи DishkaMiddleware и снаружи
-# TransactionMiddleware. К этому моменту сессия откачена, а запросный
-# контейнер закрыт, и @inject резолвил бы из закрытого
+# ни одного сервиса: ErrorMiddleware стоит снаружи DishkaMiddleware, и к
+# этому моменту сессия откачена, а запросный контейнер закрыт
 @router.exception(
     ExceptionTypeFilter(UnknownIntent, OutdatedIntent, InvalidStackIdError),
 )
@@ -55,14 +51,13 @@ async def unexpected_error_handler(event: ErrorEvent[Any, Any]) -> None:
 
 
 async def _notify(event: ErrorEvent[Any, Any], text: str) -> None:
-    # сообщением, а не только колбэком: обработчик, вернувший None, для
-    # ErrorMiddleware разобран, и ошибка при вводе текста пропала бы совсем
+    # обработчик, вернувший None, для ErrorMiddleware разобран: ветка без
+    # ответа потеряла бы ошибку совсем
     update = event.update.update
     if isinstance(update, MessageCallback):
         await update.callback_answer(notification=text)
     elif isinstance(update, MessageCreated):
         await update.answer_text(text, notify=False)
     elif isinstance(update, BotStarted):
-        # мертвый код приглашения прилетает сюда: у BotStarted нет ни колбэка,
-        # ни сообщения, на которое можно ответить, - только сам чат
+        # мертвая ссылка приглашения: ответить можно только в сам чат
         await update.send_message(text=text, notify=False)

@@ -40,12 +40,8 @@ from zheka.config import RedisConfig
 
 STATE_TTL = timedelta(days=30)
 
-# бот-администратор чата дома получает и его сообщения, а онбординг в группе
-# начинаться не должен. Фильтр висит на общем родителе: Router._trigger, не
-# пройдя фильтр обсервера, возвращает UNHANDLED и до детей не спускается,
-# поэтому одна эта строка закрывает и роутеры, и диалоги под ней. На сам
-# Dialog его вешать нельзя - observer.filter() присваивает, и IntentFilter,
-# который Dialog ставит себе сам, был бы молча затерт
+# висит на общем родителе: не пройдя фильтр, роутер до детей не спускается.
+# На Dialog его вешать нельзя - filter() присваивает и затер бы IntentFilter
 PRIVATE_ONLY = MagicData(F.update_context.chat_type == ChatType.DIALOG)
 
 
@@ -59,10 +55,10 @@ class BotSetup(ZhekaType):
 def make_dispatcher(
     config: RedisConfig,
     storage: BaseStorage | None = None,
-    events_isolation: BaseEventIsolation | None = None,
     message_manager: MessageManagerProtocol | None = None,
 ) -> BotSetup:
     key_builder = DefaultKeyBuilder(with_destiny=True)
+    events_isolation: BaseEventIsolation | None = None
     if storage is None:
         redis_storage = RedisStorage.from_url(
             config.url,
@@ -76,18 +72,13 @@ def make_dispatcher(
             },
         )
         storage = redis_storage
-        # create_isolation() есть только у RedisStorage, поэтому изоляцию
-        # берем отсюда, а не из любого storage: gunicorn держит воркер на
-        # ядро, и воркер таскика рисует окна тем же стеком, так что два
-        # нажатия одного жителя прилетают в разные процессы
-        events_isolation = events_isolation or redis_storage.create_isolation()
+        # межпроцессная: два нажатия одного жителя попадают в разные воркеры
+        events_isolation = redis_storage.create_isolation()
 
     dp = Dispatcher(
         storage=storage,
-        # межпроцессную блокировку держит events_isolation, отданная ниже в
-        # setup_dialogs: она достается IntentMiddlewareFactory и запирает
-        # контекст диалога. Своя изоляция диспетчера была бы вторым замком на
-        # тех же ключах уровня FSM, а сырого состояния FSM у бота нет
+        # контекст диалога запирает events_isolation из setup_dialogs, а
+        # сырого состояния FSM у бота нет
         events_isolation=DisabledEventIsolation(),
         key_builder=key_builder,
     )
@@ -122,9 +113,7 @@ def make_dispatcher(
         fallback_router,
     )
 
-    # остановка и звук приходят из лички, добавление и удаление бота - из
-    # чата дома. Ни то ни другое не окна личного потока, и фильтр
-    # private_router висит не на их обсерверах
+    # события жизни бота и чата дома - не окна личного потока
     dp.include(error_router, lifecycle_router, chats_router, private_router)
 
     media_id_storage = MediaIdStorage()

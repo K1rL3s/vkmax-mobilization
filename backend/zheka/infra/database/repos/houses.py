@@ -274,7 +274,6 @@ class HousesRepo(BaseAlchemyRepo):
         self,
         house_ids: Collection[HouseId],
     ) -> dict[HouseId, int]:
-        # заявки живут в блоке 9, здесь нужен только счетчик на карточку дома
         if not house_ids:
             return {}
         stmt = (

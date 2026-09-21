@@ -46,8 +46,7 @@ def _profile_service(session: AsyncSession) -> ProfileService:
 
 
 def _original(dependency: Any) -> Callable[..., Awaitable[CurrentResidency]]:
-    # @inject вырезает параметры FromDishka из сигнатуры обертки, поэтому
-    # тест зовет оригинал и передает репозитории руками
+    # @inject вырезает параметры FromDishka из сигнатуры обертки
     return cast(
         Callable[..., Awaitable[CurrentResidency]],
         dependency.__dishka_orig_func__,
@@ -274,58 +273,30 @@ async def test_get_me_leaves_the_verification_status_empty_without_a_request(
     assert summary.verification_reject_reason is None
 
 
-async def test_get_me_carries_the_pending_verification_status(
+# у одобренного запроса в поле причины лежит заметка УК, жителю ее не видно
+@pytest.mark.parametrize(
+    ("status", "reason", "shown_reason"),
+    [
+        (VerificationStatus.PENDING, None, None),
+        (VerificationStatus.REJECTED, REJECT_REASON, REJECT_REASON),
+        (VerificationStatus.APPROVED, "Проверено по реестру", None),
+    ],
+)
+async def test_get_me_carries_the_verification_status(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    status: VerificationStatus,
+    reason: str | None,
+    shown_reason: str | None,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    await _request_verification(session, own.user_id, own.flat_id)
+    await _request_verification(session, own.user_id, own.flat_id, status, reason)
 
     view = await _profile_service(session).me(own.user_id)
 
     summary = ResidencySummary.of(view.residencies[0])
-    assert summary.verification_status is VerificationStatus.PENDING
-    assert summary.verification_reject_reason is None
-
-
-async def test_get_me_carries_the_reject_reason(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    await _request_verification(
-        session,
-        own.user_id,
-        own.flat_id,
-        VerificationStatus.REJECTED,
-        REJECT_REASON,
-    )
-
-    view = await _profile_service(session).me(own.user_id)
-
-    summary = ResidencySummary.of(view.residencies[0])
-    assert summary.verification_status is VerificationStatus.REJECTED
-    assert summary.verification_reject_reason == REJECT_REASON
-
-
-async def test_get_me_hides_the_note_of_an_approved_request(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    await _request_verification(
-        session,
-        own.user_id,
-        own.flat_id,
-        VerificationStatus.APPROVED,
-        "Проверено по реестру",
-    )
-
-    view = await _profile_service(session).me(own.user_id)
-
-    summary = ResidencySummary.of(view.residencies[0])
-    assert summary.verification_status is VerificationStatus.APPROVED
-    assert summary.verification_reject_reason is None
+    assert summary.verification_status is status
+    assert summary.verification_reject_reason == shown_reason
 
 
 async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(

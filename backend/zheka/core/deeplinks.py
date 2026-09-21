@@ -25,10 +25,6 @@ _STANDALONE = (DeeplinkKind.DEMO_STAFF, DeeplinkKind.DEMO_RESIDENT)
 _BY_PREFIX = {kind.value: kind for kind in DeeplinkKind if kind not in _STANDALONE}
 
 
-def org_register_payload(code: str) -> str:
-    return f"{DeeplinkKind.ORG_REGISTER}_{code}"
-
-
 def org_invite_payload(code: str) -> str:
     return f"{DeeplinkKind.ORG_INVITE}_{code}"
 
@@ -46,9 +42,8 @@ def entrance_qr_payload(house_id: HouseId, entrance: int) -> str:
 
 
 def parse_deeplink(payload: str) -> Deeplink | None:
-    for kind in _STANDALONE:
-        if payload == kind:
-            return Deeplink(kind=kind)
+    if payload in _STANDALONE:
+        return Deeplink(kind=DeeplinkKind(payload))
 
     prefix, _, value = payload.partition("_")
     kind_with_value = _BY_PREFIX.get(prefix)

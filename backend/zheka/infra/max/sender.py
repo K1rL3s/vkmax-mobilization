@@ -1,8 +1,8 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
-from typing import Any
 
 from maxo import Bot
 from maxo.dialogs import BgManagerFactory, Data, ShowMode, StartMode
@@ -14,6 +14,8 @@ from maxo.errors import (
     MaxBotNotFoundError,
 )
 from maxo.fsm import State
+from maxo.omit import Omitted
+from maxo.types import Attachments, AttachmentsRequests
 from maxo.types.buttons import InlineButtons
 from maxo.types.inline_keyboard_attachment_request import (
     InlineKeyboardAttachmentRequest,
@@ -28,14 +30,23 @@ logger = logging.getLogger(__name__)
 
 BOT_RATE_LIMIT = RateLimiter(max_calls=30, period=1.0)
 
-# звук окна диалога: ZhekaMessageManager читает его на каждой отправке.
-# Дефолт продуктовый - молча, поднимает флаг только start_dialog
+# звук окна диалога для ZhekaMessageManager, поднимает его только start_dialog
 dialog_notify: ContextVar[bool] = ContextVar("dialog_notify", default=False)
 
 
 @lru_cache(maxsize=4096)
 def _chat_rate_limit(recipient: int) -> RateLimiter:  # noqa: ARG001
     return RateLimiter(max_calls=2, period=1.0)
+
+
+@contextmanager
+def _undelivered() -> Iterator[None]:
+    try:
+        yield
+    except (MaxBotNotFoundError, MaxBotForbiddenError) as error:
+        logger.warning("Получатель недоступен, бот остановлен или удалён: %s", error)
+    except (MaxBotNetworkError, MaxBotApiError):
+        logger.exception("MAX не принял сообщение")
 
 
 class MaxSender:
@@ -53,41 +64,30 @@ class MaxSender:
         user_id: MaxUserId | None = None,
         notify: bool = False,
         keyboard: Sequence[Sequence[InlineButtons]] | None = None,
-        **kwargs: Any,
     ) -> SendMessageResult | None:
         recipient = chat_id if chat_id is not None else user_id
         if recipient is None:
             raise ValueError("Нужен либо chat_id, либо user_id")
 
+        attachments: list[AttachmentsRequests | Attachments] | None = None
         if keyboard is not None:
-            kwargs["attachments"] = [
+            attachments = [
                 InlineKeyboardAttachmentRequest.factory(
-                    [list(row) for row in keyboard],
+                    [list(row) for row in keyboard]
                 ),
             ]
 
-        async with BOT_RATE_LIMIT, _chat_rate_limit(recipient):
-            return await self._send(
-                text=text,
-                chat_id=chat_id,
-                user_id=user_id,
-                notify=notify,
-                **kwargs,
-            )
-
-    async def _send(self, **kwargs: Any) -> SendMessageResult | None:
-        clean = {key: value for key, value in kwargs.items() if value is not None}
-        try:
-            return await self._bot.send_message(**clean)
-        except (MaxBotNotFoundError, MaxBotForbiddenError) as error:
-            logger.warning(
-                "Получатель недоступен, бот остановлен или удалён: %s", error
-            )
-        except MaxBotNetworkError:
-            logger.exception("Сеть не дала отправить сообщение")
-        except MaxBotApiError:
-            logger.exception("MAX отказал в отправке сообщения")
-        return None
+        result: SendMessageResult | None = None
+        with _undelivered():
+            async with BOT_RATE_LIMIT, _chat_rate_limit(recipient):
+                result = await self._bot.send_message(
+                    text=text,
+                    chat_id=Omitted() if chat_id is None else chat_id,
+                    user_id=Omitted() if user_id is None else user_id,
+                    notify=notify,
+                    attachments=attachments,
+                )
+        return result
 
     async def start_dialog(
         self,
@@ -100,12 +100,8 @@ class MaxSender:
         stack_id: str | None = None,
         show_mode: ShowMode | None = None,
     ) -> None:
-        # единственный способ задачи открыть или заменить окно: потолки MAX
-        # остаются в одном классе, а notify - явным аргументом.
-        # RESET_STACK, а не NEW_STACK: последний внутри менеджера снова уходит
-        # через call_soon и возвращается раньше отправки, то есть ровно та
-        # беда, от которой тут стоит fg(). Отдельный стек для окна задается
-        # своим stack_id, и он остается синхронным
+        # RESET_STACK, а не NEW_STACK: тот снова уходит через call_soon и
+        # возвращается раньше отправки, от чего здесь и стоит fg()
         if user.max_chat_id is None or user.bot_stopped_at is not None:
             logger.info(
                 "У пользователя %s нет живого личного чата с ботом, окно не открыто",
@@ -122,39 +118,29 @@ class MaxSender:
         )
         token = dialog_notify.set(notify)
         try:
-            # fg(), а не bg().start(): тот отдает апдейт в call_soon и
-            # возвращается сразу, и задача успела бы закоммититься раньше
-            # отправки, а ошибка всплыла бы непрочитанной
-            async with (
-                BOT_RATE_LIMIT,
-                # по max_user_id, как и рассылка: у личного диалога два разных
-                # id, и ведро на max_chat_id было бы вторым на тот же чат
-                _chat_rate_limit(user.max_user_id),
-                manager.fg() as dialog_manager,
-            ):
-                await dialog_manager.start(
-                    state,
-                    data=data,
-                    mode=mode,
-                    show_mode=show_mode,
-                )
-        except (MaxBotNotFoundError, MaxBotForbiddenError) as error:
-            logger.warning(
-                "Получатель недоступен, бот остановлен или удалён: %s", error
-            )
-        except MaxBotNetworkError:
-            logger.exception("Сеть не дала открыть окно")
-        except MaxBotApiError:
-            logger.exception("MAX отказал в отправке сообщения")
+            # fg(), а не bg().start(): тот отдает апдейт в call_soon, и задача
+            # закоммитилась бы раньше отправки
+            with _undelivered():
+                async with (
+                    BOT_RATE_LIMIT,
+                    # по max_user_id, как и рассылка: ведро на max_chat_id было
+                    # бы вторым на тот же чат
+                    _chat_rate_limit(user.max_user_id),
+                    manager.fg() as dialog_manager,
+                ):
+                    await dialog_manager.start(
+                        state,
+                        data=data,
+                        mode=mode,
+                        show_mode=show_mode,
+                    )
         finally:
             dialog_notify.reset(token)
 
 
 async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:
-    # события о смене прав бота в MAX нет, поэтому права спрашиваются сами.
     # 403 и 404 значат, что бота в чате уже нет, а сбой сети или сервера
     # ничего о правах не говорит и поднимается дальше
-    # под потолком бота: рассылка по чатам зовет это на каждый недошедший чат
     try:
         async with BOT_RATE_LIMIT:
             member = await bot.get_membership(chat_id=chat_id)

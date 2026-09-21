@@ -343,7 +343,6 @@ class FlatsService:
         return [
             FlatResidentView(resident=resident, user=users[resident.user_id])
             for resident in residents
-            if resident.user_id in users
         ]
 
     async def list_invites(
@@ -447,10 +446,8 @@ class FlatsService:
             raise InvalidState("Код приглашения истек или отозван")
 
     def _ensure_not_moving(self, resident: Resident, flat_id: FlatId) -> None:
-        # переезд из подтвержденной квартиры оформляет УК: иначе житель уводил
-        # бы себя из нее в любую другую. До подтверждения защищать нечего, а
-        # запрет запирал бы жителя в квартире, номер которой он набрал с
-        # опечаткой
+        # переезд из подтвержденной квартиры оформляет УК, а до подтверждения
+        # житель волен исправить опечатку в номере
         if (
             resident.verified_at is not None
             and resident.flat_id is not None
@@ -555,7 +552,6 @@ class FlatsService:
                 user=users[request.user_id],
             )
             for request in requests
-            if request.flat_id in flats and request.user_id in users
         ]
 
     def _notify(self, user_id: UserId, text: str) -> None:

@@ -40,24 +40,6 @@ async def _add_request(session: AsyncSession, house_id: HouseId) -> RequestId:
     return request.id
 
 
-async def test_scoped_to_org_hides_foreign_request(
-    session: AsyncSession,
-    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
-) -> None:
-    org_a = await make_org_house_flat_user()
-    org_b = await make_org_house_flat_user()
-    foreign_request_id = await _add_request(session, org_b.house_id)
-
-    stmt = scoped_to_org(
-        select(Request),
-        requests_table.c.house_id,
-        org_a.org_id,
-    ).where(requests_table.c.id == foreign_request_id)
-    result = await session.execute(stmt)
-
-    assert result.scalar_one_or_none() is None
-
-
 async def test_scoped_to_org_lists_only_own_org(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
@@ -73,13 +55,6 @@ async def test_scoped_to_org_lists_only_own_org(
     assert [row.id for row in result.scalars().all()] == [own_request_id]
 
 
-def test_resolve_org_rejects_org_without_membership() -> None:
-    membership = OrgMember(org_id=OrgId(1), user_id=UserId(1), role=OrgRole.ADMIN)
-
-    with pytest.raises(NotEnoughRights):
-        resolve_org([membership], UserId(1), org_id_header=OrgId(2))
-
-
 def test_resolve_org_infers_single_membership() -> None:
     membership = OrgMember(org_id=OrgId(7), user_id=UserId(1), role=OrgRole.ADMIN)
 
@@ -88,21 +63,27 @@ def test_resolve_org_infers_single_membership() -> None:
     assert result.org_id == 7
 
 
-def test_resolve_org_requires_header_for_multiple_memberships() -> None:
+@pytest.mark.parametrize(
+    ("roles", "header"),
+    [
+        # заголовок называет организацию, в которой пользователь не состоит
+        ([(1, OrgRole.ADMIN)], OrgId(2)),
+        # членств несколько, а заголовка нет
+        ([(1, OrgRole.ADMIN), (2, OrgRole.EMPLOYEE)], None),
+        ([(1, OrgRole.EXECUTOR)], None),
+    ],
+)
+def test_resolve_org_refuses(
+    roles: list[tuple[int, OrgRole]],
+    header: OrgId | None,
+) -> None:
     memberships = [
-        OrgMember(org_id=OrgId(1), user_id=UserId(1), role=OrgRole.ADMIN),
-        OrgMember(org_id=OrgId(2), user_id=UserId(1), role=OrgRole.EMPLOYEE),
+        OrgMember(org_id=OrgId(org_id), user_id=UserId(1), role=role)
+        for org_id, role in roles
     ]
 
     with pytest.raises(NotEnoughRights):
-        resolve_org(memberships, UserId(1), org_id_header=None)
-
-
-def test_resolve_org_rejects_executor() -> None:
-    membership = OrgMember(org_id=OrgId(1), user_id=UserId(1), role=OrgRole.EXECUTOR)
-
-    with pytest.raises(NotEnoughRights):
-        resolve_org([membership], UserId(1), org_id_header=None)
+        resolve_org(memberships, UserId(1), org_id_header=header)
 
 
 async def test_upsert_by_max_id_updates_existing_row(session: AsyncSession) -> None:
@@ -126,8 +107,7 @@ async def test_events_service_record_swallows_write_failure(
 ) -> None:
     events_service = EventsService(EventsRepo(session))
 
-    # бизнес-объект добавлен до record() - savepoint не должен потерять его
-    # при откате: это как раз случай, который тихо ломается при регрессии
+    # объект добавлен до record(): откат savepoint не должен его потерять
     pending_user = User(
         max_user_id=MaxUserId(secrets.randbits(48)), name="До сбоя события"
     )
@@ -148,12 +128,8 @@ async def test_events_service_record_serializes_decimal_payload(
 ) -> None:
     events_service = EventsService(EventsRepo(session))
 
-    # payload может получить Decimal/datetime из значений, которые вызывающий
-    # код не приводит к JSON заранее - record() должен превратить их в строку,
-    # а не упасть
     await events_service.record(EventType.MINIAPP_OPEN, amount=Decimal("10.00"))
 
-    # сессия должна остаться пригодной для обычной работы
     user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="После сериализации")
     session.add(user)
     await session.flush()

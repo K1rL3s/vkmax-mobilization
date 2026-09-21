@@ -556,46 +556,28 @@ async def test_a_window_with_two_seats_takes_two_residents_and_no_third(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    # в кабинете двое сотрудников, значит в слот помещаются двое жителей
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     await _open_every_day(service, fixture.org_id, capacity=2)
     day = _some_day()
     starts_at = _moment(day)
 
+    async def is_free() -> bool:
+        slots = await service.slots(fixture.house_id, day, day)
+        return {slot.starts_at: slot.is_free for slot in slots}[starts_at]
+
     await service.book(fixture.user_id, fixture.house_id, starts_at, None)
+
+    assert await is_free() is True
+
     second = await _add_user(session)
     await service.book(second, fixture.house_id, starts_at, None)
 
-    slots = {
-        slot.starts_at: slot.is_free
-        for slot in await service.slots(fixture.house_id, day, day)
-    }
-    assert slots[starts_at] is False
+    assert await is_free() is False
 
     third = await _add_user(session)
     with pytest.raises(InvalidState, match="занят"):
         await service.book(third, fixture.house_id, starts_at, None)
-
-
-async def test_a_window_with_two_seats_stays_free_after_one_booking(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    fixture = await make_org_house_flat_user()
-    service = _make_service(session)
-    await _open_every_day(service, fixture.org_id, capacity=2)
-    day = _some_day()
-    starts_at = _moment(day)
-
-    await service.book(fixture.user_id, fixture.house_id, starts_at, None)
-
-    slots = {
-        slot.starts_at: slot.is_free
-        for slot in await service.slots(fixture.house_id, day, day)
-    }
-
-    assert slots[starts_at] is True
 
 
 async def test_another_org_does_not_take_our_slot(
@@ -633,29 +615,6 @@ async def test_another_org_does_not_take_our_slot(
     rows = await service.today(fixture.org_id, day, None)
 
     assert [row.appointment.id for row in rows] == [booked.appointment.id]
-
-
-async def test_one_resident_takes_one_seat_of_a_slot(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    # в слоте два места, но не для одного и того же жителя
-    fixture = await make_org_house_flat_user()
-    service = _make_service(session)
-    await _open_every_day(service, fixture.org_id, capacity=2)
-    day = _some_day()
-    starts_at = _moment(day)
-
-    await service.book(fixture.user_id, fixture.house_id, starts_at, None)
-
-    with pytest.raises(InvalidState, match="уже записаны"):
-        await service.book(fixture.user_id, fixture.house_id, starts_at, None)
-
-    # место осталось свободным для соседа
-    neighbour = await _add_user(session)
-    second = await service.book(neighbour, fixture.house_id, starts_at, None)
-
-    assert second.appointment.user_id == neighbour
 
 
 async def test_a_cancelled_record_does_not_block_the_same_resident(

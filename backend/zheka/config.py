@@ -78,8 +78,6 @@ class DeeplinksConfig(ZhekaType):
 
 
 class YandexConfig(ZhekaType):
-    # ключ и каталог опциональны: без них клиенты коротко замыкаются на None и
-    # не ходят в сеть
     api_key: str | None
     folder_id: str | None
     model: str = YANDEX_DEFAULT_MODEL
@@ -169,11 +167,9 @@ def _load_files(env: Env) -> FilesConfig:
 
 def _load_deeplinks(env: Env) -> DeeplinksConfig:
     with env.prefixed("DEEPLINK_"):
-        # у кода регистрации нет значения по умолчанию: пустой секрет, который
-        # молча работает, хуже ошибки на старте
+        # без умолчания: молча работающий пустой секрет хуже ошибки на старте
         org_register = env.str("ORG_REGISTER")
-    # сравнение с кодом идет через secrets.compare_digest, а он на не-ASCII
-    # бросает TypeError - то есть 500 на первом же запросе вместо ошибки старта
+    # secrets.compare_digest бросает TypeError на не-ASCII, то есть 500 на запросе
     if not org_register.isascii():
         raise ValueError("DEEPLINK_ORG_REGISTER должен состоять только из ASCII")
     return DeeplinksConfig(org_register=org_register)

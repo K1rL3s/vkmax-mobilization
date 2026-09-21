@@ -51,7 +51,6 @@ class ReadingPeriodItem(BaseSchema):
     period: date
     is_open: bool
     is_submitted: bool
-    # почему период закрыт, если закрыт
     reason: str | None = None
 
     @classmethod

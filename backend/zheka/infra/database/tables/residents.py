@@ -73,8 +73,8 @@ flat_verification_requests_table = Table(
     Column("decided_by", BigInteger, ForeignKey("users.id"), nullable=True),
     Column("decided_at", DateTime(timezone=True), nullable=True),
     Column("reason", String, nullable=True),
-    # вторую заявку в ожидании по той же квартире держит база, а не чтение
-    # перед записью: два параллельных запроса прошли бы его оба
+    # вторую ожидающую заявку на квартиру держит база: чтение перед записью
+    # пропустило бы два параллельных запроса
     Index(
         None,
         "user_id",

@@ -29,10 +29,8 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-# дом столько квартир не наберет, чтобы постраничная выборка что-то отрезала,
-# а прогноз кворума не имеет права потерять ни одну квартиру дома
+# столько квартир в доме не бывает, а кворум не может потерять ни одной
 _ALL_FLATS_LIMIT = 10_000
-# минимум различных непустых вариантов ответа в опросе
 MIN_POLL_OPTIONS = 2
 
 POLL_NOT_FOUND = "Опрос не найден"
@@ -94,8 +92,7 @@ class AdminPollListItemData(ZhekaType):
 
 
 def _effective_status(poll: Poll, now: datetime) -> PollStatus:
-    # строку переводит в CLOSED задача close_expired_polls раз в сутки - до
-    # нее сырой статус может врать, если ends_at уже прошел
+    # close_expired_polls закрывает строку раз в сутки, до нее статус врет
     if poll.status is PollStatus.CLOSED or poll.ends_at <= now:
         return PollStatus.CLOSED
     return PollStatus.ACTIVE
@@ -159,8 +156,7 @@ class PollsService:
         options = _clean_options(draft.options)
 
         if org_id is not None:
-            # сотрудник УК - право уже подтвердил CurrentOrgDep, здесь только
-            # проверка, что дом действительно этой организации
+            # право сотрудника уже проверил CurrentOrgDep, здесь - что дом его
             house = await self._houses.get_for_org(house_id, org_id)
             if house is None:
                 raise EntityNotFound(HOUSE_NOT_FOUND)
@@ -205,22 +201,11 @@ class PollsService:
         user_id: UserId,
         status: PollStatus | None,
     ) -> list[PollListItemData]:
-        polls = await self._polls.list_for_house(house_id, None)
-        now = datetime.now(UTC)
-        items: list[PollListItemData] = []
-        for poll in polls:
-            effective = _effective_status(poll, now)
-            if status is not None and effective is not status:
-                continue
-            items.append(await self._list_item(poll, user_id, effective))
-        # стабильная сортировка дважды: сначала свежие сверху, потом активные
-        # перед закрытыми - обе заметки блока 12 выполняются на одном списке.
-        # id - надежный второй ключ: now() в PostgreSQL общий на транзакцию,
-        # и два опроса, заведенных подряд в одной транзакции, получают
-        # одинаковый created_at, а id все равно растет по порядку вставки
-        items.sort(key=lambda item: (item.poll.created_at, item.poll.id), reverse=True)
-        items.sort(key=lambda item: item.status is PollStatus.CLOSED)
-        return items
+        polls = await self._polls.list_for_house(house_id)
+        return [
+            await self._list_item(poll, user_id, effective)
+            for poll, effective in _by_status(polls, status)
+        ]
 
     async def list_org_polls(
         self,
@@ -236,14 +221,7 @@ class PollsService:
             if house is None:
                 raise EntityNotFound(HOUSE_NOT_FOUND)
 
-        polls = await self._polls.list_for_org(org_id, house_id, None)
-        now = datetime.now(UTC)
-        dated = [(poll, _effective_status(poll, now)) for poll in polls]
-        if status is not None:
-            dated = [pair for pair in dated if pair[1] is status]
-        dated.sort(key=lambda pair: (pair[0].created_at, pair[0].id), reverse=True)
-        dated.sort(key=lambda pair: pair[1] is PollStatus.CLOSED)
-
+        dated = _by_status(await self._polls.list_for_org(org_id, house_id), status)
         total = len(dated)
         page = dated[offset : offset + limit]
         houses = {
@@ -253,16 +231,13 @@ class PollsService:
             )
         }
 
-        result: list[AdminPollListItemData] = []
-        for poll, effective in page:
-            item = await self._list_item(poll, user_id, effective)
-            house = houses.get(HouseId(poll.house_id))
-            result.append(
-                AdminPollListItemData(
-                    item=item,
-                    address="" if house is None else house.address,
-                ),
+        result = [
+            AdminPollListItemData(
+                item=await self._list_item(poll, user_id, effective),
+                address=houses[HouseId(poll.house_id)].address,
             )
+            for poll, effective in page
+        ]
         return result, total
 
     async def vote(
@@ -332,7 +307,7 @@ class PollsService:
     async def close(self, poll_id: PollId, user_id: UserId) -> PollCardData:
         poll = await self._get_poll(poll_id)
         await self._require_initiator_or_staff(poll, user_id)
-        await self._polls.close(PollId(poll.id))
+        await self._polls.close(poll)
         return await self._card(poll, user_id)
 
     async def _card(self, poll: Poll, user_id: UserId) -> PollCardData:
@@ -456,25 +431,33 @@ class PollsService:
     async def _reachable_poll(self, poll_id: PollId, user_id: UserId) -> Poll:
         poll = await self._get_poll(poll_id)
         resident = await self._residents.get_for_house(user_id, HouseId(poll.house_id))
-        if resident is not None:
-            return poll
-        if poll.org_id is not None and await self._is_org_staff(
-            OrgId(poll.org_id),
-            user_id,
-        ):
-            return poll
-        raise EntityNotFound(POLL_NOT_FOUND)
+        if resident is None and not await self._is_poll_staff(poll, user_id):
+            raise EntityNotFound(POLL_NOT_FOUND)
+        return poll
 
     async def _require_initiator_or_staff(self, poll: Poll, user_id: UserId) -> None:
         if UserId(poll.created_by_user_id) == user_id:
             return
-        if poll.org_id is not None and await self._is_org_staff(
-            OrgId(poll.org_id),
-            user_id,
-        ):
-            return
-        raise NotEnoughRights(NOT_INITIATOR)
+        if not await self._is_poll_staff(poll, user_id):
+            raise NotEnoughRights(NOT_INITIATOR)
 
-    async def _is_org_staff(self, org_id: OrgId, user_id: UserId) -> bool:
-        member = await self._orgs.get_member(org_id, user_id)
+    async def _is_poll_staff(self, poll: Poll, user_id: UserId) -> bool:
+        if poll.org_id is None:
+            return False
+        member = await self._orgs.get_member(OrgId(poll.org_id), user_id)
         return member is not None and is_staff(member.role)
+
+
+def _by_status(
+    polls: Sequence[Poll],
+    status: PollStatus | None,
+) -> list[tuple[Poll, PollStatus]]:
+    now = datetime.now(UTC)
+    dated = [(poll, _effective_status(poll, now)) for poll in polls]
+    if status is not None:
+        dated = [pair for pair in dated if pair[1] is status]
+    # свежие сверху, затем активные перед закрытыми. id - второй ключ: now()
+    # в PostgreSQL общий на транзакцию, и created_at двух опросов совпадает
+    dated.sort(key=lambda pair: (pair[0].created_at, pair[0].id), reverse=True)
+    dated.sort(key=lambda pair: pair[1] is PollStatus.CLOSED)
+    return dated

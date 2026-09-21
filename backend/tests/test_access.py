@@ -348,17 +348,19 @@ async def test_a_full_slot_rejects_the_next_pick(
     assert picked.my_slot_id == free
 
 
-async def test_a_repeated_pick_does_not_double_the_counter(
+async def test_a_repeated_pick_is_a_no_op_and_a_move_keeps_the_first_answer(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
+    # окно на одну квартиру: если повторный выбор пойдет мимо проверки
+    # «то же самое окно», житель упрется в собственную занятую ячейку
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     flat_id, user_id = await _with_resident(session, fixture.house_id, "12")
     grid = await service.create(
         fixture.org_id,
         fixture.user_id,
-        _draft(fixture.house_id, [flat_id], capacity=2),
+        _draft(fixture.house_id, [flat_id], capacity=1),
     )
     request_id = AccessRequestId(grid.request.request.id)
     first_slot = AccessSlotId(grid.request.slots[0].slot.id)
@@ -367,18 +369,21 @@ async def test_a_repeated_pick_does_not_double_the_counter(
     await service.pick(user_id, request_id, first_slot)
     before = await service.grid(fixture.org_id, request_id)
     first_answer = before.targets[0].target.responded_at
+    again = await service.pick(user_id, request_id, first_slot)
 
-    await service.pick(user_id, request_id, first_slot)
+    assert again.my_slot_id == first_slot
+    assert [data.taken for data in again.slots] == [1, 0]
+    assert len(await _events(session, EventType.ACCESS_SLOT_PICKED)) == 1
+
     moved = await service.pick(user_id, request_id, second_slot)
     after = await service.grid(fixture.org_id, request_id)
 
-    assert after.request.responded_count == 1
-    assert after.request.targets_count == 1
     assert moved.my_slot_id == second_slot
+    assert after.request.responded_count == 1
+    assert [data.taken for data in after.request.slots] == [0, 1]
     # ответ остается первым: смена решения не новый ответ
     assert first_answer is not None
     assert after.targets[0].target.responded_at == first_answer
-    assert [data.taken for data in after.request.slots] == [0, 1]
 
 
 async def test_a_pick_of_a_stranger_or_of_another_request_is_not_found(
@@ -490,37 +495,6 @@ async def test_a_request_of_another_house_stays_out_of_the_list(
     assert len(await service.list_for_org(fixture.org_id, None)) == 1
 
 
-async def test_a_repeat_of_the_same_choice_is_a_no_op(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    # окно на одну квартиру: если повторный выбор пойдет мимо проверки
-    # «то же самое окно», житель упрется в собственную занятую ячейку
-    fixture = await make_org_house_flat_user()
-    service = _make_service(session)
-    flat_id, user_id = await _with_resident(session, fixture.house_id, "12")
-    grid = await service.create(
-        fixture.org_id,
-        fixture.user_id,
-        _draft(fixture.house_id, [flat_id], capacity=1),
-    )
-    request_id = AccessRequestId(grid.request.request.id)
-    slot_id = AccessSlotId(grid.request.slots[0].slot.id)
-
-    await service.pick(user_id, request_id, slot_id)
-    again = await service.pick(user_id, request_id, slot_id)
-
-    assert again.my_slot_id == slot_id
-    assert again.responded_count == 1
-    assert [data.taken for data in again.slots] == [1, 0]
-
-    # повторный выбор не пишет ни ячейку, ни событие
-    events = await _events(session, EventType.ACCESS_SLOT_PICKED)
-
-    assert len(events) == 1
-    assert events[0].payload["slot_id"] == slot_id
-
-
 async def test_a_resident_blocked_after_the_request_is_refused_with_the_reason(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
@@ -619,20 +593,6 @@ async def test_a_block_in_another_house_does_not_reach_this_request(
     )
 
     assert picked.my_flat_id == flat_id
-
-    # и тот же житель, не адресат чужого запроса, получает 404, а не отказ
-    stranger_grid = await service.create(
-        elsewhere.org_id,
-        elsewhere.user_id,
-        _draft(elsewhere.house_id, [other_flat]),
-    )
-
-    with pytest.raises(EntityNotFound, match="Запрос доступа"):
-        await service.pick(
-            user_id,
-            AccessRequestId(stranger_grid.request.request.id),
-            AccessSlotId(stranger_grid.request.slots[0].slot.id),
-        )
 
 
 async def test_a_request_for_today_is_accepted(

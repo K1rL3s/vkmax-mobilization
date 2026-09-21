@@ -18,8 +18,6 @@ from zheka.infra.database.tables.organizations import (
 class OrgsRepo(BaseAlchemyRepo):
     async def get(self, org_id: OrgId) -> Organization | None:
         stmt = select(Organization).where(organizations_table.c.id == org_id)
-        # аннотация обязательна: Organization отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         org: Organization | None = await self._session.scalar(stmt)
         return org
 
@@ -55,8 +53,6 @@ class OrgsRepo(BaseAlchemyRepo):
 
     async def get_settings(self, org_id: OrgId) -> OrgSettings | None:
         stmt = select(OrgSettings).where(org_settings_table.c.org_id == org_id)
-        # аннотация обязательна: OrgSettings отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         settings: OrgSettings | None = await self._session.scalar(stmt)
         return settings
 

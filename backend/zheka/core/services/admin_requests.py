@@ -234,12 +234,9 @@ class AdminRequestsService:
     ) -> RequestGroupCardData:
         group = await self._org_group(org_id, group_id)
         members = await self._requests.list_for_group(RequestGroupId(group.id))
-        # опоздавший участник, застрявший в NEW, пока группа ушла вперед
-        # (группа остается OPEN сквозь ACCEPTED/IN_PROGRESS/ON_REVIEW, и
-        # свежая заявка вступает в нее как в любую другую открытую группу),
-        # идет через промежуточные статусы той же транзакцией - лог и
-        # событие на каждый шаг. Участник, обогнавший цель, ломает вызов
-        # целиком: transition_path поднимет InvalidState до первой записи
+        # опоздавший участник идет через промежуточные статусы, с логом и
+        # событием на каждый шаг. Обогнавший цель ломает вызов целиком:
+        # transition_path поднимет InvalidState до первой записи
         paths = [(member, transition_path(member.status, target)) for member in members]
         if all(not path for _, path in paths):
             raise InvalidState(GROUP_ALREADY_THERE)
@@ -264,20 +261,16 @@ class AdminRequestsService:
             raise InvalidRequest(EMPTY_DESCRIPTION)
         caller_name = (draft.caller_name or "").strip() or None
         caller_phone = (draft.caller_phone or "").strip() or None
-        # заявку по звонку должно быть чем привязать к дому: либо к квартире,
-        # либо к тому, кто звонил - иначе ее некому показать и некому звонить
+        # без квартиры и без звонившего заявку некому показать и некому звонить
         if draft.flat_id is None and not (caller_name and caller_phone):
             raise InvalidRequest(NO_CALLER_IDENTIFICATION)
 
-        flat = None
         if draft.flat_id is not None:
             flat = await self._houses.get_flat(draft.flat_id)
             if flat is None or flat.house_id != draft.house_id:
                 raise EntityNotFound(FLAT_NOT_FOUND)
 
-        # у заявки по звонку нет автора в сервисе, поэтому и обратного канала
-        # тоже нет: бот не пишет первым тому, кто его не запускал. Закрывает
-        # такую заявку УК - принимать работу некому
+        # у заявки по звонку нет автора, поэтому закрывает ее УК
         request = await self._requests.create(
             draft.house_id,
             draft.flat_id,
@@ -373,9 +366,8 @@ class AdminRequestsService:
         )
         if not notify_author:
             return
-        # на приемку заявку уводит только _move: исполнитель, кабинет и
-        # группа. Карточка приемки заменяет текст статуса, два сообщения на
-        # одно событие - шум. У заявки по звонку нет ни того, ни другого
+        # на приемку заявку уводит только _move; карточка приемки заменяет
+        # текст статуса. У заявки по звонку нет ни того, ни другого
         if target is RequestStatus.ON_REVIEW and request.author_user_id is not None:
             self._notifications.open_review_card(RequestId(request.id))
         else:
@@ -385,8 +377,7 @@ class AdminRequestsService:
             )
 
     def _notify_author(self, request: Request, text: str) -> None:
-        # у заявки по звонку автора в сервисе нет, и обратного канала тоже:
-        # бот не пишет первым тому, кто его не запускал
+        # автора звонка бот не знает, а первым не пишет
         if request.author_user_id is None:
             return
         self._notifications.notify_user(
@@ -419,20 +410,14 @@ class AdminRequestsService:
             )
 
     async def _card(self, request: Request) -> AdminRequestCardData:
-        house = await self._house_of(request)
-        flat = (
-            None
-            if request.flat_id is None
-            else await self._houses.get_flat(FlatId(request.flat_id))
-        )
         return AdminRequestCardData(
             card=await build_card(
                 self._requests,
+                self._houses,
                 self._users,
                 self._orgs,
                 request,
-                house,
-                flat,
+                await self._house(HouseId(request.house_id)),
             ),
             author=(
                 None
@@ -444,22 +429,15 @@ class AdminRequestsService:
     async def _group_card(self, group: RequestGroup) -> RequestGroupCardData:
         members = await self._requests.list_for_group(RequestGroupId(group.id))
         rows = await self._rows(members)
-        # столько жалобщиков собрало группу: квартира, а у заявки про общее
-        # имущество - сам житель. Тот же счет, что и у склейки
-        sources = complaint_sources(members)
-        house = await self._houses.get(HouseId(group.house_id))
-        if house is None:
-            raise EntityNotFound(HOUSE_NOT_FOUND)
         return RequestGroupCardData(
             group=group,
-            house=house,
+            house=await self._house(HouseId(group.house_id)),
             rows=rows,
-            flats_count=len(sources),
+            # тот же счет жалобщиков, что и у склейки
+            flats_count=len(complaint_sources(members)),
         )
 
     async def _rows(self, requests: Sequence[Request]) -> list[AdminRequestRow]:
-        # счетчики фото/группы и подгрузка квартир/исполнителей общие с
-        # кабинетом жителя - build_rows считает их один раз для обоих
         base_rows = await build_rows(
             self._requests,
             self._houses,
@@ -515,8 +493,8 @@ class AdminRequestsService:
             raise EntityNotFound(GROUP_NOT_FOUND)
         return group
 
-    async def _house_of(self, request: Request) -> House:
-        house = await self._houses.get(HouseId(request.house_id))
+    async def _house(self, house_id: HouseId) -> House:
+        house = await self._houses.get(house_id)
         if house is None:
             raise EntityNotFound(HOUSE_NOT_FOUND)
         return house
@@ -529,7 +507,7 @@ class AdminRequestsService:
         photo_names: Sequence[str],
     ) -> None:
         # все проверки до первой записи: задача с фото ловит отказ и все
-        # равно рисует карточку, и отказ не должен оставить полдела в сессии
+        # равно коммитит
         request = await self._requests.get(request_id)
         if request is None:
             raise EntityNotFound(REQUEST_NOT_FOUND)
@@ -566,8 +544,7 @@ class AdminRequestsService:
         user_id: UserId,
         request_id: RequestId,
     ) -> RequestCardData | None:
-        # None - заявку передали другому или исполнителя убрали из УК: окно
-        # говорит об этом, а не падает, иначе старая карточка ушла бы в меню
+        # None, а не отказ: геттер, упавший на старой карточке, увел бы ее в меню
         request = await self._requests.get(request_id)
         if request is None:
             raise EntityNotFound(REQUEST_NOT_FOUND)
@@ -580,7 +557,7 @@ class AdminRequestsService:
         # остается в executor_user_id и с живой карточкой на руках
         if request.executor_user_id != user_id:
             return False
-        house = await self._house_of(request)
+        house = await self._house(HouseId(request.house_id))
         if house.org_id is None:
             return False
         member = await self._orgs.get_member(OrgId(house.org_id), user_id)

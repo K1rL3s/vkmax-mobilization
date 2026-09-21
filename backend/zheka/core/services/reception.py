@@ -66,8 +66,7 @@ def expand_slots(window: ReceptionWindow, day: date) -> list[datetime]:
     ends_at = datetime.combine(day, window.time_to, tzinfo=UTC)
     starts_at = datetime.combine(day, window.time_from, tzinfo=UTC)
     slots = []
-    # слот, который не помещается целиком, не предлагается: хвост окна,
-    # не кратный длине слота, просто пропадает
+    # хвост окна короче слота не предлагается
     while starts_at + step <= ends_at:
         slots.append(starts_at)
         starts_at += step
@@ -149,7 +148,21 @@ class ReceptionService:
         # пустую сетку, как и у организации без часов приема
         if house.org_id is None:
             return []
-        return await self._slots_of_org(OrgId(house.org_id), date_from, date_to)
+        org_id = OrgId(house.org_id)
+        windows = await self._reception.list_windows(org_id)
+        taken = await self._reception.taken_counts(org_id, date_from, date_to)
+        capacities = slot_capacities(windows, date_from, date_to)
+
+        # прошедший слот не выбор, а полный - выбор чужой: его видно серым
+        now = datetime.now(UTC)
+        return [
+            ReceptionSlot(
+                starts_at=moment,
+                is_free=taken.get(moment, 0) < capacity,
+            )
+            for moment, capacity in sorted(capacities.items())
+            if moment > now
+        ]
 
     async def book(
         self,
@@ -270,29 +283,6 @@ class ReceptionService:
             ],
         )
 
-    async def _slots_of_org(
-        self,
-        org_id: OrgId,
-        date_from: date,
-        date_to: date,
-    ) -> list[ReceptionSlot]:
-        windows = await self._reception.list_windows(org_id)
-        if not windows:
-            return []
-        taken = await self._reception.taken_counts(org_id, date_from, date_to)
-        capacities = slot_capacities(windows, date_from, date_to)
-
-        # прошедший слот не выбор, а полный - выбор чужой: его видно серым
-        now = datetime.now(UTC)
-        return [
-            ReceptionSlot(
-                starts_at=moment,
-                is_free=taken.get(moment, 0) < capacity,
-            )
-            for moment, capacity in sorted(capacities.items())
-            if moment > now
-        ]
-
     async def _decorate(
         self,
         appointments: Sequence[Appointment],
@@ -316,15 +306,15 @@ class ReceptionService:
 
         rows = []
         for appointment in appointments:
-            house = houses.get(HouseId(appointment.house_id))
-            org = orgs.get(OrgId(appointment.org_id))
+            house = houses[HouseId(appointment.house_id)]
+            org = orgs[OrgId(appointment.org_id)]
             user_id = UserId(appointment.user_id)
             rows.append(
                 AppointmentData(
                     appointment=appointment,
-                    address="" if house is None else house.address,
-                    org_address="" if org is None else org.address,
-                    org_phone="" if org is None else org.phone,
+                    address=house.address,
+                    org_address=org.address,
+                    org_phone=org.phone,
                     user_name=names.get(user_id),
                     flat_number=flat_numbers.get(
                         (user_id, HouseId(appointment.house_id)),

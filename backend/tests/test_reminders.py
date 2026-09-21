@@ -250,7 +250,7 @@ async def _submitted(
     await session.commit()
 
 
-async def test_the_reading_reminder_skips_a_flat_that_submitted(
+async def test_the_reading_reminder_goes_once_to_a_flat_that_did_not_submit(
     bot_session: AsyncSession,
     task_broker: InMemoryBroker,
     bot_broker: RecordingBroker,
@@ -268,43 +268,15 @@ async def test_the_reading_reminder_skips_a_flat_that_submitted(
     await _submitted(bot_session, await _meter(bot_session, done_flat), done)
 
     await _run(task_broker, remind_readings)
+    await _run(task_broker, remind_readings)
 
-    assert _to_users(bot_broker, lagging)
-    assert _to_users(bot_broker, done) == []
-    assert _to_users(bot_broker, unverified) == []
-
-
-async def test_the_reading_reminder_is_queued_as_optional_meters(
-    bot_session: AsyncSession,
-    task_broker: InMemoryBroker,
-    bot_broker: RecordingBroker,
-) -> None:
+    [queued] = _to_users(bot_broker, lagging)
     # уровень разрешает рассылка, и OFF глушит ее только у необязательного
     # сообщения своей категории
-    house_id = await _reading_house(bot_session)
-    flat_id, user_id = await _resident(bot_session, house_id)
-    await _meter(bot_session, flat_id)
-
-    await _run(task_broker, remind_readings)
-
-    [queued] = _to_users(bot_broker, user_id)
     assert queued["category"] == NotificationCategory.METERS.value
     assert queued["mandatory"] is False
-
-
-async def test_a_rerun_does_not_repeat_the_reading_reminder(
-    bot_session: AsyncSession,
-    task_broker: InMemoryBroker,
-    bot_broker: RecordingBroker,
-) -> None:
-    house_id = await _reading_house(bot_session)
-    flat_id, user_id = await _resident(bot_session, house_id)
-    await _meter(bot_session, flat_id)
-
-    await _run(task_broker, remind_readings)
-    await _run(task_broker, remind_readings)
-
-    assert len(_to_users(bot_broker, user_id)) == 1
+    assert _to_users(bot_broker, done) == []
+    assert _to_users(bot_broker, unverified) == []
 
 
 async def _poll(
@@ -382,22 +354,7 @@ async def test_a_poll_is_reminded_in_its_last_two_days(
     assert bool(_to_users(bot_broker, user_id)) is reminded
 
 
-async def test_a_rerun_does_not_repeat_the_poll_reminder(
-    bot_session: AsyncSession,
-    task_broker: InMemoryBroker,
-    bot_broker: RecordingBroker,
-) -> None:
-    house_id = await _house(bot_session)
-    _, user_id = await _resident(bot_session, house_id)
-    await _poll(bot_session, house_id, timedelta(hours=24))
-
-    await _run(task_broker, remind_polls)
-    await _run(task_broker, remind_polls)
-
-    assert len(_to_users(bot_broker, user_id)) == 1
-
-
-async def test_the_poll_reminder_goes_only_to_flats_without_a_vote(
+async def test_the_poll_reminder_goes_once_only_to_flats_without_a_vote(
     bot_session: AsyncSession,
     task_broker: InMemoryBroker,
     bot_broker: RecordingBroker,
@@ -416,6 +373,7 @@ async def test_the_poll_reminder_goes_only_to_flats_without_a_vote(
     poll_id = await _poll(bot_session, house_id, timedelta(hours=24))
     await _vote(bot_session, poll_id, voted_flat, voted)
 
+    await _run(task_broker, remind_polls)
     await _run(task_broker, remind_polls)
 
     [queued] = _to_users(bot_broker, waiting)

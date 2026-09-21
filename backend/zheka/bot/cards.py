@@ -28,14 +28,9 @@ async def ask_in_default_stack(
     state: State,
     data: Data,
 ) -> None:
-    # текст и фото maxo 0.9.0 доставляет только в стек по умолчанию
-    # (IntentMiddleware.process_message), а карточка живет в своем. Окно ввода
-    # поэтому открывается там, по нажатию самого жителя. bg().start(), а не
-    # fg(): _get_fake_user отдает вложенному апдейту настоящего User, его
-    # UserMiddleware делает апсерт той же строки users, которую держит еще не
-    # закоммиченная транзакция этого нажатия, и fg ждал бы сам себя.
-    # SEND: для события диалога в личке maxo выбирает EDIT и переписал бы
-    # последнее сообщение стека, которое давно ушло вверх по истории
+    # maxo 0.9.0 доставляет текст и фото только в стек по умолчанию.
+    # bg().start(): fg() ждал бы строку users, которую держит транзакция
+    # этого нажатия. SEND: иначе maxo переписал бы старое сообщение стека
     await dialog_manager.bg(stack_id=DEFAULT_STACK_ID).start(
         state,
         data=data,
@@ -45,8 +40,7 @@ async def ask_in_default_stack(
 
 
 async def back_to_menu(dialog_manager: DialogManager, notice: str) -> None:
-    # окно ввода заменило меню в стеке по умолчанию; после ввода там остается
-    # меню с итогом, а не окно без кнопок, которое глотает каждое сообщение
+    # иначе в стеке по умолчанию осталось бы окно ввода, глотающее сообщения
     await dialog_manager.start(
         Menu.main,
         data=MenuData(notice=notice).to_data(),

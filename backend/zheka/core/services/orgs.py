@@ -220,7 +220,6 @@ class OrgsService:
         return [
             OrgMemberView(member=member, user=users[member.user_id])
             for member in members
-            if member.user_id in users
         ]
 
     async def remove_member(

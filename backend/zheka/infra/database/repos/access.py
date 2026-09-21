@@ -41,14 +41,12 @@ class AccessRepo(BaseAlchemyRepo):
         await self._session.flush()
         return request
 
-    async def get(self, access_request_id: AccessRequestId) -> AccessRequest | None:
+    async def get(self, access_request_id: AccessRequestId) -> AccessRequest:
         stmt = select(AccessRequest).where(
             access_requests_table.c.id == access_request_id,
         )
-        # аннотация обязательна: AccessRequest отображен императивно, и
-        # scalar() для такой сущности возвращает Any
-        request: AccessRequest | None = await self._session.scalar(stmt)
-        return request
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
 
     async def get_for_org(
         self,
@@ -131,8 +129,6 @@ class AccessRepo(BaseAlchemyRepo):
         self,
         access_request_ids: Collection[AccessRequestId],
     ) -> Sequence[AccessSlot]:
-        if not access_request_ids:
-            return []
         stmt = (
             select(AccessSlot)
             .where(access_slots_table.c.access_request_id.in_(access_request_ids))
@@ -213,8 +209,6 @@ class AccessRepo(BaseAlchemyRepo):
         self,
         access_request_ids: Collection[AccessRequestId],
     ) -> dict[AccessSlotId, int]:
-        if not access_request_ids:
-            return {}
         stmt = (
             select(access_targets_table.c.slot_id, func.count())
             .where(
@@ -230,10 +224,6 @@ class AccessRepo(BaseAlchemyRepo):
         self,
         access_request_ids: Collection[AccessRequestId],
     ) -> dict[AccessRequestId, tuple[int, int]]:
-        # ответившие и всего - одним группированным запросом на весь список,
-        # а не запросом на запрос
-        if not access_request_ids:
-            return {}
         stmt = (
             select(
                 access_targets_table.c.access_request_id,

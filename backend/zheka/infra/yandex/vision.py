@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from zheka.config import YandexConfig
-from zheka.core.enums import MeterType, TariffZone
+from zheka.core.enums import TariffZone
 from zheka.core.errors import EntityNotFound
 from zheka.core.services.files import FilesService
 
@@ -28,14 +28,8 @@ def parse_reading(text: str) -> int | None:
     match = _NUMBER_RE.search(text)
     if match is None:
         return None
-    raw = match.group().replace(",", ".")
-    whole, _, frac = raw.partition(".")
-    whole = whole or "0"
-    frac = (frac + "000")[:3]
-    try:
-        return int(whole) * 1000 + int(frac)
-    except ValueError:
-        return None
+    whole, _, frac = match.group().replace(",", ".").partition(".")
+    return int(whole) * 1000 + int((frac + "000")[:3])
 
 
 def _full_text(data: Mapping[str, Any]) -> str | None:
@@ -53,11 +47,7 @@ class VisionClient:
         self._config = config
         self._files = files_service
 
-    async def recognize(
-        self,
-        photo_path: str,
-        meter_type: MeterType,  # noqa: ARG002 - зарезервировано под мультитарифный разбор
-    ) -> dict[TariffZone, int] | None:
+    async def recognize(self, photo_path: str) -> dict[TariffZone, int] | None:
         if not self._config.api_key or not self._config.folder_id:
             return None
 

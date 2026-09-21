@@ -49,7 +49,6 @@ class ChargeBreakdown(ZhekaType):
 
 
 def parse_line(raw: Mapping[str, Any]) -> ChargeLine:
-    # форма строки charges.lines: seed (блок 20) пишет именно эти ключи
     raw_service = raw["service"]
     try:
         service = ServiceType(raw_service)
@@ -70,8 +69,6 @@ def parse_lines(raw: Sequence[Any]) -> list[ChargeLine]:
 
 
 def previous_period(period: date) -> date:
-    # тот же сдвиг месяца, что и в ReadingsService, но не по "сегодня", а по
-    # периоду начисления - на месяц назад с переходом через год
     month_index = period.year * 12 + (period.month - 1) - 1
     year, month = divmod(month_index, 12)
     return date(year, month + 1, 1)

@@ -75,11 +75,7 @@ class VerifyFlatResponse(BaseSchema):
 
     @classmethod
     def of(cls, result: VerifyResult) -> Self:
-        return cls(
-            verified=result.verified,
-            detail=result.detail,
-            verification_status=result.verification_status,
-        )
+        return cls.model_validate(result)
 
 
 class FlatVerificationRequest(BaseSchema):

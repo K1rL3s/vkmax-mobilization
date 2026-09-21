@@ -167,7 +167,6 @@ class FlatsRepo(BaseAlchemyRepo):
         return result.scalar_one()
 
     async def count_meters(self, flat_id: FlatId) -> int:
-        # счетчики заводит блок 10, здесь нужно только их число на карточке
         stmt = (
             select(func.count())
             .select_from(meters_table)

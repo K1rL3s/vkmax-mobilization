@@ -165,8 +165,7 @@ async def link_house(
     houses_service: HousesService,
     flat_number: str | None,
 ) -> None:
-    # источник и подъезд кладет сюда тот, кто привел жителя в дом. HOUSE_LINKED
-    # пишет сам сервис, и второй записи тут быть не должно
+    # источник и подъезд кладет сюда тот, кто привел жителя в дом
     data = OnboardingData.load(dialog_manager)
     await houses_service.link(
         dialog_user_id(dialog_manager),
@@ -185,7 +184,5 @@ async def link_house(
 
 
 async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
-    # диплинк кладет дом, подъезд и источник в start_data, а выбор адреса
-    # руками - в данные диалога. Одна копия на старте, и дальше читается
-    # только dialog_data
+    # диплинк кладет дом в start_data, выбор руками - в dialog_data
     OnboardingData.load_start(dialog_manager).dump(dialog_manager)

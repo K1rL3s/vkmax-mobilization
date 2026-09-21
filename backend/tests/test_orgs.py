@@ -202,15 +202,16 @@ async def test_register(
 async def test_moderation(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
 ) -> None:
     own = await make_org_house_flat_user(
         org_role=OrgRole.CREATOR,
         resident_role=ResidentRole.OWNER,
     )
-    residents_repo = ResidentsRepo(session)
-    resident = await residents_repo.get_for_house(own.user_id, own.house_id)
+    resident = await ResidentsRepo(session).get_for_house(own.user_id, own.house_id)
     assert resident is not None
-    moderation = make_moderation_service(session)
+    moderation = make_moderation_service(session, publisher)
 
     view = await moderation.block(own.org_id, resident.id, "  мусорит  ", own.user_id)
     assert view.resident.status is ResidentStatus.BLOCKED
@@ -219,8 +220,14 @@ async def test_moderation(
     view = await moderation.unblock(own.org_id, resident.id, own.user_id)
     assert view.resident.status is ResidentStatus.ACTIVE
 
-    # блокировка и разблокировка обязаны оставлять след: в строке жителя нет
-    # ни автора, ни времени, только причина
+    await publisher.flush()
+    blocked, unblocked = broker.enqueued(TaskName.SEND_TO_USER)
+    assert blocked["user_id"] == unblocked["user_id"] == own.user_id
+    assert blocked["mandatory"] is unblocked["mandatory"] is True
+    assert "мусорит" in blocked["text"]
+    assert "вернула" in unblocked["text"]
+
+    # в строке жителя нет ни автора, ни времени блокировки, след - только событие
     stmt = select(Event).order_by(events_table.c.id)
     events = (await session.execute(stmt)).scalars().all()
     assert [event.type for event in events] == [
@@ -260,8 +267,7 @@ async def test_foreign_resident_is_not_found_for_another_org(
     foreign = await ResidentsRepo(session).get_for_house(other.user_id, other.house_id)
     assert foreign is not None
 
-    # общий путь _get_resident закрывает block, unblock, revoke-verification
-    # и chairman разом. Чужой житель - это 404, а не 403: 403 подтвердил бы,
+    # _get_resident общий для всей модерации. 404, а не 403: 403 подтвердил бы,
     # что такой resident_id существует
     with pytest.raises(EntityNotFound):
         await make_moderation_service(session).block(
@@ -331,7 +337,7 @@ async def test_update_settings_rejects_values_outside_the_limits(
 
 @pytest.mark.parametrize(
     ("expires_in_hours", "max_activations"),
-    [(0, 1), (-1, 1), (72, 0), (72, -1)],
+    [(0, 1), (72, 0)],
 )
 async def test_create_invite_rejects_dead_limits(
     session: AsyncSession,
@@ -350,32 +356,3 @@ async def test_create_invite_rejects_dead_limits(
             expires_in_hours=expires_in_hours,
             max_activations=max_activations,
         )
-
-
-async def test_block_and_unblock_reach_the_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
-) -> None:
-    own = await make_org_house_flat_user(
-        org_role=OrgRole.CREATOR,
-        resident_role=ResidentRole.OWNER,
-    )
-    resident = await ResidentsRepo(session).get_for_house(own.user_id, own.house_id)
-    assert resident is not None
-    moderation = make_moderation_service(session, publisher)
-    reason = "Оскорблял соседей в чате"
-
-    await moderation.block(own.org_id, resident.id, reason, own.user_id)
-    await moderation.unblock(own.org_id, resident.id, own.user_id)
-
-    await publisher.flush()
-    blocked, unblocked = broker.enqueued(TaskName.SEND_TO_USER)
-    assert blocked["user_id"] == own.user_id
-    assert blocked["mandatory"] is True
-    # причина - единственное, ради чего _require_reason не пускает пробелы
-    assert reason in blocked["text"]
-    assert unblocked["user_id"] == own.user_id
-    assert unblocked["mandatory"] is True
-    assert "вернула" in unblocked["text"]

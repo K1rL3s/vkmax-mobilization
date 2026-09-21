@@ -20,8 +20,7 @@ REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = MappingProxyType(
 
 
 def _plain(value: str) -> str:
-    # бот отправляет сообщения в режиме HTML, а сюда приходит текст УК и
-    # жителя: незакрытый угловой скобкой фрагмент иначе роняет отправку
+    # бот шлет HTML, и незакрытая угловая скобка от УК или жителя роняет отправку
     return escape(value)
 
 
@@ -66,10 +65,7 @@ def announcement(org_name: str, text: str) -> str:
 
 
 def blocked_detail(reason: str | None) -> str:
-    # причина из residents.block_reason: отказ без нее не подсказывает жителю,
-    # к кому идти и что исправлять. Единственная строка файла без _plain:
-    # она уезжает в detail ответа API, а не в сообщение MAX, - для бота
-    # берите resident_blocked, иначе «<» от УК уедет в HTML неэкранированным
+    # без _plain: уходит в detail ответа API, для бота есть resident_blocked
     return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
 
 
@@ -120,8 +116,7 @@ def verification_expired(meter: str, serial: str) -> str:
 
 
 def appointment_reminder(starts_at: datetime, address: str) -> str:
-    # время приема - настенные часы, хранятся как UTC, поэтому показываются
-    # как есть, без перевода в пояс
+    # настенные часы хранятся как UTC и показываются без перевода в пояс
     return (
         f"Напоминаем: завтра в {starts_at:%H:%M} вы записаны на прием в УК "
         f"по дому {_plain(address)}"

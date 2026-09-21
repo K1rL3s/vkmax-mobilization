@@ -3,8 +3,8 @@ from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
 from zheka.api.dependencies import CurrentOrgDep
+from zheka.api.routes.requests import signed
 from zheka.api.schemas.base import Limit, Offset, Page
-from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.requests import (
     AdminRequestCard,
     AdminRequestListItem,
@@ -32,14 +32,8 @@ router = APIRouter(tags=["Админка: заявки"], route_class=DishkaRout
 def _card(data: AdminRequestCardData, files_service: FilesService) -> AdminRequestCard:
     return AdminRequestCard.of_admin(
         data,
-        [
-            FileRef(name=photo.path, url=files_service.sign(photo.path))
-            for photo in data.card.issue_photos
-        ],
-        [
-            FileRef(name=photo.path, url=files_service.sign(photo.path))
-            for photo in data.card.result_photos
-        ],
+        signed(data.card.issue_photos, files_service),
+        signed(data.card.result_photos, files_service),
     )
 
 

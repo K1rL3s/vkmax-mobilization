@@ -14,6 +14,5 @@ def resolve_notify(level: NotificationLevel, *, mandatory: bool) -> bool | None:
     return False if mandatory else None
 
 
-# кнопка едет в задачу через редис, поэтому это пара text/url, а не объект
-# maxo; экраны с колбэками живут в диалогах блока 15
+# кнопка едет в задачу через редис, поэтому это пара text/url, а не объект maxo
 Buttons = list[dict[str, str]]

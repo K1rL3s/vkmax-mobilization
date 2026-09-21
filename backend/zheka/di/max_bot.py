@@ -13,16 +13,12 @@ from zheka.infra.max import MaxSender
 class MaxBotProvider(Provider):
     scope: BaseScope | None = Scope.APP
 
-    # ту самую, что вернул setup_dialogs: второй BgManagerFactoryImpl(dp)
-    # сегодня сработал бы, потому что он без состояния, и перестанет в день,
-    # когда состояние появится
+    # ту самую, что вернул setup_dialogs, а не второй BgManagerFactoryImpl(dp)
     bg_manager_factory = from_context(BgManagerFactory)
 
     max_sender = provide(MaxSender)
 
-    # override=True: maxo's own MaxoProvider declares Bot via from_context,
-    # expecting the app to inject a ready instance - we build ours from the
-    # token instead, so ours is the real provider and that one is unused
+    # MaxoProvider ждет Bot из контекста, а мы собираем его из токена
     @provide(override=True)
     async def bot(self, config: MaxConfig) -> AsyncIterable[Bot]:
         bot = Bot(

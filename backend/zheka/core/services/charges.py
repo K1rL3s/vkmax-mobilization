@@ -19,7 +19,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
 from zheka.core.ids import ChargeId, FlatId, HouseId, MeterId, RequestId, UserId
-from zheka.core.models import Charge, Flat, House, Resident, Tariff
+from zheka.core.models import Charge, Flat, House, Tariff
 from zheka.core.services.events import EventsService
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService
@@ -153,7 +153,7 @@ class ChargesService:
         return await self._charges.list_for_flat(flat_id, limit, offset)
 
     async def card(self, charge_id: ChargeId, user_id: UserId) -> ChargeCardData:
-        charge, _resident = await self._verified_charge(charge_id, user_id)
+        charge = await self._verified_charge(charge_id, user_id)
         flat = await self._get_flat(FlatId(charge.flat_id))
         house = await self._houses.get(HouseId(flat.house_id))
         if house is None:
@@ -166,9 +166,9 @@ class ChargesService:
         )
 
     async def breakdown(self, charge_id: ChargeId, user_id: UserId) -> BreakdownData:
-        charge, _resident = await self._verified_charge(charge_id, user_id)
+        charge = await self._verified_charge(charge_id, user_id)
         flat_id = FlatId(charge.flat_id)
-        house_id = await self._house_id_of_flat(flat_id)
+        house_id = HouseId((await self._get_flat(flat_id)).house_id)
 
         current_lines, previous_lines, previous_charge = await self._diffed_lines(
             charge
@@ -208,9 +208,9 @@ class ChargesService:
         comment: str,
         service: ServiceType | None,
     ) -> RequestId:
-        charge, _resident = await self._verified_charge(charge_id, user_id)
+        charge = await self._verified_charge(charge_id, user_id)
         flat_id = FlatId(charge.flat_id)
-        house_id = await self._house_id_of_flat(flat_id)
+        house_id = HouseId((await self._get_flat(flat_id)).house_id)
 
         current_lines, previous_lines, _previous_charge = await self._diffed_lines(
             charge
@@ -246,7 +246,7 @@ class ChargesService:
         return request_id
 
     async def pay_demo(self, charge_id: ChargeId, user_id: UserId) -> PaymentResult:
-        charge, _resident = await self._verified_charge(charge_id, user_id)
+        charge = await self._verified_charge(charge_id, user_id)
         if charge.paid_at is not None:
             raise InvalidState(ALREADY_PAID)
         paid_at = datetime.now(UTC)
@@ -257,21 +257,19 @@ class ChargesService:
         self,
         charge_id: ChargeId,
         user_id: UserId,
-    ) -> tuple[Charge, Resident]:
+    ) -> Charge:
         charge = await self._charges.get(charge_id)
         if charge is None:
             raise EntityNotFound(CHARGE_NOT_FOUND)
         resident = await self._access.verified_resident(user_id, FlatId(charge.flat_id))
         if not resident.can_see_charges:
             raise NotEnoughRights(CANNOT_SEE_CHARGES)
-        return charge, resident
+        return charge
 
     async def _diffed_lines(
         self,
         charge: Charge,
     ) -> tuple[list[ChargeLine], list[ChargeLine], Charge | None]:
-        # общий первый шаг разбора и оспаривания - строки текущей квитанции
-        # и квитанции месяцем раньше, если она есть
         current_lines = parse_lines(charge.lines)
         previous_charge = await self._charges.get_by_period(
             FlatId(charge.flat_id),
@@ -287,10 +285,6 @@ class ChargesService:
         if flat is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         return flat
-
-    async def _house_id_of_flat(self, flat_id: FlatId) -> HouseId:
-        flat = await self._get_flat(flat_id)
-        return HouseId(flat.house_id)
 
     async def _period_photos(self, flat_id: FlatId, period: date) -> list[str]:
         meters = await self._meters.list_for_flat(flat_id)
@@ -313,11 +307,10 @@ class ChargesService:
         for meter in meters:
             history = await self._readings.history(user_id, MeterId(meter.id))
             by_period: dict[date, int] = {}
-            for row in history.rows:
+            for row in history:
                 if row.reading.period > period:
                     continue
-                # первая встреченная строка на период и есть самая свежая
-                # подача - history() возвращает показания по submitted_at desc
+                # history() отдает свежую подачу периода первой
                 by_period.setdefault(row.reading.period, sum(row.consumption.values()))
             recent_periods = sorted(by_period)[-CONSUMPTION_POINTS:]
             points = [

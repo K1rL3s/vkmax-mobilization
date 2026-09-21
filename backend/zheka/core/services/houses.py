@@ -25,8 +25,7 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-# один градус широты в метрах, грубо. Сжатие долготы к полюсам учитывает
-# множитель cos(широты), а потолок радиуса задает сам запрос
+# один градус широты в метрах, грубо
 NEARBY_METERS_PER_DEGREE = 111_320
 
 CONSENT_REQUIRED = "Сначала примите согласие на обработку персональных данных"
@@ -291,8 +290,7 @@ class HousesService:
 
     async def unlink(self, user_id: UserId, resident_id: ResidentId) -> None:
         resident = await self._residents.get(resident_id)
-        # чужая привязка отвечает 404, а не 403: 403 подтвердил бы, что такой
-        # resident_id существует, а в пути нет ничего о том, чей он
+        # чужая привязка отвечает 404: 403 подтвердил бы, что resident_id существует
         if resident is None or resident.user_id != user_id:
             raise EntityNotFound("Привязка к дому не найдена")
 
@@ -329,10 +327,8 @@ class HousesService:
         limit: int,
         offset: int,
     ) -> tuple[Sequence[Flat], int, set[FlatId]]:
-        # is_taken показывает, в каких квартирах дома уже есть наши
-        # пользователи, поэтому список квартир закрыт жителями этого дома.
-        # Зависимость маршрута проверяет то же самое раньше, но сервис зовут
-        # и мимо нее, а чужой дом отвечает 404, а не 403
+        # is_taken выдает, где живут наши пользователи, поэтому список только
+        # для жителей дома. Маршрут проверяет то же, но сервис зовут и мимо него
         resident = await self._residents.get_for_house(user_id, house_id)
         if resident is None:
             raise EntityNotFound("Дом не найден")
@@ -487,8 +483,7 @@ class HousesService:
         return await self._resident_views(residents), total
 
     async def _org_house(self, org_id: OrgId, house_id: HouseId) -> House:
-        # house_id приходит из пути: дом чужой организации отвечает 404,
-        # а не 403 - 403 подтвердил бы, что такой дом есть
+        # дом чужой организации отвечает 404: 403 подтвердил бы, что он есть
         house = await self._houses.get_for_org(house_id, org_id)
         if house is None:
             raise EntityNotFound("Дом не найден")

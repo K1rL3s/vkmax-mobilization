@@ -10,6 +10,7 @@ from zheka.core.models import Flat
 from zheka.core.services.polls import (
     AdminPollListItemData,
     PollCardData,
+    PollDraft,
     PollListItemData,
     PollOptionCount,
     PollResultsData,
@@ -107,6 +108,15 @@ class CreatePollRequest(BaseSchema):
     description: str | None = None
     is_multiple: bool = False
 
+    def draft(self) -> PollDraft:
+        return PollDraft(
+            title=self.title,
+            description=self.description,
+            options=self.options,
+            ends_at=self.ends_at,
+            is_multiple=self.is_multiple,
+        )
+
 
 class CreateOrgPollRequest(CreatePollRequest):
     house_id: HouseId
@@ -149,7 +159,6 @@ class PollResults(BaseSchema):
     options: list[PollOptionResult]
     disclaimer: str = DISCLAIMER
     is_oss: bool = False
-    # квартиры без указанной площади - не в замороженном контракте, задача 12
     flats_without_area: int
 
     @classmethod
@@ -193,16 +202,8 @@ class AdminPollListItem(PollListItem):
 
     @classmethod
     def of_admin(cls, data: AdminPollListItemData) -> Self:
-        poll = data.item.poll
         return cls(
-            id=PollId(poll.id),
-            title=poll.title,
-            status=data.item.status,
-            starts_at=poll.starts_at,
-            ends_at=poll.ends_at,
-            is_multiple=poll.is_multiple,
-            voted=data.item.voted,
-            voted_flats=data.item.voted_flats,
-            house_id=HouseId(poll.house_id),
+            **PollListItem.of(data.item).model_dump(),
+            house_id=HouseId(data.item.poll.house_id),
             address=data.address,
         )

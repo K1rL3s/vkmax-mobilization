@@ -7,7 +7,7 @@ from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.polls import AdminPollListItem, CreateOrgPollRequest, PollCard
 from zheka.core.enums import PollStatus
 from zheka.core.ids import HouseId
-from zheka.core.services.polls import PollDraft, PollsService
+from zheka.core.services.polls import PollsService
 
 router = APIRouter(tags=["Админка: опросы"], route_class=DishkaRoute)
 
@@ -44,13 +44,7 @@ async def create_org_poll(
     card = await polls_service.create(
         current_org.user_id,
         body.house_id,
-        PollDraft(
-            title=body.title,
-            description=body.description,
-            options=body.options,
-            ends_at=body.ends_at,
-            is_multiple=body.is_multiple,
-        ),
+        body.draft(),
         org_id=current_org.org_id,
     )
     return PollCard.of_card(card)

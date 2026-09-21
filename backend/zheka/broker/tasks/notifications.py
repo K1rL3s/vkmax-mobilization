@@ -41,8 +41,7 @@ async def _fan_out(
     mandatory: bool,
     buttons: Buttons | None,
 ) -> int:
-    # уровень разрешается здесь, а не на месте вызова: перезапущенная задача
-    # видит настройки такими, какие они сейчас, а в очереди лежит только id
+    # уровень читается при доставке, а не при постановке в очередь
     recipients = await notifications_repo.recipients(
         user_ids,
         NotificationCategory(category),
@@ -55,8 +54,7 @@ async def _fan_out(
         notify = resolve_notify(recipient.level, mandatory=mandatory)
         if notify is None:
             continue
-        # недоступного получателя MaxSender проглатывает и возвращает None,
-        # поэтому один мертвый адресат не обрывает остальную рассылку
+        # недоступного получателя MaxSender проглатывает и возвращает None
         await sender.send_message(
             text,
             user_id=recipient.max_user_id,
@@ -124,10 +122,7 @@ async def broadcast_to_chats(
     chats_service: FromDishka[ChatsService],
     users_repo: FromDishka[UsersRepo],
 ) -> int:
-    # у чата нет ни настроек уровня, ни получателя, чей уровень можно
-    # разрешить, поэтому здесь стоит продуктовый дефолт - тот же, что в
-    # DEFAULT_LEVEL (NotificationLevel.SILENT): меняя его, поправить и эту
-    # строку
+    # у чата нет уровня, notify=False повторяет DEFAULT_LEVEL
     keyboard = _keyboard(buttons)
     logger.info("Рассылка по чатам: чатов %s", len(chat_ids))
     sent = 0

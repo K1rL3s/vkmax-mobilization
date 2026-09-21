@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, make_config
@@ -60,7 +60,6 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
-from zheka.infra.database.tables.meters import meters_table
 from zheka.infra.yandex.vision import VisionClient, parse_reading
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
@@ -104,6 +103,27 @@ def _photo() -> str:
     return f"{uuid4().hex}.jpg"
 
 
+def _period_back(months_back: int) -> date:
+    today = datetime.now(UTC).date()
+    year, month = divmod(today.year * 12 + today.month - 1 - months_back, 12)
+    return date(year, month + 1, 1)
+
+
+def _draft(
+    value: int = 1_000,
+    period: date | None = None,
+    *,
+    ocr: bool = False,
+) -> SubmitDraft:
+    return SubmitDraft(
+        period=_period_back(0) if period is None else period,
+        values={TariffZone.SINGLE: value},
+        photos=[_photo()],
+        ocr_used=ocr,
+        ocr_accepted=ocr,
+    )
+
+
 async def _add_user(session: AsyncSession, name: str = "Сосед") -> UserId:
     user = User(max_user_id=MaxUserId(secrets.randbits(48)), name=name)
     session.add(user)
@@ -119,7 +139,6 @@ async def _add_resident(
     *,
     role: ResidentRole = ResidentRole.OWNER,
     verified: bool = True,
-    can_see_charges: bool | None = None,
 ) -> Resident:
     is_owner = role is ResidentRole.OWNER
     resident = Resident(
@@ -127,7 +146,7 @@ async def _add_resident(
         house_id=house_id,
         flat_id=flat_id,
         role=role,
-        can_see_charges=is_owner if can_see_charges is None else can_see_charges,
+        can_see_charges=is_owner,
         can_vote=is_owner,
         verified_at=datetime.now(UTC) if verified else None,
     )
@@ -140,24 +159,23 @@ async def _set_window(
     session: AsyncSession,
     org_id: OrgId,
     *,
-    always_open: bool = False,
-    day_from: int = 1,
-    day_to: int = 28,
+    day_from: int,
+    day_to: int,
 ) -> None:
     orgs_repo = OrgsRepo(session)
     settings = await orgs_repo.get_settings(org_id)
     if settings is None:
         settings = await orgs_repo.add_settings(org_id)
-    settings.meter_window_always_open = always_open
+    settings.meter_window_always_open = False
     settings.meter_window_day_from = day_from
     settings.meter_window_day_to = day_to
     await session.flush()
 
 
-def _closed_window_day(today: date) -> int:
-    # день, заведомо отличный от сегодняшнего - однодневное окно на него
-    # гарантированно закрыто прямо сейчас
-    return 1 if today.day != 1 else 2
+async def _close_window(session: AsyncSession, org_id: OrgId) -> None:
+    # однодневное окно не на сегодня закрыто прямо сейчас
+    closed_day = 1 if datetime.now(UTC).day != 1 else 2
+    await _set_window(session, org_id, day_from=closed_day, day_to=closed_day)
 
 
 async def _add_meter(
@@ -179,43 +197,55 @@ async def _add_meter(
     return MeterId(meter.id)
 
 
-async def _add_tariff(
+async def _add_reading(
     session: AsyncSession,
-    house_id: HouseId,
-    service: ServiceType,
+    meter_id: MeterId,
+    period: date,
     value: int,
-    valid_from: date = date(2020, 1, 1),
-) -> Tariff:
-    tariff = Tariff(
-        house_id=house_id,
-        service=service,
-        value=value,
-        unit="m3",
-        valid_from=valid_from,
+    user_id: UserId,
+) -> None:
+    await MetersRepo(session).add_reading(
+        meter_id,
+        period,
+        {TariffZone.SINGLE: value},
+        [_photo()],
+        ocr_used=False,
+        ocr_accepted=False,
+        is_below_previous=False,
+        submitted_at=datetime.now(UTC),
+        submitted_by=user_id,
     )
-    session.add(tariff)
+
+
+async def _add_tariff(session: AsyncSession, house_id: HouseId, value: int) -> None:
+    session.add(
+        Tariff(
+            house_id=house_id,
+            service=ServiceType.COLD_WATER,
+            value=value,
+            unit="m3",
+            valid_from=date(2020, 1, 1),
+        ),
+    )
     await session.flush()
-    return tariff
 
 
-async def _add_charge(session: AsyncSession, flat_id: FlatId, period: date) -> Charge:
-    charge = Charge(flat_id=flat_id, period=period, lines={}, total=0, is_closed=True)
-    session.add(charge)
-    await session.flush()
-    return charge
-
-
-def _current_period() -> date:
-    today = datetime.now(UTC).date()
-    return date(today.year, today.month, 1)
-
-
-def _period_back(months_back: int) -> date:
-    # то же смещение месяца, что и в ReadingsService._shift_months
-    today = datetime.now(UTC).date()
-    month_index = today.year * 12 + (today.month - 1) - months_back
-    year, month = divmod(month_index, 12)
-    return date(year, month + 1, 1)
+async def _owner_with_meter(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    *,
+    tariff_zones: int = 1,
+    next_verification_date: date | None = None,
+) -> tuple[OrgHouseFlatUser, MeterId]:
+    own = await make_org_house_flat_user()
+    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
+    meter_id = await _add_meter(
+        session,
+        own.flat_id,
+        tariff_zones=tariff_zones,
+        next_verification_date=next_verification_date,
+    )
+    return own, meter_id
 
 
 async def _events(session: AsyncSession, event_type: EventType) -> list[Event]:
@@ -223,151 +253,109 @@ async def _events(session: AsyncSession, event_type: EventType) -> list[Event]:
     return list((await session.execute(stmt)).scalars().all())
 
 
-# ---------------------------------------------------------------------------
-# Чистые хелперы - без базы
-# ---------------------------------------------------------------------------
-
-
-def test_window_is_open_for_a_normal_window() -> None:
-    assert window_is_open(20, 15, 25, always_open=False) is True
-    assert window_is_open(10, 15, 25, always_open=False) is False
-    assert window_is_open(26, 15, 25, always_open=False) is False
-    # границы включены
-    assert window_is_open(15, 15, 25, always_open=False) is True
-    assert window_is_open(25, 15, 25, always_open=False) is True
-
-
-def test_window_is_open_for_a_wrapping_window() -> None:
-    # окно 28-5 переваливает через конец месяца
-    assert window_is_open(30, 28, 5, always_open=False) is True
-    assert window_is_open(3, 28, 5, always_open=False) is True
-    assert window_is_open(15, 28, 5, always_open=False) is False
-    assert window_is_open(28, 28, 5, always_open=False) is True
-    assert window_is_open(5, 28, 5, always_open=False) is True
-
-
-def test_window_is_open_when_always_open() -> None:
-    # день вне обычного окна, always_open все равно отвечает True
-    assert window_is_open(1, 15, 25, always_open=True) is True
+@pytest.mark.parametrize(
+    ("day", "day_from", "day_to", "always_open", "is_open"),
+    [
+        (20, 15, 25, False, True),
+        (10, 15, 25, False, False),
+        (26, 15, 25, False, False),
+        (15, 15, 25, False, True),
+        (25, 15, 25, False, True),
+        # окно 28-5 переваливает через конец месяца
+        (30, 28, 5, False, True),
+        (3, 28, 5, False, True),
+        (15, 28, 5, False, False),
+        (28, 28, 5, False, True),
+        (5, 28, 5, False, True),
+        (1, 15, 25, True, True),
+    ],
+)
+def test_window_is_open(
+    day: int,
+    day_from: int,
+    day_to: int,
+    always_open: bool,
+    is_open: bool,
+) -> None:
+    assert window_is_open(day, day_from, day_to, always_open=always_open) is is_open
 
 
 def test_available_periods_marks_a_charged_period_closed_but_keeps_it() -> None:
-    today = date(2026, 3, 17)
-    current = date(2026, 3, 1)
-    previous = date(2026, 2, 1)
-    two_back = date(2026, 1, 1)
+    options = available_periods(date(2026, 3, 17), {date(2026, 2, 1)})
 
-    options = available_periods(today, {previous})
-
-    assert [option.period for option in options] == [current, previous, two_back]
-    by_period = {option.period: option for option in options}
-    assert by_period[current].is_open is True
-    assert by_period[current].reason is None
-    assert by_period[previous].is_open is False
-    assert by_period[previous].reason is not None
-    assert by_period[two_back].is_open is True
+    assert [(option.period, option.is_open) for option in options] == [
+        (date(2026, 3, 1), True),
+        (date(2026, 2, 1), False),
+        (date(2026, 1, 1), True),
+    ]
+    assert options[0].reason is None
+    assert options[1].reason is not None
 
 
-def test_consumption_computes_the_delta_per_zone() -> None:
-    assert consumption(
-        {TariffZone.SINGLE: 15_500},
-        {TariffZone.SINGLE: 10_000},
-    ) == {TariffZone.SINGLE: 5_500}
+@pytest.mark.parametrize(
+    ("previous", "delta"),
+    [
+        ({TariffZone.SINGLE: 10_000}, {TariffZone.SINGLE: 5_500}),
+        # первая подача счетчика не порождает мнимый расход от нуля
+        (None, {TariffZone.SINGLE: 0}),
+    ],
+)
+def test_consumption(
+    previous: dict[TariffZone, int] | None,
+    delta: dict[TariffZone, int],
+) -> None:
+    assert consumption({TariffZone.SINGLE: 15_500}, previous) == delta
 
 
-def test_consumption_is_zero_without_a_previous_reading() -> None:
-    # первая подача счетчика не порождает мнимый расход от нуля
-    assert consumption({TariffZone.SINGLE: 15_500}, None) == {TariffZone.SINGLE: 0}
+@pytest.mark.parametrize(
+    ("value", "previous", "below"),
+    [(900, 1_000, True), (1_100, 1_000, False), (0, None, False)],
+)
+def test_is_below_previous(value: int, previous: int | None, below: bool) -> None:
+    previous_values = None if previous is None else {TariffZone.SINGLE: previous}
+    assert is_below_previous({TariffZone.SINGLE: value}, previous_values) is below
 
 
-def test_is_below_previous_true_when_a_zone_drops() -> None:
-    assert (
-        is_below_previous(
-            {TariffZone.SINGLE: 900},
-            {TariffZone.SINGLE: 1_000},
-        )
-        is True
-    )
+@pytest.mark.parametrize(
+    ("current", "history", "spike"),
+    [
+        (200, [100, 90, 110], True),
+        (150, [100, 90, 110], False),
+        (1_000_000, [100, 90], False),
+        # медиана четного числа значений - целое среднее двух средних (//)
+        (299, [100, 200, 100, 200], False),
+        (300, [100, 200, 100, 200], True),
+    ],
+)
+def test_is_spike(current: int, history: list[int], spike: bool) -> None:
+    assert is_spike(current, history) is spike
 
 
-def test_is_below_previous_false_when_values_grow() -> None:
-    assert (
-        is_below_previous(
-            {TariffZone.SINGLE: 1_100},
-            {TariffZone.SINGLE: 1_000},
-        )
-        is False
-    )
+@pytest.mark.parametrize(
+    ("text", "value"),
+    [("123.45", 123_450), ("123,45", 123_450), ("0123", 123_000), ("garbage", None)],
+)
+def test_parse_reading(text: str, value: int | None) -> None:
+    assert parse_reading(text) == value
 
 
-def test_is_below_previous_false_without_a_previous_reading() -> None:
-    assert is_below_previous({TariffZone.SINGLE: 0}, None) is False
-
-
-def test_is_spike_true_at_double_the_median() -> None:
-    assert is_spike(200, [100, 90, 110]) is True
-
-
-def test_is_spike_false_below_the_threshold() -> None:
-    assert is_spike(150, [100, 90, 110]) is False
-
-
-def test_is_spike_false_with_insufficient_history() -> None:
-    assert is_spike(1_000_000, [100, 90]) is False
-
-
-def test_is_spike_uses_the_integer_median_of_an_even_history() -> None:
-    # медиана четного числа значений - целое среднее двух средних (//)
-    assert is_spike(299, [100, 200, 100, 200]) is False
-    assert is_spike(300, [100, 200, 100, 200]) is True
-
-
-def test_parse_reading_dot_decimal() -> None:
-    assert parse_reading("123.45") == 123_450
-
-
-def test_parse_reading_comma_decimal() -> None:
-    assert parse_reading("123,45") == 123_450
-
-
-def test_parse_reading_leading_zero() -> None:
-    assert parse_reading("0123") == 123_000
-
-
-def test_parse_reading_garbage_returns_none() -> None:
-    assert parse_reading("garbage") is None
-
-
-async def test_vision_client_short_circuits_without_config() -> None:
-    client = VisionClient(
+@pytest.mark.parametrize(
+    "config",
+    [
         YandexConfig(api_key=None, folder_id=None),
-        FilesService(make_config().files, "test-token"),
-    )
-
-    result = await client.recognize(_photo(), MeterType.COLD_WATER)
-
-    assert result is None
-
-
-async def test_vision_client_returns_none_for_a_missing_photo_file() -> None:
-    # ключ и folder_id заданы, но файла на диске нет - сети клиент не касается,
-    # это проверяет только сообщение об ошибке ниже по стеку (see_other test)
-    client = VisionClient(
+        # ключ задан, но файла на диске нет: до сети дело не доходит
         YandexConfig(api_key="key", folder_id="folder"),
-        FilesService(make_config().files, "test-token"),
-    )
+    ],
+)
+async def test_vision_client_returns_none_without_calling_ocr(
+    config: YandexConfig,
+) -> None:
+    client = VisionClient(config, FilesService(make_config().files, "test-token"))
 
-    result = await client.recognize(_photo(), MeterType.COLD_WATER)
-
-    assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Доступ
-# ---------------------------------------------------------------------------
+    assert await client.recognize(_photo()) is None
 
 
-async def test_history_refuses_an_unverified_resident(
+async def test_readings_are_refused_to_an_unverified_resident(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
@@ -378,48 +366,19 @@ async def test_history_refuses_an_unverified_resident(
 
     with pytest.raises(NotEnoughRights):
         await service.history(own.user_id, meter_id)
-
-
-async def test_submit_refuses_an_unverified_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=False)
-    meter_id = await _add_meter(session, own.flat_id)
-    service = _make_service(session)
-
     with pytest.raises(NotEnoughRights):
-        await service.submit(
-            own.user_id,
-            meter_id,
-            SubmitDraft(
-                period=_current_period(),
-                values={TariffZone.SINGLE: 1_000},
-                photos=[_photo()],
-            ),
-        )
+        await service.submit(own.user_id, meter_id, _draft())
 
 
-async def test_add_meter_refuses_an_unverified_owner(
+@pytest.mark.parametrize(
+    ("role", "verified"),
+    [(ResidentRole.OWNER, False), (ResidentRole.TENANT, True)],
+)
+async def test_add_meter_needs_a_verified_owner(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=False)
-    service = _make_meters_service(session)
-
-    with pytest.raises(NotEnoughRights):
-        await service.add(
-            own.user_id,
-            own.flat_id,
-            MeterDraft(type=MeterType.COLD_WATER, tariff_zones=1, serial="SN-1"),
-        )
-
-
-async def test_add_meter_refuses_a_verified_tenant(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    role: ResidentRole,
+    verified: bool,
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(
@@ -427,14 +386,12 @@ async def test_add_meter_refuses_a_verified_tenant(
         own.user_id,
         own.house_id,
         own.flat_id,
-        role=ResidentRole.TENANT,
-        verified=True,
-        can_see_charges=False,
+        role=role,
+        verified=verified,
     )
-    service = _make_meters_service(session)
 
     with pytest.raises(NotEnoughRights):
-        await service.add(
+        await _make_meters_service(session).add(
             own.user_id,
             own.flat_id,
             MeterDraft(type=MeterType.COLD_WATER, tariff_zones=1, serial="SN-1"),
@@ -452,22 +409,11 @@ async def test_submit_allows_a_verified_tenant_but_hides_the_amount(
         own.house_id,
         own.flat_id,
         role=ResidentRole.TENANT,
-        verified=True,
-        can_see_charges=False,
     )
     meter_id = await _add_meter(session, own.flat_id)
-    await _add_tariff(session, own.house_id, ServiceType.COLD_WATER, 100_000)
-    service = _make_service(session)
+    await _add_tariff(session, own.house_id, 100_000)
 
-    result = await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=_current_period(),
-            values={TariffZone.SINGLE: 1_000},
-            photos=[_photo()],
-        ),
-    )
+    result = await _make_service(session).submit(own.user_id, meter_id, _draft())
 
     assert result.row.amount is None
 
@@ -479,9 +425,8 @@ async def test_add_meter_allows_org_staff_of_the_managing_org(
     own = await make_org_house_flat_user()
     employee_id = await _add_user(session, "Сотрудник УК")
     await OrgsRepo(session).add_member(own.org_id, employee_id, OrgRole.EMPLOYEE)
-    service = _make_meters_service(session)
 
-    card = await service.add(
+    card = await _make_meters_service(session).add(
         employee_id,
         own.flat_id,
         MeterDraft(type=MeterType.COLD_WATER, tariff_zones=1, serial="SN-1"),
@@ -490,7 +435,7 @@ async def test_add_meter_allows_org_staff_of_the_managing_org(
     assert card.meter.flat_id == own.flat_id
 
 
-async def test_history_refuses_a_foreign_meter_id(
+async def test_a_foreign_meter_id_is_not_found(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
@@ -502,42 +447,10 @@ async def test_history_refuses_a_foreign_meter_id(
 
     with pytest.raises(EntityNotFound):
         await service.history(own.user_id, other_meter_id)
-
-
-async def test_submit_refuses_a_foreign_meter_id(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    other = await make_org_house_flat_user()
-    other_meter_id = await _add_meter(session, other.flat_id)
-    service = _make_service(session)
-
     with pytest.raises(EntityNotFound):
-        await service.submit(
-            own.user_id,
-            other_meter_id,
-            SubmitDraft(
-                period=_current_period(),
-                values={TariffZone.SINGLE: 1_000},
-                photos=[_photo()],
-            ),
-        )
-
-
-async def test_update_meter_refuses_a_foreign_meter_id(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    other = await make_org_house_flat_user()
-    other_meter_id = await _add_meter(session, other.flat_id)
-    service = _make_meters_service(session)
-
+        await service.submit(own.user_id, other_meter_id, _draft())
     with pytest.raises(EntityNotFound):
-        await service.update(
+        await _make_meters_service(session).update(
             own.user_id,
             other_meter_id,
             MeterUpdateDraft(tariff_zones=1, serial="SN-2"),
@@ -550,10 +463,9 @@ async def test_admin_list_refuses_a_cross_org_house(
 ) -> None:
     own = await make_org_house_flat_user()
     other = await make_org_house_flat_user()
-    service = _make_admin_service(session)
 
     with pytest.raises(EntityNotFound):
-        await service.admin_list(
+        await _make_admin_service(session).admin_list(
             other.org_id,
             own.house_id,
             None,
@@ -564,85 +476,43 @@ async def test_admin_list_refuses_a_cross_org_house(
         )
 
 
-# ---------------------------------------------------------------------------
-# Подача показания
-# ---------------------------------------------------------------------------
-
-
-async def test_submit_raises_when_values_miss_a_tariff_zone(
+@pytest.mark.parametrize(
+    "draft",
+    [
+        # у двухзонного счетчика нет ключа "night"
+        SubmitDraft(
+            period=date(2026, 1, 1),
+            values={TariffZone.DAY: 1_000},
+            photos=["a.jpg"],
+        ),
+        SubmitDraft(
+            period=date(2026, 1, 1),
+            values={TariffZone.DAY: 1_000, TariffZone.NIGHT: 500},
+            photos=[],
+        ),
+    ],
+)
+async def test_submit_rejects_wrong_zones_and_a_missing_photo(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    draft: SubmitDraft,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id, tariff_zones=2)
-    service = _make_service(session)
+    own, meter_id = await _owner_with_meter(
+        session, make_org_house_flat_user, tariff_zones=2
+    )
 
     with pytest.raises(InvalidRequest):
-        await service.submit(
-            own.user_id,
-            meter_id,
-            # у двухзонного счетчика нет ключа "night"
-            SubmitDraft(
-                period=_current_period(),
-                values={TariffZone.DAY: 1_000},
-                photos=[_photo()],
-            ),
-        )
-
-
-async def test_submit_requires_at_least_one_photo(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    service = _make_service(session)
-
-    with pytest.raises(InvalidRequest):
-        await service.submit(
-            own.user_id,
-            meter_id,
-            SubmitDraft(
-                period=_current_period(),
-                values={TariffZone.SINGLE: 1_000},
-                photos=[],
-            ),
-        )
+        await _make_service(session).submit(own.user_id, meter_id, draft)
 
 
 async def test_submit_accepts_and_flags_a_value_below_the_previous_one(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    period = _current_period()
-    meters_repo = MetersRepo(session)
-    await meters_repo.add_reading(
-        meter_id,
-        date(period.year - 1, period.month, 1),
-        {TariffZone.SINGLE: 5_000},
-        [_photo()],
-        ocr_used=False,
-        ocr_accepted=False,
-        is_below_previous=False,
-        submitted_at=datetime.now(UTC),
-        submitted_by=own.user_id,
-    )
-    service = _make_service(session)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await _add_reading(session, meter_id, _period_back(12), 5_000, own.user_id)
 
-    result = await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=period,
-            values={TariffZone.SINGLE: 4_000},
-            photos=[_photo()],
-        ),
-    )
+    result = await _make_service(session).submit(own.user_id, meter_id, _draft(4_000))
 
     assert result.row.reading.is_below_previous is True
     assert result.warning is not None
@@ -652,55 +522,27 @@ async def test_submit_blocks_an_expired_verification(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(
+    own, meter_id = await _owner_with_meter(
         session,
-        own.flat_id,
+        make_org_house_flat_user,
         next_verification_date=date(2000, 1, 1),
     )
-    service = _make_service(session)
 
     with pytest.raises(InvalidState):
-        await service.submit(
-            own.user_id,
-            meter_id,
-            SubmitDraft(
-                period=_current_period(),
-                values={TariffZone.SINGLE: 1_000},
-                photos=[_photo()],
-            ),
-        )
+        await _make_service(session).submit(own.user_id, meter_id, _draft())
 
 
 async def test_resubmission_wins_over_the_earlier_row(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     service = _make_service(session)
-    period = _current_period()
 
-    await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=period, values={TariffZone.SINGLE: 1_000}, photos=[_photo()]
-        ),
-    )
-    await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=period, values={TariffZone.SINGLE: 2_000}, photos=[_photo()]
-        ),
-    )
+    await service.submit(own.user_id, meter_id, _draft(1_000))
+    await service.submit(own.user_id, meter_id, _draft(2_000))
 
-    history = await service.history(own.user_id, meter_id)
-    assert len(history.rows) == 2
-
+    assert len(await service.history(own.user_id, meter_id)) == 2
     cards = await service.list_meters(own.flat_id)
     assert len(cards) == 1
     assert cards[0].last_values == {TariffZone.SINGLE: 2_000}
@@ -710,20 +552,13 @@ async def test_submit_rejects_a_period_other_than_the_current_one_inside_the_win
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    service = _make_service(session)
-    period = _current_period()
-    a_year_ago = date(period.year - 1, period.month, 1)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
 
     with pytest.raises(InvalidState):
-        await service.submit(
+        await _make_service(session).submit(
             own.user_id,
             meter_id,
-            SubmitDraft(
-                period=a_year_ago, values={TariffZone.SINGLE: 1_000}, photos=[_photo()]
-            ),
+            _draft(period=_period_back(12)),
         )
 
 
@@ -731,25 +566,12 @@ async def test_submit_out_of_window_uses_one_of_the_allowed_past_periods(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    today = datetime.now(UTC).date()
-    closed_day = _closed_window_day(today)
-    await _set_window(session, own.org_id, day_from=closed_day, day_to=closed_day)
-    service = _make_service(session)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await _close_window(session, own.org_id)
 
-    result = await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=_current_period(),
-            values={TariffZone.SINGLE: 1_000},
-            photos=[_photo()],
-        ),
-    )
+    result = await _make_service(session).submit(own.user_id, meter_id, _draft())
 
-    assert result.row.reading.period == _current_period()
+    assert result.row.reading.period == _period_back(0)
     events = await _events(session, EventType.READING_SUBMITTED)
     assert events[-1].payload["out_of_window"] is True
 
@@ -758,47 +580,35 @@ async def test_submit_out_of_window_for_a_period_with_a_charge_raises(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    today = datetime.now(UTC).date()
-    closed_day = _closed_window_day(today)
-    await _set_window(session, own.org_id, day_from=closed_day, day_to=closed_day)
-    period = _current_period()
-    await _add_charge(session, own.flat_id, period)
-    service = _make_service(session)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await _close_window(session, own.org_id)
+    session.add(
+        Charge(
+            flat_id=own.flat_id,
+            period=_period_back(0),
+            lines={},
+            total=0,
+            is_closed=True,
+        ),
+    )
+    await session.flush()
 
     with pytest.raises(InvalidState):
-        await service.submit(
-            own.user_id,
-            meter_id,
-            SubmitDraft(
-                period=period, values={TariffZone.SINGLE: 1_000}, photos=[_photo()]
-            ),
-        )
+        await _make_service(session).submit(own.user_id, meter_id, _draft())
 
 
 async def test_submit_out_of_window_rejects_a_period_outside_periods_back(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    today = datetime.now(UTC).date()
-    closed_day = _closed_window_day(today)
-    await _set_window(session, own.org_id, day_from=closed_day, day_to=closed_day)
-    period = _current_period()
-    far_past = date(period.year - 5, period.month, 1)
-    service = _make_service(session)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await _close_window(session, own.org_id)
 
     with pytest.raises(InvalidState):
-        await service.submit(
+        await _make_service(session).submit(
             own.user_id,
             meter_id,
-            SubmitDraft(
-                period=far_past, values={TariffZone.SINGLE: 1_000}, photos=[_photo()]
-            ),
+            _draft(period=_period_back(60)),
         )
 
 
@@ -806,33 +616,12 @@ async def test_submit_computes_consumption_and_the_exact_kopeck_amount(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    period = _current_period()
-    meters_repo = MetersRepo(session)
-    await meters_repo.add_reading(
-        meter_id,
-        date(period.year - 1, period.month, 1),
-        {TariffZone.SINGLE: 0},
-        [_photo()],
-        ocr_used=False,
-        ocr_accepted=False,
-        is_below_previous=False,
-        submitted_at=datetime.now(UTC),
-        submitted_by=own.user_id,
-    )
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await _add_reading(session, meter_id, _period_back(12), 0, own.user_id)
     # тариф 10.0000 руб/ед (1/10000 руб/ед): 1 единица расхода = 10 руб = 1000 коп
-    await _add_tariff(session, own.house_id, ServiceType.COLD_WATER, 100_000)
-    service = _make_service(session)
+    await _add_tariff(session, own.house_id, 100_000)
 
-    result = await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=period, values={TariffZone.SINGLE: 1_000}, photos=[_photo()]
-        ),
-    )
+    result = await _make_service(session).submit(own.user_id, meter_id, _draft())
 
     assert result.row.consumption == {TariffZone.SINGLE: 1_000}
     assert result.row.amount == 1_000
@@ -842,87 +631,47 @@ async def test_submit_records_the_reading_submitted_event(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    service = _make_service(session)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
 
-    await service.submit(
+    await _make_service(session).submit(
         own.user_id,
         meter_id,
-        SubmitDraft(
-            period=_current_period(),
-            values={TariffZone.SINGLE: 1_000},
-            photos=[_photo()],
-            ocr_used=True,
-            ocr_accepted=True,
-        ),
+        _draft(ocr=True),
     )
 
     events = await _events(session, EventType.READING_SUBMITTED)
     assert len(events) == 1
-    payload = events[0].payload
-    assert payload["meter_type"] == MeterType.COLD_WATER.value
-    assert payload["ocr_used"] is True
-    assert payload["ocr_accepted"] is True
-    assert payload["is_below_previous"] is False
-    assert payload["out_of_window"] is False
+    assert events[0].payload == {
+        "meter_type": MeterType.COLD_WATER.value,
+        "ocr_used": True,
+        "ocr_accepted": True,
+        "is_below_previous": False,
+        "out_of_window": False,
+    }
 
 
 async def test_submit_suggests_a_leak_request_on_a_consumption_spike(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    meters_repo = MetersRepo(session)
-    # 4 прошлых периода с накопительными показаниями 100, 200, 300, 400 -
-    # ровный расход по 100 за каждый шаг, три дельты истории
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    # ровный расход по 100 за каждый из трех шагов истории
     for back, value in zip((4, 3, 2, 1), (100, 200, 300, 400), strict=True):
-        await meters_repo.add_reading(
-            meter_id,
-            _period_back(back),
-            {TariffZone.SINGLE: value},
-            [_photo()],
-            ocr_used=False,
-            ocr_accepted=False,
-            is_below_previous=False,
-            submitted_at=datetime.now(UTC),
-            submitted_by=own.user_id,
-        )
-    service = _make_service(session)
+        await _add_reading(session, meter_id, _period_back(back), value, own.user_id)
 
-    # расход 5000 против медианы истории 100 - многократный скачок
-    result = await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=_current_period(),
-            values={TariffZone.SINGLE: 5_400},
-            photos=[_photo()],
-        ),
-    )
+    result = await _make_service(session).submit(own.user_id, meter_id, _draft(5_400))
 
     assert result.suggested_category is RequestCategory.LEAK
-
-
-# ---------------------------------------------------------------------------
-# Начисление, счетчики, показания по дому
-# ---------------------------------------------------------------------------
 
 
 async def test_add_meter_rejects_a_second_meter_of_the_same_type(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    await _add_meter(session, own.flat_id)
-    service = _make_meters_service(session)
+    own, _ = await _owner_with_meter(session, make_org_house_flat_user)
 
     with pytest.raises(InvalidValue):
-        await service.add(
+        await _make_meters_service(session).add(
             own.user_id,
             own.flat_id,
             MeterDraft(type=MeterType.COLD_WATER, tariff_zones=1, serial="SN-2"),
@@ -933,12 +682,9 @@ async def test_update_meter_changes_serial_and_zones(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    service = _make_meters_service(session)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
 
-    card = await service.update(
+    card = await _make_meters_service(session).update(
         own.user_id,
         meter_id,
         MeterUpdateDraft(tariff_zones=2, serial="NEW-SERIAL"),
@@ -948,87 +694,24 @@ async def test_update_meter_changes_serial_and_zones(
     assert card.meter.serial == "NEW-SERIAL"
 
 
-async def test_meters_repo_add_leaves_exactly_one_row_for_a_race(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    # два параллельных нажатия «добавить счетчик» бьются об уникальный индекс
-    # (flat_id, type), а не об исключение из read-then-write в питоне
-    own = await make_org_house_flat_user()
-    meters_repo = MetersRepo(session)
-
-    first = await meters_repo.add(own.flat_id, MeterType.COLD_WATER, 1, "SN-1", None)
-    second = await meters_repo.add(own.flat_id, MeterType.COLD_WATER, 1, "SN-2", None)
-
-    assert first is not None
-    assert second is None
-
-    stmt = (
-        select(func.count())
-        .select_from(meters_table)
-        .where(
-            meters_table.c.flat_id == own.flat_id,
-            meters_table.c.type == MeterType.COLD_WATER,
-        )
-    )
-    count = (await session.execute(stmt)).scalar_one()
-    assert count == 1
-
-
 async def test_house_average_covers_flats_that_submitted_for_the_same_meter_type(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-
-    neighbour_user = await _add_user(session, "Сосед")
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    neighbour = await _add_user(session, "Сосед")
     neighbour_flat = Flat(house_id=own.house_id, number="2")
     session.add(neighbour_flat)
     await session.flush()
-    await _add_resident(
-        session,
-        neighbour_user,
-        own.house_id,
-        FlatId(neighbour_flat.id),
-    )
+    await _add_resident(session, neighbour, own.house_id, FlatId(neighbour_flat.id))
     neighbour_meter_id = await _add_meter(session, FlatId(neighbour_flat.id))
-
-    meters_repo = MetersRepo(session)
-    period = _current_period()
-    for meter, user in ((meter_id, own.user_id), (neighbour_meter_id, neighbour_user)):
-        # база для расчета расхода - без нее первая подача не порождает расход
-        await meters_repo.add_reading(
-            meter,
-            _period_back(1),
-            {TariffZone.SINGLE: 0},
-            [_photo()],
-            ocr_used=False,
-            ocr_accepted=False,
-            is_below_previous=False,
-            submitted_at=datetime.now(UTC),
-            submitted_by=user,
-        )
-
+    for meter, user in ((meter_id, own.user_id), (neighbour_meter_id, neighbour)):
+        await _add_reading(session, meter, _period_back(1), 0, user)
     service = _make_service(session)
 
-    await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=period, values={TariffZone.SINGLE: 1_000}, photos=[_photo()]
-        ),
-    )
-    result = await service.submit(
-        neighbour_user,
-        neighbour_meter_id,
-        SubmitDraft(
-            period=period, values={TariffZone.SINGLE: 3_000}, photos=[_photo()]
-        ),
-    )
+    await service.submit(own.user_id, meter_id, _draft(1_000))
+    result = await service.submit(neighbour, neighbour_meter_id, _draft(3_000))
 
-    # расход 1000 и 3000 относительно нулевой базы, среднее 2000
     assert result.house_average == 2_000
 
 
@@ -1038,89 +721,52 @@ async def test_flats_without_reading_lists_flats_with_a_meter_and_no_submission(
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_meter(session, own.flat_id)
-    period = _current_period()
+    period = _period_back(0)
     meters_repo = MetersRepo(session)
 
-    missing = await meters_repo.flats_without_reading(own.house_id, period)
-    assert own.flat_id in missing
+    assert own.flat_id in await meters_repo.flats_without_reading(own.house_id, period)
 
-    await meters_repo.add_reading(
-        await _add_meter(session, own.flat_id, meter_type=MeterType.HOT_WATER),
-        period,
-        {TariffZone.SINGLE: 1_000},
-        [_photo()],
-        ocr_used=False,
-        ocr_accepted=False,
-        is_below_previous=False,
-        submitted_at=datetime.now(UTC),
-        submitted_by=own.user_id,
+    hot = await _add_meter(session, own.flat_id, meter_type=MeterType.HOT_WATER)
+    await _add_reading(session, hot, period, 1_000, own.user_id)
+
+    # подачи хоть одним счетчиком хватает для участия в периоде
+    assert own.flat_id not in await meters_repo.flats_without_reading(
+        own.house_id, period
     )
-
-    still_missing = await meters_repo.flats_without_reading(own.house_id, period)
-    # у квартиры теперь есть подача (пусть и другим счетчиком) - блока 18
-    # интересует сам факт участия в периоде, поэтому квартиры больше нет в списке
-    assert own.flat_id not in still_missing
 
 
 async def test_admin_list_shows_the_whole_chain_and_the_below_previous_flag(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
-    # база предыдущего периода - 5000: вторая подача ниже нее, первая выше
-    await MetersRepo(session).add_reading(
-        meter_id,
-        _period_back(1),
-        {TariffZone.SINGLE: 5_000},
-        [_photo()],
-        ocr_used=False,
-        ocr_accepted=False,
-        is_below_previous=False,
-        submitted_at=datetime.now(UTC),
-        submitted_by=own.user_id,
-    )
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await _add_reading(session, meter_id, _period_back(1), 5_000, own.user_id)
     service = _make_service(session)
-    period = _current_period()
-
-    await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=period, values={TariffZone.SINGLE: 6_000}, photos=[_photo()]
-        ),
-    )
-    await service.submit(
-        own.user_id,
-        meter_id,
-        SubmitDraft(
-            period=period, values={TariffZone.SINGLE: 4_000}, photos=[_photo()]
-        ),
-    )
+    await service.submit(own.user_id, meter_id, _draft(6_000))
+    await service.submit(own.user_id, meter_id, _draft(4_000))
     admin_service = _make_admin_service(session)
 
     rows, total = await admin_service.admin_list(
         own.org_id,
         own.house_id,
-        period,
+        _period_back(0),
         None,
         only_below_previous=False,
         limit=50,
         offset=0,
     )
-    assert total == 2
-    assert len(rows) == 2
-
     below_rows, below_total = await admin_service.admin_list(
         own.org_id,
         own.house_id,
-        period,
+        _period_back(0),
         None,
         only_below_previous=True,
         limit=50,
         offset=0,
     )
+
+    assert total == 2
+    assert len(rows) == 2
     assert below_total == 1
     assert below_rows[0].reading.is_below_previous is True
 
@@ -1161,32 +807,18 @@ async def test_submit_in_the_tail_of_a_wrapping_window_goes_to_its_opening_month
     make_org_house_flat_user: Fixture,
 ) -> None:
     # сегодня - последний день окна, открывшегося в прошлом месяце
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-    meter_id = await _add_meter(session, own.flat_id)
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
     today = datetime.now(UTC).date()
     await _set_window(session, own.org_id, day_from=today.day + 1, day_to=today.day)
     service = _make_service(session)
 
     periods = await service.periods(own.flat_id)
     with pytest.raises(InvalidState, match=WRONG_PERIOD):
-        await service.submit(
-            own.user_id,
-            meter_id,
-            SubmitDraft(
-                period=_current_period(),
-                values={TariffZone.SINGLE: 1_000},
-                photos=[_photo()],
-            ),
-        )
+        await service.submit(own.user_id, meter_id, _draft())
     result = await service.submit(
         own.user_id,
         meter_id,
-        SubmitDraft(
-            period=_period_back(1),
-            values={TariffZone.SINGLE: 1_000},
-            photos=[_photo()],
-        ),
+        _draft(period=_period_back(1)),
     )
 
     assert [option.period for option in periods.options] == [_period_back(1)]

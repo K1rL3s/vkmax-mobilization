@@ -65,17 +65,14 @@ from zheka.infra.database.repos.notifications import NotificationsRepo
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# load_config() (используемый migrations/env.py) требует эти переменные,
-# а тестам не нужен ни настоящий бот, ни редис
+# load_config() из migrations/env.py требует эти переменные
 os.environ.setdefault("MAX_TOKEN", "test-token")
 os.environ.setdefault("REDIS_HOST", "127.0.0.1")
 os.environ.setdefault("DEEPLINK_ORG_REGISTER", "test-register-code")
 
 
-# initdb поднимает временный сервер и печатает в лог то же самое
-# "database system is ready to accept connections", по которому testcontainers
-# отпускает контейнер, - к этому моменту порт снаружи еще закрыт. Ждем сами,
-# иначе alembic ловит connection refused примерно в каждом третьем прогоне
+# testcontainers отпускает контейнер по строке в логе, которую печатает и
+# временный сервер initdb, когда порт снаружи еще закрыт
 POSTGRES_READY_TIMEOUT = 30.0
 
 
@@ -200,7 +197,6 @@ async def make_org_house_flat_user(
     return _make
 
 
-# dummy config values, no real credentials or network calls involved
 _DUMMY_DB_PASSWORD = "p"  # noqa: S105
 _DUMMY_MAX_TOKEN = "test-token"  # noqa: S105
 
@@ -233,8 +229,7 @@ def make_config() -> Config:
 
 
 class RecordingBroker(AsyncBroker):
-    # настоящий брокер, только без сети: публикация проходит весь путь
-    # AsyncKicker.kiq и оседает здесь
+    # публикация проходит весь путь AsyncKicker.kiq и оседает здесь
 
     def __init__(self) -> None:
         super().__init__()
@@ -268,8 +263,6 @@ def make_notifications_service(
     session: AsyncSession,
     publisher: TaskPublisher | None = None,
 ) -> NotificationsService:
-    # публикация копится в TaskPublisher до flush, поэтому тесту, который на
-    # нее не смотрит, хватает отдельного одноразового
     return NotificationsService(
         NotificationsRepo(session),
         publisher or TaskPublisher(RecordingBroker()),
@@ -277,9 +270,8 @@ def make_notifications_service(
     )
 
 
-# у бота своя база в том же контейнере: его окна коммитят по-настоящему, а
-# остальной прогон живет в транзакции, которую откатывают, и проверки вида
-# "в events ровно два события" ломались бы о чужие строки
+# окна бота коммитят по-настоящему, поэтому у него своя база: иначе его строки
+# попадали бы в проверки остальных тестов, живущих в откатываемой транзакции
 BOT_DB_NAME = "zheka_bot"
 
 
@@ -329,20 +321,17 @@ async def bot_engine(bot_database_url: str) -> AsyncGenerator[AsyncEngine]:
 
 @pytest_asyncio.fixture
 async def bot_session(bot_engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
-    # читает то, что окна бота уже закоммитили; своих записей не коммитит
     async with AsyncSession(bind=bot_engine) as db_session:
         yield db_session
 
 
 def empty_bot_setup() -> BotSetup:
-    # тестам, которым бот не нужен, хватает пустого диспетчера: настоящий в
-    # прогоне один, и он принадлежит фикстуре bot_setup
+    # настоящий диспетчер в прогоне один и принадлежит фикстуре bot_setup
     dp = Dispatcher()
     return BotSetup(dp=dp, bg_manager_factory=BgManagerFactoryImpl(dp))
 
 
 class RecordingBrokerProvider(Provider):
-    # настоящий TaskPublisher из контейнера, но кикает в память, а не в редис
     scope: BaseScope | None = Scope.APP
 
     def __init__(self, broker: RecordingBroker) -> None:
@@ -354,9 +343,8 @@ class RecordingBrokerProvider(Provider):
         return cast(ZhekaBroker, self._broker)
 
 
-# диспетчер в прогоне один - роутеры и диалоги модульные синглтоны, - а maxo
-# запрещает include после старта. Поэтому пробники тестов складываются сюда на
-# импорте модуля и уезжают в диспетчер вместе с боевыми роутерами
+# maxo запрещает include после старта, поэтому пробные роутеры тестов
+# складываются сюда на импорте модуля
 PROBE_ROUTERS: list[BaseRouter] = []
 
 
@@ -377,9 +365,7 @@ def bot_broker() -> RecordingBroker:
 
 @pytest.fixture(scope="session")
 def bot_setup(message_manager: MockMessageManager) -> BotSetup:
-    # настоящий make_dispatcher: тест обязан краснеть, если мидлварь или
-    # роутер забыли зарегистрировать именно там. Другая проводка добывается
-    # аргументами make_dispatcher, а не правкой внутренностей maxo
+    # настоящий make_dispatcher: забытая в нем мидлварь или роутер краснеет
     setup = make_dispatcher(
         make_config().redis,
         storage=JsonMemoryStorage(),
@@ -405,16 +391,14 @@ async def bot_container(
         },
     )
     setup_maxo_dishka(container, bot_setup.dp, auto_inject=True)
-    # before_startup раскладывает inner-мидлвари диспетчера по дочерним
-    # роутерам и инжектит dishka в хендлеры: без него апдейт до окна не дойдет
+    # before_startup раскладывает inner-мидлвари по роутерам и инжектит dishka
     await bot_setup.dp.feed_signal(BeforeStartup(), fake_bot)
     yield container
     await container.close()
 
 
 class FakeBotProvider(Provider):
-    # настоящий Bot из MaxBotProvider входит в async with и спрашивает MAX о
-    # себе, а тестовый токен тот отвергает
+    # настоящий Bot спрашивает MAX о себе, а тестовый токен тот отвергает
     scope: BaseScope | None = Scope.APP
 
     def __init__(self, bot: Bot) -> None:
@@ -433,9 +417,8 @@ async def task_broker(
     bot_broker: RecordingBroker,
     fake_bot: FakeBot,
 ) -> AsyncGenerator[InMemoryBroker]:
-    # тело задачи целиком: свой запросный контейнер, коммит и flush
-    # публикатора, как у воркера. Поставленное задачей оседает в bot_broker,
-    # а не исполняется, - следующую задачу тест запускает сам
+    # коммит и flush публикатора как у воркера; поставленное задачей оседает
+    # в bot_broker, следующую задачу тест запускает сам
     container = make_container(
         RecordingBrokerProvider(bot_broker),
         FakeBotProvider(fake_bot),

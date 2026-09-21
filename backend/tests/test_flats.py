@@ -3,7 +3,6 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import (
@@ -120,6 +119,27 @@ async def _add_request(
     return request
 
 
+async def _pending_request(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> tuple[OrgHouseFlatUser, Resident, VerificationRequest]:
+    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
+    resident = await _add_resident(
+        session, await _add_user(session), staff.house_id, None
+    )
+    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
+    return staff, resident, request
+
+
+async def _verified_owner(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> OrgHouseFlatUser:
+    own = await make_org_house_flat_user()
+    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    return own
+
+
 async def test_verify_matches_the_account_ignoring_spaces_and_case(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
@@ -138,35 +158,25 @@ async def test_verify_matches_the_account_ignoring_spaces_and_case(
     assert result.verified is True
     assert resident.flat_id == own.flat_id
     assert resident.verified_at is not None
-    # самообслуживание, подтвердившего сотрудника нет
     assert resident.verified_by is None
 
 
-async def test_verify_with_a_wrong_account_creates_nothing(
+@pytest.mark.parametrize(("stored", "stated"), [(ACCOUNT, "0000"), (None, "")])
+async def test_verify_without_a_match_changes_nothing(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    stored: str | None,
+    stated: str,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _set_account(session, own.flat_id, ACCOUNT)
+    if stored is not None:
+        await _set_account(session, own.flat_id, stored)
     resident = await _add_resident(session, own.user_id, own.house_id, None)
 
-    result = await _make_service(session).verify(own.user_id, own.flat_id, "0000")
+    result = await _make_service(session).verify(own.user_id, own.flat_id, stated)
 
     assert result.verified is False
     assert resident.flat_id is None
-    assert resident.verified_at is None
-
-
-async def test_verify_never_matches_a_flat_without_an_account(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    resident = await _add_resident(session, own.user_id, own.house_id, None)
-
-    result = await _make_service(session).verify(own.user_id, own.flat_id, "")
-
-    assert result.verified is False
     assert resident.verified_at is None
 
 
@@ -174,9 +184,8 @@ async def test_verify_is_idempotent_on_the_same_flat(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
+    own = await _verified_owner(session, make_org_house_flat_user)
     await _set_account(session, own.flat_id, ACCOUNT)
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
 
     result = await _make_service(session).verify(own.user_id, own.flat_id, ACCOUNT)
 
@@ -188,9 +197,8 @@ async def test_verify_refuses_a_move_to_another_flat(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
+    own = await _verified_owner(session, make_org_house_flat_user)
     other_flat = await _add_flat(session, own.house_id, "2", ACCOUNT)
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
 
     with pytest.raises(InvalidState):
         await _make_service(session).verify(own.user_id, other_flat, ACCOUNT)
@@ -200,8 +208,6 @@ async def test_verify_moves_an_unverified_residency_to_the_confirmed_flat(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    # квартиру житель выбрал при привязке и мог ошибиться: пока подтверждения
-    # нет, защищать нечего
     own = await make_org_house_flat_user()
     other_flat = await _add_flat(session, own.house_id, "2", ACCOUNT)
     resident = await _add_resident(session, own.user_id, own.house_id, own.flat_id)
@@ -231,6 +237,17 @@ async def test_verify_refuses_a_tenant(
         await _make_service(session).verify(own.user_id, own.flat_id, ACCOUNT)
 
 
+async def test_verify_answers_not_found_for_a_flat_of_another_house(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await _verified_owner(session, make_org_house_flat_user)
+    other = await make_org_house_flat_user()
+
+    with pytest.raises(EntityNotFound):
+        await _make_service(session).verify(own.user_id, other.flat_id, ACCOUNT)
+
+
 async def test_second_pending_request_is_refused(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
@@ -250,8 +267,7 @@ async def test_request_verification_is_refused_for_a_verified_residency(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
 
     with pytest.raises(InvalidState):
         await _make_service(session).request_verification(
@@ -262,35 +278,38 @@ async def test_request_verification_is_refused_for_a_verified_residency(
         )
 
 
-async def test_approve_verifies_the_resident_and_closes_the_request(
+async def test_approve_verifies_the_resident_and_notifies_them(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
 ) -> None:
-    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
-    resident = await _add_resident(
-        session, await _add_user(session), staff.house_id, None
-    )
-    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
-    service = _make_service(session)
+    staff, resident, request = await _pending_request(session, make_org_house_flat_user)
 
-    view = await service.approve_verification(staff.org_id, request.id, staff.user_id)
+    view = await _make_service(session, publisher).approve_verification(
+        staff.org_id,
+        request.id,
+        staff.user_id,
+    )
 
     assert view.request.status is VerificationStatus.APPROVED
     assert view.request.decided_by == staff.user_id
     assert view.request.decided_at is not None
     assert resident.flat_id == staff.flat_id
     assert resident.verified_by == staff.user_id
+    await publisher.flush()
+    enqueued = broker.enqueued(TaskName.SEND_TO_USER)
+    assert len(enqueued) == 1
+    assert enqueued[0]["user_id"] == resident.user_id
+    assert enqueued[0]["mandatory"] is True
+    assert "подтвердила" in enqueued[0]["text"]
 
 
 async def test_deciding_a_decided_request_is_refused(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
-    resident = await _add_resident(
-        session, await _add_user(session), staff.house_id, None
-    )
-    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
+    staff, _, request = await _pending_request(session, make_org_house_flat_user)
     service = _make_service(session)
     await service.approve_verification(staff.org_id, request.id, staff.user_id)
 
@@ -309,11 +328,7 @@ async def test_reject_requires_a_reason(
     make_org_house_flat_user: Fixture,
     reason: str,
 ) -> None:
-    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
-    resident = await _add_resident(
-        session, await _add_user(session), staff.house_id, None
-    )
-    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
+    staff, _, request = await _pending_request(session, make_org_house_flat_user)
 
     with pytest.raises(InvalidRequest):
         await _make_service(session).reject_verification(
@@ -326,17 +341,15 @@ async def test_reject_requires_a_reason(
     assert request.status is VerificationStatus.PENDING
 
 
-async def test_reject_stores_the_reason(
+async def test_reject_stores_the_reason_and_sends_it_to_the_resident(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
 ) -> None:
-    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
-    resident = await _add_resident(
-        session, await _add_user(session), staff.house_id, None
-    )
-    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
+    staff, resident, request = await _pending_request(session, make_org_house_flat_user)
 
-    view = await _make_service(session).reject_verification(
+    view = await _make_service(session, publisher).reject_verification(
         staff.org_id,
         request.id,
         staff.user_id,
@@ -346,6 +359,12 @@ async def test_reject_stores_the_reason(
     assert view.request.status is VerificationStatus.REJECTED
     assert view.request.reason == "счет не ваш"
     assert resident.verified_at is None
+    await publisher.flush()
+    enqueued = broker.enqueued(TaskName.SEND_TO_USER)
+    assert len(enqueued) == 1
+    assert enqueued[0]["user_id"] == resident.user_id
+    assert enqueued[0]["mandatory"] is True
+    assert "счет не ваш" in enqueued[0]["text"]
 
 
 async def test_foreign_verification_request_is_not_found_for_another_org(
@@ -356,8 +375,6 @@ async def test_foreign_verification_request_is_not_found_for_another_org(
     other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     request = await _add_request(session, other.flat_id, other.user_id)
 
-    # чужой запрос - это 404, а не 403: 403 подтвердил бы, что такой
-    # verification_id существует
     with pytest.raises(EntityNotFound):
         await _make_service(session).approve_verification(
             own.org_id,
@@ -386,9 +403,15 @@ async def test_verification_requests_list_hides_another_org(
     assert views == []
 
 
-async def test_create_invite_refuses_a_tenant(
+@pytest.mark.parametrize(
+    ("role", "verified"),
+    [(ResidentRole.TENANT, True), (ResidentRole.OWNER, False)],
+)
+async def test_create_invite_needs_a_verified_owner(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    role: ResidentRole,
+    verified: bool,
 ) -> None:
     own = await make_org_house_flat_user()
     await _add_resident(
@@ -396,20 +419,9 @@ async def test_create_invite_refuses_a_tenant(
         own.user_id,
         own.house_id,
         own.flat_id,
-        ResidentRole.TENANT,
-        verified=True,
+        role,
+        verified=verified,
     )
-
-    with pytest.raises(NotEnoughRights):
-        await _make_service(session).create_invite(own.user_id, own.flat_id, 72, 1)
-
-
-async def test_create_invite_refuses_an_unverified_owner(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
 
     with pytest.raises(NotEnoughRights):
         await _make_service(session).create_invite(own.user_id, own.flat_id, 72, 1)
@@ -425,8 +437,7 @@ async def test_create_invite_rejects_dead_limits(
     expires_in_hours: int,
     max_activations: int,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
 
     with pytest.raises(InvalidRequest):
         await _make_service(session).create_invite(
@@ -441,8 +452,7 @@ async def test_activated_invite_makes_a_tenant_without_charges_and_votes(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
     tenant_id = await _add_user(session)
@@ -461,8 +471,7 @@ async def test_single_use_flat_invite_is_not_activated_twice(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
     first = await _add_user(session)
@@ -482,8 +491,7 @@ async def test_activation_by_a_resident_of_the_same_flat_consumes_nothing(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
 
@@ -499,8 +507,7 @@ async def test_activation_refuses_a_resident_of_another_flat_in_the_house(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
     neighbour_flat = await _add_flat(session, own.house_id, "2")
@@ -515,34 +522,34 @@ async def test_activation_refuses_a_resident_of_another_flat_in_the_house(
     assert used.activations_used == 0
 
 
-async def test_revoked_invite_is_not_activated(
+async def test_revoked_invite_is_dead_for_a_newcomer_and_for_the_flat(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
     await service.revoke_invite(own.user_id, invite.code)
 
     with pytest.raises(InvalidState):
         await service.activate_invite(await _add_user(session), invite.code)
+    # у жителя квартиры активация не списывается, и мертвый код не должен
+    # молча отвечать ему успехом
+    with pytest.raises(InvalidState):
+        await service.activate_invite(own.user_id, invite.code)
 
 
 async def test_invite_is_not_revoked_by_a_stranger(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
+    own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
     neighbour_flat = await _add_flat(session, own.house_id, "2")
     neighbour = await _add_user(session)
     await _add_resident(session, neighbour, own.house_id, neighbour_flat, verified=True)
 
-    # код не говорит в пути, чьей квартире он принадлежит, поэтому чужой код -
-    # это 404
     with pytest.raises(EntityNotFound):
         await service.revoke_invite(neighbour, invite.code)
 
@@ -555,9 +562,8 @@ async def test_flat_card_shows_the_account_tail_only_to_a_verified_owner(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
-    own = await make_org_house_flat_user()
+    own = await _verified_owner(session, make_org_house_flat_user)
     await _set_account(session, own.flat_id, ACCOUNT)
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
     tenant = await _add_user(session)
     await _add_resident(
         session,
@@ -617,112 +623,5 @@ async def test_flat_card_is_refused_to_a_resident_of_another_flat(
     neighbour = await _add_user(session)
     await _add_resident(session, neighbour, own.house_id, neighbour_flat, verified=True)
 
-    # сосед по дому - не житель этой квартиры, ее карточка ему закрыта
     with pytest.raises(NotEnoughRights):
         await _make_service(session).flat_card(neighbour, own.flat_id)
-
-
-async def test_revoked_invite_is_dead_even_for_a_resident_of_the_flat(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
-    service = _make_service(session)
-    invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
-    await service.revoke_invite(own.user_id, invite.code)
-
-    # у жителя квартиры активация не списывается, и мертвый код не должен
-    # молча отвечать успехом
-    with pytest.raises(InvalidState):
-        await service.activate_invite(own.user_id, invite.code)
-
-
-async def test_second_pending_row_is_refused_by_the_database(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, None)
-    await _add_request(session, own.flat_id, own.user_id)
-
-    # правило живет в частичном уникальном индексе, а не в чтении перед
-    # записью: два параллельных нажатия кнопки прошли бы проверку в питоне оба
-    session.add(
-        VerificationRequest(
-            flat_id=own.flat_id,
-            user_id=own.user_id,
-            account_no=ACCOUNT,
-            status=VerificationStatus.PENDING,
-        ),
-    )
-    with pytest.raises(IntegrityError):
-        await session.flush()
-
-
-async def test_verify_answers_not_found_for_a_flat_of_another_house(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    other = await make_org_house_flat_user()
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id, verified=True)
-
-    # чужая квартира - это 404, а не 403: 403 подтвердил бы, что такой
-    # flat_id существует
-    with pytest.raises(EntityNotFound):
-        await _make_service(session).verify(own.user_id, other.flat_id, ACCOUNT)
-
-
-async def test_approve_notifies_the_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
-) -> None:
-    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
-    resident = await _add_resident(
-        session, await _add_user(session), staff.house_id, None
-    )
-    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
-
-    await _make_service(session, publisher).approve_verification(
-        staff.org_id,
-        request.id,
-        staff.user_id,
-    )
-
-    await publisher.flush()
-    enqueued = broker.enqueued(TaskName.SEND_TO_USER)
-    assert len(enqueued) == 1
-    assert enqueued[0]["user_id"] == resident.user_id
-    assert enqueued[0]["mandatory"] is True
-    assert "подтвердила" in enqueued[0]["text"]
-
-
-async def test_rejection_carries_the_reason_to_the_resident(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
-) -> None:
-    staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
-    resident = await _add_resident(
-        session, await _add_user(session), staff.house_id, None
-    )
-    request = await _add_request(session, staff.flat_id, UserId(resident.user_id))
-    reason = "Лицевой счет не совпал с нашей базой"
-
-    await _make_service(session, publisher).reject_verification(
-        staff.org_id,
-        request.id,
-        staff.user_id,
-        reason,
-    )
-
-    await publisher.flush()
-    enqueued = broker.enqueued(TaskName.SEND_TO_USER)
-    assert len(enqueued) == 1
-    assert enqueued[0]["user_id"] == resident.user_id
-    assert enqueued[0]["mandatory"] is True
-    assert reason in enqueued[0]["text"]

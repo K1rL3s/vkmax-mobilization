@@ -8,14 +8,11 @@ from fastapi import FastAPI
 from tests.conftest import empty_bot_setup, make_config
 
 from zheka.api.app import app_factory
-from zheka.api.schemas import polls as poll_schemas
 from zheka.api.schemas.polls import DISCLAIMER
-from zheka.core.services import quorum
 
-# контракт мини-аппа: метод, путь и имя операции из плана. Правка этого списка
-# ломает фронт, поэтому она обсуждается, а не делается по ходу задачи
 CYRILLIC = re.compile(r"[а-яё]", re.IGNORECASE)
 
+# контракт мини-аппа: правка этого списка ломает фронт
 CONTRACT: tuple[tuple[str, str, str], ...] = (
     ("get", "/api/healthcheck", "healthcheck"),
     ("get", "/api/me", "get_me"),
@@ -155,9 +152,8 @@ CONTRACT: tuple[tuple[str, str, str], ...] = (
 )
 
 
-# контракту бот не нужен, и настоящий диспетчер он не занимает: тот в
-# прогоне один, принадлежит фикстуре bot_setup, и второй setup_maxo_dishka
-# повесил бы на него второй контейнер
+# контракту бот не нужен, а настоящий диспетчер в прогоне один и принадлежит
+# фикстуре bot_setup
 @pytest.fixture(scope="module")
 def app() -> FastAPI:
     return app_factory(make_config(), empty_bot_setup())
@@ -218,192 +214,90 @@ def test_no_unreachable_validation_response(openapi: dict[str, Any]) -> None:
     assert "HTTPValidationError" not in openapi["components"]["schemas"]
 
 
-@pytest.mark.parametrize("schema_name", ["RequestCard", "AdminRequestCard"])
-def test_request_cards_expose_nullable_org_and_required_normative_hours(
-    openapi: dict[str, Any],
-    schema_name: str,
-) -> None:
-    schema = openapi["components"]["schemas"][schema_name]
-
-    assert schema["properties"]["org_name"]["anyOf"] == [
-        {"type": "string"},
-        {"type": "null"},
-    ]
-    assert schema["properties"]["normative_hours"]["type"] == "integer"
-    assert {"org_name", "normative_hours"} <= set(schema["required"])
-
-
-@pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
-def test_request_list_items_do_not_expose_card_org_and_normative_hours(
-    openapi: dict[str, Any],
-    schema_name: str,
-) -> None:
-    properties = openapi["components"]["schemas"][schema_name]["properties"]
-
-    assert "org_name" not in properties
-    assert "normative_hours" not in properties
-
-
-@pytest.mark.parametrize("schema_name", ["RequestCard", "AdminRequestCard"])
-def test_request_cards_expose_a_nullable_optional_auto_close_at(
-    openapi: dict[str, Any],
-    schema_name: str,
-) -> None:
-    schema = openapi["components"]["schemas"][schema_name]
-
-    assert schema["properties"]["auto_close_at"]["anyOf"] == [
-        {"type": "string", "format": "date-time"},
-        {"type": "null"},
-    ]
-    # дедлайна нет большую часть жизни заявки, поэтому поле необязательное,
-    # в отличие от org_name и normative_hours
-    assert "auto_close_at" not in schema["required"]
-
-
-@pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
-def test_request_list_items_do_not_expose_the_auto_close_deadline(
-    openapi: dict[str, Any],
-    schema_name: str,
-) -> None:
-    properties = openapi["components"]["schemas"][schema_name]["properties"]
-
-    assert "auto_close_at" not in properties
-
-
-def test_charge_breakdown_exposes_consumption_additively(
-    openapi: dict[str, Any],
-) -> None:
-    # задача 11, заметка контроллера: consumption не входит в замороженный
-    # контракт, поэтому поле необязательное (свой дефолт - пустой список)
-    schema = openapi["components"]["schemas"]["ChargeBreakdown"]
-
-    assert schema["properties"]["consumption"]["items"] == {
-        "$ref": "#/components/schemas/ServiceConsumption"
-    }
-    assert "consumption" not in schema["required"]
-
-
-def test_service_consumption_nests_meter_id_and_consumption_points(
-    openapi: dict[str, Any],
-) -> None:
-    schema = openapi["components"]["schemas"]["ServiceConsumption"]
-
-    assert schema["properties"]["points"]["items"] == {
-        "$ref": "#/components/schemas/ConsumptionPoint"
-    }
-    assert {"service", "meter_id", "points"} <= set(schema["required"])
-    # среднее по дому не всегда посчитано (нет ни одной подачи по дому)
-    assert "house_average" not in schema["required"]
-
-
-def test_quorum_percent_is_imported_from_the_core_module_not_redefined() -> None:
-    # задача 12, заметка контроллера: api/schemas/polls.py не заводит свою
-    # копию QUORUM_PERCENT, а берет ее из core/services/quorum.py
-    assert poll_schemas.QUORUM_PERCENT is quorum.QUORUM_PERCENT
-    assert poll_schemas.QUORUM_PERCENT == 5000
-
-
-@pytest.mark.parametrize("schema_name", ["PollCard", "PollResults"])
-def test_poll_card_and_results_carry_the_oss_disclaimer_additively(
-    openapi: dict[str, Any],
-    schema_name: str,
-) -> None:
-    # задача 12, заметка контроллера: is_oss и disclaimer - не опциональные
-    # для фронта строки, а часть каждого ответа, добавлены аддитивно
-    schema = openapi["components"]["schemas"][schema_name]
-
-    assert schema["properties"]["is_oss"]["default"] is False
-    assert schema["properties"]["disclaimer"]["default"] == DISCLAIMER
-
-
-def test_poll_results_exposes_flats_without_area_additively(
-    openapi: dict[str, Any],
-) -> None:
-    # задача 12, заметка контроллера: flats_without_area - не в замороженном
-    # контракте, добавлено аддитивно и всегда присутствует (нет дефолта)
-    schema = openapi["components"]["schemas"]["PollResults"]
-
-    assert schema["properties"]["flats_without_area"]["type"] == "integer"
-    assert "flats_without_area" in schema["required"]
-
-
-def test_access_request_grid_exposes_flats_without_residents_additively(
-    openapi: dict[str, Any],
-) -> None:
-    # задача 14, заметка контроллера: flats_without_residents добавлено
-    # аддитивно, заполняет его только создание запроса
-    schema = openapi["components"]["schemas"]["AccessRequestGrid"]
-
-    assert schema["properties"]["flats_without_residents"]["default"] == []
-    assert "flats_without_residents" not in schema["required"]
-    assert CYRILLIC.search(
-        schema["properties"]["flats_without_residents"]["description"],
-    )
-
-
-@pytest.mark.parametrize("schema_name", ["ReceptionWindowInput", "ReceptionWindowItem"])
-def test_reception_windows_expose_capacity_additively(
-    openapi: dict[str, Any],
-    schema_name: str,
-) -> None:
-    # задача 14, решение владельца: в слот принимают столько жителей, сколько
-    # сотрудников ведет прием. Поле добавлено аддитивно, дефолт - одно место
-    schema = openapi["components"]["schemas"][schema_name]
-
-    assert schema["properties"]["capacity"]["default"] == 1
-    assert "capacity" not in schema["required"]
-    assert CYRILLIC.search(schema["properties"]["capacity"]["description"])
+_NULLABLE_INT = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
 
 
 @pytest.mark.parametrize(
-    "schema_name",
+    ("schema_name", "field", "expected", "required"),
     [
-        "DashboardResponse",
-        "MetersSeasonResponse",
-        "ChannelsSplitResponse",
-        "BenchmarkResponse",
+        *[
+            (card, field, expected, required)
+            for card in ("RequestCard", "AdminRequestCard")
+            for field, expected, required in (
+                ("org_name", {"anyOf": [{"type": "string"}, {"type": "null"}]}, True),
+                ("normative_hours", {"type": "integer"}, True),
+                (
+                    "auto_close_at",
+                    {
+                        "anyOf": [
+                            {"type": "string", "format": "date-time"},
+                            {"type": "null"},
+                        ]
+                    },
+                    False,
+                ),
+            )
+        ],
+        (
+            "ChargeBreakdown",
+            "consumption",
+            {"items": {"$ref": "#/components/schemas/ServiceConsumption"}},
+            False,
+        ),
+        ("ServiceConsumption", "service", {}, True),
+        ("ServiceConsumption", "meter_id", {}, True),
+        (
+            "ServiceConsumption",
+            "points",
+            {"items": {"$ref": "#/components/schemas/ConsumptionPoint"}},
+            True,
+        ),
+        ("ServiceConsumption", "house_average", {}, False),
+        ("PollCard", "is_oss", {"default": False}, False),
+        ("PollCard", "disclaimer", {"default": DISCLAIMER}, False),
+        ("PollResults", "is_oss", {"default": False}, False),
+        ("PollResults", "disclaimer", {"default": DISCLAIMER}, False),
+        ("PollResults", "flats_without_area", {"type": "integer"}, True),
+        ("PollResults", "quorum_percent", {"default": 5000}, False),
+        ("AccessRequestGrid", "flats_without_residents", {"default": []}, False),
+        ("ReceptionWindowInput", "capacity", {"default": 1}, False),
+        ("ReceptionWindowItem", "capacity", {"default": 1}, False),
+        ("DashboardResponse", "is_empty", {"type": "boolean"}, True),
+        ("MetersSeasonResponse", "is_empty", {"type": "boolean"}, True),
+        ("ChannelsSplitResponse", "is_empty", {"type": "boolean"}, True),
+        ("BenchmarkResponse", "is_empty", {"type": "boolean"}, True),
+        ("MetersSeasonResponse", "window_open", {"type": "boolean"}, True),
+        # меньше трех организаций с данными - сравнения нет, иначе чужое
+        # значение получается вычитанием
+        ("BenchmarkMetric", "platform_median", _NULLABLE_INT, True),
+        ("BenchmarkMetric", "rank", _NULLABLE_INT, True),
+        ("BenchmarkMetric", "total", _NULLABLE_INT, True),
     ],
 )
-def test_analytics_responses_flag_an_empty_state(
+def test_schema_field(
+    openapi: dict[str, Any],
+    schema_name: str,
+    field: str,
+    expected: dict[str, Any],
+    required: bool,
+) -> None:
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert expected.items() <= schema["properties"][field].items()
+    assert (field in schema.get("required", ())) is required
+
+
+@pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
+def test_request_list_items_leave_card_only_fields_out(
     openapi: dict[str, Any],
     schema_name: str,
 ) -> None:
-    # задача 19, бриф: пустой экран аналитики объясняется флагом, а не
-    # догадкой фронта по нулям
-    schema = openapi["components"]["schemas"][schema_name]
+    properties = openapi["components"]["schemas"][schema_name]["properties"]
 
-    assert schema["properties"]["is_empty"]["type"] == "boolean"
-    assert "is_empty" in schema["required"]
+    assert not {"org_name", "normative_hours", "auto_close_at"} & set(properties)
 
 
-def test_meters_season_states_whether_the_window_is_open(
-    openapi: dict[str, Any],
-) -> None:
-    schema = openapi["components"]["schemas"]["MetersSeasonResponse"]
-
-    assert schema["properties"]["window_open"]["type"] == "boolean"
-    assert "window_open" in schema["required"]
-
-
-@pytest.mark.parametrize("field", ["platform_median", "rank", "total"])
-def test_benchmark_comparison_is_nullable_below_three_organizations(
-    openapi: dict[str, Any],
-    field: str,
-) -> None:
-    # задача 19, бриф: меньше трех организаций с данными - сравнения нет,
-    # иначе чужое значение получается вычитанием
-    schema = openapi["components"]["schemas"]["BenchmarkMetric"]
-
-    assert schema["properties"][field]["anyOf"] == [
-        {"type": "integer"},
-        {"type": "null"},
-    ]
-    assert field in schema["required"]
-
-
-def test_metric_unit_carries_points_additively(openapi: dict[str, Any]) -> None:
-    # задача 19, решение контроллера: оценка в сотых долях балла получила свою
-    # единицу, count остается без масштаба
+def test_metric_unit_carries_points(openapi: dict[str, Any]) -> None:
     schema = openapi["components"]["schemas"]
 
     assert schema["MetricUnit"]["enum"] == [

@@ -74,14 +74,7 @@ class ChargeListItem(BaseSchema):
 
     @classmethod
     def of(cls, charge: Charge) -> Self:
-        return cls(
-            id=ChargeId(charge.id),
-            flat_id=FlatId(charge.flat_id),
-            period=charge.period,
-            total=charge.total,
-            is_closed=charge.is_closed,
-            paid_at=charge.paid_at,
-        )
+        return cls.model_validate(charge)
 
 
 class ChargeCard(ChargeListItem):
@@ -95,14 +88,8 @@ class ChargeCard(ChargeListItem):
 
     @classmethod
     def of_card(cls, data: ChargeCardData) -> Self:
-        charge = data.charge
         return cls(
-            id=ChargeId(charge.id),
-            flat_id=FlatId(charge.flat_id),
-            period=charge.period,
-            total=charge.total,
-            is_closed=charge.is_closed,
-            paid_at=charge.paid_at,
+            **ChargeListItem.of(data.charge).model_dump(),
             address=data.house.address,
             flat_number=data.flat.number,
             lines=[ChargeLine.of(line) for line in data.lines],
@@ -144,7 +131,7 @@ class ConsumptionPoint(BaseSchema):
 
     @classmethod
     def of(cls, point: DomainConsumptionPoint) -> Self:
-        return cls(period=point.period, consumption=point.consumption)
+        return cls.model_validate(point)
 
 
 class ServiceConsumption(BaseSchema):
@@ -171,8 +158,6 @@ class ChargeBreakdown(BaseSchema):
     lines: list[ChargeBreakdownLine]
     previous_period: date | None = None
     previous_total: int | None = Field(default=None, description=_MONEY)
-    # спарклайн собственного расхода за полгода и среднее по дому - не в
-    # исходном контракте, добавлено аддитивно (задача 11, заметки контроллера)
     consumption: list[ServiceConsumption] = Field(default_factory=list)
 
     @classmethod

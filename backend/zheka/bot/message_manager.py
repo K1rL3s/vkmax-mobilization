@@ -11,10 +11,8 @@ from zheka.infra.max.sender import dialog_notify
 
 class ZhekaMessageManager(MessageManager):
     async def send_message(self, bot: Bot, new_message: NewMessage) -> Message:
-        # копия maxo 0.9.0 с одной правкой: там notify=True зашит константой,
-        # а продуктовый дефолт - без звука. Со звуком приходит только окно,
-        # которое открыла задача через MaxSender.start_dialog.
-        # Редактирование не звонит никогда, поэтому edit_message не тронут
+        # копия maxo 0.9.0, где notify=True зашит константой. edit_message не
+        # тронут: редактирование не звонит
         if new_message.link_preview_options:
             disable_link_preview = new_message.link_preview_options.is_disabled
         else:

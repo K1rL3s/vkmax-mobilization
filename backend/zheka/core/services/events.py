@@ -24,9 +24,7 @@ class EventsService:
         user_id: UserId | None = None,
         **payload: Any,
     ) -> None:
-        # аналитика не должна валить бизнес-действие, поэтому ошибка глотается;
-        # Decimal/datetime/UUID в payload превращаются в строку через default=str,
-        # а не роняют json.dumps внутри psycopg при записи в events.payload
+        # аналитика не валит бизнес-действие; default=str спасает datetime и UUID
         try:
             payload = json.loads(json.dumps(payload, default=str))
             await self._events_repo.add(type, user_id, payload)

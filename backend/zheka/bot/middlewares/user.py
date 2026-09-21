@@ -19,9 +19,6 @@ USER_KEY: Final = "user"
 
 
 class UserMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
-    # inner и после TransactionMiddleware: DishkaMiddleware регистрируется
-    # позже, уже из setup_dishka, поэтому outer-мидлварь отсюда оказалась бы
-    # снаружи контейнера, а апсерт - снаружи транзакции, которая его коммитит
     __slots__ = ()
 
     async def __call__(
@@ -39,30 +36,20 @@ class UserMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
         max_user = context.user
 
         if isinstance(max_user, FakeUser) or context.chat_type is not ChatType.DIALOG:
-            # окно, которое открыла задача: FakeUser собран из одних id, имя в
-            # нем пустое, и апсерт затер бы им настоящее. Из чата дома бот-админ
-            # получает каждое сообщение, и апсерт завел бы строку users всем,
-            # кто там пишет, хотя согласия никто из них не давал
+            # FakeUser окна задачи собран из одних id с пустым именем, а в чате
+            # дома согласия на запись в users никто не давал
             user = await users_repo.get_by_max_id(MaxUserId(max_user.id))
         else:
             user = await users_repo.upsert_by_max_id(
                 MaxUserId(max_user.id),
                 max_user.fullname,
                 max_user.username,
-                private_chat_id(context),
+                None if context.chat_id is None else MaxChatId(context.chat_id),
             )
 
         if user is not None:
             ctx[USER_KEY] = user
         return await next(ctx)
-
-
-def private_chat_id(context: UpdateContext) -> MaxChatId | None:
-    # у сообщения из чата дома chat_id чужой, и записывать его как личный
-    # нельзя: по нему задача откроет окно всему дому
-    if context.chat_type is not ChatType.DIALOG or context.chat_id is None:
-        return None
-    return MaxChatId(context.chat_id)
 
 
 def dialog_user_id(dialog_manager: DialogManager) -> UserId:

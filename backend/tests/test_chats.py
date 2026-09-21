@@ -95,22 +95,25 @@ async def test_staff_of_another_org_cannot_bind(
     assert (await _chat(session, chat_id)).bound_at is None
 
 
-async def test_an_executor_is_not_staff_for_binding(
+@pytest.mark.parametrize(
+    ("org_role", "chairman_status"),
+    [(OrgRole.EXECUTOR, None), (None, None), (None, ResidentStatus.BLOCKED)],
+    ids=["executor", "plain_resident", "blocked_chairman"],
+)
+async def test_only_staff_or_an_active_chairman_binds(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    org_role: OrgRole | None,
+    chairman_status: ResidentStatus | None,
 ) -> None:
-    data = await make_org_house_flat_user(org_role=OrgRole.EXECUTOR)
-    chat_id = await _added(session)
-
-    with pytest.raises(NotEnoughRights):
-        await _service(session).bind(data.user_id, chat_id, data.house_id)
-
-
-async def test_a_plain_resident_cannot_bind(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    data = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    data = await make_org_house_flat_user(
+        org_role=org_role,
+        resident_role=None if org_role else ResidentRole.OWNER,
+    )
+    if chairman_status is not None:
+        resident = (await ResidentsRepo(session).list_for_user(data.user_id))[0]
+        resident.is_chairman = True
+        resident.status = chairman_status
     chat_id = await _added(session)
 
     with pytest.raises(NotEnoughRights):
@@ -231,8 +234,7 @@ async def test_the_rights_of_a_chat_the_bot_left_are_not_recorded(
         await service.set_admin(chat_id, True)
 
 
-# событие удаления бота могло и не дойти: повторное добавление сбрасывает все
-# само, а не полагается на него
+# событие удаления бота могло не дойти, поэтому сброс не полагается на него
 @pytest.mark.parametrize("removed", [True, False])
 async def test_a_re_add_clears_the_previous_binding(
     session: AsyncSession,
@@ -256,17 +258,3 @@ async def test_a_re_add_clears_the_previous_binding(
     assert chat.bound_by is None
     assert chat.bound_at is None
     assert chat.bot_is_admin is False
-
-
-async def test_a_blocked_chairman_cannot_bind(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    data = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    resident = (await ResidentsRepo(session).list_for_user(data.user_id))[0]
-    resident.is_chairman = True
-    resident.status = ResidentStatus.BLOCKED
-    chat_id = await _added(session)
-
-    with pytest.raises(NotEnoughRights):
-        await _service(session).bind(data.user_id, chat_id, data.house_id)

@@ -55,8 +55,7 @@ poll_votes_table = Table(
     Column("poll_id", BigInteger, ForeignKey("polls.id"), nullable=False),
     Column("option_id", BigInteger, ForeignKey("poll_options.id"), nullable=False),
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
-    # житель может отвязаться от дома, а голос остается: он считается по
-    # user_id и flat_id, и история собрания не переписывается задним числом
+    # голос переживает отвязку жителя от дома: история собрания не переписывается
     Column(
         "resident_id",
         BigInteger,
@@ -65,10 +64,7 @@ poll_votes_table = Table(
     ),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True),
     Column("counted_by_area", Boolean, nullable=False),
-    # (poll_id, user_id) без option_id не пускал multiple-choice - у него по
-    # одной строке на выбранный вариант. "Один голос на человека" держит
-    # сервис: PollsService.vote проверяет get_vote(), а PollsRepo.add_vote
-    # вставляет весь выбор одной транзакцией с ON CONFLICT DO NOTHING по
-    # этому индексу
+    # multiple-choice пишет строку на вариант, поэтому "один голос на человека"
+    # держит PollsService.vote, а индекс - цель ON CONFLICT в add_vote
     UniqueConstraint("poll_id", "user_id", "option_id"),
 )

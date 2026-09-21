@@ -1,5 +1,4 @@
 import importlib.util
-from pathlib import Path
 from types import ModuleType
 
 import pytest
@@ -9,7 +8,7 @@ from tests.conftest import BACKEND_ROOT
 
 def _script() -> ModuleType:
     # скрипт лежит вне пакета и запускается руками, поэтому грузится по пути
-    path = Path(BACKEND_ROOT / "scripts" / "fetch_seed_data.py")
+    path = BACKEND_ROOT / "scripts" / "fetch_seed_data.py"
     spec = importlib.util.spec_from_file_location("fetch_seed_data", path)
     assert spec is not None
     assert spec.loader is not None

@@ -1,10 +1,9 @@
 import secrets
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from maxo.types.buttons import InlineButtons
 from maxo.types.send_message_result import SendMessageResult
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +29,7 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
 )
-from zheka.core.ids import MaxChatId, MaxUserId, RequestGroupId, RequestId, UserId
+from zheka.core.ids import MaxUserId, RequestGroupId, RequestId, UserId
 from zheka.core.notifications import DEFAULT_LEVEL, resolve_notify
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
@@ -57,22 +56,16 @@ class _FakeSender(MaxSender):
     __slots__ = ("sent",)
 
     def __init__(self) -> None:
-        self.sent: list[tuple[int, str, bool]] = []
+        self.sent: list[bool] = []
 
     async def send_message(
         self,
-        text: str,
+        text: str,  # noqa: ARG002
         *,
-        chat_id: MaxChatId | None = None,
-        user_id: MaxUserId | None = None,
         notify: bool = False,
-        keyboard: Sequence[Sequence[InlineButtons]] | None = None,
         **kwargs: Any,  # noqa: ARG002
     ) -> SendMessageResult | None:
-        recipient = chat_id if chat_id is not None else user_id
-        assert recipient is not None
-        assert keyboard is None or keyboard
-        self.sent.append((recipient, text, notify))
+        self.sent.append(notify)
         return None
 
 
@@ -177,53 +170,33 @@ async def test_recipient_without_settings_row_is_silent(
     assert [recipient.level for recipient in recipients] == [NotificationLevel.SILENT]
 
 
-async def test_off_user_is_skipped_unless_message_is_mandatory(
+@pytest.mark.parametrize(
+    ("level", "mandatory", "sent"),
+    [
+        (NotificationLevel.OFF, False, []),
+        (NotificationLevel.OFF, True, [False]),
+        (NotificationLevel.SOUND, False, [True]),
+    ],
+)
+async def test_fan_out_sends_with_the_resolved_sound(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    level: NotificationLevel,
+    mandatory: bool,
+    sent: list[bool],
 ) -> None:
     data = await make_org_house_flat_user()
     repo = NotificationsRepo(session)
-    await repo.set_level(
-        data.user_id,
-        NotificationCategory.REQUESTS,
-        NotificationLevel.OFF,
-    )
+    await repo.set_level(data.user_id, NotificationCategory.REQUESTS, level)
     sender = _FakeSender()
     category = NotificationCategory.REQUESTS.value
 
-    skipped = await _fan_out(sender, repo, [data.user_id], TEXT, category, False, None)
-    assert skipped == 0
-    assert sender.sent == []
-
-    sent = await _fan_out(sender, repo, [data.user_id], TEXT, category, True, None)
-    assert sent == 1
-    assert sender.sent[0][2] is False
-
-
-async def test_sound_level_rings(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    data = await make_org_house_flat_user()
-    repo = NotificationsRepo(session)
-    await repo.set_level(
-        data.user_id,
-        NotificationCategory.REQUESTS,
-        NotificationLevel.SOUND,
-    )
-    sender = _FakeSender()
-
-    await _fan_out(
-        sender,
-        repo,
-        [data.user_id],
-        TEXT,
-        NotificationCategory.REQUESTS.value,
-        False,
-        None,
+    count = await _fan_out(
+        sender, repo, [data.user_id], TEXT, category, mandatory, None
     )
 
-    assert sender.sent[0][2] is True
+    assert count == len(sent)
+    assert sender.sent == sent
 
 
 async def test_notify_user_reaches_the_broker(

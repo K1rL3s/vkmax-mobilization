@@ -46,12 +46,9 @@ class DbProvider(Provider):
         maker: async_sessionmaker[AsyncSession],
     ) -> AsyncGenerator[AsyncSession, BaseException | None]:
         async with maker() as session:
-            # коммитит транзакцию transaction_middleware в api и
-            # CommitMiddleware в воркере - тот, кто знает исход. Здесь
-            # остается только страховочный откат, и он именно на присланном
-            # значении: dishka финализирует провайдер через agen.asend(exc),
-            # то есть передает исключение значением, а не броском, и
-            # try/except вокруг yield не сработал бы никогда
+            # коммитят решатели транзакции, здесь только страховочный откат.
+            # dishka передает исключение через agen.asend(exc), значением, так
+            # что try/except вокруг yield не сработал бы
             exception = yield session
             if exception is not None:
                 await session.rollback()
