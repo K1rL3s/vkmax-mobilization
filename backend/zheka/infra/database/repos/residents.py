@@ -1,7 +1,7 @@
 from collections.abc import Collection, Sequence
 from datetime import datetime
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import ResidentRole, ResidentStatus
@@ -13,6 +13,15 @@ from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.houses import flats_table
 from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
+
+# заблокированный житель не адресат: рассылка его уже не видит
+# (active_user_ids), и после блокировки он не отвечает ни на что, так что
+# запрос доступа к его квартире некому было бы закрыть. Это же правило
+# ReadingsService.submit держит в MeterAccess.verified_resident
+VERIFIED_RESIDENT = and_(
+    residents_table.c.verified_at.is_not(None),
+    residents_table.c.status != ResidentStatus.BLOCKED,
+)
 
 
 class ResidentsRepo(BaseAlchemyRepo):
@@ -53,13 +62,9 @@ class ResidentsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def list_verified_for_house(self, house_id: HouseId) -> Sequence[Resident]:
-        # заблокированный житель не адресат: рассылка его уже не видит
-        # (active_user_ids), и после блокировки он не отвечает ни на что,
-        # так что запрос доступа к его квартире некому было бы закрыть
         stmt = select(Resident).where(
             residents_table.c.house_id == house_id,
-            residents_table.c.verified_at.is_not(None),
-            residents_table.c.status != ResidentStatus.BLOCKED,
+            VERIFIED_RESIDENT,
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
@@ -288,6 +293,19 @@ class ResidentsRepo(BaseAlchemyRepo):
         stmt = select(Resident).where(
             residents_table.c.house_id.in_(house_ids),
             residents_table.c.user_id.in_(user_ids),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def list_verified_for_flats(
+        self,
+        flat_ids: Collection[FlatId],
+    ) -> Sequence[Resident]:
+        if not flat_ids:
+            return []
+        stmt = select(Resident).where(
+            residents_table.c.flat_id.in_(flat_ids),
+            VERIFIED_RESIDENT,
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()

@@ -98,3 +98,9 @@ class ChatBindingData(BaseDialogData):
     chat_id: int
     title: str
     notice: str | None = None
+
+
+class AccessSlotsData(BaseDialogData):
+    # запрос кладет задача рассылки; стек у окна свой на запрос
+    access_request_id: int
+    notice: str | None = None

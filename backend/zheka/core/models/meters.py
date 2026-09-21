@@ -17,6 +17,7 @@ class Meter(ZhekaMutableType):
     tariff_zones: int = 1
     serial: str
     next_verification_date: date | None = None
+    verification_warned_at: date | None = None
 
 
 class Reading(ZhekaMutableType):

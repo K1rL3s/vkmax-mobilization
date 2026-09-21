@@ -188,3 +188,17 @@ class ReceptionRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
+
+    async def list_to_remind(self, on_date: date) -> Sequence[Appointment]:
+        stmt = select(Appointment).where(
+            appointments_table.c.status == AppointmentStatus.BOOKED,
+            appointments_table.c.reminder_sent_at.is_(None),
+            appointments_table.c.starts_at >= _day_start(on_date),
+            appointments_table.c.starts_at < _day_end(on_date),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def mark_reminded(self, appointment: Appointment, at: datetime) -> None:
+        appointment.reminder_sent_at = at
+        await self._session.flush()

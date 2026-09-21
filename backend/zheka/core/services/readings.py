@@ -13,7 +13,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
 from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
-from zheka.core.models import Meter, Reading
+from zheka.core.models import Meter, OrgSettings, Reading
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import (
@@ -34,7 +34,7 @@ SPIKE_PERCENT = 200
 # медиане нужно SPIKE_MIN_HISTORY прошлых расходов, а расход - это дельта
 # между двумя показаниями, поэтому для порога нужно на одно показание больше
 SPIKE_MIN_HISTORY = 3
-# предупреждение об истечении поверки - на будущее, для напоминаний блока 18
+# за сколько до конца поверки житель получает первое предупреждение
 VERIFICATION_WARNING = timedelta(days=30)
 
 # сколько прошлых показаний тянуть для истории и для расчета скачка
@@ -107,7 +107,7 @@ def window_is_open(day: int, day_from: int, day_to: int, *, always_open: bool) -
     return day >= day_from or day <= day_to
 
 
-def _current_period(today: date) -> date:
+def current_period(today: date) -> date:
     return date(today.year, today.month, 1)
 
 
@@ -222,8 +222,11 @@ class ReadingsService:
         house_id = await self._house_id_of_flat(flat_id)
         today = datetime.now(UTC).date()
 
-        if await self._window_open(house_id, today):
-            options = [PeriodOption(period=_current_period(today), is_open=True)]
+        settings = await self._window_settings(house_id)
+        if window_accepts(today, settings):
+            options = [
+                PeriodOption(period=window_period(today, settings), is_open=True)
+            ]
         else:
             closed: set[date] = set()
             for period in _candidate_periods(today):
@@ -310,14 +313,15 @@ class ReadingsService:
         ):
             raise InvalidState(VERIFICATION_EXPIRED)
 
-        out_of_window = not await self._window_open(house_id, today)
+        settings = await self._window_settings(house_id)
+        out_of_window = not window_accepts(today, settings)
         if out_of_window:
             if draft.period not in _candidate_periods(today):
                 raise InvalidState(PERIOD_NOT_ALLOWED)
             charge = await self._charges.get_by_period(flat_id, draft.period)
             if charge is not None:
                 raise InvalidState(PERIOD_HAS_CHARGE)
-        elif draft.period != _current_period(today):
+        elif draft.period != window_period(today, settings):
             raise InvalidState(WRONG_PERIOD)
 
         previous = await self._meters.previous_reading(meter_id, draft.period)
@@ -388,19 +392,11 @@ class ReadingsService:
                     break
         return submitted
 
-    async def _window_open(self, house_id: HouseId, today: date) -> bool:
+    async def _window_settings(self, house_id: HouseId) -> OrgSettings | None:
         house = await self._houses.get(house_id)
         if house is None or house.org_id is None:
-            return True
-        settings = await self._orgs.get_settings(OrgId(house.org_id))
-        if settings is None:
-            return True
-        return window_is_open(
-            today.day,
-            settings.meter_window_day_from,
-            settings.meter_window_day_to,
-            always_open=settings.meter_window_always_open,
-        )
+            return None
+        return await self._orgs.get_settings(OrgId(house.org_id))
 
     async def house_average(
         self,
@@ -452,3 +448,28 @@ class ReadingsService:
         if flat is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         return HouseId(flat.house_id)
+
+
+def window_accepts(today: date, settings: OrgSettings | None) -> bool:
+    # без организации или без строки настроек окно открыто всегда
+    if settings is None:
+        return True
+    return window_is_open(
+        today.day,
+        settings.meter_window_day_from,
+        settings.meter_window_day_to,
+        always_open=settings.meter_window_always_open,
+    )
+
+
+def window_period(today: date, settings: OrgSettings | None) -> date:
+    # окно через конец месяца - один период, месяц его открытия: показание,
+    # поданное 3-го в окно 25-5, относится к тому же месяцу, что и поданное 27-го
+    if (
+        settings is not None
+        and not settings.meter_window_always_open
+        and settings.meter_window_day_from > settings.meter_window_day_to
+        and today.day <= settings.meter_window_day_to
+    ):
+        return _shift_months(today, 1)
+    return current_period(today)

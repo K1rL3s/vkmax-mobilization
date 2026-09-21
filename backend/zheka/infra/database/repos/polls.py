@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import PollStatus
@@ -81,8 +81,8 @@ class PollsRepo(BaseAlchemyRepo):
     ) -> Sequence[Poll]:
         # status фильтрует по сырому значению колонки. PollsService.list_polls
         # запрашивает весь список (status=None) и сам решает, что показать,
-        # потому что строка может быть еще не переведена в CLOSED
-        # планировщиком блока 18, а его ends_at уже прошел - "не врать"
+        # потому что строка может быть еще не переведена в CLOSED задачей
+        # close_expired_polls, а его ends_at уже прошел - "не врать"
         # разбирает эффективный статус, не хранимый
         stmt = select(Poll).where(polls_table.c.house_id == house_id)
         if status is not None:
@@ -195,3 +195,39 @@ class PollsRepo(BaseAlchemyRepo):
             return
         poll.status = PollStatus.CLOSED
         await self._session.flush()
+
+    async def list_to_remind(self, now: datetime, until: datetime) -> Sequence[Poll]:
+        stmt = select(Poll).where(
+            polls_table.c.status == PollStatus.ACTIVE,
+            polls_table.c.reminder_sent_at.is_(None),
+            polls_table.c.ends_at > now,
+            polls_table.c.ends_at <= until,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def mark_reminded(self, poll: Poll, at: datetime) -> None:
+        poll.reminder_sent_at = at
+        await self._session.flush()
+
+    async def close_expired(self, now: datetime) -> int:
+        stmt = (
+            update(polls_table)
+            .where(
+                polls_table.c.status == PollStatus.ACTIVE,
+                polls_table.c.ends_at <= now,
+            )
+            .values(status=PollStatus.CLOSED)
+            .returning(polls_table.c.id)
+        )
+        result = await self._session.execute(stmt)
+        return len(result.scalars().all())
+
+    async def voter_ids(self, poll_id: PollId) -> Sequence[UserId]:
+        stmt = (
+            select(poll_votes_table.c.user_id)
+            .where(poll_votes_table.c.poll_id == poll_id)
+            .distinct()
+        )
+        result = await self._session.execute(stmt)
+        return [UserId(user_id) for user_id in result.scalars().all()]

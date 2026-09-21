@@ -1,7 +1,7 @@
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import MeterType, TariffZone
@@ -180,7 +180,7 @@ class MetersRepo(BaseAlchemyRepo):
         period: date,
     ) -> Sequence[FlatId]:
         # только квартиры, у которых вообще есть счетчик - без него подавать
-        # показание нечем, и напоминание блока 18 такой квартире не нужно
+        # показание нечем, и напоминание о показаниях такой квартире не нужно
         has_meter = select(meters_table.c.flat_id).distinct()
         submitted = (
             select(meters_table.c.flat_id)
@@ -199,3 +199,26 @@ class MetersRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return [FlatId(flat_id) for flat_id in result.scalars().all()]
+
+    async def list_to_warn(self, until: date) -> Sequence[Meter]:
+        # поверка кончается не позже until, а предупреждение о текущей дате
+        # поверки еще не дошло до стадии «истекла». Какая из двух стадий
+        # нужна, решает вызывающий
+        stmt = (
+            select(Meter)
+            .where(
+                meters_table.c.next_verification_date <= until,
+                or_(
+                    meters_table.c.verification_warned_at.is_(None),
+                    meters_table.c.verification_warned_at
+                    < meters_table.c.next_verification_date,
+                ),
+            )
+            .order_by(meters_table.c.id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def mark_warned(self, meter: Meter, on: date) -> None:
+        meter.verification_warned_at = on
+        await self._session.flush()

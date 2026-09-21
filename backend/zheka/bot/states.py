@@ -50,3 +50,7 @@ class ChatBinding(StatesGroup):
     code = State()
     rights = State()
     done = State()
+
+
+class AccessSlots(StatesGroup):
+    pick = State()

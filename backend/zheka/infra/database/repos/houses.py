@@ -6,12 +6,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import RequestStatus
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
-from zheka.infra.database.models import DemandSignal, Flat, House
+from zheka.infra.database.models import DemandSignal, Flat, House, OrgSettings
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.chats import BOUND_CHAT
 from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
+from zheka.infra.database.tables.organizations import org_settings_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import demand_signals_table
 
@@ -327,3 +328,25 @@ class HousesRepo(BaseAlchemyRepo):
         stmt = select(House).where(houses_table.c.chat_binding_code == code)
         house: House | None = await self._session.scalar(stmt)
         return house
+
+    async def list_managed_with_settings(
+        self,
+    ) -> Sequence[tuple[HouseId, OrgSettings | None]]:
+        # у организации из реестра строки настроек может не быть, и тогда
+        # окно показаний, как в ReadingsService, открыто всегда
+        stmt = (
+            select(houses_table.c.id, OrgSettings)
+            .select_from(
+                houses_table.outerjoin(
+                    org_settings_table,
+                    org_settings_table.c.org_id == houses_table.c.org_id,
+                ),
+            )
+            .where(houses_table.c.org_id.is_not(None))
+            .order_by(houses_table.c.id)
+        )
+        result = await self._session.execute(stmt)
+        return [
+            (HouseId(house_id), settings)
+            for house_id, settings in result.tuples().all()
+        ]

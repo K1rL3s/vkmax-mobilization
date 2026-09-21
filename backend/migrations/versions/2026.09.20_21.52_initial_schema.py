@@ -483,6 +483,7 @@ def upgrade() -> None:
             postgresql.ENUM("active", "closed", name="poll_status", create_type=False),
             nullable=False,
         ),
+        sa.Column("reminder_sent_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
             ["created_by_user_id"],
             ["users.id"],
@@ -699,6 +700,7 @@ def upgrade() -> None:
         sa.Column("tariff_zones", sa.Integer(), server_default="1", nullable=False),
         sa.Column("serial", sa.String(length=32), nullable=False),
         sa.Column("next_verification_date", sa.Date(), nullable=True),
+        sa.Column("verification_warned_at", sa.Date(), nullable=True),
         sa.ForeignKeyConstraint(
             ["flat_id"], ["flats.id"], name=op.f("fk_meters_flat_id_flats")
         ),

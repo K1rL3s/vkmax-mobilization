@@ -1,9 +1,13 @@
+from collections.abc import Collection
 from typing import Any
+
+from sqlalchemy import select
 
 from zheka.core.enums import EventType
 from zheka.core.ids import UserId
 from zheka.infra.database.models import Event
 from zheka.infra.database.repos.base import BaseAlchemyRepo
+from zheka.infra.database.tables.events import events_table
 
 
 class EventsRepo(BaseAlchemyRepo):
@@ -18,3 +22,21 @@ class EventsRepo(BaseAlchemyRepo):
         # бизнес-транзакция вызывающего кода
         async with self._session.begin_nested():
             self._session.add(Event(user_id=user_id, type=type.value, payload=payload))
+
+    async def users_with(
+        self,
+        type: EventType,
+        user_ids: Collection[UserId],
+        payload: dict[str, Any],
+    ) -> set[UserId]:
+        # кому из user_ids событие с таким payload уже записано: отметка
+        # напоминания, а не только аналитика
+        if not user_ids:
+            return set()
+        stmt = select(events_table.c.user_id).where(
+            events_table.c.type == type.value,
+            events_table.c.user_id.in_(user_ids),
+            events_table.c.payload.contains(payload),
+        )
+        result = await self._session.execute(stmt)
+        return {UserId(user_id) for user_id in result.scalars().all()}

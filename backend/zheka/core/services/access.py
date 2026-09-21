@@ -20,6 +20,7 @@ from zheka.core.ids import (
 )
 from zheka.core.models import AccessRequest, AccessSlot, AccessTarget
 from zheka.core.services.events import EventsService
+from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.reception import as_utc
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -82,7 +83,7 @@ class AccessRequestDraft(ZhekaType):
 
 
 class AccessService:
-    __slots__ = ("_access", "_events", "_houses", "_residents")
+    __slots__ = ("_access", "_events", "_houses", "_notifications", "_residents")
 
     def __init__(
         self,
@@ -90,11 +91,13 @@ class AccessService:
         houses_repo: HousesRepo,
         residents_repo: ResidentsRepo,
         events_service: EventsService,
+        notifications_service: NotificationsService,
     ) -> None:
         self._access = access_repo
         self._houses = houses_repo
         self._residents = residents_repo
         self._events = events_service
+        self._notifications = notifications_service
 
     async def create(
         self,
@@ -164,6 +167,7 @@ class AccessService:
             access_request_id=access_request_id,
             flats_count=len(targeted),
         )
+        self._notifications.open_access_slots(access_request_id)
 
         grid = await self.grid(org_id, access_request_id)
         return AccessGridData(
@@ -205,23 +209,7 @@ class AccessService:
         access_request_id: AccessRequestId,
         slot_id: AccessSlotId,
     ) -> AccessRequestData:
-        residencies = {
-            FlatId(resident.flat_id): resident
-            for resident in await self._residents.list_for_user(user_id)
-            if resident.flat_id is not None and resident.verified_at is not None
-        }
-        target = await self._access.target_for_flats(
-            access_request_id,
-            residencies.keys(),
-        )
-        if target is None:
-            raise EntityNotFound(REQUEST_NOT_FOUND)
-        # сначала ячейка, потом блокировка: чужому достается 404, из которого
-        # он ничего не узнает, а заблокированному - прямой отказ с причиной,
-        # которую УК ему уже назвала
-        resident = residencies[FlatId(target.flat_id)]
-        if resident.status is ResidentStatus.BLOCKED:
-            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
+        target = await self._target(user_id, access_request_id)
         # слот чужого запроса доступа сюда не проходит: выборка сужена
         # запросом, в котором стоит ячейка жителя
         slot = await self._access.lock_slot(access_request_id, slot_id)
@@ -317,3 +305,39 @@ class AccessService:
                 ),
             )
         return rows
+
+    async def resident_view(
+        self,
+        user_id: UserId,
+        access_request_id: AccessRequestId,
+    ) -> AccessRequestData:
+        target = await self._target(user_id, access_request_id)
+        request = await self._access.get(access_request_id)
+        if request is None:
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        rows = await self._decorate([request], {access_request_id: target})
+        return rows[0]
+
+    async def _target(
+        self,
+        user_id: UserId,
+        access_request_id: AccessRequestId,
+    ) -> AccessTarget:
+        residencies = {
+            FlatId(resident.flat_id): resident
+            for resident in await self._residents.list_for_user(user_id)
+            if resident.flat_id is not None and resident.verified_at is not None
+        }
+        target = await self._access.target_for_flats(
+            access_request_id,
+            residencies.keys(),
+        )
+        if target is None:
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        # сначала ячейка, потом блокировка: чужому достается 404, из которого
+        # он ничего не узнает, а заблокированному - прямой отказ с причиной,
+        # которую УК ему уже назвала
+        resident = residencies[FlatId(target.flat_id)]
+        if resident.status is ResidentStatus.BLOCKED:
+            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
+        return target

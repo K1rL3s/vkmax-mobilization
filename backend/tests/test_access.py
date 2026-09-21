@@ -6,8 +6,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser
+from tests.conftest import (
+    OrgHouseFlatUser,
+    RecordingBroker,
+    make_notifications_service,
+)
 
+from zheka.broker.publisher import TaskPublisher
+from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventType, ResidentRole, ResidentStatus
 from zheka.core.errors import (
     EntityNotFound,
@@ -39,12 +45,16 @@ from zheka.infra.database.tables.events import events_table
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 
-def _make_service(session: AsyncSession) -> AccessService:
+def _make_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> AccessService:
     return AccessService(
         AccessRepo(session),
         HousesRepo(session),
         ResidentsRepo(session),
         EventsService(EventsRepo(session)),
+        make_notifications_service(session, publisher),
     )
 
 
@@ -654,3 +664,24 @@ async def test_a_request_for_today_is_accepted(
     )
 
     assert grid.request.request.date == today
+
+
+async def test_create_queues_the_slots_window_for_the_residents(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    fixture = await make_org_house_flat_user()
+    flat_id, _ = await _with_resident(session, fixture.house_id, "12")
+    grid = await _make_service(session, publisher).create(
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id]),
+    )
+
+    await publisher.flush()
+
+    assert broker.enqueued(TaskName.BROADCAST_ACCESS_REQUEST) == [
+        {"access_request_id": grid.request.request.id},
+    ]

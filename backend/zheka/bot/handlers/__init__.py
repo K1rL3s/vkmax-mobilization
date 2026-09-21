@@ -1,3 +1,4 @@
+from zheka.bot.handlers.access import access_dialog
 from zheka.bot.handlers.chats import chat_binding_dialog, chats_router
 from zheka.bot.handlers.commands import commands_router, deeplinks_router
 from zheka.bot.handlers.consent import consent_dialog
@@ -11,6 +12,7 @@ from zheka.bot.handlers.requests import request_dialog
 from zheka.bot.handlers.review import review_dialog
 
 __all__ = (
+    "access_dialog",
     "chat_binding_dialog",
     "chats_router",
     "commands_router",

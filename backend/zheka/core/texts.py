@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from datetime import date, datetime
 from html import escape
 from types import MappingProxyType
 
@@ -77,3 +78,60 @@ def request_auto_closed(request_id: RequestId) -> str:
         f"Заявка №{request_id} закрыта: работу не проверили за 48 часов. "
         "Если проблема осталась, подайте повторную заявку"
     )
+
+
+def reading_window_opened() -> str:
+    return "Открыт прием показаний счетчиков. Передайте их в мини-приложении"
+
+
+def reading_window_closing(days: int) -> str:
+    return (
+        f"Через {_days(days)} закрывается прием показаний, а ваших еще нет. "
+        "Без них начисление пойдет по нормативу"
+    )
+
+
+def poll_reminder(title: str, ends_at: datetime) -> str:
+    return (
+        f"Идет опрос «{_plain(title)}», голосование закончится "
+        f"{ends_at:%d.%m.%Y}. От вашей квартиры голоса еще нет"
+    )
+
+
+def poll_chat_reminder(title: str, ends_at: datetime) -> str:
+    return (
+        f"Идет опрос «{_plain(title)}», голосование закончится "
+        f"{ends_at:%d.%m.%Y}. Проголосовать можно в мини-приложении"
+    )
+
+
+def verification_soon(meter: str, serial: str, due: date) -> str:
+    return (
+        f"{due:%d.%m.%Y} истекает поверка счетчика «{meter}» №{_plain(serial)}. "
+        "После этого начисление пойдет по нормативу"
+    )
+
+
+def verification_expired(meter: str, serial: str) -> str:
+    return (
+        f"Истекла поверка счетчика «{meter}» №{_plain(serial)}: начисление "
+        "пойдет по нормативу, пока счетчик не поверят"
+    )
+
+
+def appointment_reminder(starts_at: datetime, address: str) -> str:
+    # время приема - настенные часы, хранятся как UTC, поэтому показываются
+    # как есть, без перевода в пояс
+    return (
+        f"Напоминаем: завтра в {starts_at:%H:%M} вы записаны на прием в УК "
+        f"по дому {_plain(address)}"
+    )
+
+
+def _days(count: int) -> str:
+    teen, units = count % 100 // 10 == 1, count % 10
+    if not teen and units == 1:
+        return f"{count} день"
+    if not teen and units in {2, 3, 4}:
+        return f"{count} дня"
+    return f"{count} дней"

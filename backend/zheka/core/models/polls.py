@@ -33,6 +33,7 @@ class Poll(ZhekaMutableType):
     starts_at: datetime
     ends_at: datetime
     status: PollStatus
+    reminder_sent_at: datetime | None = None
 
 
 class PollOption(ZhekaMutableType):

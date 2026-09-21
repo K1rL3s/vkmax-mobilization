@@ -2,7 +2,7 @@ import asyncio
 import secrets
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, cast
 
 import pytest
@@ -47,6 +47,8 @@ from taskiq import InMemoryBroker
 from tests.conftest import PROBE_ROUTERS, RecordingBroker
 
 from zheka.bot import BotSetup
+from zheka.bot.handlers.access.handlers import PICKED
+from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
@@ -60,6 +62,7 @@ from zheka.bot.states import Consent, Menu
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import JOIN_HOUSE, on_bot_added, welcome_chat
 from zheka.broker.tasks.notifications import broadcast_to_chats
+from zheka.broker.tasks.reminders import broadcast_access_request
 from zheka.broker.tasks.requests import (
     attach_result_photo,
     send_executor_card,
@@ -81,27 +84,42 @@ from zheka.core.enums import (
     ResidentStatus,
 )
 from zheka.core.errors import NotEnoughRights
-from zheka.core.ids import HouseId, MaxChatId, MaxUserId, OrgId, RequestId, UserId
+from zheka.core.ids import (
+    AccessRequestId,
+    AccessSlotId,
+    FlatId,
+    HouseId,
+    MaxChatId,
+    MaxUserId,
+    OrgId,
+    RequestId,
+    UserId,
+)
 from zheka.core.models import User
+from zheka.core.services.access import SLOT_FULL
 from zheka.core.services.chats import CHAT_NOT_BOUND, CHAT_TAKEN, WRONG_CODE
 from zheka.core.services.orgs import INVITE_NOT_FOUND
 from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
 from zheka.core.texts import REQUEST_STATUS_LABELS
 from zheka.infra.database.models import (
     Chat,
+    Flat,
     House,
     OrgMember,
     Organization,
     Request,
     Resident,
 )
+from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.database.tables.access import access_targets_table
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
+from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
 from zheka.infra.max.sender import _chat_rate_limit, dialog_notify, is_chat_admin
@@ -1771,3 +1789,150 @@ async def test_a_mini_app_upsert_keeps_the_stop_mark(session: AsyncSession) -> N
     user = await repo.upsert_by_max_id(max_user_id, "Житель", None, None)
 
     assert user.bot_stopped_at is not None
+
+
+FIRST_SLOT = InlineButtonTextLocator("10:00")
+ACCESS_REASON = "Поверка газового оборудования"
+
+
+async def _access_window(
+    session: AsyncSession,
+    client: BotClient,
+    broker: InMemoryBroker,
+) -> tuple[AccessRequestId, AccessSlotId, FlatId]:
+    # двум квартирам одно окно на одного: вторая займет его, пока у первой
+    # висит клавиатура
+    user_id = await _started(session, client)
+    org_id, house_id = await _org_house(session)
+    mine, other = (
+        Flat(house_id=house_id, number="1"),
+        Flat(house_id=house_id, number="2"),
+    )
+    session.add_all([mine, other])
+    await session.flush()
+    session.add(
+        Resident(
+            user_id=user_id,
+            house_id=house_id,
+            flat_id=mine.id,
+            role=ResidentRole.OWNER,
+            verified_at=datetime.now(UTC),
+        ),
+    )
+    access = AccessRepo(session)
+    request = await access.create_request(
+        org_id,
+        house_id,
+        ACCESS_REASON,
+        datetime.now(UTC).date() + timedelta(days=1),
+        user_id,
+    )
+    day = datetime.combine(request.date, time(10), tzinfo=UTC)
+    [slot, _] = await access.add_slots(
+        AccessRequestId(request.id),
+        [(day, 1), (day + timedelta(hours=1), 1)],
+    )
+    await access.add_targets(
+        AccessRequestId(request.id),
+        [FlatId(mine.id), FlatId(other.id)],
+    )
+    ids = AccessRequestId(request.id), AccessSlotId(slot.id), FlatId(other.id)
+    await session.commit()
+    await _run(broker, broadcast_access_request, access_request_id=ids[0])
+    return ids
+
+
+async def test_the_access_window_is_sent_to_the_resident(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    await _access_window(bot_session, client, task_broker)
+
+    mode, _, chat_id, _ = _shown(shows, ACCESS_REASON)
+    assert mode is ShowMode.SEND
+    assert chat_id == client.chat.chat_id
+
+
+async def test_a_full_slot_rerenders_the_access_window(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id, slot_id, other = await _access_window(bot_session, client, task_broker)
+    window = message_manager.last_message()
+    stmt = (
+        update(access_targets_table)
+        .where(
+            access_targets_table.c.access_request_id == request_id,
+            access_targets_table.c.flat_id == other,
+        )
+        .values(slot_id=slot_id)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(window, FIRST_SLOT)
+
+    rerendered = message_manager.last_message()
+    assert ACCESS_REASON in (rerendered.body.text or "")
+    assert SLOT_FULL in (rerendered.body.text or "")
+    assert FIRST_SLOT.find_button(rerendered) is None
+
+
+async def test_a_picked_slot_is_marked_in_the_access_window(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _access_window(bot_session, client, task_broker)
+
+    await client.click(message_manager.last_message(), FIRST_SLOT)
+
+    picked = InlineButtonTextLocator(PICKED.format(time="10:00"))
+    assert picked.find_button(message_manager.last_message()) is not None
+
+
+async def test_an_access_window_of_a_lost_flat_renders_instead_of_failing(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _access_window(bot_session, client, task_broker)
+    window = message_manager.last_message()
+    stmt = (
+        update(residents_table)
+        .where(residents_table.c.user_id == await _started(bot_session, client))
+        .values(verified_at=None)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(window, FIRST_SLOT)
+
+    assert GONE_TEXT in (message_manager.last_message().body.text or "")
+
+
+async def test_a_block_reason_with_markup_renders_in_the_access_window(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _access_window(bot_session, client, task_broker)
+    window = message_manager.last_message()
+    stmt = (
+        update(residents_table)
+        .where(residents_table.c.user_id == await _started(bot_session, client))
+        .values(status=ResidentStatus.BLOCKED, block_reason="долг <3 мес>")
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(window, FIRST_SLOT)
+
+    assert "долг &lt;3 мес&gt;" in (message_manager.last_message().body.text or "")

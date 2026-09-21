@@ -21,6 +21,7 @@ from zheka.core.services.polls import PollsService
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.readings import ReadingsService
 from zheka.core.services.reception import ReceptionService
+from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
 from zheka.infra.database.repos.access import AccessRepo
@@ -345,12 +346,14 @@ class ServicesProvider(Provider):
         houses_repo: HousesRepo,
         residents_repo: ResidentsRepo,
         events_service: EventsService,
+        notifications_service: NotificationsService,
     ) -> AccessService:
         return AccessService(
             access_repo,
             houses_repo,
             residents_repo,
             events_service,
+            notifications_service,
         )
 
     @provide
@@ -370,4 +373,29 @@ class ServicesProvider(Provider):
             residents_repo,
             notifications_service,
             events_service,
+        )
+
+    @provide
+    def reminders_service(
+        self,
+        houses_repo: HousesRepo,
+        meters_repo: MetersRepo,
+        residents_repo: ResidentsRepo,
+        polls_repo: PollsRepo,
+        chats_repo: ChatsRepo,
+        reception_repo: ReceptionRepo,
+        events_repo: EventsRepo,
+        events_service: EventsService,
+        notifications_service: NotificationsService,
+    ) -> RemindersService:
+        return RemindersService(
+            houses_repo,
+            meters_repo,
+            residents_repo,
+            polls_repo,
+            chats_repo,
+            reception_repo,
+            events_repo,
+            events_service,
+            notifications_service,
         )

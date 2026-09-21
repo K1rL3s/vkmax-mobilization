@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
-from zheka.core.ids import HouseId, MaxChatId, RequestId, UserId
+from zheka.core.ids import AccessRequestId, HouseId, MaxChatId, RequestId, UserId
 from zheka.core.notifications import DEFAULT_LEVEL, Buttons
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
@@ -130,4 +130,12 @@ class NotificationsService:
             TaskName.WELCOME_CHAT,
             chat_id=chat_id,
             house_id=house_id,
+        )
+
+    def open_access_slots(self, access_request_id: AccessRequestId) -> None:
+        # адресатов и их уровень задача найдет сама, после коммита: окно
+        # читает запрос из другой сессии
+        self._publisher.publish(
+            TaskName.BROADCAST_ACCESS_REQUEST,
+            access_request_id=access_request_id,
         )

@@ -385,6 +385,32 @@ review finding.
   `is_chat_admin` goes through `BOT_RATE_LIMIT`, because the broadcast calls it
   once per failed chat; `get_chat` and `leave_chat` in `on_bot_added` bypass it
   on purpose - one call per add, the same weight as a handler's own answer.
+- One reading window is one period, the month it opened in. A window that
+  wraps the month end (`day_from > day_to`, Moscow's 15th to the 3rd) takes on
+  its tail days the readings for the month it opened in, not for the calendar
+  month of the day. `window_period` in `core/services/readings.py` is the one
+  function that answers "which period does the open window accept":
+  `ReadingsService.submit`, `ReadingsService.periods` and the reading reminder
+  all call it, and none of them computes the period on its own, since two
+  answers would split one window into two periods and remind residents who
+  already submitted. The out-of-window choice of past periods is separate.
+- A reminder selects its recipients, stamps them and queues the sends in one
+  transaction, and never sends from its own body: `RemindersService` writes
+  the stamp (`polls.reminder_sent_at`, `appointments.reminder_sent_at`,
+  `meters.verification_warned_at`, or a `READING_REMINDER_SENT` event whose
+  payload carries `house_id`, `period` and `kind`, since each house has its own
+  window; a resident of two houses reminded the same day gets one text and a
+  stamp in each) and hands the text to
+  `NotificationsService`, whose publisher flushes only after the commit. A run
+  that dies before its commit sent nothing and stamped nothing; a rerun after
+  it sees the stamps. The reminder date logic takes `today` or `now` as an
+  argument and the task passes `datetime.now(UTC)`, which is what lets a test
+  pin the day. The reading reminder checks `current_period`, the very function
+  `ReadingsService.submit` writes by: another period would remind those who
+  already submitted. The access window is the one broadcast that opens a
+  window instead of sending text: `AccessService.create` queues
+  `broadcast_access_request`, which opens `AccessSlots.pick` in the derived
+  stack `access-{access_request_id}` with `ShowMode.SEND`.
 
 ## Orientation
 
@@ -401,20 +427,21 @@ the next agent does not pay for them again.
   json in `startParam` so a deeplink can land on a mini-app screen). It waits
   for its frontend half and blocks no backend block; block 16 has no mini-app
   screen to route to.
-- The forty-five `EventType` members divide with nothing left over: 34 + 4
-  + 2 + 5. Thirty-four are recorded **inside** `core/services/`, so a bot
+- The forty-five `EventType` members divide with nothing left over: 36 + 4
+  + 2 + 3. Thirty-six are recorded **inside** `core/services/`, so a bot
   handler or a route that records one of those again doubles the statistic -
   pass the service the right `source` or `method` and let it write; `CHAT_BOUND`
-  and `CHAT_ADMIN_GRANTED` are among them, in `ChatsService`. Four are recorded
+  and `CHAT_ADMIN_GRANTED` are among them, in `ChatsService`, and so are
+  `READING_REMINDER_SENT` and `APPOINTMENT_REMINDER_SENT`, in
+  `RemindersService`. Four are recorded
   in bot handlers: `BOT_START` in `bot/handlers/commands/start.py`,
   `BOT_STOPPED`, `BOT_MUTED` and `BOT_UNMUTED` in `bot/handlers/lifecycle.py`.
   `MINIAPP_OPEN` and `ANNOUNCEMENT_CLICK` are recorded by `POST /me/events`,
   where the client sends the type in the body, so no `EventType.MINIAPP_OPEN`
   appears at any `record` call and grep alone will tell you they are written
   nowhere; the `Literal` in `TrackEventRequest` is the whitelist, and those two
-  are the only events a client may send. The remaining five have no writer yet
-  and get one in their own block: `READING_REMINDER_SENT`,
-  `APPOINTMENT_REMINDER_SENT`, `REQUEST_EXPORTED`, `LLM_SUGGESTED`,
+  are the only events a client may send. The remaining three have no writer yet
+  and get one in their own block: `REQUEST_EXPORTED`, `LLM_SUGGESTED`,
   `LLM_ACCEPTED`.
 - The truth about maxo is in the installed sources,
   `.venv/lib/python3.12/site-packages/maxo/`, never in the plan and never from

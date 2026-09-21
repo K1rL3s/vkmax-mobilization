@@ -94,8 +94,8 @@ class AdminPollListItemData(ZhekaType):
 
 
 def _effective_status(poll: Poll, now: datetime) -> PollStatus:
-    # строку переводит в CLOSED планировщик блока 18 - до этого момента
-    # сырой статус может врать, если ends_at уже прошел
+    # строку переводит в CLOSED задача close_expired_polls раз в сутки - до
+    # нее сырой статус может врать, если ends_at уже прошел
     if poll.status is PollStatus.CLOSED or poll.ends_at <= now:
         return PollStatus.CLOSED
     return PollStatus.ACTIVE

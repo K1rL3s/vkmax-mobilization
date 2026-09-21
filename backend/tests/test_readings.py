@@ -33,6 +33,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.meters import MeterDraft, MeterUpdateDraft, MetersService
 from zheka.core.services.readings import (
+    WRONG_PERIOD,
     ReadingsService,
     SubmitDraft,
     available_periods,
@@ -40,8 +41,17 @@ from zheka.core.services.readings import (
     is_below_previous,
     is_spike,
     window_is_open,
+    window_period,
 )
-from zheka.infra.database.models import Charge, Event, Flat, Resident, Tariff, User
+from zheka.infra.database.models import (
+    Charge,
+    Event,
+    Flat,
+    OrgSettings,
+    Resident,
+    Tariff,
+    User,
+)
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -1113,3 +1123,71 @@ async def test_admin_list_shows_the_whole_chain_and_the_below_previous_flag(
     )
     assert below_total == 1
     assert below_rows[0].reading.is_below_previous is True
+
+
+def _window(day_from: int, day_to: int, *, always_open: bool = False) -> OrgSettings:
+    return OrgSettings(
+        org_id=OrgId(1),
+        meter_window_day_from=day_from,
+        meter_window_day_to=day_to,
+        meter_window_always_open=always_open,
+    )
+
+
+@pytest.mark.parametrize(
+    ("today", "settings", "period"),
+    [
+        (date(2026, 9, 27), _window(25, 5), date(2026, 9, 1)),
+        # 3 октября окно 25-5 еще сентябрьское
+        (date(2026, 10, 3), _window(25, 5), date(2026, 9, 1)),
+        (date(2026, 10, 1), _window(25, 1), date(2026, 9, 1)),
+        (date(2027, 1, 2), _window(20, 5), date(2026, 12, 1)),
+        (date(2026, 9, 20), _window(15, 25), date(2026, 9, 1)),
+        (date(2026, 9, 3), None, date(2026, 9, 1)),
+        # флаг «всегда открыто» хранит дни окна, но они не действуют
+        (date(2026, 10, 3), _window(25, 5, always_open=True), date(2026, 10, 1)),
+    ],
+)
+def test_a_wrapping_window_is_one_period_the_month_it_opened(
+    today: date,
+    settings: OrgSettings | None,
+    period: date,
+) -> None:
+    assert window_period(today, settings) == period
+
+
+async def test_submit_in_the_tail_of_a_wrapping_window_goes_to_its_opening_month(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    # сегодня - последний день окна, открывшегося в прошлом месяце
+    own = await make_org_house_flat_user()
+    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
+    meter_id = await _add_meter(session, own.flat_id)
+    today = datetime.now(UTC).date()
+    await _set_window(session, own.org_id, day_from=today.day + 1, day_to=today.day)
+    service = _make_service(session)
+
+    periods = await service.periods(own.flat_id)
+    with pytest.raises(InvalidState, match=WRONG_PERIOD):
+        await service.submit(
+            own.user_id,
+            meter_id,
+            SubmitDraft(
+                period=_current_period(),
+                values={TariffZone.SINGLE: 1_000},
+                photos=[_photo()],
+            ),
+        )
+    result = await service.submit(
+        own.user_id,
+        meter_id,
+        SubmitDraft(
+            period=_period_back(1),
+            values={TariffZone.SINGLE: 1_000},
+            photos=[_photo()],
+        ),
+    )
+
+    assert [option.period for option in periods.options] == [_period_back(1)]
+    assert result.row.reading.period == _period_back(1)

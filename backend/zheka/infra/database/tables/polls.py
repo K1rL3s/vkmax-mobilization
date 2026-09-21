@@ -34,6 +34,8 @@ polls_table = Table(
     Column("starts_at", DateTime(timezone=True), nullable=False),
     Column("ends_at", DateTime(timezone=True), nullable=False),
     Column("status", pg_enum(PollStatus, "poll_status"), nullable=False),
+    # напоминание об опросе уходит один раз: повторный прогон видит отметку
+    Column("reminder_sent_at", DateTime(timezone=True), nullable=True),
 )
 
 poll_options_table = Table(
