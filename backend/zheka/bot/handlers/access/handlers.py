@@ -46,9 +46,9 @@ async def get_slots(
         SlotItem(
             id=slot.slot.id,
             label=(
-                PICKED.format(time=f"{slot.slot.starts_at:%H:%M}")
+                PICKED.format(time=f"{view.house.local(slot.slot.starts_at):%H:%M}")
                 if slot.slot.id == view.my_slot_id
-                else f"{slot.slot.starts_at:%H:%M}"
+                else f"{view.house.local(slot.slot.starts_at):%H:%M}"
             ),
         )
         for slot in view.slots
@@ -56,7 +56,7 @@ async def get_slots(
     ]
     return {
         "available": True,
-        "address": escape(view.address),
+        "address": escape(view.house.address),
         "date": f"{request.date:%d.%m.%Y}",
         "reason": escape(request.reason),
         "notice": None if notice is None else escape(notice),

@@ -238,7 +238,9 @@ class DemoService:
             account_no=f"ДЕМО-{house_id}-{demo_flat_number(user_id)}",
         )
         if created:
-            await self.furnish(flat, user_id, now.date(), verification_soon=True)
+            await self.furnish(
+                flat, user_id, house.local(now).date(), verification_soon=True
+            )
 
         resident, _created = await self._residents.add_or_get(
             user_id, house_id, flat.id, None, ResidentRole.OWNER

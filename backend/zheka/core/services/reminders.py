@@ -1,7 +1,7 @@
 import logging
 from calendar import monthrange
 from collections.abc import Callable, Collection
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 
 from zheka.core import texts
@@ -25,6 +25,7 @@ from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
+from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.reception import ReceptionRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -33,6 +34,12 @@ logger = logging.getLogger(__name__)
 
 READING_SECOND_REMINDER_DAYS = 2
 POLL_REMINDER_BEFORE = timedelta(hours=48)
+# местный час: ежечасный запуск действует с него до конца дня,
+# отметка не дает отправить дважды
+READING_HOUR = 10
+POLL_HOUR = 10
+VERIFICATION_HOUR = 9
+APPOINTMENT_HOUR = 19
 
 
 class ReadingReminder(StrEnum):
@@ -79,6 +86,7 @@ class RemindersService:
         "_houses",
         "_meters",
         "_notifications",
+        "_orgs",
         "_polls",
         "_reception",
         "_residents",
@@ -87,6 +95,7 @@ class RemindersService:
     def __init__(
         self,
         houses_repo: HousesRepo,
+        orgs_repo: OrgsRepo,
         meters_repo: MetersRepo,
         residents_repo: ResidentsRepo,
         polls_repo: PollsRepo,
@@ -97,6 +106,7 @@ class RemindersService:
         notifications_service: NotificationsService,
     ) -> None:
         self._houses = houses_repo
+        self._orgs = orgs_repo
         self._meters = meters_repo
         self._residents = residents_repo
         self._polls = polls_repo
@@ -106,25 +116,34 @@ class RemindersService:
         self._events = events_service
         self._notifications = notifications_service
 
-    async def remind_readings(self, today: date) -> int:
+    async def remind_readings(self, now: datetime) -> int:
         queued: dict[ReadingReminder, set[UserId]] = {
             kind: set() for kind in ReadingReminder
         }
         sent = 0
-        for house_id, settings in await self._houses.list_managed_with_settings():
+        for house, settings in await self._houses.list_managed_with_settings():
+            local = house.local(now)
+            if local.hour < READING_HOUR:
+                continue
+            today = local.date()
             kind = reading_reminder(today, settings)
             if kind is None:
                 continue
             period = window_period(today, settings)
             sent += await self._remind_house_readings(
-                house_id, period, kind, queued[kind]
+                house.id, period, kind, queued[kind]
             )
         logger.info("Напоминание о показаниях: адресатов %s", sent)
         return sent
 
     async def remind_polls(self, now: datetime) -> int:
         polls = await self._polls.list_to_remind(now, now + POLL_REMINDER_BEFORE)
+        reminded = 0
         for poll in polls:
+            house = await self._houses.get(poll.house_id)
+            if house is None or house.local(now).hour < POLL_HOUR:
+                continue
+            ends_at = house.local(poll.ends_at)
             voted = set(await self._polls.voted_flat_ids(poll.id, verified_only=True))
             voters = set(await self._polls.voter_ids(poll.id))
             user_ids = [
@@ -140,28 +159,37 @@ class RemindersService:
             await self._polls.mark_reminded(poll, now)
             self._notifications.notify_users(
                 user_ids,
-                texts.poll_reminder(poll.title, poll.ends_at),
+                texts.poll_reminder(poll.title, ends_at),
                 category=NotificationCategory.ANNOUNCEMENTS,
                 mandatory=False,
             )
             self._notifications.notify_chats(
                 [chat.chat_id for chat in chats],
-                texts.poll_chat_reminder(poll.title, poll.ends_at),
+                texts.poll_chat_reminder(poll.title, ends_at),
             )
-        logger.info("Напоминание об опросах: опросов %s", len(polls))
-        return len(polls)
+            reminded += 1
+        logger.info("Напоминание об опросах: опросов %s", reminded)
+        return reminded
 
     async def close_expired_polls(self, now: datetime) -> int:
         closed = await self._polls.close_expired(now)
         logger.info("Закрыто опросов по сроку: %s", closed)
         return closed
 
-    async def warn_verification(self, today: date) -> int:
-        meters = await self._meters.list_to_warn(today + VERIFICATION_WARNING)
+    async def warn_verification(self, now: datetime) -> int:
+        # местная дата опережает дату UTC не больше чем на день
+        meters = await self._meters.list_to_warn(
+            now.date() + timedelta(days=1) + VERIFICATION_WARNING
+        )
         warned = 0
         for meter in meters:
             due = meter.next_verification_date
-            if due is None:
+            house = await self._houses.get_by_flat(meter.flat_id)
+            if due is None or house is None:
+                continue
+            local = house.local(now)
+            today = local.date()
+            if local.hour < VERIFICATION_HOUR or due > today + VERIFICATION_WARNING:
                 continue
             label = SERVICE_LABELS[SERVICE_OF_METER[meter.type]]
             if today >= due:
@@ -186,10 +214,22 @@ class RemindersService:
         return warned
 
     async def remind_appointments(self, now: datetime) -> int:
+        # местное завтра кончается не позже чем через двое суток
         appointments = await self._reception.list_to_remind(
-            now.date() + timedelta(days=1)
+            now, now + timedelta(days=2)
         )
+        reminded = 0
         for appointment in appointments:
+            org = await self._orgs.get(appointment.org_id)
+            if org is None:
+                continue
+            local = org.local(now)
+            starts_at = org.local(appointment.starts_at)
+            if (
+                local.hour < APPOINTMENT_HOUR
+                or starts_at.date() != local.date() + timedelta(days=1)
+            ):
+                continue
             house = await self._houses.get(appointment.house_id)
             await self._reception.mark_reminded(appointment, now)
             await self._events.record(
@@ -200,13 +240,14 @@ class RemindersService:
             self._notifications.notify_user(
                 appointment.user_id,
                 texts.appointment_reminder(
-                    appointment.starts_at, "" if house is None else house.address
+                    starts_at, "" if house is None else house.address
                 ),
                 category=NotificationCategory.REQUESTS,
                 mandatory=True,
             )
-        logger.info("Напоминание о приеме: записей %s", len(appointments))
-        return len(appointments)
+            reminded += 1
+        logger.info("Напоминание о приеме: записей %s", reminded)
+        return reminded
 
     async def _remind_house_readings(
         self,
@@ -247,12 +288,12 @@ class RemindersService:
     async def remind_reading_laggards(
         self, house_ids: Collection[HouseId], period: date, now: datetime
     ) -> int:
-        since = datetime.combine(now.date(), time(), now.tzinfo)
         queued: set[UserId] = set()
         sent = 0
-        for house_id in house_ids:
+        for house in await self._houses.list_by_ids(house_ids):
+            since = house.day_start(house.local(now).date())
             sent += await self._remind_house_readings(
-                house_id, period, ReadingReminder.MANUAL, queued, since
+                house.id, period, ReadingReminder.MANUAL, queued, since
             )
         logger.info("Ручное напоминание о показаниях: адресатов %s", sent)
         return sent

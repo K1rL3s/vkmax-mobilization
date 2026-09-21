@@ -144,6 +144,7 @@ async def make_org_house_flat_user(
         org_role: OrgRole | None = None,
         resident_role: ResidentRole | None = None,
         registered: bool = True,
+        timezone: str = "Europe/Moscow",
     ) -> OrgHouseFlatUser:
         unique = secrets.token_hex(4)
         org = Organization(
@@ -152,6 +153,7 @@ async def make_org_house_flat_user(
             phone="+70000000000",
             address="Тестовая область, Тестоград, Тестовая, 1",
             registered_at=datetime.now(UTC) if registered else None,
+            timezone=timezone,
         )
         user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Тест Тестов")
         session.add_all([org, user])
@@ -165,6 +167,7 @@ async def make_org_house_flat_user(
             building="1",
             cadastral_no=secrets.token_hex(8),
             chat_binding_code=secrets.token_hex(4),
+            timezone=timezone,
         )
         session.add(house)
         await session.flush()
@@ -417,3 +420,14 @@ async def task_broker(
     )
     yield broker
     await container.close()
+
+
+def freeze_now(monkeypatch: pytest.MonkeyPatch, module: str, now: datetime) -> None:
+    # задача или сервис сами читают часы, а от местного часа зависит результат,
+    # то есть и от времени запуска тестов
+    class Frozen(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return now.astimezone(tz)
+
+    monkeypatch.setattr(f"{module}.datetime", Frozen)

@@ -49,7 +49,7 @@ class AccessRequestItem(BaseSchema):
             id=request.id,
             created_at=request.created_at,
             house_id=request.house_id,
-            address=data.address,
+            address=data.house.address,
             reason=request.reason,
             date=request.date,
             slots=[AccessSlotItem.of(slot) for slot in data.slots],

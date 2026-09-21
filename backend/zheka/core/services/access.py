@@ -14,10 +14,9 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import AccessRequestId, AccessSlotId, FlatId, HouseId, OrgId, UserId
-from zheka.core.models import AccessRequest, AccessSlot, AccessTarget
+from zheka.core.models import AccessRequest, AccessSlot, AccessTarget, House
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
-from zheka.core.services.reception import as_utc
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -41,7 +40,7 @@ class AccessSlotData(ZhekaType):
 
 class AccessRequestData(ZhekaType):
     request: AccessRequest
-    address: str
+    house: House
     slots: list[AccessSlotData]
     responded_count: int
     targets_count: int
@@ -102,17 +101,16 @@ class AccessService:
             raise InvalidRequest(NO_FLATS)
         if any(slot.capacity < 1 for slot in draft.slots):
             raise InvalidRequest(BAD_CAPACITY)
-        if draft.date < datetime.now(UTC).date():
-            raise InvalidRequest(PAST_DATE)
-        starts = [as_utc(slot.starts_at) for slot in draft.slots]
-        if len(set(starts)) != len(starts):
-            raise InvalidRequest(DUPLICATE_SLOTS)
-        if any(start.date() != draft.date for start in starts):
-            raise InvalidRequest(SLOT_OFF_DATE)
-
         house = await self._houses.get_for_org(draft.house_id, org_id)
         if house is None:
             raise EntityNotFound(HOUSE_NOT_FOUND)
+        if draft.date < house.local(datetime.now(UTC)).date():
+            raise InvalidRequest(PAST_DATE)
+        starts = [house.to_utc(slot.starts_at) for slot in draft.slots]
+        if len(set(starts)) != len(starts):
+            raise InvalidRequest(DUPLICATE_SLOTS)
+        if any(house.local(start).date() != draft.date for start in starts):
+            raise InvalidRequest(SLOT_OFF_DATE)
 
         flat_ids = list(dict.fromkeys(draft.flat_ids))
         flats = await self._houses.list_flats_by_ids(flat_ids)
@@ -242,7 +240,7 @@ class AccessService:
             rows.append(
                 AccessRequestData(
                     request=request,
-                    address=houses[request.house_id].address,
+                    house=houses[request.house_id],
                     slots=[
                         AccessSlotData(slot=slot, taken=taken.get(slot.id, 0))
                         for slot in slots

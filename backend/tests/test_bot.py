@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, time, timedelta
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import pytest
 from dishka import AsyncContainer
@@ -485,6 +486,7 @@ async def _bot_started(client: BotClient, payload: Omittable[str | None]) -> Non
 
 async def _bot_house(session: AsyncSession) -> tuple[HouseId, str]:
     house = House(
+        timezone="Europe/Moscow",
         region="Тестовая область",
         city="Тестоград",
         street="Диплинковая",
@@ -632,6 +634,7 @@ PHOTO_TOKEN = "photo-token"  # noqa: S105
 
 async def _org_house(session: AsyncSession) -> tuple[OrgId, HouseId]:
     org = Organization(
+        timezone="Europe/Moscow",
         name=f"УК {secrets.token_hex(4)}",
         inn=secrets.token_hex(6),
         phone="+70000000000",
@@ -641,6 +644,7 @@ async def _org_house(session: AsyncSession) -> tuple[OrgId, HouseId]:
     session.add(org)
     await session.flush()
     house = House(
+        timezone="Europe/Moscow",
         org_id=org.id,
         region="Тестовая область",
         city="Тестоград",
@@ -1586,7 +1590,8 @@ async def _access_window(
         datetime.now(UTC).date() + timedelta(days=1),
         user_id,
     )
-    day = datetime.combine(request.date, time(10), tzinfo=UTC)
+    # бот печатает окно по часам дома, а не в UTC
+    day = datetime.combine(request.date, time(10), tzinfo=ZoneInfo("Europe/Moscow"))
     [slot, _] = await access.add_slots(
         request.id, [(day, 1), (day + timedelta(hours=1), 1)]
     )
@@ -1692,6 +1697,7 @@ async def _bot_demo(session: AsyncSession, number: int = 1) -> tuple[OrgId, str]
         org_id = org.id
     else:
         org = Organization(
+            timezone="Europe/Moscow",
             name=f"Демо-УК «{number}»",
             inn=DEMO_INNS[number - 1],
             phone="+70000000000",
@@ -1704,6 +1710,7 @@ async def _bot_demo(session: AsyncSession, number: int = 1) -> tuple[OrgId, str]
         org_id = org.id
         session.add(
             House(
+                timezone="Europe/Moscow",
                 org_id=org_id,
                 region="Демо",
                 city="Демоград",

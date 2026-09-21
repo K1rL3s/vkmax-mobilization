@@ -72,6 +72,7 @@ def _service(
 ) -> AnalyticsService:
     reminders = RemindersService(
         HousesRepo(session),
+        OrgsRepo(session),
         MetersRepo(session),
         ResidentsRepo(session),
         PollsRepo(session),
@@ -91,8 +92,10 @@ async def _house(
     org_id: OrgId | None,
     city: str = "Аналитград",
     region: str = REGION,
+    timezone: str = "Europe/Moscow",
 ) -> HouseId:
     house = House(
+        timezone=timezone,
         org_id=org_id,
         region=region,
         city=city,
@@ -116,6 +119,7 @@ async def _org(
     settings: dict[str, Any] | None = None,
 ) -> tuple[OrgId, HouseId]:
     org = Organization(
+        timezone="Europe/Moscow",
         name=f"УК Имярек {secrets.token_hex(4)}",
         inn=secrets.token_hex(6),
         phone="+70000000000",
@@ -610,7 +614,7 @@ async def test_the_season_counts_the_period_of_a_wrapping_window(
 
 
 async def test_the_reminder_refuses_outside_the_window(session: AsyncSession) -> None:
-    now = datetime.now(UTC)
+    now = NOW
     # день окна - любой, кроме сегодняшнего
     day = now.day % 28 + 1
     org_id, house_id = await _org(
@@ -855,3 +859,32 @@ async def test_an_executor_assigned_after_review_is_not_charged(
     by_user = {row.user_id: row for row in rows}
     assert by_user[second].median_time is None
     assert by_user[first].median_time is None
+
+
+async def test_dashboard_weeks_follow_the_office_clock(session: AsyncSession) -> None:
+    # воскресенье 22:00 UTC - в Москве уже понедельник, то есть эта неделя
+    org_id, house_id = await _org(session)
+    await _request(session, house_id, created_at=datetime(2031, 3, 9, 22, tzinfo=UTC))
+
+    dashboard = await _service(session).dashboard(org_id, None, None, None, NOW)
+
+    by_week = {point.label: point.value for point in dashboard.charts[1].points}
+    assert (by_week["2031-03-03"], by_week["2031-03-10"]) == (0, 1)
+
+
+async def test_the_readings_window_of_each_house_follows_its_own_clock(
+    session: AsyncSession,
+) -> None:
+    # УК в Москве, где еще 14-е, а во Владивостоке уже 15-е и окно открыто
+    now = datetime(2031, 3, 14, 20, tzinfo=UTC)
+    org_id, _ = await _org(
+        session, settings={"meter_window_day_from": 15, "meter_window_day_to": 25}
+    )
+    far = await _house(session, OrgId(org_id), timezone="Asia/Vladivostok")
+    await _metered_resident(session, far)
+    service = _service(session)
+
+    season = await service.season(org_id, None, now)
+    queued = await service.remind_not_submitted(org_id, [], None, now)
+
+    assert (season.window_open, queued) == (True, 1)

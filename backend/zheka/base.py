@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, time
 from typing import Any, dataclass_transform
+from zoneinfo import ZoneInfo
 
 _FROZEN_ATTR = "__zheka_frozen__"
 _SLOTS_ATTR = "__zheka_slots__"
@@ -43,3 +45,25 @@ class ZhekaType(metaclass=_ZhekaTypeMetaClass):
 
 class ZhekaMutableType(metaclass=_ZhekaMutableTypeMetaClass, frozen=False, slots=False):
     __slots__ = ()
+
+
+class Zoned:
+    __slots__ = ()
+
+    timezone: str
+
+    @property
+    def zone(self) -> ZoneInfo:
+        return ZoneInfo(self.timezone)
+
+    def local(self, moment: datetime) -> datetime:
+        return moment.astimezone(self.zone)
+
+    def day_start(self, day: date) -> datetime:
+        return datetime.combine(day, time(), self.zone)
+
+    def to_utc(self, moment: datetime) -> datetime:
+        # время без зоны от клиента - местное время этой зоны
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=self.zone)
+        return moment.astimezone(UTC)

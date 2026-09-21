@@ -1,6 +1,7 @@
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -531,3 +532,18 @@ async def test_org_staff_list_and_close_a_chairmans_poll(
     assert closed.status is PollStatus.CLOSED
     with pytest.raises(NotEnoughRights):
         await service.close(foreign_card.poll.id, base.user_id)
+
+
+async def test_a_naive_end_is_the_house_time(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    base = await make_org_house_flat_user(
+        org_role=OrgRole.ADMIN, timezone="Asia/Vladivostok"
+    )
+    ends_at = datetime.combine(_future().date(), time(18))
+
+    card = await _make_service(session).create(
+        base.user_id, base.house_id, _draft(ends_at=ends_at), org_id=base.org_id
+    )
+
+    assert card.poll.ends_at == ends_at.replace(tzinfo=ZoneInfo("Asia/Vladivostok"))

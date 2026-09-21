@@ -227,14 +227,17 @@ no evidence in a report or review.
   `READING_REMINDER_SENT` event with `house_id`, `period`, `kind`) and hands
   the text to `NotificationsService`, which sends after the commit. Date logic
   takes `today` / `now` as an argument.
-- Schedule labels are Moscow time with `"cron_offset": "Europe/Moscow"`
-  (taskiq's cron is UTC otherwise); tasks pass the UTC date, equal to
-  Moscow's at every scheduled hour, so a label before 03:00 needs a Moscow date.
+- `House.timezone` (what residents see) and `Organization.timezone` (reception,
+  appointments, dashboard) are IANA names; `Zoned` (`zheka/base.py`) derives
+  every local "today", day bound and printed time and reads a naive input as
+  local. Schedules are UTC, no `cron_offset`: reminders run hourly and act
+  where the local hour reached the target; their stamps keep each reminder to
+  one send.
 - `broadcast_access_request` (from `AccessService.create`) is the one
   broadcast that opens a window (`AccessSlots.pick`, `ShowMode.SEND`).
 - `remind_not_submitted` refuses outside the window with `InvalidState`
   (`window_open` is only a button hint), stamps `kind: manual` and skips anyone
-  reminded since the start of the day.
+  reminded since the start of the house's local day.
 - Each analytics metric is one SQL expression in `_METRICS`
   (`infra/database/repos/analytics.py`), shared by the dashboard and the
   benchmark. Overdue is `overdue_at` (`repos/requests.py`, from

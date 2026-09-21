@@ -134,9 +134,6 @@ class PollsService:
         *,
         org_id: OrgId | None,
     ) -> PollCardData:
-        now = datetime.now(UTC)
-        if draft.ends_at <= now:
-            raise InvalidValue(ENDS_IN_PAST)
         options = _clean_options(draft.options)
 
         if org_id is not None:
@@ -156,6 +153,10 @@ class PollsService:
             role = "chairman"
             org_id = house.org_id
 
+        now = datetime.now(UTC)
+        ends_at = house.to_utc(draft.ends_at)
+        if ends_at <= now:
+            raise InvalidValue(ENDS_IN_PAST)
         poll = await self._polls.create(
             house_id,
             org_id,
@@ -165,7 +166,7 @@ class PollsService:
             draft.description,
             draft.is_multiple,
             now,
-            draft.ends_at,
+            ends_at,
             options,
         )
         await self._events.record(

@@ -34,6 +34,7 @@ houses_table = Table(
     Column("chat_binding_code", String(8), nullable=False, unique=True),
     Column("overhaul", JSONB, default=dict, nullable=False),
     Column("documents", JSONB, default=list, nullable=False),
+    Column("timezone", String, nullable=False),
     Index(None, "city", "street"),
 )
 

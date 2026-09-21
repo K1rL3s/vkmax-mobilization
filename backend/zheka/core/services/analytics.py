@@ -6,12 +6,13 @@ from zheka.base import ZhekaType
 from zheka.core.enums import CATEGORY_RULES, AnalyticsMetric, MetricUnit, RequestChannel
 from zheka.core.errors import (
     HOUSE_NOT_FOUND,
+    ORG_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
 )
 from zheka.core.ids import HouseId, OrgId
-from zheka.core.models import OrgSettings
+from zheka.core.models import House, OrgSettings, Organization
 from zheka.core.services.readings import window_accepts, window_period
 from zheka.core.services.reminders import RemindersService
 from zheka.infra.database.repos.analytics import (
@@ -23,7 +24,6 @@ from zheka.infra.database.repos.analytics import (
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 
-ORG_NOT_FOUND = "Организация не найдена"
 WINDOW_CLOSED = "Прием показаний закрыт, напомнить можно только в окно подачи"
 WRONG_PERIOD = "Напомнить можно только о периоде, который принимается сейчас"
 
@@ -218,14 +218,18 @@ class AnalyticsService:
     ) -> Dashboard:
         if house_id is not None:
             await self._own_houses(org_id, [house_id])
-        period_from, period_to = _range(date_from, date_to, now)
-        since = _start_of(period_from)
-        until = _start_of(period_to + timedelta(days=1))
+        org = await self._org(org_id)
+        local = org.local(now)
+        period_from, period_to = _range(date_from, date_to, local)
+        since = org.day_start(period_from)
+        until = org.day_start(period_to + timedelta(days=1))
         tiles = await self._analytics.tiles(org_id, house_id, since, until, now)
         categories = await self._analytics.by_category(org_id, house_id, since, until)
-        this_week = now.date() - timedelta(days=now.weekday())
+        this_week = local.date() - timedelta(days=local.weekday())
         weeks = [this_week - timedelta(weeks=back) for back in range(WEEKS - 1, -1, -1)]
-        by_week = await self._analytics.by_week(org_id, house_id, _start_of(weeks[0]))
+        by_week = await self._analytics.by_week(
+            org_id, house_id, org.day_start(weeks[0]), org.timezone
+        )
         dashboard_tiles = [
             Tile(
                 key="active",
@@ -283,12 +287,14 @@ class AnalyticsService:
 
     async def season(self, org_id: OrgId, period: date | None, now: datetime) -> Season:
         settings = await self._orgs.get_settings(org_id)
-        today = now.date()
-        current = window_period(today, settings)
-        period = current if period is None else period.replace(day=1)
+        if period is None:
+            today = (await self._org(org_id)).local(now).date()
+            period = window_period(today, settings)
+        period = period.replace(day=1)
         counts = await self._analytics.season(org_id, period)
+        org_houses = await self._houses.list_for_org(org_id)
         houses = []
-        for house in await self._houses.list_for_org(org_id):
+        for house in org_houses:
             count = counts.get(house.id, _NO_FLATS)
             houses.append(
                 SeasonHouse(
@@ -305,7 +311,7 @@ class AnalyticsService:
             period=period,
             window_from=window_from,
             window_to=window_to,
-            window_open=period == current and window_accepts(today, settings),
+            window_open=period in _open_periods(org_houses, settings, now).values(),
             submitted=sum(house.submitted for house in houses),
             not_submitted=sum(house.not_submitted for house in houses),
             houses=houses,
@@ -320,34 +326,52 @@ class AnalyticsService:
         now: datetime,
     ) -> int:
         settings = await self._orgs.get_settings(org_id)
-        today = now.date()
-        if not window_accepts(today, settings):
-            raise InvalidState(WINDOW_CLOSED)
-        current = window_period(today, settings)
-        if period is not None and period.replace(day=1) != current:
-            raise InvalidRequest(WRONG_PERIOD)
         if house_ids:
             await self._own_houses(org_id, house_ids)
+            houses = await self._houses.list_by_ids(house_ids)
         else:
-            house_ids = [house.id for house in await self._houses.list_for_org(org_id)]
-        return await self._reminders.remind_reading_laggards(house_ids, current, now)
+            houses = await self._houses.list_for_org(org_id)
+        open_periods = _open_periods(houses, settings, now)
+        if houses and not open_periods:
+            raise InvalidState(WINDOW_CLOSED)
+        if period is not None:
+            open_periods = {
+                house_id: current
+                for house_id, current in open_periods.items()
+                if current == period.replace(day=1)
+            }
+            if houses and not open_periods:
+                raise InvalidRequest(WRONG_PERIOD)
+        by_period: dict[date, list[HouseId]] = {}
+        for house_id, current in open_periods.items():
+            by_period.setdefault(current, []).append(house_id)
+        sent = 0
+        for current, ids in by_period.items():
+            sent += await self._reminders.remind_reading_laggards(ids, current, now)
+        return sent
 
     async def executors(
         self, org_id: OrgId, date_from: date | None, date_to: date | None, now: datetime
     ) -> list[ExecutorRow]:
-        period_from, period_to = _range(date_from, date_to, now)
+        org = await self._org(org_id)
+        period_from, period_to = _range(date_from, date_to, org.local(now))
         return await self._analytics.by_executor(
-            org_id, _start_of(period_from), _start_of(period_to + timedelta(days=1))
+            org_id,
+            org.day_start(period_from),
+            org.day_start(period_to + timedelta(days=1)),
         )
 
     async def channels(
         self, org_id: OrgId, date_from: date | None, date_to: date | None, now: datetime
     ) -> Channels:
-        period_from, period_to = _range(date_from, date_to, now)
+        org = await self._org(org_id)
+        period_from, period_to = _range(date_from, date_to, org.local(now))
         rows = {
             row.channel: row
             for row in await self._analytics.by_channel(
-                org_id, _start_of(period_from), _start_of(period_to + timedelta(days=1))
+                org_id,
+                org.day_start(period_from),
+                org.day_start(period_to + timedelta(days=1)),
             )
         }
         items = [
@@ -358,9 +382,7 @@ class AnalyticsService:
         return Channels(total=total, items=items, is_empty=total == 0)
 
     async def benchmark(self, org_id: OrgId, now: datetime) -> Benchmark:
-        org = await self._orgs.get(org_id)
-        if org is None:
-            raise EntityNotFound(ORG_NOT_FOUND)
+        org = await self._org(org_id)
         since = _start_of(now.date() - DEFAULT_PERIOD)
         metrics = []
         for spec in BENCHMARK:
@@ -418,3 +440,21 @@ class AnalyticsService:
     async def _own_houses(self, org_id: OrgId, house_ids: Sequence[HouseId]) -> None:
         if await self._houses.ids_for_org(house_ids, org_id) != set(house_ids):
             raise EntityNotFound(HOUSE_NOT_FOUND)
+
+    async def _org(self, org_id: OrgId) -> Organization:
+        org = await self._orgs.get(org_id)
+        if org is None:
+            raise EntityNotFound(ORG_NOT_FOUND)
+        return org
+
+
+def _open_periods(
+    houses: Sequence[House], settings: OrgSettings | None, now: datetime
+) -> dict[HouseId, date]:
+    # окно показаний каждый дом открывает по своим часам
+    periods = {}
+    for house in houses:
+        today = house.local(now).date()
+        if window_accepts(today, settings):
+            periods[house.id] = window_period(today, settings)
+    return periods

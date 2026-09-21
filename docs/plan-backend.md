@@ -46,9 +46,12 @@
   процесса). Дефолт продукта - без звука, дефолт API - со звуком, поэтому
   `notify` передается всегда явно. Обработчики бота отвечают пользователю
   сами, без очереди.
-- Расписание по Москве: напоминания о показаниях и опросах и автозакрытие
-  опросов в 10:00, предупреждение о поверке в 09:00, напоминание о приеме в
-  19:00 накануне, автозакрытие приемки проверяется каждую минуту.
+- Расписание по местному времени: у дома и у организации своя зона
+  (`timezone`, имя IANA). Задачи идут каждый час по UTC и действуют там, где
+  местное время дошло до цели: напоминания о показаниях и опросах в 10:00 и
+  предупреждение о поверке в 09:00 по времени дома, напоминание о приеме в
+  19:00 накануне по времени УК. Автозакрытие опросов проверяется каждый час,
+  приемки - каждую минуту.
 - Дробные величины - масштабированные целые: деньги в копейках, тариф в
   1/10000 рубля, площадь в 1/100 м2, объем и показания в 1/1000, проценты в
   1/100.
@@ -71,7 +74,7 @@
 
 - `organizations` - id, name, inn, license_no, phone, address,
   reception_note, registered_at (пусто у незарегистрированных из реестра),
-  is_demo
+  is_demo, timezone (зона офиса: прием, записи, недели дашборда)
 - `org_settings` - org_id, meter_window_day_from / _to (по умолчанию 15 и
   25), meter_window_always_open, group_threshold, group_window_hours
 - `org_members` - org_id, user_id, role (`creator` / `admin` / `employee` /
@@ -82,7 +85,8 @@
   activations_used, revoked_at
 - `houses` - id, org_id (nullable), region, city, street, building,
   cadastral_no, built_year, floors, area, entrances, lat, lon,
-  chat_binding_code, overhaul (JSONB), documents
+  chat_binding_code, overhaul (JSONB), documents, timezone (зона дома:
+  окно показаний, напоминания, окна доступа, опросы)
 - `flats` - id, house_id, number, entrance, area, account_no
 - `users` - id, max_user_id, name, username, consent_version, consent_at,
   bot_stopped_at, max_chat_id

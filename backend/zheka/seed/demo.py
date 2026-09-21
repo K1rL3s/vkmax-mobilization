@@ -304,7 +304,7 @@ class Seeder:
         voters: list[User] = []
         taken: set[HouseId] = set()
         for profile in PROFILES:
-            org = await self._org(profile)
+            org = await self._org(profile, free[profile.cities[0]][0].house.timezone)
             staff = await self._staff(org, profile)
             for city in profile.cities:
                 item = free[city].pop(0)
@@ -334,7 +334,7 @@ class Seeder:
         await self._session.flush()
         return user
 
-    async def _org(self, profile: OrgProfile) -> Organization:
+    async def _org(self, profile: OrgProfile, timezone: str) -> Organization:
         org = Organization(
             name=profile.name,
             inn=profile.inn,
@@ -343,6 +343,7 @@ class Seeder:
             reception_note="Прием по вторникам и четвергам, запись в приложении",
             registered_at=self._now - HISTORY - timedelta(days=30),
             is_demo=True,
+            timezone=timezone,
         )
         self._session.add(org)
         await self._session.flush()
@@ -582,7 +583,7 @@ class Seeder:
                 org_id=org.id,
                 house_id=house.id,
                 user_id=user.id,
-                starts_at=datetime.combine(day, at, UTC),
+                starts_at=datetime.combine(day, at, org.zone),
                 status=status,
             )
             for (user, _resident), day, at, status in (

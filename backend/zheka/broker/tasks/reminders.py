@@ -22,16 +22,16 @@ logger = logging.getLogger(__name__)
 
 @async_shared_broker.task(
     task_name=TaskName.REMIND_READINGS.value,
-    schedule=[{"cron": "0 10 * * *", "cron_offset": "Europe/Moscow"}],
+    schedule=[{"cron": "0 * * * *"}],
 )
 @inject(patch_module=True)
 async def remind_readings(reminders_service: FromDishka[RemindersService]) -> int:
-    return await reminders_service.remind_readings(datetime.now(UTC).date())
+    return await reminders_service.remind_readings(datetime.now(UTC))
 
 
 @async_shared_broker.task(
     task_name=TaskName.REMIND_POLLS.value,
-    schedule=[{"cron": "0 10 * * *", "cron_offset": "Europe/Moscow"}],
+    schedule=[{"cron": "0 * * * *"}],
 )
 @inject(patch_module=True)
 async def remind_polls(reminders_service: FromDishka[RemindersService]) -> int:
@@ -40,7 +40,7 @@ async def remind_polls(reminders_service: FromDishka[RemindersService]) -> int:
 
 @async_shared_broker.task(
     task_name=TaskName.CLOSE_EXPIRED_POLLS.value,
-    schedule=[{"cron": "0 10 * * *", "cron_offset": "Europe/Moscow"}],
+    schedule=[{"cron": "0 * * * *"}],
 )
 @inject(patch_module=True)
 async def close_expired_polls(reminders_service: FromDishka[RemindersService]) -> int:
@@ -49,16 +49,16 @@ async def close_expired_polls(reminders_service: FromDishka[RemindersService]) -
 
 @async_shared_broker.task(
     task_name=TaskName.WARN_VERIFICATION.value,
-    schedule=[{"cron": "0 9 * * *", "cron_offset": "Europe/Moscow"}],
+    schedule=[{"cron": "0 * * * *"}],
 )
 @inject(patch_module=True)
 async def warn_verification(reminders_service: FromDishka[RemindersService]) -> int:
-    return await reminders_service.warn_verification(datetime.now(UTC).date())
+    return await reminders_service.warn_verification(datetime.now(UTC))
 
 
 @async_shared_broker.task(
     task_name=TaskName.REMIND_APPOINTMENTS.value,
-    schedule=[{"cron": "0 19 * * *", "cron_offset": "Europe/Moscow"}],
+    schedule=[{"cron": "0 * * * *"}],
 )
 @inject(patch_module=True)
 async def remind_appointments(reminders_service: FromDishka[RemindersService]) -> int:

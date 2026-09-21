@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import datetime
 
 from sqlalchemy import delete, exists, func, select
 
@@ -11,14 +11,6 @@ from zheka.infra.database.tables.reception import (
     appointments_table,
     reception_windows_table,
 )
-
-
-def _day_start(day: date) -> datetime:
-    return datetime.combine(day, time.min, tzinfo=UTC)
-
-
-def _day_end(day: date) -> datetime:
-    return _day_start(day + timedelta(days=1))
 
 
 class ReceptionRepo(BaseAlchemyRepo):
@@ -45,12 +37,12 @@ class ReceptionRepo(BaseAlchemyRepo):
         return windows
 
     async def list_appointments(
-        self, org_id: OrgId, on_date: date, house_id: HouseId | None
+        self, org_id: OrgId, since: datetime, until: datetime, house_id: HouseId | None
     ) -> Sequence[Appointment]:
         stmt = select(Appointment).where(
             appointments_table.c.org_id == org_id,
-            appointments_table.c.starts_at >= _day_start(on_date),
-            appointments_table.c.starts_at < _day_end(on_date),
+            appointments_table.c.starts_at >= since,
+            appointments_table.c.starts_at < until,
         )
         if house_id is not None:
             stmt = stmt.where(appointments_table.c.house_id == house_id)
@@ -68,15 +60,15 @@ class ReceptionRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def taken_counts(
-        self, org_id: OrgId, date_from: date, date_to: date
+        self, org_id: OrgId, since: datetime, until: datetime
     ) -> dict[datetime, int]:
         stmt = (
             select(appointments_table.c.starts_at, func.count())
             .where(
                 appointments_table.c.org_id == org_id,
                 appointments_table.c.status == AppointmentStatus.BOOKED,
-                appointments_table.c.starts_at >= _day_start(date_from),
-                appointments_table.c.starts_at < _day_end(date_to),
+                appointments_table.c.starts_at >= since,
+                appointments_table.c.starts_at < until,
             )
             .group_by(appointments_table.c.starts_at)
         )
@@ -159,12 +151,14 @@ class ReceptionRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
-    async def list_to_remind(self, on_date: date) -> Sequence[Appointment]:
+    async def list_to_remind(
+        self, since: datetime, until: datetime
+    ) -> Sequence[Appointment]:
         stmt = select(Appointment).where(
             appointments_table.c.status == AppointmentStatus.BOOKED,
             appointments_table.c.reminder_sent_at.is_(None),
-            appointments_table.c.starts_at >= _day_start(on_date),
-            appointments_table.c.starts_at < _day_end(on_date),
+            appointments_table.c.starts_at >= since,
+            appointments_table.c.starts_at < until,
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()

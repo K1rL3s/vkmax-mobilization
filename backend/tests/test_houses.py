@@ -74,6 +74,7 @@ async def _count(session: AsyncSession, column: Column[int], value: int) -> int:
 
 async def _add_house(session: AsyncSession, org_id: OrgId, **fields: Any) -> HouseId:
     house = House(
+        timezone="Europe/Moscow",
         **{
             "org_id": org_id,
             "region": "Тестовая область",
@@ -83,7 +84,7 @@ async def _add_house(session: AsyncSession, org_id: OrgId, **fields: Any) -> Hou
             "cadastral_no": secrets.token_hex(8),
             "chat_binding_code": secrets.token_hex(4),
             **fields,
-        }
+        },
     )
     session.add(house)
     await session.flush()

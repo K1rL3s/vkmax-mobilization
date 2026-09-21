@@ -1,10 +1,11 @@
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, make_config
+from tests.conftest import OrgHouseFlatUser, freeze_now, make_config
 from tests.test_requests import _add_user, _events, _photo
 
 from zheka.config import YandexConfig
@@ -52,6 +53,7 @@ from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.yandex.vision import VisionClient, parse_reading
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 def _make_access(session: AsyncSession) -> MeterAccess:
@@ -67,7 +69,6 @@ def _make_service(session: AsyncSession) -> ReadingsService:
     return ReadingsService(
         MetersRepo(session),
         ChargesRepo(session),
-        HousesRepo(session),
         OrgsRepo(session),
         _make_access(session),
         FilesService(make_config().files, "test-token"),
@@ -86,7 +87,7 @@ def _make_admin_service(session: AsyncSession) -> AdminReadingsService:
 
 
 def _period_back(months_back: int) -> date:
-    today = datetime.now(UTC).date()
+    today = datetime.now(MOSCOW).date()
     year, month = divmod(today.year * 12 + today.month - 1 - months_back, 12)
     return date(year, month + 1, 1)
 
@@ -142,7 +143,7 @@ async def _set_window(
 
 async def _close_window(session: AsyncSession, org_id: OrgId) -> None:
     # однодневное окно не на сегодня закрыто прямо сейчас
-    closed_day = 1 if datetime.now(UTC).day != 1 else 2
+    closed_day = 1 if datetime.now(MOSCOW).day != 1 else 2
     await _set_window(session, org_id, day_from=closed_day, day_to=closed_day)
 
 
@@ -713,7 +714,7 @@ async def test_submit_in_the_tail_of_a_wrapping_window_goes_to_its_opening_month
 ) -> None:
     # сегодня - последний день окна, открывшегося в прошлом месяце
     own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
-    today = datetime.now(UTC).date()
+    today = datetime.now(MOSCOW).date()
     await _set_window(session, own.org_id, day_from=today.day + 1, day_to=today.day)
     service = _make_service(session)
 
@@ -724,3 +725,48 @@ async def test_submit_in_the_tail_of_a_wrapping_window_goes_to_its_opening_month
 
     assert [option.period for option in periods.options] == [_period_back(1)]
     assert result.row.reading.period == _period_back(1)
+
+
+async def test_the_window_opens_on_the_date_of_the_house(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 20:00 UTC 14-го во Владивостоке уже 06:00 15-го
+    freeze_now(
+        monkeypatch,
+        "zheka.core.services.readings",
+        datetime(2026, 9, 14, 20, tzinfo=UTC),
+    )
+    own = await make_org_house_flat_user(timezone="Asia/Vladivostok")
+    await _set_window(session, own.org_id, day_from=15, day_to=25)
+
+    periods = await _make_service(session).periods(own.flat_id)
+
+    assert [(option.period, option.is_open) for option in periods.options] == [
+        (date(2026, 9, 1), True)
+    ]
+
+
+async def test_a_verification_ended_on_the_house_date_blocks_the_reading(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # поверка до 14-го, а во Владивостоке в 20:00 UTC 14-го уже 15-е
+    freeze_now(
+        monkeypatch,
+        "zheka.core.services.readings",
+        datetime(2026, 9, 14, 20, tzinfo=UTC),
+    )
+    own = await make_org_house_flat_user(timezone="Asia/Vladivostok")
+    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
+    meter_id = await _add_meter(
+        session, own.flat_id, next_verification_date=date(2026, 9, 14)
+    )
+    service = _make_service(session)
+
+    [card] = await service.list_meters(own.flat_id)
+    assert card.verification_expired is True
+    with pytest.raises(InvalidState, match="Срок поверки истек"):
+        await service.submit(own.user_id, meter_id, _draft(period=date(2026, 9, 1)))

@@ -197,9 +197,11 @@ class AnalyticsRepo(BaseAlchemyRepo):
         return list(result.tuples().all())
 
     async def by_week(
-        self, org_id: OrgId, house_id: HouseId | None, since: datetime
+        self, org_id: OrgId, house_id: HouseId | None, since: datetime, timezone: str
     ) -> dict[date, int]:
-        week = cast(func.date_trunc("week", func.timezone("UTC", _R.created_at)), Date)
+        week = cast(
+            func.date_trunc("week", func.timezone(timezone, _R.created_at)), Date
+        )
         stmt = _org_requests(
             select(week, func.count()).where(_R.created_at >= since).group_by(week),
             org_id,

@@ -1,11 +1,11 @@
-from datetime import date
+from datetime import date, datetime
 
 from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.enums import ResidentStatus, TariffZone
 from zheka.core.errors import FLAT_NOT_FOUND, EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, MeterId, UserId
-from zheka.core.models import Flat, Meter, Resident
+from zheka.core.models import Flat, House, Meter, Resident
 from zheka.core.roles import is_staff
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
@@ -88,7 +88,8 @@ class MeterAccess:
             raise NotEnoughRights(CANNOT_MANAGE_METER)
         raise EntityNotFound(FLAT_NOT_FOUND)
 
-    async def meter_card(self, meter: Meter, today: date) -> MeterCard:
+    async def meter_card(self, meter: Meter, now: datetime) -> MeterCard:
+        today = (await self.house_of_flat(meter.flat_id)).local(now).date()
         last = await self._meters.list_readings(meter.id, 1)
         last_reading = last[0] if last else None
         expired = (
@@ -110,3 +111,9 @@ class MeterAccess:
         if flat is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         return flat
+
+    async def house_of_flat(self, flat_id: FlatId) -> House:
+        house = await self._houses.get_by_flat(flat_id)
+        if house is None:
+            raise EntityNotFound(FLAT_NOT_FOUND)
+        return house

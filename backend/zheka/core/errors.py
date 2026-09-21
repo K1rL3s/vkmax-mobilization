@@ -25,6 +25,7 @@ class EntityNotFound(ZhekaError, LookupError):
 
 
 HOUSE_NOT_FOUND = "Дом не найден"
+ORG_NOT_FOUND = "Организация не найдена"
 FLAT_NOT_FOUND = "Квартира не найдена"
 REQUEST_NOT_FOUND = "Заявка не найдена"
 GROUP_NOT_FOUND = "Группа заявок не найдена"

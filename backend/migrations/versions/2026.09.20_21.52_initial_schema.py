@@ -99,6 +99,7 @@ def upgrade() -> None:
         sa.Column(
             "is_demo", sa.Boolean(), server_default=sa.text("false"), nullable=False
         ),
+        sa.Column("timezone", sa.String(), nullable=False),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_organizations")),
         sa.UniqueConstraint("inn", name=op.f("uq_organizations_inn")),
     )
@@ -203,6 +204,7 @@ def upgrade() -> None:
         sa.Column("chat_binding_code", sa.String(length=8), nullable=False),
         sa.Column("overhaul", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("documents", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("timezone", sa.String(), nullable=False),
         sa.ForeignKeyConstraint(
             ["org_id"],
             ["organizations.id"],

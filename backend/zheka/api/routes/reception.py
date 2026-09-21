@@ -18,7 +18,7 @@ from zheka.api.schemas.reception import (
 )
 from zheka.core.ids import AccessRequestId, AccessSlotId, AppointmentId, HouseId
 from zheka.core.services.access import AccessService
-from zheka.core.services.reception import ReceptionService, horizon
+from zheka.core.services.reception import ReceptionService
 
 router = APIRouter(tags=["Прием и доступ"], route_class=DishkaRoute)
 
@@ -38,8 +38,7 @@ async def list_reception_slots(
     reception_service: FromDishka[ReceptionService],
     on_date: date | None = None,
 ) -> list[ReceptionSlotItem]:
-    date_from, date_to = horizon(on_date)
-    slots = await reception_service.slots(house_id, date_from, date_to)
+    slots = await reception_service.slots(house_id, on_date)
     return [ReceptionSlotItem.of(slot) for slot in slots]
 
 

@@ -49,7 +49,6 @@ def _make_service(session: AsyncSession) -> ChargesService:
     readings_service = ReadingsService(
         meters_repo,
         ChargesRepo(session),
-        houses_repo,
         orgs_repo,
         access,
         files_service,

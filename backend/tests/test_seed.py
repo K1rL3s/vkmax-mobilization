@@ -4,6 +4,7 @@ import tempfile
 from collections.abc import AsyncGenerator
 from datetime import UTC, date, datetime, time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 import pytest_asyncio
@@ -227,7 +228,7 @@ async def test_activation_twice_is_one_flat_and_the_month_is_open(
     assert second.residency.resident.verified_at == verified_at
 
     flat_id = FlatId(second.residency.resident.flat_id or 0)
-    this_month = current_period(datetime.now(UTC).date())
+    this_month = current_period(datetime.now(ZoneInfo("Europe/Moscow")).date())
     charged = select(charges_table.c.period).where(charges_table.c.flat_id == flat_id)
     assert len((await db.execute(charged)).scalars().all()) == 6
     periods = await _readings(db).periods(flat_id)
@@ -242,7 +243,6 @@ def _readings(session: AsyncSession) -> ReadingsService:
     return ReadingsService(
         meters,
         ChargesRepo(session),
-        houses,
         orgs,
         MeterAccess(meters, houses, ResidentsRepo(session), orgs),
         FilesService(make_config().files, "test-token"),

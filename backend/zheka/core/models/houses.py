@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
 
-from zheka.base import ZhekaMutableType
+from zheka.base import ZhekaMutableType, Zoned
 from zheka.core.ids import FlatId, HouseId, OrgId
 
 _UNSET_AT = cast(datetime, None)
@@ -11,7 +11,7 @@ _UNSET_HOUSE_ID = cast(HouseId, None)
 _UNSET_FLAT_ID = cast(FlatId, None)
 
 
-class House(ZhekaMutableType):
+class House(ZhekaMutableType, Zoned):
     id: HouseId = _UNSET_HOUSE_ID
     created_at: datetime = _UNSET_AT
     org_id: OrgId | None = None
@@ -29,6 +29,8 @@ class House(ZhekaMutableType):
     chat_binding_code: str
     overhaul: Any = field(default_factory=dict)
     documents: Any = field(default_factory=list)
+    # имя зоны IANA: по ней окно показаний, напоминания, окна доступа и опросы дома
+    timezone: str
 
     @property
     def address(self) -> str:

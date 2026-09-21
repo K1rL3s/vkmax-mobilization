@@ -27,6 +27,7 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
                 inn=row["inn"],
                 phone=row["phone"],
                 address=row["address"],
+                timezone=row["timezone"],
             )
     session.add_all(orgs.values())
     await session.flush()
@@ -48,6 +49,7 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
                 lat=Decimal(row["lat"]) if row["lat"] else None,
                 lon=Decimal(row["lon"]) if row["lon"] else None,
                 chat_binding_code=secrets.token_hex(4),
+                timezone=row["timezone"],
             )
             directory.append(
                 DirectoryHouse(

@@ -13,12 +13,11 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import InvalidRequest, InvalidState
 from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
-from zheka.core.models import Meter, OrgSettings, Reading
+from zheka.core.models import House, Meter, OrgSettings, Reading
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess, MeterCard, zones_of
 from zheka.infra.database.repos.charges import ChargesRepo
-from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 
@@ -152,7 +151,6 @@ class ReadingsService:
         "_charges",
         "_events",
         "_files",
-        "_houses",
         "_meters",
         "_orgs",
     )
@@ -161,7 +159,6 @@ class ReadingsService:
         self,
         meters_repo: MetersRepo,
         charges_repo: ChargesRepo,
-        houses_repo: HousesRepo,
         orgs_repo: OrgsRepo,
         access: MeterAccess,
         files_service: FilesService,
@@ -169,7 +166,6 @@ class ReadingsService:
     ) -> None:
         self._meters = meters_repo
         self._charges = charges_repo
-        self._houses = houses_repo
         self._orgs = orgs_repo
         self._access = access
         self._files = files_service
@@ -177,14 +173,14 @@ class ReadingsService:
 
     async def list_meters(self, flat_id: FlatId) -> list[MeterCard]:
         meters = await self._meters.list_for_flat(flat_id)
-        today = datetime.now(UTC).date()
-        return [await self._access.meter_card(meter, today) for meter in meters]
+        now = datetime.now(UTC)
+        return [await self._access.meter_card(meter, now) for meter in meters]
 
     async def periods(self, flat_id: FlatId) -> PeriodsData:
-        house_id = await self._house_id_of_flat(flat_id)
-        today = datetime.now(UTC).date()
+        house = await self._access.house_of_flat(flat_id)
+        today = house.local(datetime.now(UTC)).date()
 
-        settings = await self._window_settings(house_id)
+        settings = await self._window_settings(house)
         if window_accepts(today, settings):
             options = [
                 PeriodOption(period=window_period(today, settings), is_open=True)
@@ -205,7 +201,7 @@ class ReadingsService:
     async def history(self, user_id: UserId, meter_id: MeterId) -> list[ReadingRow]:
         meter = await self._access.get_meter(meter_id)
         resident = await self._access.verified_resident(user_id, meter.flat_id)
-        house_id = await self._house_id_of_flat(meter.flat_id)
+        house_id = (await self._access.house_of_flat(meter.flat_id)).id
         readings = await self._meters.list_readings(meter_id, HISTORY_LIMIT)
 
         previous_cache: dict[date, Reading | None] = {}
@@ -251,7 +247,8 @@ class ReadingsService:
         meter = await self._access.get_meter(meter_id)
         resident = await self._access.verified_resident(user_id, meter.flat_id)
         flat_id = meter.flat_id
-        house_id = await self._house_id_of_flat(flat_id)
+        house = await self._access.house_of_flat(flat_id)
+        house_id = house.id
 
         _checked_values(meter, draft.values)
         if not draft.photos:
@@ -260,7 +257,7 @@ class ReadingsService:
             self._files.path_of(name)
 
         now = datetime.now(UTC)
-        today = now.date()
+        today = house.local(now).date()
 
         if (
             meter.next_verification_date is not None
@@ -268,7 +265,7 @@ class ReadingsService:
         ):
             raise InvalidState("Срок поверки истек, начисление пойдет по нормативу")
 
-        settings = await self._window_settings(house_id)
+        settings = await self._window_settings(house)
         out_of_window = not window_accepts(today, settings)
         if out_of_window:
             if draft.period not in _candidate_periods(today):
@@ -345,9 +342,8 @@ class ReadingsService:
                     break
         return submitted
 
-    async def _window_settings(self, house_id: HouseId) -> OrgSettings | None:
-        house = await self._houses.get(house_id)
-        if house is None or house.org_id is None:
+    async def _window_settings(self, house: House) -> OrgSettings | None:
+        if house.org_id is None:
             return None
         return await self._orgs.get_settings(OrgId(house.org_id))
 
@@ -386,9 +382,6 @@ class ReadingsService:
             delta = consumption(zones_of(later.values), zones_of(earlier.values))
             totals.append(sum(delta.values()))
         return totals
-
-    async def _house_id_of_flat(self, flat_id: FlatId) -> HouseId:
-        return (await self._access.get_flat(flat_id)).house_id
 
 
 def window_accepts(today: date, settings: OrgSettings | None) -> bool:

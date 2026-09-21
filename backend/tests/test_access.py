@@ -1,10 +1,16 @@
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, RecordingBroker, make_notifications_service
+from tests.conftest import (
+    OrgHouseFlatUser,
+    RecordingBroker,
+    freeze_now,
+    make_notifications_service,
+)
 from tests.test_requests import _add_user, _events
 
 from zheka.broker.publisher import TaskPublisher
@@ -30,6 +36,7 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 def _make_service(
@@ -53,7 +60,7 @@ def _draft(
     slots: int = 2,
     days_ahead: int = 1,
 ) -> AccessRequestDraft:
-    day = datetime.now(UTC).date() + timedelta(days=days_ahead)
+    day = datetime.now(MOSCOW).date() + timedelta(days=days_ahead)
     return AccessRequestDraft(
         house_id=house_id,
         reason=reason,
@@ -61,8 +68,7 @@ def _draft(
         flat_ids=flat_ids,
         slots=[
             AccessSlotDraft(
-                starts_at=datetime.combine(day, datetime.min.time(), tzinfo=UTC)
-                + timedelta(hours=10 + number),
+                starts_at=datetime.combine(day, time(10 + number), tzinfo=MOSCOW),
                 capacity=capacity,
             )
             for number in range(slots)
@@ -373,7 +379,7 @@ async def test_the_resident_list_carries_the_flat_and_the_choice(
     assert rows[0].my_slot_id == slot_id
     assert rows[0].responded_count == 1
     assert rows[0].targets_count == 2
-    assert rows[0].address.endswith("Тестовая, 1")
+    assert rows[0].house.address.endswith("Тестовая, 1")
 
     # соседу тот же запрос показывается без чужого выбора
     neighbour_rows = await service.list_for_resident(neighbour_flat)
@@ -450,7 +456,7 @@ async def test_a_request_for_today_is_accepted(
         _draft(fixture.house_id, [flat_id], slots=1, days_ahead=0),
     )
 
-    assert grid.request.request.date == datetime.now(UTC).date()
+    assert grid.request.request.date == datetime.now(MOSCOW).date()
 
 
 async def test_create_queues_the_slots_window_for_the_residents(
@@ -470,3 +476,58 @@ async def test_create_queues_the_slots_window_for_the_residents(
     assert broker.enqueued(TaskName.BROADCAST_ACCESS_REQUEST) == [
         {"access_request_id": grid.request.request.id}
     ]
+
+
+def _draft_at(
+    house_id: HouseId, flat_id: FlatId, day: date, at: datetime
+) -> AccessRequestDraft:
+    return AccessRequestDraft(
+        house_id=house_id,
+        reason="Поверка газового оборудования",
+        date=day,
+        flat_ids=[flat_id],
+        slots=[AccessSlotDraft(starts_at=at, capacity=1)],
+    )
+
+
+async def test_a_naive_slot_is_house_time_and_dated_by_it(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    # 00:30 по Москве - еще вчерашний день по UTC, но окно в день доступа
+    fixture = await make_org_house_flat_user()
+    flat_id, _ = await _with_resident(session, fixture.house_id, "12")
+    day = datetime.now(MOSCOW).date() + timedelta(days=2)
+
+    grid = await _make_service(session).create(
+        fixture.org_id,
+        fixture.user_id,
+        _draft_at(fixture.house_id, flat_id, day, datetime.combine(day, time(0, 30))),
+    )
+
+    [slot] = grid.request.slots
+    assert slot.slot.starts_at == datetime.combine(day, time(0, 30), MOSCOW)
+
+
+async def test_the_access_day_is_past_by_the_house_clock(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 22:00 UTC 15-го в Москве уже 16-е
+    freeze_now(
+        monkeypatch, "zheka.core.services.access", datetime(2026, 9, 15, 22, tzinfo=UTC)
+    )
+    fixture = await make_org_house_flat_user()
+    day = date(2026, 9, 15)
+
+    with pytest.raises(InvalidRequest, match="прошел"):
+        await _make_service(session).create(
+            fixture.org_id,
+            fixture.user_id,
+            _draft_at(
+                fixture.house_id,
+                fixture.flat_id,
+                day,
+                datetime.combine(day, time(23), MOSCOW),
+            ),
+        )

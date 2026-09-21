@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import cast
 
-from zheka.base import ZhekaMutableType
+from zheka.base import ZhekaMutableType, Zoned
 from zheka.core.enums import OrgRole
 from zheka.core.ids import OrgId, OrgMemberId, UserId
 
@@ -10,7 +10,7 @@ _UNSET_ORG_ID = cast(OrgId, None)
 _UNSET_ORG_MEMBER_ID = cast(OrgMemberId, None)
 
 
-class Organization(ZhekaMutableType):
+class Organization(ZhekaMutableType, Zoned):
     id: OrgId = _UNSET_ORG_ID
     created_at: datetime = _UNSET_AT
     name: str
@@ -21,6 +21,8 @@ class Organization(ZhekaMutableType):
     reception_note: str | None = None
     registered_at: datetime | None = None
     is_demo: bool = False
+    # имя зоны IANA офиса: окна приема, записи и недели дашборда
+    timezone: str
 
 
 class OrgSettings(ZhekaMutableType):

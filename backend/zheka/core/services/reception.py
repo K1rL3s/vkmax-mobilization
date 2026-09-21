@@ -1,17 +1,18 @@
 from collections.abc import Sequence
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 
 from zheka.base import ZhekaType
 from zheka.core.enums import AppointmentStatus, EventType
 from zheka.core.errors import (
     HOUSE_NOT_FOUND,
+    ORG_NOT_FOUND,
     REQUEST_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
 )
 from zheka.core.ids import AppointmentId, HouseId, OrgId, RequestId, UserId
-from zheka.core.models import Appointment, ReceptionWindow
+from zheka.core.models import Appointment, Organization, ReceptionWindow
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -58,19 +59,20 @@ class ReceptionWindowDraft(ZhekaType):
     capacity: int = 1
 
 
-def expand_slots(window: ReceptionWindow, day: date) -> list[datetime]:
+def expand_slots(window: ReceptionWindow, day: date, zone: tzinfo) -> list[datetime]:
     if window.slot_minutes <= 0:
         return []
     step = timedelta(minutes=window.slot_minutes)
-    starts_at = datetime.combine(day, window.time_from, tzinfo=UTC)
-    ends_at = datetime.combine(day, window.time_to, tzinfo=UTC)
+    starts_at = datetime.combine(day, window.time_from, tzinfo=zone)
+    ends_at = datetime.combine(day, window.time_to, tzinfo=zone)
     return [
-        starts_at + step * number for number in range((ends_at - starts_at) // step)
+        (starts_at + step * number).astimezone(UTC)
+        for number in range((ends_at - starts_at) // step)
     ]
 
 
 def slot_capacities(
-    windows: Sequence[ReceptionWindow], date_from: date, date_to: date
+    windows: Sequence[ReceptionWindow], date_from: date, date_to: date, zone: tzinfo
 ) -> dict[datetime, int]:
     capacities: dict[datetime, int] = {}
     day = date_from
@@ -78,23 +80,10 @@ def slot_capacities(
         for window in windows:
             if window.weekday != day.weekday():
                 continue
-            for moment in expand_slots(window, day):
+            for moment in expand_slots(window, day, zone):
                 capacities[moment] = max(capacities.get(moment, 0), window.capacity)
         day += timedelta(days=1)
     return capacities
-
-
-def horizon(on_date: date | None) -> tuple[date, date]:
-    if on_date is not None:
-        return on_date, on_date
-    today = datetime.now(UTC).date()
-    return today, today + timedelta(days=RECEPTION_HORIZON_DAYS)
-
-
-def as_utc(moment: datetime) -> datetime:
-    if moment.tzinfo is None:
-        return moment.replace(tzinfo=UTC)
-    return moment.astimezone(UTC)
 
 
 class ReceptionService:
@@ -127,19 +116,24 @@ class ReceptionService:
         self._events = events_service
 
     async def slots(
-        self, house_id: HouseId, date_from: date, date_to: date
+        self, house_id: HouseId, on_date: date | None
     ) -> list[ReceptionSlot]:
         house = await self._houses.get(house_id)
         if house is None:
             raise EntityNotFound(HOUSE_NOT_FOUND)
         if house.org_id is None:
             return []
-        org_id = house.org_id
-        windows = await self._reception.list_windows(org_id)
-        taken = await self._reception.taken_counts(org_id, date_from, date_to)
-        capacities = slot_capacities(windows, date_from, date_to)
-
+        org = await self._org(house.org_id)
         now = datetime.now(UTC)
+        date_from = date_to = on_date or org.local(now).date()
+        if on_date is None:
+            date_to += timedelta(days=RECEPTION_HORIZON_DAYS)
+        windows = await self._reception.list_windows(org.id)
+        taken = await self._reception.taken_counts(
+            org.id, org.day_start(date_from), org.day_start(date_to + timedelta(days=1))
+        )
+        capacities = slot_capacities(windows, date_from, date_to, org.zone)
+
         return [
             ReceptionSlot(starts_at=moment, is_free=taken.get(moment, 0) < capacity)
             for moment, capacity in sorted(capacities.items())
@@ -159,11 +153,12 @@ class ReceptionService:
         if house.org_id is None:
             raise InvalidState(SLOT_UNKNOWN)
         org_id = house.org_id
+        org = await self._org(org_id)
 
-        moment = as_utc(starts_at)
-        day = moment.date()
+        moment = org.to_utc(starts_at)
+        day = org.local(moment).date()
         windows = await self._reception.lock_windows(org_id, day.weekday())
-        capacity = slot_capacities(windows, day, day).get(moment)
+        capacity = slot_capacities(windows, day, day, org.zone).get(moment)
         if capacity is None or moment <= datetime.now(UTC):
             raise InvalidState(SLOT_UNKNOWN)
         if await self._reception.has_booking(org_id, user_id, moment):
@@ -214,8 +209,11 @@ class ReceptionService:
             and await self._houses.get_for_org(house_id, org_id) is None
         ):
             raise EntityNotFound(HOUSE_NOT_FOUND)
-        day = on_date or datetime.now(UTC).date()
-        appointments = await self._reception.list_appointments(org_id, day, house_id)
+        org = await self._org(org_id)
+        day = on_date or org.local(datetime.now(UTC)).date()
+        appointments = await self._reception.list_appointments(
+            org_id, org.day_start(day), org.day_start(day + timedelta(days=1)), house_id
+        )
         return await self._decorate(appointments, with_people=True)
 
     async def windows(self, org_id: OrgId) -> Sequence[ReceptionWindow]:
@@ -310,3 +308,9 @@ class ReceptionService:
             for resident in residents
         }
         return names, flat_numbers
+
+    async def _org(self, org_id: OrgId) -> Organization:
+        org = await self._orgs.get(org_id)
+        if org is None:
+            raise EntityNotFound(ORG_NOT_FOUND)
+        return org

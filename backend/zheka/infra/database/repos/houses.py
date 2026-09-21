@@ -290,9 +290,9 @@ class HousesRepo(BaseAlchemyRepo):
 
     async def list_managed_with_settings(
         self,
-    ) -> Sequence[tuple[HouseId, OrgSettings | None]]:
+    ) -> Sequence[tuple[House, OrgSettings | None]]:
         stmt = (
-            select(houses_table.c.id, OrgSettings)
+            select(House, OrgSettings)
             .select_from(
                 houses_table.outerjoin(
                     org_settings_table,
@@ -303,10 +303,7 @@ class HousesRepo(BaseAlchemyRepo):
             .order_by(houses_table.c.id)
         )
         result = await self._session.execute(stmt)
-        return [
-            (HouseId(house_id), settings)
-            for house_id, settings in result.tuples().all()
-        ]
+        return result.tuples().all()
 
     async def add_flat_or_get(
         self, house_id: HouseId, number: str, area: int | None, account_no: str | None
@@ -327,3 +324,12 @@ class HousesRepo(BaseAlchemyRepo):
         if flat is None:
             raise EntityNotFound("Квартира не найдена")
         return flat, False
+
+    async def get_by_flat(self, flat_id: FlatId) -> House | None:
+        stmt = (
+            select(House)
+            .join(flats_table, flats_table.c.house_id == houses_table.c.id)
+            .where(flats_table.c.id == flat_id)
+        )
+        house: House | None = await self._session.scalar(stmt)
+        return house

@@ -1,10 +1,11 @@
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser
+from tests.conftest import OrgHouseFlatUser, freeze_now
 from tests.test_requests import _add_user, _events
 
 from zheka.core.enums import (
@@ -23,7 +24,6 @@ from zheka.core.services.reception import (
     ReceptionService,
     ReceptionWindowDraft,
     expand_slots,
-    horizon,
 )
 from zheka.infra.database.models import Request
 from zheka.infra.database.repos.events import EventsRepo
@@ -35,6 +35,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 def _make_service(session: AsyncSession) -> ReceptionService:
@@ -74,7 +75,7 @@ def _some_day() -> date:
 
 
 def _moment(day: date, at: time = time(10, 0)) -> datetime:
-    return datetime.combine(day, at, tzinfo=UTC)
+    return datetime.combine(day, at, tzinfo=MOSCOW)
 
 
 async def _add_request(
@@ -115,17 +116,44 @@ def test_a_window_expands_into_whole_slots(
         slot_minutes=30,
     )
 
-    assert expand_slots(window, day) == [
+    assert expand_slots(window, day, MOSCOW) == [
         _moment(day, time_from) + timedelta(minutes=30 * number)
         for number in range(count)
     ]
 
 
-def test_horizon_without_a_date_is_two_weeks() -> None:
-    date_from, date_to = horizon(None)
+def test_a_moscow_window_at_ten_is_a_slot_at_seven_utc() -> None:
+    window = ReceptionWindow(
+        org_id=OrgId(1),
+        weekday=0,
+        time_from=time(10, 0),
+        time_to=time(10, 30),
+        slot_minutes=30,
+    )
 
-    assert (date_to - date_from).days == 14
-    assert horizon(date(2026, 9, 21)) == (date(2026, 9, 21), date(2026, 9, 21))
+    [slot] = expand_slots(window, date(2026, 9, 21), MOSCOW)
+
+    assert (slot, slot.tzinfo) == (datetime(2026, 9, 21, 7, tzinfo=UTC), UTC)
+
+
+async def test_slots_without_a_date_run_two_weeks_ahead(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 22:00 UTC 14-го в Москве уже 15-е, две недели от него - 29-е
+    freeze_now(
+        monkeypatch,
+        "zheka.core.services.reception",
+        datetime(2026, 9, 14, 22, tzinfo=UTC),
+    )
+    fixture = await make_org_house_flat_user()
+    service = _make_service(session)
+    await _open_every_day(service, fixture.org_id)
+
+    slots = await service.slots(fixture.house_id, None)
+
+    assert slots[-1].starts_at == _moment(date(2026, 9, 29), time(17, 30))
 
 
 async def test_several_windows_on_one_weekday_are_expanded_together(
@@ -153,7 +181,7 @@ async def test_several_windows_on_one_weekday_are_expanded_together(
         ],
     )
 
-    slots = await service.slots(fixture.house_id, day, day)
+    slots = await service.slots(fixture.house_id, day)
 
     # 11:00 попадает в оба окна, но остается одним слотом
     assert [slot.starts_at for slot in slots] == [
@@ -168,7 +196,7 @@ async def test_several_windows_on_one_weekday_are_expanded_together(
     shared = _moment(day, time(11, 0))
 
     async def is_free() -> bool:
-        slots = await service.slots(fixture.house_id, day, day)
+        slots = await service.slots(fixture.house_id, day)
         return {slot.starts_at: slot.is_free for slot in slots}[shared]
 
     await service.book(fixture.user_id, fixture.house_id, shared, None)
@@ -198,7 +226,7 @@ async def test_a_taken_slot_stays_in_the_grid_and_cannot_be_booked_twice(
 
     slots = {
         slot.starts_at: slot.is_free
-        for slot in await service.slots(fixture.house_id, day, day)
+        for slot in await service.slots(fixture.house_id, day)
     }
     assert slots[starts_at] is False
 
@@ -217,12 +245,12 @@ async def test_a_slot_off_the_grid_or_in_the_past_is_neither_offered_nor_booked(
     service = _make_service(session)
     day = _some_day()
 
-    assert await service.slots(fixture.house_id, day, day) == []
+    assert await service.slots(fixture.house_id, day) == []
 
     await _open_every_day(service, fixture.org_id)
     yesterday = datetime.now(UTC).date() - timedelta(days=1)
 
-    assert await service.slots(fixture.house_id, yesterday, yesterday) == []
+    assert await service.slots(fixture.house_id, yesterday) == []
 
     for moment in (_moment(day, time(10, 7)), _moment(yesterday)):
         with pytest.raises(InvalidState, match="Такого слота нет"):
@@ -288,7 +316,7 @@ async def test_cancelling_frees_the_slot_for_the_next_resident(
 
     slots = {
         slot.starts_at: slot.is_free
-        for slot in await service.slots(fixture.house_id, day, day)
+        for slot in await service.slots(fixture.house_id, day)
     }
     assert slots[starts_at] is True
 
@@ -434,7 +462,7 @@ async def test_another_org_does_not_take_our_slot(
 
     slots = {
         slot.starts_at: slot.is_free
-        for slot in await service.slots(fixture.house_id, day, day)
+        for slot in await service.slots(fixture.house_id, day)
     }
     assert slots[starts_at] is True
 
@@ -451,3 +479,46 @@ async def test_another_org_does_not_take_our_slot(
     rows = await service.today(fixture.org_id, day, None)
 
     assert [row.appointment.id for row in rows] == [booked.appointment.id]
+
+
+async def test_a_naive_time_books_the_slot_of_the_office_clock(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    fixture = await make_org_house_flat_user()
+    service = _make_service(session)
+    await _open_every_day(service, fixture.org_id)
+    day = _some_day()
+
+    booked = await service.book(
+        fixture.user_id, fixture.house_id, datetime.combine(day, time(10)), None
+    )
+
+    assert booked.appointment.starts_at == datetime.combine(day, time(7), UTC)
+
+
+async def test_the_office_day_is_counted_on_the_office_clock(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    # 00:30 по Москве - еще вчерашний день по UTC
+    fixture = await make_org_house_flat_user()
+    service = _make_service(session)
+    day = _some_day()
+    await service.set_windows(
+        fixture.org_id,
+        [
+            ReceptionWindowDraft(
+                weekday=day.weekday(),
+                time_from=time(0, 30),
+                time_to=time(1, 30),
+                slot_minutes=60,
+            )
+        ],
+    )
+    [slot] = await service.slots(fixture.house_id, day)
+    booked = await service.book(fixture.user_id, fixture.house_id, slot.starts_at, None)
+
+    [row] = await service.today(fixture.org_id, day, None)
+    [taken] = await service.slots(fixture.house_id, day)
+
+    assert row.appointment.id == booked.appointment.id
+    assert taken.is_free is False

@@ -48,7 +48,7 @@ class MetersService:
         )
         if meter is None:
             raise InvalidValue("У квартиры уже есть счетчик такого типа")
-        return await self._access.meter_card(meter, datetime.now(UTC).date())
+        return await self._access.meter_card(meter, datetime.now(UTC))
 
     async def update(
         self, user_id: UserId, meter_id: MeterId, draft: MeterUpdateDraft
@@ -60,4 +60,4 @@ class MetersService:
         await self._meters.update(
             meter, draft.tariff_zones, serial, draft.next_verification_date
         )
-        return await self._access.meter_card(meter, datetime.now(UTC).date())
+        return await self._access.meter_card(meter, datetime.now(UTC))

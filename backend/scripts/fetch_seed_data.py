@@ -56,6 +56,7 @@ class Street(NamedTuple):
     street: str
     prefix: str
     mun_obr: str
+    timezone: str
 
 
 STREETS = (
@@ -67,6 +68,7 @@ STREETS = (
         street="Ленинский проспект",
         prefix="Ленинский просп. ",
         mun_obr="",
+        timezone="Europe/Moscow",
     ),
     Street(
         export_id=250,
@@ -76,6 +78,7 @@ STREETS = (
         street="Гражданский проспект",
         prefix="Гражданский пр., д. ",
         mun_obr="",
+        timezone="Europe/Moscow",
     ),
     Street(
         export_id=220,
@@ -85,6 +88,7 @@ STREETS = (
         street="проспект Победы",
         prefix="пр-кт. Победы, д. ",
         mun_obr="г. Казань",
+        timezone="Europe/Moscow",
     ),
 )
 
@@ -104,8 +108,9 @@ HOUSE_FIELDS = (
     "lon",
     "org_inn",
     "source_id",
+    "timezone",
 )
-ORG_FIELDS = ("inn", "name", "phone", "address")
+ORG_FIELDS = ("inn", "name", "phone", "address", "timezone")
 # городской номер из семи цифр без кода не дозвонится с мобильного, а код у
 # региона один. В Москве их два, но московские номера в реестре все с кодом
 FULL_DIGITS = 11
@@ -240,12 +245,13 @@ def _registry() -> dict[tuple[str, str], list[dict[str, str]]]:
     return by_name
 
 
-def _org(row: dict[str, str]) -> dict[str, str]:
+def _org(row: dict[str, str], timezone: str) -> dict[str, str]:
     return {
         "inn": row["inn"],
         "name": _clean(row["name_short"]),
         "phone": phone(row["phone"], AREA_CODES.get(row["subject_rf"])),
         "address": _clean(row["actual_address"] or row["legal_address"]),
+        "timezone": timezone,
     }
 
 
@@ -280,7 +286,7 @@ def main() -> None:
                 # одноименные УК в регионе - не повод выбирать наугад
                 if len(matches) == 1:
                     ((org_inn, org),) = matches.items()
-                    orgs[org_inn] = _org(org)
+                    orgs[org_inn] = _org(org, street.timezone)
                 else:
                     log.info(
                         "УК %r у %s: совпадений %s", manager, building, len(matches)
@@ -303,6 +309,7 @@ def main() -> None:
                     "lon": lon,
                     "org_inn": org_inn,
                     "source_id": row["house_id"],
+                    "timezone": street.timezone,
                 }
             )
         _fill_from_osm(street, street_houses)

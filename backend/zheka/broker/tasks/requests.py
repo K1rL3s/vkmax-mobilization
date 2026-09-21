@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 @async_shared_broker.task(
     task_name=TaskName.AUTO_CLOSE_REVIEWED_REQUESTS.value,
-    schedule=[{"cron": "* * * * *", "cron_offset": "Europe/Moscow"}],
+    schedule=[{"cron": "* * * * *"}],
 )
 @inject(patch_module=True)
 async def auto_close_reviewed_requests(

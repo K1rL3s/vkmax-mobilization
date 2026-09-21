@@ -33,6 +33,7 @@ organizations_table = Table(
     Column("reception_note", String, nullable=True),
     Column("registered_at", DateTime(timezone=True), nullable=True),
     Column("is_demo", Boolean, default=False, server_default=false(), nullable=False),
+    Column("timezone", String, nullable=False),
 )
 
 org_settings_table = Table(
