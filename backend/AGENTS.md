@@ -24,7 +24,7 @@ Package `zheka`, Python 3.12, all code async.
 | `zheka/infra/database/` | Repositories; `models/` re-exports the mapped entities for them. |
 | `zheka/infra/max/` | Outgoing MAX calls and the platform rate limits. |
 | `zheka/logger/` | Formatters, context columns, `setup_logger`. |
-| `zheka/seed/` | `just seed`: the directory, the demo organizations and their history; `data/` holds the committed CSVs and images. |
+| `zheka/seed/` | `just seed` and the bot's `/seed`: the directory, the demo organizations and their history; `data/` holds the committed CSVs and images. |
 | `scripts/` | `fetch_seed_data.py`, the one-off download that wrote `zheka/seed/data/`. |
 | `migrations/` | Linear Alembic history. |
 | `tests/` | Empty for now; mirror the app structure when filling it. |
@@ -487,6 +487,20 @@ review finding.
   timestamps, not records of actions, so they are written as rows and not
   through the services that record the live ones. It leaves no request
   `ON_REVIEW`: the scheduler would auto-close it and write to the author.
+- The seed has two entry points over one `seed()`: `just seed`
+  (`zheka/seed/__main__.py`, its own decider) and the bot's `/seed`. The
+  `/seed` handler in `bot/handlers/commands/start.py` only queues `seed_demo`
+  and answers, because thousands of rows do not fit the webhook's 30 seconds;
+  the task seeds under `CommitMiddleware` and tells the caller whether it wrote
+  the demo through `NotificationsService.notify_user`, so the reply leaves
+  only after the seed committed. `seed()` takes `pg_advisory_xact_lock(SEED_LOCK)` before its guard,
+  so a second run started before the first commits waits, then sees the demo
+  and returns `False` instead of dying on the unique `organizations.inn`.
+  That reply is the one task the publisher carries: `seed()` itself is handed
+  no publisher at all, so nothing seeded notifies anyone.
+  Anyone may send `/seed`: it acts only on a database without the demo, and it
+  is not advertised (no command menu, not in `/help`). The cost is that
+  whoever sends it first on a fresh deploy starts the 30-day clock.
 - The benchmark's cut rules decide the seed's layout: all five fictional
   organizations have request history in Москва, a federal city where region
   and city coincide, so the region's complement is 0 and both the region and
@@ -559,8 +573,8 @@ the next agent does not pay for them again.
 - The seed runs once into an empty database: to reseed, recreate the local
   database (`docker compose down -v` drops the volume), `just migrate`, then
   `just seed`. The history ends at the seed date, and the dashboard and the
-  benchmark read a rolling 30 days, so `just seed` runs on the deploy closest
-  to judging: after about three weeks the benchmark thins out, after 30 days
+  benchmark read a rolling 30 days, so `just seed` or `/seed` runs on the deploy
+  closest to judging: after about three weeks the benchmark thins out, after 30 days
   it is empty. A reseed wipes every reviewer's flat and membership. `uv run python scripts/fetch_seed_data.py` rewrites the CSVs in
   `zheka/seed/data/` from reformagkh.ru and Nominatim; its downloads are
   cached in `backend/.cache/seed/` (gitignored), so a rerun with a warm cache

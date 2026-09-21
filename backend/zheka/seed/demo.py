@@ -7,6 +7,7 @@ from math import ceil
 from pathlib import Path
 from random import Random
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from zheka.base import ZhekaType
@@ -87,6 +88,9 @@ RATED_PERCENT = 85
 # квартир в доме с историей: демо-дом целиком, с кворумом по площади
 MIN_FLATS = 40
 MAX_FLATS = 250
+# ключ транзакционной advisory-блокировки сида: второй запуск ждет первый и
+# видит его демо, а не падает на уникальном ИНН
+SEED_LOCK = 1
 
 
 class OrgProfile(ZhekaType):
@@ -278,6 +282,8 @@ async def seed(
     files_dir: Path,
     today: date,
 ) -> bool:
+    stmt = select(func.pg_advisory_xact_lock(SEED_LOCK))
+    await session.execute(stmt)
     # один страж на весь сид: демо-организация есть - сид уже прошел. Он
     # одна транзакция, так что наполовину засеянной базы не бывает
     if await OrgsRepo(session).get_by_inn(DEMO_INN) is not None:

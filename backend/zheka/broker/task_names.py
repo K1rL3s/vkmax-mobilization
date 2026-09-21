@@ -20,3 +20,4 @@ class TaskName(StrEnum):
     WARN_VERIFICATION = "warn_verification"
     REMIND_APPOINTMENTS = "remind_appointments"
     BROADCAST_ACCESS_REQUEST = "broadcast_access_request"
+    SEED_DEMO = "seed_demo"

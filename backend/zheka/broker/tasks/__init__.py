@@ -19,6 +19,7 @@ from zheka.broker.tasks.requests import (
     send_executor_card,
     send_review_card,
 )
+from zheka.broker.tasks.seed import seed_demo
 
 __all__ = (
     "attach_result_photo",
@@ -32,6 +33,7 @@ __all__ = (
     "remind_appointments",
     "remind_polls",
     "remind_readings",
+    "seed_demo",
     "send_executor_card",
     "send_review_card",
     "send_to_user",

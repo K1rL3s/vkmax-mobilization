@@ -5,6 +5,8 @@ from maxo.routing.filters import Command, CommandStart
 from maxo.types import BotStarted, MessageCreated
 
 from zheka.bot.states import entry_state
+from zheka.broker.publisher import TaskPublisher
+from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventSource, EventType
 from zheka.core.ids import UserId
 from zheka.core.models import User
@@ -19,6 +21,7 @@ HELP_TEXT = (
     "Заявки, начисления и показания счётчиков живут в приложении - "
     "кнопка под меню."
 )
+SEEDING_TEXT = "Заполняю демо-данные, это займет до минуты"
 
 
 @router.bot_started()
@@ -59,3 +62,17 @@ async def open_entry_window(
         source=EventSource.DIRECT.value,
     )
     await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)
+
+
+# ponytail: нажать может кто угодно - сид трогает только базу без демо, но
+# первый нажавший на свежем деплое запускает 30-дневное окно аналитики.
+# Ограничить id владельца из конфига, если посторонний засеет раньше времени
+@router.message_created(Command("seed"))
+async def seed_handler(
+    update: MessageCreated,
+    user: User,
+    publisher: FromDishka[TaskPublisher],
+) -> None:
+    # тысячи строк не укладываются в тридцать секунд вебхука: сеет задача
+    publisher.publish(TaskName.SEED_DEMO, user_id=int(user.id))
+    await update.answer_text(SEEDING_TEXT, notify=False)
