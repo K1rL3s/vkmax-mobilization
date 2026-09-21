@@ -12,6 +12,7 @@ from zheka.core.consent import CONSENT_VERSION
 from zheka.core.deeplinks import parse_deeplink
 from zheka.core.ids import UserId
 from zheka.core.models import User
+from zheka.core.services.demo import DemoService
 from zheka.core.services.flats import FlatsService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.profile import ProfileService
@@ -25,6 +26,7 @@ async def on_accept(
     profile_service: FromDishka[ProfileService],
     orgs_service: FromDishka[OrgsService],
     flats_service: FromDishka[FlatsService],
+    demo_service: FromDishka[DemoService],
 ) -> None:
     # accept_consent - единственное место, где версия согласия проверяется, и
     # согласие дают один раз, так что его лишние чтения не стоят второго метода
@@ -44,6 +46,7 @@ async def on_accept(
                 me.user,
                 orgs_service,
                 flats_service,
+                demo_service,
             )
             return
 

@@ -5,6 +5,7 @@ from sqlalchemy import exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import RequestStatus
+from zheka.core.errors import EntityNotFound
 from zheka.core.ids import FlatId, HouseId, OrgId, UserId
 from zheka.infra.database.models import DemandSignal, Flat, House, OrgSettings
 from zheka.infra.database.repos.base import BaseAlchemyRepo
@@ -350,3 +351,34 @@ class HousesRepo(BaseAlchemyRepo):
             (HouseId(house_id), settings)
             for house_id, settings in result.tuples().all()
         ]
+
+    async def add_flat_or_get(
+        self,
+        house_id: HouseId,
+        number: str,
+        area: int | None,
+        account_no: str | None,
+    ) -> tuple[Flat, bool]:
+        # второй элемент - завели ли квартиру этим вызовом: два параллельных
+        # нажатия разводит уникальный индекс (house_id, number)
+        stmt = (
+            pg_insert(Flat)
+            .values(
+                house_id=house_id,
+                number=number,
+                area=area,
+                account_no=account_no,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[flats_table.c.house_id, flats_table.c.number],
+            )
+            .returning(Flat)
+        )
+        result = await self._session.execute(stmt)
+        created = result.scalar_one_or_none()
+        if created is not None:
+            return created, True
+        flat = await self.get_flat_by_number(house_id, number)
+        if flat is None:
+            raise EntityNotFound("Квартира не найдена")
+        return flat, False

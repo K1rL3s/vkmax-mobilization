@@ -19,7 +19,8 @@ class House(ZhekaMutableType):
     city: str
     street: str
     building: str
-    cadastral_no: str
+    # в открытых данных его нет, а придумывать настоящий номер нельзя
+    cadastral_no: str | None = None
     built_year: int | None = None
     floors: int | None = None
     area: int | None = None  # 1/100 square metre

@@ -13,6 +13,7 @@ from zheka.core.deeplinks import Deeplink, DeeplinkKind, parse_deeplink
 from zheka.core.enums import EventSource, EventType
 from zheka.core.ids import UserId
 from zheka.core.models import User
+from zheka.core.services.demo import DemoService, demo_flat_number
 from zheka.core.services.events import EventsService
 from zheka.core.services.flats import FlatsService
 from zheka.core.services.orgs import OrgsService
@@ -22,15 +23,23 @@ router = Router(name=__name__)
 REGISTER_NOTICE = "Регистрация управляющей компании открывается в приложении"
 ORG_JOINED = "Вы в команде «{name}»"
 FLAT_JOINED = "Квартира подтверждена"
+DEMO_STAFF_NOTICE = (
+    "Демо-доступ открыт: вы сотрудник «{org}». Кабинет УК - в приложении, "
+    "там же ваша демо-квартира"
+)
+DEMO_RESIDENT_NOTICE = (
+    "Демо-доступ открыт: квартира {flat}, {address}. Подайте показания за этот "
+    "месяц в приложении, кабинет УК там же"
+)
 
-# демо-нагрузки появятся в блоке 20: до тех пор они не наши, и апдейт с ними
-# уходит дальше, в обычный /start
 _SOURCE_BY_KIND = {
     DeeplinkKind.HOUSE: EventSource.CHAT,
     DeeplinkKind.ENTRANCE_QR: EventSource.QR,
     DeeplinkKind.ORG_INVITE: EventSource.DEEPLINK,
     DeeplinkKind.FLAT_INVITE: EventSource.DEEPLINK,
     DeeplinkKind.ORG_REGISTER: EventSource.DEEPLINK,
+    DeeplinkKind.DEMO_STAFF: EventSource.DEEPLINK,
+    DeeplinkKind.DEMO_RESIDENT: EventSource.DEEPLINK,
 }
 
 
@@ -42,6 +51,7 @@ async def deeplink_handler(
     events_service: FromDishka[EventsService],
     orgs_service: FromDishka[OrgsService],
     flats_service: FromDishka[FlatsService],
+    demo_service: FromDishka[DemoService],
 ) -> Any:
     # роутер стоит раньше commands_router, а maxo останавливается на первом
     # обработчике, вернувшем не UNHANDLED. Поэтому разобранная ссылка съедает
@@ -67,6 +77,7 @@ async def deeplink_handler(
         user,
         orgs_service,
         flats_service,
+        demo_service,
     )
     return None
 
@@ -78,6 +89,7 @@ async def open_deeplink(
     user: User,
     orgs_service: OrgsService,
     flats_service: FlatsService,
+    demo_service: DemoService,
 ) -> None:
     # согласие первее любой дороги в дом, а сама ссылка едет в start_data,
     # чтобы после нажатия «Согласен» житель попал туда, куда шел
@@ -101,6 +113,22 @@ async def open_deeplink(
         # не роутится - он только классифицирует источник открытия, поэтому
         # код пока вводится в приложении руками
         await _menu(dialog_manager, REGISTER_NOTICE)
+    elif deeplink.kind is DeeplinkKind.DEMO_STAFF:
+        access = await demo_service.activate(user_id)
+        await _menu(
+            dialog_manager,
+            DEMO_STAFF_NOTICE.format(org=access.membership.org.name),
+        )
+    elif deeplink.kind is DeeplinkKind.DEMO_RESIDENT:
+        # обе ссылки выдают обе роли, вид меняет только то, куда указать
+        access = await demo_service.activate(user_id)
+        await _menu(
+            dialog_manager,
+            DEMO_RESIDENT_NOTICE.format(
+                flat=demo_flat_number(user_id),
+                address=access.residency.house.address,
+            ),
+        )
     else:
         await _start_house(deeplink, dialog_manager)
 

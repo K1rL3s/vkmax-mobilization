@@ -24,6 +24,8 @@ Package `zheka`, Python 3.12, all code async.
 | `zheka/infra/database/` | Repositories; `models/` re-exports the mapped entities for them. |
 | `zheka/infra/max/` | Outgoing MAX calls and the platform rate limits. |
 | `zheka/logger/` | Formatters, context columns, `setup_logger`. |
+| `zheka/seed/` | `just seed`: the directory, the demo organizations and their history; `data/` holds the committed CSVs and images. |
+| `scripts/` | `fetch_seed_data.py`, the one-off download that wrote `zheka/seed/data/`. |
 | `migrations/` | Linear Alembic history. |
 | `tests/` | Empty for now; mirror the app structure when filling it. |
 
@@ -31,7 +33,7 @@ Package `zheka`, Python 3.12, all code async.
 
 Everything goes through `just` (see `justfile`): `format`, `ruff`, `codespell`,
 `slots`, `bandit`, `mypy`, `test`, `lint`, `check`, `all`, `migrate`,
-`migration <msg>`, `api`, `worker`, `scheduler`, `bump`.
+`migration <msg>`, `api`, `worker`, `scheduler`, `seed`, `bump`.
 
 `just check` is the gate: ruff (no-fix) + ruff format --check + codespell +
 slotscheck + bandit + mypy strict. Keep it green.
@@ -187,12 +189,14 @@ review finding.
   `zheka/api/app.py`, and registration order is the stack inside out: the last
   registered is the outermost.
 - A dishka REQUEST container always belongs to exactly one decider, and there
-  are exactly three: `transaction_middleware` for an http request (commits only
+  are exactly four: `transaction_middleware` for an http request (commits only
   on a response below 400), `CommitMiddleware` for a taskiq task (commits on a
-  result without an error), and `TransactionMiddleware` in `zheka/bot/` for a
-  bot update (commits when the handler returns). Each of them commits the
-  session and then flushes the `TaskPublisher`; each rolls back on an
-  exception. No provider and no route commits - the session provider keeps a
+  result without an error), `TransactionMiddleware` in `zheka/bot/` for a
+  bot update (commits when the handler returns), and `zheka/seed/__main__.py`
+  (commits once, when `seed` reports it wrote something). The first three
+  commit the session and then flush the `TaskPublisher`; the seed never
+  flushes it, because nothing it creates may notify anyone. Each rolls back on
+  an exception. No provider and no route commits - the session provider keeps a
   rollback as a backstop only. A new entry point that opens a REQUEST container
   brings its own decider, otherwise its writes are silently dropped.
 - The provider cannot decide the transaction itself: domain errors are turned
@@ -447,6 +451,64 @@ review finding.
   stamps `kind: manual`, but skips anyone who got any reading reminder since
   the start of the day, so ten presses are one message and a press yesterday
   does not silence today.
+- Real where it is public, fictional where it would be a claim. Every
+  organization from the registry (`zheka/seed/data/organizations.csv`) is
+  seeded unregistered and without staff or history, so "УК не подключена" is
+  true about it, and it is linked only to a house whose reformagkh card names
+  it, matched by name within the region and dropped when the name is
+  ambiguous. Every registered organization is fictional, named «Демо-УК ...»,
+  `is_demo = True`, and its INN fails the INN checksum (`DEMO_INN` and the
+  four peers in `PROFILES`), so it collides with no real registration. Nothing
+  real-world is invented: no licence number, no cadastral number
+  (`houses.cadastral_no` is nullable because the open data has none), no
+  photo - the seed's images are generated and live in `zheka/seed/data/files/`.
+  A fictional organization takes a house whose card names no manager wherever
+  its city has one, and replaces a real link only where the street has too
+  few: Москва has one such house (61/1, the demo house) and needs five. The
+  replaced links, exactly: Ленинский проспект 7 (ГБУ «Жилищник района
+  Якиманка»), 13 (ГБУ ЭВАЖД), 16 and 20 (ООО «Жилищник»). The replacement
+  says nothing about the real organization, but those four buildings read
+  "connected" with invented history. `test_a_real_manager_is_replaced_only_in_moscow`
+  holds the rule; a peer's second house moving from Казань to
+  Санкт-Петербург (one unmanaged house there) breaks it.
+- Seeded people can never be reached or impersonated: every seeded user has a
+  negative `max_user_id` and `max_chat_id NULL`. A real MAX id is positive and
+  arrives only signed in `initData`, and a `NULL` chat is what `MaxSender` and
+  the broadcast queries already skip, so a reminder, card or announcement that
+  lands on seeded data sends nothing.
+- The seed is one transaction with one guard: the organization with
+  `DEMO_INN` exists, so the seed ran, logs that and returns `False`. There are
+  no per-row upserts; changing seeded data means recreating the database. It
+  never touches the network, takes `today` as an argument (history is the six
+  months before it, strictly before its midnight UTC), and draws randomness
+  from `random.Random` seeded with a string per entity (its address, a flat's
+  house and number), never from the global generator. The history rows it
+  writes (`REQUEST_ASSIGNED` events, status log, readings) are data with past
+  timestamps, not records of actions, so they are written as rows and not
+  through the services that record the live ones. It leaves no request
+  `ON_REVIEW`: the scheduler would auto-close it and write to the author.
+- The benchmark's cut rules decide the seed's layout: all five fictional
+  organizations have request history in Москва, a federal city where region
+  and city coincide, so the region's complement is 0 and both the region and
+  the city rows survive `MIN_ORGS_FOR_CUT`. Their profiles differ on every
+  metric, and `test_seed.py` asserts five distinct ranks per metric; moving a
+  peer out of Москва hides the cut rows. Repeats of the last 30 days are a
+  count per house (`recent_repeats`), older ones a share: a percent of the
+  dozen requests a month holds rounds every organization to the same number.
+- `DemoService.activate(user_id)` takes no kind: both demo deeplinks and
+  `POST /demo/activate` grant `EMPLOYEE` in the demo organization and a
+  verified owner's own flat `Д{user_id}` in the demo house, the one house that
+  organization owns. The flat number is derived from the user, so parallel
+  activations never race for a number, and every insert goes through
+  `ON CONFLICT DO NOTHING`, so ten taps are one membership, one residency and
+  one flat. The flat is furnished by `DemoService.furnish`, the same code the
+  seed uses for the demo house's flats: meters, seven monthly readings (the
+  first is the baseline), six charges built with `ChargeLine` and
+  `to_kopecks`, and the current period left open. No seed is
+  `EntityNotFound`; a user without `consent_at` is `NotEnoughRights`, the
+  backstop under the route's and the bot's consent gates, as in
+  `HousesService.link`. The reviewer's account number ends with the flat
+  number `Д{user_id}`, so it never equals a seeded flat's. The kind changes only the bot's notice.
 
 ## Orientation
 
@@ -494,5 +556,15 @@ the next agent does not pay for them again.
   removed, proved by running it rather than by reasoning about it, and
   reported per guard - never as an aggregate row covering several. A guard
   that cannot be killed is an honest gap, not a reason to invent a test.
+- The seed runs once into an empty database: to reseed, recreate the local
+  database (`docker compose down -v` drops the volume), `just migrate`, then
+  `just seed`. The history ends at the seed date, and the dashboard and the
+  benchmark read a rolling 30 days, so `just seed` runs on the deploy closest
+  to judging: after about three weeks the benchmark thins out, after 30 days
+  it is empty. A reseed wipes every reviewer's flat and membership. `uv run python scripts/fetch_seed_data.py` rewrites the CSVs in
+  `zheka/seed/data/` from reformagkh.ru and Nominatim; its downloads are
+  cached in `backend/.cache/seed/` (gitignored), so a rerun with a warm cache
+  touches no network. A cold run makes about 330 requests 1.1 s apart and
+  took twenty minutes, most of it reformagkh answering slowly.
 - `grep --include=*.py ...` fails under zsh with `no matches found`, because
   the shell eats the glob. Quote it or drop it.

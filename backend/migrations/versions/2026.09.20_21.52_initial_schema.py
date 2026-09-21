@@ -193,7 +193,7 @@ def upgrade() -> None:
         sa.Column("city", sa.String(), nullable=False),
         sa.Column("street", sa.String(), nullable=False),
         sa.Column("building", sa.String(), nullable=False),
-        sa.Column("cadastral_no", sa.String(), nullable=False),
+        sa.Column("cadastral_no", sa.String(), nullable=True),
         sa.Column("built_year", sa.Integer(), nullable=True),
         sa.Column("floors", sa.Integer(), nullable=True),
         sa.Column("area", sa.Integer(), nullable=True),

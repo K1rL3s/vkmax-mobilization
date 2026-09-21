@@ -83,6 +83,10 @@ worker:
 scheduler:
     uv run python -m zheka.broker.scheduler
 
+# демо-данные в пустую базу; второй запуск ничего не меняет
+seed:
+    uv run python -m zheka.seed
+
 migrate:
     uv run alembic upgrade head
 

@@ -9,6 +9,7 @@ from zheka.core.services.analytics import AnalyticsService
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.charges import ChargesService
 from zheka.core.services.chats import ChatsService
+from zheka.core.services.demo import DemoService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
@@ -415,4 +416,23 @@ class ServicesProvider(Provider):
             houses_repo,
             orgs_repo,
             reminders_service,
+        )
+
+    @provide
+    def demo_service(
+        self,
+        orgs_repo: OrgsRepo,
+        houses_repo: HousesRepo,
+        residents_repo: ResidentsRepo,
+        meters_repo: MetersRepo,
+        charges_repo: ChargesRepo,
+        users_repo: UsersRepo,
+    ) -> DemoService:
+        return DemoService(
+            orgs_repo,
+            houses_repo,
+            residents_repo,
+            meters_repo,
+            charges_repo,
+            users_repo,
         )

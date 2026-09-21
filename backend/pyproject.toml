@@ -159,6 +159,8 @@ combine-as-imports = true
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "PLR2004", "D", "A005"]
 "migrations/**/*.py" = ["ARG001", "E501", "INP001", "N999"]
+# разовый скрипт выгрузки данных сида, не пакет
+"scripts/*.py" = ["INP001"]
 "zheka/bot/middlewares/*.py" = ["ARG002"]
 "zheka/broker/middlewares.py" = ["ARG002"]
 

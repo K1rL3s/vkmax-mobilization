@@ -133,7 +133,7 @@ class HouseCard(BaseSchema):
     city: str
     street: str
     building: str
-    cadastral_no: str
+    cadastral_no: str | None
     entrances: int
     is_connected: bool
     demand_count: int
@@ -261,7 +261,7 @@ class AdminHouseCard(BaseSchema):
     city: str
     street: str
     building: str
-    cadastral_no: str
+    cadastral_no: str | None
     entrances: int
     flats_count: int
     residents_count: int

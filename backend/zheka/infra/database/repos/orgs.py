@@ -1,8 +1,10 @@
 from collections.abc import Collection, Sequence
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import OrgRole
+from zheka.core.errors import EntityNotFound
 from zheka.core.ids import OrgId, UserId
 from zheka.infra.database.models import OrgMember, OrgSettings, Organization
 from zheka.infra.database.repos.base import BaseAlchemyRepo
@@ -99,3 +101,31 @@ class OrgsRepo(BaseAlchemyRepo):
         self._session.add(settings)
         await self._session.flush()
         return settings
+
+    async def add_member_or_get(
+        self,
+        org_id: OrgId,
+        user_id: UserId,
+        role: OrgRole,
+    ) -> OrgMember:
+        # второе нажатие того же диплинка разводит уникальный индекс
+        # (org_id, user_id), и прежняя роль остается как была
+        stmt = (
+            pg_insert(OrgMember)
+            .values(org_id=org_id, user_id=user_id, role=role)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    org_members_table.c.org_id,
+                    org_members_table.c.user_id,
+                ],
+            )
+            .returning(OrgMember)
+        )
+        result = await self._session.execute(stmt)
+        created = result.scalar_one_or_none()
+        if created is not None:
+            return created
+        member = await self.get_member(org_id, user_id)
+        if member is None:
+            raise EntityNotFound("Сотрудник не найден")
+        return member

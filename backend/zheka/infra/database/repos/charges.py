@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import select
 
@@ -69,3 +70,24 @@ class ChargesRepo(BaseAlchemyRepo):
     async def mark_paid(self, charge: Charge, paid_at: datetime) -> None:
         charge.paid_at = paid_at
         await self._session.flush()
+
+    async def add(
+        self,
+        flat_id: FlatId,
+        period: date,
+        lines: list[dict[str, Any]],
+        total: int,
+        created_at: datetime,
+        paid_at: datetime | None,
+    ) -> Charge:
+        charge = Charge(
+            flat_id=flat_id,
+            period=period,
+            lines=lines,
+            total=total,
+            created_at=created_at,
+            paid_at=paid_at,
+        )
+        self._session.add(charge)
+        await self._session.flush()
+        return charge

@@ -51,6 +51,10 @@ from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
+from zheka.bot.handlers.commands.deeplinks import (
+    DEMO_RESIDENT_NOTICE,
+    DEMO_STAFF_NOTICE,
+)
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
 from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
 from zheka.bot.handlers.menu.windows import MENU_TEXT
@@ -69,7 +73,7 @@ from zheka.broker.tasks.requests import (
     send_review_card,
 )
 from zheka.core.consent import CONSENT_TEXT
-from zheka.core.deeplinks import house_payload, org_invite_payload
+from zheka.core.deeplinks import DeeplinkKind, house_payload, org_invite_payload
 from zheka.core.enums import (
     CATEGORY_RULES,
     ChatStatus,
@@ -98,6 +102,7 @@ from zheka.core.ids import (
 from zheka.core.models import User
 from zheka.core.services.access import SLOT_FULL
 from zheka.core.services.chats import CHAT_NOT_BOUND, CHAT_TAKEN, WRONG_CODE
+from zheka.core.services.demo import DEMO_INN, demo_flat_number
 from zheka.core.services.orgs import INVITE_NOT_FOUND
 from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
 from zheka.core.texts import REQUEST_STATUS_LABELS
@@ -113,6 +118,7 @@ from zheka.infra.database.models import (
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
+from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
@@ -1936,3 +1942,89 @@ async def test_a_block_reason_with_markup_renders_in_the_access_window(
     await client.click(window, FIRST_SLOT)
 
     assert "долг &lt;3 мес&gt;" in (message_manager.last_message().body.text or "")
+
+
+async def _bot_demo(session: AsyncSession) -> str:
+    # у базы бота демо-организация одна на прогон: окна коммитят по-настоящему,
+    # и второй тест находит ту, что завел первый
+    org = await OrgsRepo(session).get_by_inn(DEMO_INN)
+    if org is not None:
+        org_id = OrgId(org.id)
+    else:
+        org = Organization(
+            name="Демо-УК",
+            inn=DEMO_INN,
+            phone="+70000000000",
+            address="Демо",
+            registered_at=datetime.now(UTC),
+            is_demo=True,
+        )
+        session.add(org)
+        await session.flush()
+        org_id = OrgId(org.id)
+        session.add(
+            House(
+                org_id=org_id,
+                region="Демо",
+                city="Демоград",
+                street="Демо",
+                building="1",
+                chat_binding_code=secrets.token_hex(4),
+            ),
+        )
+        await session.commit()
+    houses = await HousesRepo(session).list_for_org(org_id)
+    return houses[0].address
+
+
+async def test_a_demo_link_from_a_consented_user_opens_the_menu_with_the_flat(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    address = await _bot_demo(bot_session)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    await _bot_started(client, DeeplinkKind.DEMO_RESIDENT.value)
+
+    user = await _saved(bot_session, MaxUserId(client.user.id))
+    assert user is not None
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert (
+        DEMO_RESIDENT_NOTICE.format(
+            flat=demo_flat_number(UserId(user.id)),
+            address=address,
+        )
+        in text
+    )
+    sources = [
+        event.payload["source"] for event in await _starts_of(bot_session, client)
+    ]
+    assert sources.count(EventSource.DEEPLINK.value) == 1
+
+
+async def test_a_demo_link_without_consent_asks_for_it_and_then_grants_access(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _bot_demo(bot_session)
+
+    await _bot_started(client, DeeplinkKind.DEMO_STAFF.value)
+    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    text = message_manager.last_message().body.text or ""
+    assert DEMO_STAFF_NOTICE.format(org="Демо-УК") in text
+    user = await _saved(bot_session, MaxUserId(client.user.id))
+    assert user is not None
+    stmt = select(org_members_table.c.role).where(
+        org_members_table.c.user_id == user.id,
+    )
+    assert (await bot_session.execute(stmt)).scalars().all() == [OrgRole.EMPLOYEE]
+    sources = [
+        event.payload["source"] for event in await _starts_of(bot_session, client)
+    ]
+    assert sources == [EventSource.DEEPLINK.value]
