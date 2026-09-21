@@ -9,11 +9,9 @@ from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import LocationAttachment, MessageCallback, MessageCreated
 
 from zheka.bot.dialog_data import HouseItem, MenuData, OnboardingData
-from zheka.bot.middlewares.user import USER_KEY
+from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import Menu, Onboarding
 from zheka.core.enums import ResidentRole
-from zheka.core.ids import UserId
-from zheka.core.models import User
 from zheka.core.services.houses import HouseFound, HousesService
 
 # больше одной прокрутки житель все равно не пролистает, уточнить адрес дешевле
@@ -27,11 +25,6 @@ def _house_items(found: Sequence[HouseFound]) -> list[HouseItem]:
     return [
         HouseItem(id=int(item.house.id), title=item.house.address) for item in found
     ]
-
-
-def _user_id(dialog_manager: DialogManager) -> UserId:
-    user: User = dialog_manager.middleware_data[USER_KEY]
-    return UserId(user.id)
 
 
 @inject
@@ -66,7 +59,7 @@ async def get_flat(
     **_: Any,
 ) -> dict[str, Any]:
     house_id = OnboardingData.load(dialog_manager).chosen_house()
-    card = await houses_service.house_card(house_id, _user_id(dialog_manager))
+    card = await houses_service.house_card(house_id, dialog_user_id(dialog_manager))
     return {"address": card.house.address}
 
 
@@ -93,7 +86,7 @@ async def on_street(
 ) -> None:
     with OnboardingData.proxy(dialog_manager) as data:
         found, _total = await houses_service.search(
-            _user_id(dialog_manager),
+            dialog_user_id(dialog_manager),
             data.city,
             street,
             None,
@@ -135,7 +128,7 @@ async def on_location(
         return
 
     found = await houses_service.nearest(
-        _user_id(dialog_manager),
+        dialog_user_id(dialog_manager),
         location.latitude,
         location.longitude,
         NEARBY_RADIUS_M,
@@ -176,7 +169,7 @@ async def link_house(
     # пишет сам сервис, и второй записи тут быть не должно
     data = OnboardingData.load(dialog_manager)
     await houses_service.link(
-        _user_id(dialog_manager),
+        dialog_user_id(dialog_manager),
         data.chosen_house(),
         None,
         flat_number,

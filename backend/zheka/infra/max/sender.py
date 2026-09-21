@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Any
 
 from maxo import Bot
-from maxo.dialogs import BgManagerFactory, Data, StartMode
+from maxo.dialogs import BgManagerFactory, Data, ShowMode, StartMode
 from maxo.enums import ChatType
 from maxo.errors import (
     MaxBotApiError,
@@ -98,6 +98,7 @@ class MaxSender:
         data: Data = None,
         mode: StartMode = StartMode.RESET_STACK,
         stack_id: str | None = None,
+        show_mode: ShowMode | None = None,
     ) -> None:
         # единственный способ задачи открыть или заменить окно: потолки MAX
         # остаются в одном классе, а notify - явным аргументом.
@@ -131,7 +132,12 @@ class MaxSender:
                 _chat_rate_limit(user.max_user_id),
                 manager.fg() as dialog_manager,
             ):
-                await dialog_manager.start(state, data=data, mode=mode)
+                await dialog_manager.start(
+                    state,
+                    data=data,
+                    mode=mode,
+                    show_mode=show_mode,
+                )
         except (MaxBotNotFoundError, MaxBotForbiddenError) as error:
             logger.warning(
                 "Получатель недоступен, бот остановлен или удалён: %s", error

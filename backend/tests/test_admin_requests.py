@@ -8,11 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import (
     OrgHouseFlatUser,
+    RecordingBroker,
     make_config,
     make_notifications_service,
 )
 
 from zheka.api.schemas.requests import AdminRequestCard, RequestCard
+from zheka.broker.publisher import TaskPublisher
+from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
     CATEGORY_RULES,
     EventType,
@@ -24,7 +27,12 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
 )
-from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import (
     FlatId,
     HouseId,
@@ -60,14 +68,17 @@ Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 NO_FILTERS = RequestFilters()
 
 
-def _admin(session: AsyncSession) -> AdminRequestsService:
+def _admin(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> AdminRequestsService:
     return AdminRequestsService(
         RequestsRepo(session),
         HousesRepo(session),
         UsersRepo(session),
         OrgsRepo(session),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
-        make_notifications_service(session),
+        make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
     )
 
@@ -81,6 +92,7 @@ def _resident_service(session: AsyncSession) -> RequestsService:
         OrgsRepo(session),
         FilesService(make_config().files, "test-token"),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        make_notifications_service(session),
         EventsService(EventsRepo(session)),
     )
 
@@ -1004,3 +1016,231 @@ async def test_card_carries_the_auto_close_deadline_only_while_on_review(
     )
     done_card = AdminRequestCard.of_admin(done, [], [])
     assert done_card.auto_close_at is None
+
+
+async def _assigned(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> tuple[RequestId, UserId]:
+    executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    request = await _complain(session, own.user_id, own.house_id)
+    request_id = RequestId(request.id)
+    await _admin(session).assign(own.org_id, request_id, executor, own.user_id)
+    return request_id, executor
+
+
+async def _in_progress(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> tuple[RequestId, UserId]:
+    request_id, executor = await _assigned(session, own)
+    service = _admin(session)
+    await service.executor_advance(executor, request_id, RequestStatus.ACCEPTED, [])
+    await service.executor_advance(executor, request_id, RequestStatus.IN_PROGRESS, [])
+    return request_id, executor
+
+
+def _photo_name() -> str:
+    return f"{secrets.token_hex(16)}.jpg"
+
+
+async def test_the_executor_accepts_a_new_request_assigned_to_him(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    # диспетчер, назначивший NEW, оставляет «принял» исполнителю
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, executor = await _assigned(session, own)
+
+    await _admin(session).executor_advance(
+        executor,
+        request_id,
+        RequestStatus.ACCEPTED,
+        [],
+    )
+
+    stmt = select(request_status_log_table).where(
+        request_status_log_table.c.request_id == request_id,
+        request_status_log_table.c.to_status == RequestStatus.ACCEPTED,
+    )
+    log = (await session.execute(stmt)).one()
+    assert log.by_role == RequestActorRole.EXECUTOR
+    assert log.by_user_id == executor
+    events = await _events(session, EventType.EXECUTOR_STATUS_CHANGED)
+    assert [event.payload for event in events] == [
+        {"request_id": request_id, "to": RequestStatus.ACCEPTED.value},
+    ]
+
+
+async def test_ready_without_a_result_photo_is_refused_and_writes_nothing(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, executor = await _in_progress(session, own)
+
+    with pytest.raises(InvalidState, match="фото результата"):
+        await _admin(session).executor_advance(
+            executor,
+            request_id,
+            RequestStatus.ON_REVIEW,
+            [],
+        )
+
+    assert (await _logs(session, request_id))[-1] is RequestStatus.IN_PROGRESS
+
+
+async def test_ready_with_a_result_photo_goes_on_review(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, executor = await _in_progress(session, own)
+    name = _photo_name()
+
+    await _admin(session).executor_advance(
+        executor,
+        request_id,
+        RequestStatus.ON_REVIEW,
+        [name],
+    )
+
+    card = await _admin(session).executor_card(executor, request_id)
+    assert card is not None
+    assert card.request.status is RequestStatus.ON_REVIEW
+    assert [photo.path for photo in card.result_photos] == [name]
+
+
+async def test_a_refused_move_attaches_no_result_photo(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    # второе фото после того, как первое уже увело заявку на приемку: отказ
+    # должен случиться до записи фото, задача ловит его и рисует карточку
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, executor = await _in_progress(session, own)
+    service = _admin(session)
+    await service.executor_advance(
+        executor,
+        request_id,
+        RequestStatus.ON_REVIEW,
+        [_photo_name()],
+    )
+
+    with pytest.raises(InvalidState):
+        await service.executor_advance(
+            executor,
+            request_id,
+            RequestStatus.ON_REVIEW,
+            [_photo_name()],
+        )
+
+    card = await service.executor_card(executor, request_id)
+    assert card is not None
+    assert len(card.result_photos) == 1
+
+
+async def test_a_user_who_is_not_the_assigned_executor_cannot_advance(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, _ = await _assigned(session, own)
+    other = await _member(session, own.org_id, OrgRole.EXECUTOR)
+
+    with pytest.raises(NotEnoughRights):
+        await _admin(session).executor_advance(
+            other,
+            request_id,
+            RequestStatus.ACCEPTED,
+            [],
+        )
+    assert await _admin(session).executor_card(other, request_id) is None
+
+
+async def test_an_executor_removed_from_the_org_cannot_advance(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    # executor_user_id у заявки остается, а власть над статусом - нет
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, executor = await _assigned(session, own)
+    orgs_repo = OrgsRepo(session)
+    member = await orgs_repo.get_member(own.org_id, executor)
+    assert member is not None
+    await orgs_repo.remove_member(member)
+
+    with pytest.raises(NotEnoughRights):
+        await _admin(session).executor_advance(
+            executor,
+            request_id,
+            RequestStatus.ACCEPTED,
+            [],
+        )
+    assert await _admin(session).executor_card(executor, request_id) is None
+
+
+async def test_on_review_opens_the_review_card_instead_of_the_status_text(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, executor = await _in_progress(session, own)
+
+    await _admin(session, publisher).executor_advance(
+        executor,
+        request_id,
+        RequestStatus.ON_REVIEW,
+        [_photo_name()],
+    )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_REVIEW_CARD) == [{"request_id": request_id}]
+    assert broker.enqueued(TaskName.SEND_TO_USER) == []
+
+
+async def test_assign_opens_the_executor_card(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    request = await _complain(session, own.user_id, own.house_id)
+
+    await _admin(session, publisher).assign(
+        own.org_id,
+        RequestId(request.id),
+        executor,
+        own.user_id,
+    )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_EXECUTOR_CARD) == [
+        {"request_id": request.id, "user_id": None},
+    ]
+
+
+async def test_an_executor_moved_to_another_role_cannot_advance(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    # исполнителя повысили до диспетчера: executor_user_id остался, а
+    # «принял» и «выехал» ставит уже не его роль
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    request_id, executor = await _assigned(session, own)
+    orgs_repo = OrgsRepo(session)
+    member = await orgs_repo.get_member(own.org_id, executor)
+    assert member is not None
+    await orgs_repo.set_member_role(member, OrgRole.EMPLOYEE)
+
+    with pytest.raises(NotEnoughRights):
+        await _admin(session).executor_advance(
+            executor,
+            request_id,
+            RequestStatus.ACCEPTED,
+            [],
+        )

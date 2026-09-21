@@ -8,22 +8,15 @@ from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import MessageCallback, MessageCreated, PhotoAttachment
 
 from zheka.bot.dialog_data import NewRequestData
-from zheka.bot.middlewares.user import USER_KEY
+from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import NewRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestChannel
-from zheka.core.ids import UserId
-from zheka.core.models import User
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.requests import MAX_PHOTOS
 
 SENT_TEXT = "Принял, оформляю"
-
-
-def _user_id(dialog_manager: DialogManager) -> UserId:
-    user: User = dialog_manager.middleware_data[USER_KEY]
-    return UserId(user.id)
 
 
 @inject
@@ -32,7 +25,7 @@ async def get_category(
     profile_service: FromDishka[ProfileService],
     **_: Any,
 ) -> dict[str, Any]:
-    me = await profile_service.me(_user_id(dialog_manager))
+    me = await profile_service.me(dialog_user_id(dialog_manager))
     if not me.residencies:
         return {"address": None, "categories": []}
 
@@ -112,7 +105,7 @@ async def on_send(
     data = NewRequestData.load(dialog_manager)
     publisher.publish(
         TaskName.CREATE_BOT_REQUEST,
-        user_id=int(_user_id(dialog_manager)),
+        user_id=int(dialog_user_id(dialog_manager)),
         house_id=data.house_id,
         flat_id=data.flat_id,
         category=data.category,

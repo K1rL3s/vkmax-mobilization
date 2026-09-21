@@ -11,9 +11,15 @@ from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
     RequestGroupStatus,
+    RequestPhotoKind,
     RequestStatus,
 )
-from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import (
     FlatId,
     HouseId,
@@ -53,6 +59,8 @@ EMPTY_REPLY = "Напишите ответ жителю"
 EMPTY_DESCRIPTION = "Опишите проблему"
 GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе"
 NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
+NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнитель"
+RESULT_PHOTO_REQUIRED = "Пришлите фото результата"
 
 
 class AdminRequestRow(ZhekaType):
@@ -153,7 +161,7 @@ class AdminRequestsService:
         actor: UserId,
     ) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
-        await self._move(request, target, comment, actor)
+        await self._move(request, target, comment, actor, RequestActorRole.STAFF)
         return await self._card(request)
 
     async def reply(
@@ -205,6 +213,7 @@ class AdminRequestsService:
             request_id=request_id,
             executor_user_id=executor_user_id,
         )
+        self._notifications.open_executor_card(request_id)
         return await self._card(request)
 
     async def group_card(
@@ -326,13 +335,14 @@ class AdminRequestsService:
         target: RequestStatus,
         comment: str | None,
         actor: UserId,
+        by_role: RequestActorRole,
         notify_author: bool = True,
     ) -> None:
         current = request.status
         check_transition(
             current,
             target,
-            RequestActorRole.STAFF,
+            by_role,
             has_author=request.author_user_id is not None,
         )
         at = datetime.now(UTC)
@@ -342,7 +352,7 @@ class AdminRequestsService:
             current,
             target,
             actor,
-            RequestActorRole.STAFF.value,
+            by_role.value,
             at,
         )
         stated = None if comment is None else comment.strip()
@@ -351,7 +361,7 @@ class AdminRequestsService:
             await self._requests.add_message(
                 RequestId(request.id),
                 actor,
-                RequestActorRole.STAFF.value,
+                by_role.value,
                 stated,
             )
         await self._events.record(
@@ -359,9 +369,16 @@ class AdminRequestsService:
             user_id=actor,
             request_id=RequestId(request.id),
             **{"from": current.value, "to": target.value},
-            by_role=RequestActorRole.STAFF.value,
+            by_role=by_role.value,
         )
-        if notify_author:
+        if not notify_author:
+            return
+        # на приемку заявку уводит только _move: исполнитель, кабинет и
+        # группа. Карточка приемки заменяет текст статуса, два сообщения на
+        # одно событие - шум. У заявки по звонку нет ни того, ни другого
+        if target is RequestStatus.ON_REVIEW and request.author_user_id is not None:
+            self._notifications.open_review_card(RequestId(request.id))
+        else:
             self._notify_author(
                 request,
                 texts.request_status_changed(RequestId(request.id), target, stated),
@@ -397,6 +414,7 @@ class AdminRequestsService:
                 target,
                 comment if is_last else None,
                 actor,
+                RequestActorRole.STAFF,
                 notify_author=is_last,
             )
 
@@ -502,3 +520,68 @@ class AdminRequestsService:
         if house is None:
             raise EntityNotFound(HOUSE_NOT_FOUND)
         return house
+
+    async def executor_advance(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        target: RequestStatus,
+        photo_names: Sequence[str],
+    ) -> None:
+        # все проверки до первой записи: задача с фото ловит отказ и все
+        # равно рисует карточку, и отказ не должен оставить полдела в сессии
+        request = await self._requests.get(request_id)
+        if request is None:
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        if not await self._can_act(request, user_id):
+            raise NotEnoughRights(NOT_YOUR_REQUEST)
+        check_transition(
+            request.status,
+            target,
+            RequestActorRole.EXECUTOR,
+            has_author=request.author_user_id is not None,
+        )
+        if target is RequestStatus.ON_REVIEW and not photo_names:
+            photos = await self._requests.list_photos(request_id)
+            if not any(photo.kind is RequestPhotoKind.RESULT for photo in photos):
+                raise InvalidState(RESULT_PHOTO_REQUIRED)
+
+        for name in photo_names:
+            await self._requests.add_photo(
+                request_id,
+                name,
+                RequestPhotoKind.RESULT,
+                user_id,
+            )
+        await self._move(request, target, None, user_id, RequestActorRole.EXECUTOR)
+        await self._events.record(
+            EventType.EXECUTOR_STATUS_CHANGED,
+            user_id=user_id,
+            request_id=request_id,
+            to=target.value,
+        )
+
+    async def executor_card(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+    ) -> RequestCardData | None:
+        # None - заявку передали другому или исполнителя убрали из УК: окно
+        # говорит об этом, а не падает, иначе старая карточка ушла бы в меню
+        request = await self._requests.get(request_id)
+        if request is None:
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        if not await self._can_act(request, user_id):
+            return None
+        return (await self._card(request)).card
+
+    async def _can_act(self, request: Request, user_id: UserId) -> bool:
+        # назначение без членства не в счет: убранный из УК исполнитель
+        # остается в executor_user_id и с живой карточкой на руках
+        if request.executor_user_id != user_id:
+            return False
+        house = await self._house_of(request)
+        if house.org_id is None:
+            return False
+        member = await self._orgs.get_member(OrgId(house.org_id), user_id)
+        return member is not None and member.role is OrgRole.EXECUTOR

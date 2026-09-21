@@ -173,6 +173,7 @@ class ServicesProvider(Provider):
         orgs_repo: OrgsRepo,
         files_service: FilesService,
         grouping_service: GroupingService,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> RequestsService:
         return RequestsService(
@@ -183,6 +184,7 @@ class ServicesProvider(Provider):
             orgs_repo,
             files_service,
             grouping_service,
+            notifications_service,
             events_service,
         )
 

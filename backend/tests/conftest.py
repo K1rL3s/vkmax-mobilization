@@ -13,7 +13,8 @@ import pytest_asyncio
 from alembic import command
 from alembic.config import Config as AlembicConfig
 from dishka import AsyncContainer, BaseScope, Provider, Scope, provide
-from maxo import Dispatcher
+from dishka.integrations.taskiq import ContainerMiddleware
+from maxo import Bot, Dispatcher
 from maxo.dialogs import BgManagerFactory
 from maxo.dialogs.manager.bg_manager import BgManagerFactoryImpl
 from maxo.dialogs.test_tools import MockMessageManager
@@ -23,12 +24,13 @@ from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
 from maxo.routing.interfaces import BaseRouter
 from maxo.routing.signals import BeforeStartup
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from taskiq import AckableMessage, AsyncBroker, BrokerMessage
+from taskiq import AckableMessage, AsyncBroker, BrokerMessage, InMemoryBroker
 from taskiq.message import TaskiqMessage
 from testcontainers.postgres import PostgresContainer
 
 from zheka.base import ZhekaType
 from zheka.bot import BotSetup, make_dispatcher
+from zheka.broker.middlewares import CommitMiddleware
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.config import (
@@ -407,4 +409,45 @@ async def bot_container(
     # роутерам и инжектит dishka в хендлеры: без него апдейт до окна не дойдет
     await bot_setup.dp.feed_signal(BeforeStartup(), fake_bot)
     yield container
+    await container.close()
+
+
+class FakeBotProvider(Provider):
+    # настоящий Bot из MaxBotProvider входит в async with и спрашивает MAX о
+    # себе, а тестовый токен тот отвергает
+    scope: BaseScope | None = Scope.APP
+
+    def __init__(self, bot: Bot) -> None:
+        super().__init__()
+        self._bot = bot
+
+    @provide(override=True)
+    def bot(self) -> Bot:
+        return self._bot
+
+
+@pytest_asyncio.fixture(scope="session")
+async def task_broker(
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+) -> AsyncGenerator[InMemoryBroker]:
+    # тело задачи целиком: свой запросный контейнер, коммит и flush
+    # публикатора, как у воркера. Поставленное задачей оседает в bot_broker,
+    # а не исполняется, - следующую задачу тест запускает сам
+    container = make_container(
+        RecordingBrokerProvider(bot_broker),
+        FakeBotProvider(fake_bot),
+        config=make_bot_config(),
+        context={
+            Dispatcher: bot_setup.dp,
+            BgManagerFactory: bot_setup.bg_manager_factory,
+        },
+    )
+    broker = InMemoryBroker(await_inplace=True).with_middlewares(
+        ContainerMiddleware(container),
+        CommitMiddleware(),
+    )
+    yield broker
     await container.close()

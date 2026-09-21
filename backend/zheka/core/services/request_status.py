@@ -28,7 +28,11 @@ ALLOWED_TRANSITIONS: Mapping[RequestStatus, frozenset[RequestStatus]] = (
 _ROLES_BY_TARGET: Mapping[RequestStatus, frozenset[RequestActorRole]] = (
     MappingProxyType(
         {
-            RequestStatus.ACCEPTED: frozenset({RequestActorRole.STAFF}),
+            # исполнитель принимает заявку, которую ему назначили из NEW:
+            # реакция все равно УК, он ее сотрудник
+            RequestStatus.ACCEPTED: frozenset(
+                {RequestActorRole.STAFF, RequestActorRole.EXECUTOR},
+            ),
             RequestStatus.IN_PROGRESS: frozenset(
                 {RequestActorRole.STAFF, RequestActorRole.EXECUTOR},
             ),

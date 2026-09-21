@@ -1,15 +1,22 @@
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, make_config
+from tests.conftest import (
+    OrgHouseFlatUser,
+    RecordingBroker,
+    make_config,
+    make_notifications_service,
+)
 
 from zheka.api.schemas.requests import RequestCard, RequestCategoryItem
+from zheka.broker.publisher import TaskPublisher
+from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
     CATEGORY_RULES,
     EventType,
@@ -68,7 +75,10 @@ DESCRIPTION = "Течет труба в ванной, вода на полу"
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 
-def _make_service(session: AsyncSession) -> RequestsService:
+def _make_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> RequestsService:
     return RequestsService(
         RequestsRepo(session),
         HousesRepo(session),
@@ -77,6 +87,7 @@ def _make_service(session: AsyncSession) -> RequestsService:
         OrgsRepo(session),
         FilesService(make_config().files, "test-token"),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
     )
 
@@ -829,3 +840,110 @@ async def test_every_request_row_carries_its_status_log(
 
     # ни один путь не меняет requests.status, не оставив строки в журнале
     assert set(requests) == set(logged)
+
+
+@pytest.mark.parametrize("rating", [0, 6])
+async def test_rate_refuses_a_score_outside_the_scale(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    rating: int,
+) -> None:
+    # кнопка бота присылает любую строку, схему API бот не проходит вовсе
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = RequestId(created.request.id)
+    await _mark_done(session, request_id)
+
+    with pytest.raises(InvalidRequest):
+        await service.rate(own.user_id, request_id, rating, None)
+
+
+async def test_repeat_records_the_channel_it_was_given(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    parent_id = RequestId(created.request.id)
+    await _mark_on_review(session, parent_id)
+
+    repeated = await service.repeat(
+        own.user_id,
+        parent_id,
+        "Кран снова течет",
+        [],
+        channel=RequestChannel.BOT,
+    )
+
+    assert repeated.request.channel is RequestChannel.BOT
+    created_events = await _events(session, EventType.REQUEST_CREATED)
+    assert created_events[-1].payload["channel"] == RequestChannel.BOT.value
+
+
+async def test_auto_close_takes_49_hours_skips_47_and_tells_the_author(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session, publisher)
+    now = datetime.now(UTC)
+    ids = []
+    for hours in (49, 47):
+        created = await service.create(own.user_id, own.house_id, _draft())
+        request = await _mark_on_review(session, RequestId(created.request.id))
+        request.reviewed_at = now - timedelta(hours=hours)
+        ids.append(RequestId(created.request.id))
+    await session.flush()
+    stale, fresh = ids
+
+    assert await service.auto_close(now) == 1
+
+    assert (await service.get_card(own.user_id, stale)).request.status is (
+        RequestStatus.DONE
+    )
+    assert (await service.get_card(own.user_id, fresh)).request.status is (
+        RequestStatus.ON_REVIEW
+    )
+    await publisher.flush()
+    sent = broker.enqueued(TaskName.SEND_TO_USER)
+    assert len(sent) == 1
+    assert sent[0]["user_id"] == own.user_id
+    assert sent[0]["mandatory"] is True
+    assert f"№{stale}" in sent[0]["text"]
+
+
+async def test_closing_a_review_records_the_status_change(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    # аналитика переходов видит и приемку жителем, и таймаут, а не один _move
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    accepted = await service.create(own.user_id, own.house_id, _draft())
+    expired = await service.create(own.user_id, own.house_id, _draft())
+    await _mark_on_review(session, RequestId(accepted.request.id))
+    request = await _mark_on_review(session, RequestId(expired.request.id))
+    now = datetime.now(UTC)
+    request.reviewed_at = now - AUTO_CLOSE_AFTER
+    await session.flush()
+
+    await service.accept(own.user_id, RequestId(accepted.request.id))
+    await service.auto_close(now)
+
+    events = await _events(session, EventType.REQUEST_STATUS_CHANGED)
+    assert sorted(
+        (event.payload["request_id"], event.payload["by_role"], event.user_id)
+        for event in events
+    ) == sorted(
+        [
+            (accepted.request.id, RequestActorRole.RESIDENT.value, own.user_id),
+            (expired.request.id, RequestActorRole.SYSTEM.value, None),
+        ],
+    )
+    assert {(event.payload["from"], event.payload["to"]) for event in events} == {
+        (RequestStatus.ON_REVIEW.value, RequestStatus.DONE.value)
+    }

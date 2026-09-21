@@ -70,3 +70,10 @@ def blocked_detail(reason: str | None) -> str:
     # она уезжает в detail ответа API, а не в сообщение MAX, - для бота
     # берите resident_blocked, иначе «<» от УК уедет в HTML неэкранированным
     return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
+
+
+def request_auto_closed(request_id: RequestId) -> str:
+    return (
+        f"Заявка №{request_id} закрыта: работу не проверили за 48 часов. "
+        "Если проблема осталась, подайте повторную заявку"
+    )

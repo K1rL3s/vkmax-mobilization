@@ -18,10 +18,12 @@ from zheka.bot.handlers import (
     consent_dialog,
     deeplinks_router,
     error_router,
+    executor_dialog,
     fallback_router,
     menu_dialog,
     onboarding_dialog,
     request_dialog,
+    review_dialog,
 )
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.middlewares import (
@@ -109,6 +111,8 @@ def make_dispatcher(
         menu_dialog,
         onboarding_dialog,
         request_dialog,
+        executor_dialog,
+        review_dialog,
         fallback_router,
     )
 

@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, make_config
+from tests.conftest import OrgHouseFlatUser, make_config, make_notifications_service
 
 from zheka.core.enums import (
     EventType,
@@ -65,6 +65,7 @@ def _make_service(session: AsyncSession) -> ChargesService:
         orgs_repo,
         files_service,
         GroupingService(requests_repo, events),
+        make_notifications_service(session),
         events,
     )
     return ChargesService(

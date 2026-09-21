@@ -41,20 +41,7 @@ async def create_bot_request(
     users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
 ) -> int:
-    # фото скачиваются здесь, а не в обработчике: у вебхука тридцать секунд,
-    # а у загрузки неизвестной длины гарантий нет
-    photos = []
-    for url in photo_urls:
-        try:
-            photos.append(
-                await files_service.save_download(
-                    PHOTO_MIME,
-                    partial(bot.download, url, seek=False),
-                ),
-            )
-        except InvalidRequest as error:
-            logger.warning("Фото из бота не сохранено: %s", error)
-
+    photos = await save_photos(bot, files_service, photo_urls)
     card = await requests_service.create(
         user_id,
         house_id,
@@ -80,3 +67,24 @@ async def create_bot_request(
             notify=False,
         )
     return int(request_id)
+
+
+async def save_photos(
+    bot: Bot,
+    files_service: FilesService,
+    photo_urls: Sequence[str],
+) -> list[str]:
+    # фото скачиваются в задаче, а не в обработчике: у вебхука тридцать
+    # секунд, а у загрузки неизвестной длины гарантий нет
+    photos = []
+    for url in photo_urls:
+        try:
+            photos.append(
+                await files_service.save_download(
+                    PHOTO_MIME,
+                    partial(bot.download, url, seek=False),
+                ),
+            )
+        except InvalidRequest as error:
+            logger.warning("Фото из бота не сохранено: %s", error)
+    return photos

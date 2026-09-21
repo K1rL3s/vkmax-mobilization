@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 from dishka import AsyncContainer
 from maxo import Router
-from maxo.dialogs import BgManagerFactory, StartMode
+from maxo.dialogs import BgManagerFactory, ShowMode, StartMode
 from maxo.dialogs.api.entities import NewMessage
 from maxo.dialogs.context.media_storage import MediaIdStorage
 from maxo.dialogs.test_tools import BotClient, MockMessageManager
@@ -24,37 +24,64 @@ from maxo.types import (
     MessageBody,
     MessageCreated,
     OpenAppButton,
+    PhotoAttachment,
+    PhotoAttachmentPayload,
     Recipient,
     SendMessageResult,
 )
 from maxo.types.update_context import UpdateContext
-from sqlalchemy import Row, select
+from sqlalchemy import Row, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from taskiq import InMemoryBroker
 
 from tests.conftest import PROBE_ROUTERS, RecordingBroker
 
 from zheka.bot import BotSetup
+from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
+from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
 from zheka.bot.handlers.menu.windows import MENU_TEXT
+from zheka.bot.handlers.review.handlers import repeat_sent
+from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TEXT
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.middlewares.user import private_chat_id
 from zheka.bot.states import Consent, Menu
 from zheka.broker.task_names import TaskName
+from zheka.broker.tasks.requests import (
+    attach_result_photo,
+    send_executor_card,
+    send_review_card,
+)
 from zheka.core.consent import CONSENT_TEXT
 from zheka.core.deeplinks import house_payload, org_invite_payload
 from zheka.core.enums import (
     CATEGORY_RULES,
     EventSource,
     EventType,
+    OrgRole,
     RequestCategory,
+    RequestChannel,
+    RequestCompletionReason,
+    RequestStatus,
     ResidentRole,
 )
 from zheka.core.errors import NotEnoughRights
-from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
+from zheka.core.ids import HouseId, MaxChatId, MaxUserId, OrgId, RequestId, UserId
 from zheka.core.models import User
 from zheka.core.services.orgs import INVITE_NOT_FOUND
-from zheka.infra.database.models import House, Resident
+from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
+from zheka.core.texts import REQUEST_STATUS_LABELS
+from zheka.infra.database.models import (
+    House,
+    OrgMember,
+    Organization,
+    Request,
+    Resident,
+)
+from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
+from zheka.infra.database.tables.organizations import org_members_table
+from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
 from zheka.infra.max.sender import _chat_rate_limit, dialog_notify
@@ -687,3 +714,456 @@ async def test_the_sent_window_leads_back_to_the_menu(
     await client.click(message_manager.last_message(), TO_MENU)
 
     assert MENU_TEXT in (message_manager.last_message().body.text or "")
+
+
+DEPART = InlineButtonTextLocator("Выехал")
+READY = InlineButtonTextLocator("Готово")
+REJECT = InlineButtonTextLocator("Сделано плохо")
+RESULT_URL = "https://max.ru/result.jpg"
+# dummy attachment token: the fake bot never downloads anything
+PHOTO_TOKEN = "photo-token"  # noqa: S105
+
+
+async def _org_house(session: AsyncSession) -> tuple[OrgId, HouseId]:
+    org = Organization(
+        name=f"УК {secrets.token_hex(4)}",
+        inn=secrets.token_hex(6),
+        phone="+70000000000",
+        address="Тестовая область, Тестоград, Тестовая, 1",
+    )
+    session.add(org)
+    await session.flush()
+    house = House(
+        org_id=org.id,
+        region="Тестовая область",
+        city="Тестоград",
+        street="Исполнительская",
+        building=secrets.token_hex(2),
+        cadastral_no=secrets.token_hex(8),
+        chat_binding_code=secrets.token_hex(4),
+    )
+    session.add(house)
+    await session.flush()
+    # после commit атрибуты протухают, и чтение id полезло бы в базу без await
+    ids = OrgId(org.id), HouseId(house.id)
+    await session.commit()
+    return ids
+
+
+async def _started(session: AsyncSession, client: BotClient) -> UserId:
+    await client.send("/start")
+    user = await _saved(session, MaxUserId(client.user.id))
+    assert user is not None
+    return UserId(user.id)
+
+
+async def _request(
+    session: AsyncSession,
+    house_id: HouseId,
+    status: RequestStatus,
+    *,
+    author: UserId | None = None,
+    executor: UserId | None = None,
+) -> RequestId:
+    request = Request(
+        house_id=house_id,
+        author_user_id=author,
+        executor_user_id=executor,
+        category=RequestCategory.LEAK,
+        description="Течет кран",
+        status=status,
+        channel=RequestChannel.MINIAPP,
+        reviewed_at=datetime.now(UTC) if status is RequestStatus.ON_REVIEW else None,
+    )
+    session.add(request)
+    await session.flush()
+    request_id = RequestId(request.id)
+    await session.commit()
+    return request_id
+
+
+async def _executor_on(
+    session: AsyncSession,
+    client: BotClient,
+    status: RequestStatus,
+) -> RequestId:
+    user_id = await _started(session, client)
+    org_id, house_id = await _org_house(session)
+    session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.EXECUTOR))
+    await session.commit()
+    return await _request(session, house_id, status, executor=user_id)
+
+
+async def _run(broker: InMemoryBroker, task: Any, **kwargs: Any) -> None:
+    sent = await task.kicker().with_broker(broker).kiq(**kwargs)
+    result = await sent.wait_result(timeout=5)
+    assert not result.is_err, result.error
+
+
+async def _status(session: AsyncSession, request_id: RequestId) -> Request:
+    session.expire_all()
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
+    return request
+
+
+async def _send_photo(client: BotClient) -> None:
+    body = MessageBody(
+        mid=secrets.token_hex(4),
+        seq=1,
+        text=None,
+        attachments=[
+            PhotoAttachment(
+                payload=PhotoAttachmentPayload(
+                    photo_id=1,
+                    token=PHOTO_TOKEN,
+                    url=RESULT_URL,
+                ),
+            ),
+        ],
+    )
+    message = Message(
+        sender=client.user,
+        recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=client.chat.chat_id),
+        timestamp=datetime.now(UTC),
+        body=body,
+    )
+    await client.dp.feed_update(
+        MaxoUpdate(
+            update=MessageCreated(
+                message=message,
+                timestamp=datetime.now(UTC),
+            ).as_(client.bot),
+        ),
+        client.bot,
+    )
+
+
+async def _rendered(message_manager: MockMessageManager, text: str) -> None:
+    # окно ввода открывает bg().start(): апдейт уходит в call_soon и
+    # рисуется уже после ответа на нажатие. Задачу создает maxo и наружу не
+    # отдает, так что ждать нечего, кроме самого сообщения
+    async with asyncio.timeout(5):
+        while not message_manager.sent_messages or text not in (  # noqa: ASYNC110
+            message_manager.last_message().body.text or ""
+        ):
+            await asyncio.sleep(0.01)
+
+
+async def test_a_tap_on_the_executor_card_moves_the_request(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _executor_on(bot_session, client, RequestStatus.ACCEPTED)
+    request = await _status(bot_session, request_id)
+    assert request.executor_user_id is not None
+    message_manager.reset_history()
+
+    await _run(task_broker, send_executor_card, request_id=request_id)
+    await client.click(message_manager.last_message(), DEPART)
+
+    assert (await _status(bot_session, request_id)).status is RequestStatus.IN_PROGRESS
+
+
+async def test_ready_asks_for_the_photo_where_a_message_reaches_it(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    # сообщение maxo отдает только стеку по умолчанию: окно фото в стеке
+    # карточки фото бы не дождалось, и оно ушло бы в fallback
+    request_id = await _executor_on(bot_session, client, RequestStatus.IN_PROGRESS)
+    request = await _status(bot_session, request_id)
+    assert request.executor_user_id is not None
+    await _run(task_broker, send_executor_card, request_id=request_id)
+    await client.click(message_manager.last_message(), READY)
+    await _rendered(message_manager, RESULT_PHOTO_TEXT)
+
+    await _send_photo(client)
+
+    assert bot_broker.enqueued(TaskName.ATTACH_RESULT_PHOTO)[-1] == {
+        "user_id": request.executor_user_id,
+        "request_id": request_id,
+        "photo_urls": [RESULT_URL],
+    }
+    # окно фото не остается висеть в стеке по умолчанию и глотать сообщения
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert PHOTO_TAKEN in text
+
+
+async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    author = await _started(bot_session, client)
+    _, house_id = await _org_house(bot_session)
+    bot_session.add(
+        Resident(user_id=author, house_id=house_id, role=ResidentRole.OWNER),
+    )
+    await bot_session.commit()
+    request_id = await _request(
+        bot_session,
+        house_id,
+        RequestStatus.ON_REVIEW,
+        author=author,
+    )
+    await _run(task_broker, send_review_card, request_id=request_id)
+
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+    await client.send("Кран все еще течет")
+
+    parent = await _status(bot_session, request_id)
+    assert parent.completion_reason is RequestCompletionReason.RESIDENT_REJECTED
+    stmt = select(Request).where(requests_table.c.parent_request_id == request_id)
+    repeat = (await bot_session.execute(stmt)).scalar_one()
+    assert repeat.channel is RequestChannel.BOT
+    assert repeat.description == "Кран все еще течет"
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert repeat_sent(RequestId(repeat.id)) in text
+
+
+ACCEPT_WORK = InlineButtonTextLocator("Принять")
+TOP_RATING = InlineButtonTextLocator(str(MAX_RATING))
+
+Show = tuple[ShowMode, str | None, int | None]
+
+
+@pytest.fixture
+def shows(
+    message_manager: MockMessageManager,
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[Show]:
+    # MockMessageManager шлет каждое окно новым сообщением, EDIT или нет;
+    # а режим, о котором его попросили, виден только на входе
+    recorded: list[Show] = []
+    original = message_manager.show_message
+
+    async def recording(bot: Any, new_message: Any, old_message: Any) -> Any:
+        recorded.append(
+            (new_message.show_mode, new_message.text, new_message.recipient.chat_id),
+        )
+        return await original(bot, new_message, old_message)
+
+    monkeypatch.setattr(message_manager, "show_message", recording)
+    return recorded
+
+
+def _shown(shows: list[Show], text: str) -> Show:
+    return next(show for show in shows if text in (show[1] or ""))
+
+
+async def _reviewing(
+    session: AsyncSession,
+    client: BotClient,
+    broker: InMemoryBroker,
+) -> RequestId:
+    author = await _started(session, client)
+    _, house_id = await _org_house(session)
+    session.add(Resident(user_id=author, house_id=house_id, role=ResidentRole.OWNER))
+    await session.commit()
+    request_id = await _request(
+        session,
+        house_id,
+        RequestStatus.ON_REVIEW,
+        author=author,
+    )
+    await _run(broker, send_review_card, request_id=request_id)
+    return request_id
+
+
+async def _repeats_of(session: AsyncSession, request_id: RequestId) -> list[Request]:
+    stmt = select(Request).where(requests_table.c.parent_request_id == request_id)
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def test_the_input_prompt_is_sent_as_a_new_message(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    # EDIT переписал бы последнее сообщение стека по умолчанию где-то выше в
+    # истории, и житель не увидел бы, что бот ждет фото
+    request_id = await _executor_on(bot_session, client, RequestStatus.IN_PROGRESS)
+    await _run(task_broker, send_executor_card, request_id=request_id)
+
+    await client.click(message_manager.last_message(), READY)
+    await _rendered(message_manager, RESULT_PHOTO_TEXT)
+
+    assert _shown(shows, RESULT_PHOTO_TEXT)[0] is ShowMode.SEND
+
+
+async def test_cards_announcing_something_new_are_sent_not_edited(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    # повторное назначение A -> B -> A правкой карточки выше в истории прошло
+    # бы для A молча
+    request_id = await _executor_on(bot_session, client, RequestStatus.ACCEPTED)
+    await _run(task_broker, send_executor_card, request_id=request_id)
+    await _run(task_broker, send_executor_card, request_id=request_id)
+
+    cards = [mode for mode, text, _ in shows if f"№{request_id}:" in (text or "")]
+    assert cards == [ShowMode.SEND, ShowMode.SEND]
+
+
+async def test_the_review_card_is_sent_to_the_author(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    await _reviewing(bot_session, client, task_broker)
+
+    mode, _, chat_id = shows[-1]
+    assert mode is ShowMode.SEND
+    assert chat_id == client.chat.chat_id
+
+
+async def test_a_stale_rejection_prompt_files_no_repeat(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    # житель передумал и принял работу на карточке, а окно отказа осталось:
+    # следующее его сообщение не должно уйти в УК повторной заявкой
+    request_id = await _reviewing(bot_session, client, task_broker)
+    card = message_manager.last_message()
+    await client.click(card, REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+    await client.click(card, ACCEPT_WORK)
+
+    await client.send("Спасибо, все хорошо")
+
+    assert await _repeats_of(bot_session, request_id) == []
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert REJECT_NOT_ON_REVIEW in text
+
+
+async def test_a_tap_on_a_card_that_is_no_longer_his_shows_the_handover(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _executor_on(bot_session, client, RequestStatus.ACCEPTED)
+    await _run(task_broker, send_executor_card, request_id=request_id)
+    card = message_manager.last_message()
+    stmt = delete(org_members_table).where(
+        org_members_table.c.user_id == await _started(bot_session, client),
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(card, DEPART)
+
+    assert HANDED_OVER_TEXT.format(request_id=request_id) in (
+        message_manager.last_message().body.text or ""
+    )
+
+
+async def test_a_tap_on_a_review_closed_elsewhere_renders_the_closed_request(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+    card = message_manager.last_message()
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(
+            status=RequestStatus.DONE,
+            completion_reason=RequestCompletionReason.AUTO_CLOSED,
+        )
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+    message_manager.reset_history()
+
+    await client.click(card, ACCEPT_WORK)
+
+    text = message_manager.last_message().body.text or ""
+    assert REQUEST_STATUS_LABELS[RequestStatus.DONE] in text
+    assert ASK_TEXT not in text
+
+
+async def test_a_second_rating_renders_the_card_with_the_first(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+    await client.click(message_manager.last_message(), ACCEPT_WORK)
+    rating = message_manager.last_message()
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(rating=MIN_RATING)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(rating, TOP_RATING)
+
+    assert RATED_TEXT.format(rating=MIN_RATING) in (
+        message_manager.last_message().body.text or ""
+    )
+
+
+async def test_a_refused_photo_rerenders_the_card_for_the_sender(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    # заявку передали другому, пока фото ехало: отправитель видит, что она
+    # уже не его, а не старую карточку с «Готово»
+    request_id = await _executor_on(bot_session, client, RequestStatus.IN_PROGRESS)
+    sender_id = await _started(bot_session, client)
+    other = User(max_user_id=_max_id(), name="Другой исполнитель")
+    bot_session.add(other)
+    await bot_session.flush()
+    other_id = UserId(other.id)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(executor_user_id=other_id)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await _run(
+        task_broker,
+        attach_result_photo,
+        user_id=sender_id,
+        request_id=request_id,
+        photo_urls=[],
+    )
+
+    enqueued = bot_broker.enqueued(TaskName.SEND_EXECUTOR_CARD)[-1]
+    assert enqueued == {"request_id": request_id, "user_id": sender_id}
+    await _run(task_broker, send_executor_card, **enqueued)
+    _, text, chat_id = shows[-1]
+    assert HANDED_OVER_TEXT.format(request_id=request_id) in (text or "")
+    assert chat_id == client.chat.chat_id
+    assert (await _status(bot_session, request_id)).status is (
+        RequestStatus.IN_PROGRESS
+    )

@@ -81,7 +81,12 @@ review finding.
   passes `stack_id` and stays synchronous. Without one it lands on the default
   stack and throws away whatever the resident was doing there, so a caller that
   replaces its own window passes the stack id it started from and a caller that
-  interrupts out of nowhere is deciding to interrupt. A user with no `users.max_chat_id`
+  interrupts out of nowhere is deciding to interrupt. A window that announces
+  something new passes `show_mode=ShowMode.SEND`: in its own stack maxo edits
+  the stack's last message in place, which may sit far up the history, so a
+  reassignment back to the same executor would change an old card silently. A
+  re-render after the user's own action keeps the default and edits the card
+  they just tapped. A user with no `users.max_chat_id`
   or with a `bot_stopped_at` is skipped with a log line - a background manager
   addresses a chat, `NULL` there means the user never started the bot, and a
   stopped bot earns a 403 from MAX, exactly as the broadcast query already
@@ -286,6 +291,59 @@ review finding.
   inside a call's parentheses. `self._session.get(Model, id)` is not used
   either, for the same reason: the query stays visible as a `stmt`, at the
   cost of skipping the identity-map short circuit `get()` gives for free.
+- An executor's authority over a request is the assignment **and** the
+  membership: `executor_user_id` equal to the user and an `OrgRole.EXECUTOR`
+  row in the house's org. An executor removed from the org keeps
+  `executor_user_id` and a live card, so the assignment alone is never enough.
+  `AdminRequestsService.executor_advance` checks both before its first write,
+  because `attach_result_photo` catches the refusal and renders the card anyway;
+  `executor_card` asks the same question as a bool and returns `None`, since a
+  getter that raised would drop the old card into the error router.
+- The author's review card is queued in `AdminRequestsService._move`, the one
+  road into `ON_REVIEW` for the executor, the cabinet and a group move alike.
+  It replaces the plain status text rather than joining it, and a request
+  without an author gets neither.
+- A card's stack id is derived from its request, never stored:
+  `executor-{request_id}` and `review-{request_id}`. A resent card replaces the
+  one already in that stack instead of opening a second live copy, and an
+  explicit `stack_id` keeps `MaxSender.start_dialog` synchronous.
+- A value the bot hands a service is checked in the service. `Select` passes
+  `on_click` the raw callback string without matching it against the rendered
+  items, and a button hidden by `when=` still fires from an old keyboard, so
+  `when=` is presentation only: the rating range lives in `RequestsService.rate`
+  (the API schema imports `MIN_RATING` / `MAX_RATING` from there) and the
+  executor's transitions in `executor_advance`.
+- maxo 0.9.0 delivers a text or a photo only to the default stack
+  (`IntentMiddleware.process_message` loads `DEFAULT_STACK_ID`), so a window
+  that waits for input cannot live in a card's own stack. `ask_in_default_stack`
+  in `zheka/bot/cards.py` opens it there on the user's own tap, through
+  `bg().start()`: `fg()` from inside a handler deadlocks, because
+  `_get_fake_user` hands the nested update the real `User`, its
+  `UserMiddleware` upserts the `users` row the tap's uncommitted transaction
+  already holds, and the tap waits for the nested update. It starts with
+  `ShowMode.SEND`, because for a dialog event in a private chat maxo picks
+  `EDIT` and would rewrite whatever message the default stack showed last. The
+  prompt replaces what the user had there, a half-filled request draft
+  included. Once the input is taken, `back_to_menu` leaves the default stack on
+  `Menu.main` with a notice rather than on a buttonless window that swallows
+  every message. The service behind the prompt checks the state again
+  (`RequestsService.reject` refuses anything but `ON_REVIEW`), since the prompt
+  outlives the card it came from.
+- A tap on a stale card is not an error. The executor and review handlers catch
+  `ZhekaError`, answer the callback with its text and return, so the getter
+  re-renders the truth ("передали другому", a closed request with no buttons).
+  That is safe only because those services refuse before their first write.
+- A task that changes a request and then renders a window reading it does not
+  render it itself: the window's getter runs in another session and would see
+  the status from before the task's commit. `attach_result_photo` publishes
+  `send_executor_card` instead, which the publisher flushes after the commit,
+  and passes its own `user_id`: the card is re-rendered for the one who sent
+  the photo, who may no longer be the assignee.
+- A task body is tested through the `task_broker` fixture: an `InMemoryBroker`
+  with `ContainerMiddleware` and `CommitMiddleware`, run by
+  `task.kicker().with_broker(task_broker).kiq(...)`. It commits and flushes
+  like the worker, and whatever the task publishes lands in `bot_broker`
+  instead of running, so a test runs the follow-up itself.
 
 ## Orientation
 
@@ -298,11 +356,12 @@ the next agent does not pay for them again.
   `task-N-brief.md` the controller decisions for a block and
   `task-N-review.md` its review findings. The ledger answers "which commit
   belongs to which block" more reliably than `git log` does.
-- One refactor is decided and waiting, before block 16:
-  `refactor-startapp-routing.md` (base64 json in `startParam` so a deeplink
-  can land on a mini-app screen).
-- The forty-five `EventType` members divide with nothing left over: 31 + 1 + 2
-  + 11. Thirty-one are recorded **inside** `core/services/`, so a bot handler
+- One refactor is decided and waiting: `refactor-startapp-routing.md` (base64
+  json in `startParam` so a deeplink can land on a mini-app screen). It waits
+  for its frontend half and blocks no backend block; block 16 has no mini-app
+  screen to route to.
+- The forty-five `EventType` members divide with nothing left over: 32 + 1 + 2
+  + 10. Thirty-two are recorded **inside** `core/services/`, so a bot handler
   or a route that records one of those again doubles the statistic - pass the
   service the right `source` or `method` and let it write. `BOT_START` is
   recorded in `bot/handlers/commands/start.py`. `MINIAPP_OPEN` and
@@ -310,11 +369,11 @@ the next agent does not pay for them again.
   sends the type in the body, so no `EventType.MINIAPP_OPEN` appears at any
   `record` call and grep alone will tell you they are written nowhere; the
   `Literal` in `TrackEventRequest` is the whitelist, and those two are the
-  only events a client may send. The remaining eleven have no writer yet and
+  only events a client may send. The remaining ten have no writer yet and
   get one in their own block: `BOT_MUTED`, `BOT_UNMUTED`, `BOT_STOPPED`,
   `CHAT_BOUND`, `CHAT_ADMIN_GRANTED`, `READING_REMINDER_SENT`,
-  `APPOINTMENT_REMINDER_SENT`, `EXECUTOR_STATUS_CHANGED`, `REQUEST_EXPORTED`,
-  `LLM_SUGGESTED`, `LLM_ACCEPTED`.
+  `APPOINTMENT_REMINDER_SENT`, `REQUEST_EXPORTED`, `LLM_SUGGESTED`,
+  `LLM_ACCEPTED`.
 - The truth about maxo is in the installed sources,
   `.venv/lib/python3.12/site-packages/maxo/`, never in the plan and never from
   memory - the plan was wrong four times in block 15 and reading the source

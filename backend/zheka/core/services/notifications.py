@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
-from zheka.core.ids import MaxChatId, UserId
+from zheka.core.ids import MaxChatId, RequestId, UserId
 from zheka.core.notifications import DEFAULT_LEVEL, Buttons
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
@@ -105,3 +105,20 @@ class NotificationsService:
             text=text,
             buttons=buttons,
         )
+
+    def open_executor_card(
+        self,
+        request_id: RequestId,
+        user_id: UserId | None = None,
+    ) -> None:
+        # карточка - окно диалога, а не текст: получателя и его уровень
+        # задача найдет сама, по заявке, уже после коммита. user_id - это
+        # перерисовка для того, кто сам нажал, а не весть назначенному
+        self._publisher.publish(
+            TaskName.SEND_EXECUTOR_CARD,
+            request_id=request_id,
+            user_id=user_id,
+        )
+
+    def open_review_card(self, request_id: RequestId) -> None:
+        self._publisher.publish(TaskName.SEND_REVIEW_CARD, request_id=request_id)

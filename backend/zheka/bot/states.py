@@ -32,3 +32,14 @@ class NewRequest(StatesGroup):
     photo = State()
     confirm = State()
     sent = State()
+
+
+class ExecutorCard(StatesGroup):
+    card = State()
+    result_photo = State()
+
+
+class Review(StatesGroup):
+    card = State()
+    rating = State()
+    rejection = State()

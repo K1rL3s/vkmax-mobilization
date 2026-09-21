@@ -1,6 +1,7 @@
 from typing import Any, Final
 
 from dishka import AsyncContainer
+from maxo.dialogs import DialogManager
 from maxo.dialogs.api.internal import FakeUser
 from maxo.enums import ChatType
 from maxo.integrations.dishka import CONTAINER_NAME
@@ -10,7 +11,8 @@ from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.routing.signals.update import MaxoUpdate
 from maxo.types.update_context import UpdateContext
 
-from zheka.core.ids import MaxChatId, MaxUserId
+from zheka.core.ids import MaxChatId, MaxUserId, UserId
+from zheka.core.models import User
 from zheka.infra.database.repos.users import UsersRepo
 
 USER_KEY: Final = "user"
@@ -59,3 +61,8 @@ def private_chat_id(context: UpdateContext) -> MaxChatId | None:
     if context.chat_type is not ChatType.DIALOG or context.chat_id is None:
         return None
     return MaxChatId(context.chat_id)
+
+
+def dialog_user_id(dialog_manager: DialogManager) -> UserId:
+    user: User = dialog_manager.middleware_data[USER_KEY]
+    return UserId(user.id)

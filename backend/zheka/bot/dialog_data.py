@@ -81,3 +81,12 @@ class NewRequestData(BaseDialogData):
     photos: list[str] = field(default_factory=list)
     # номер заявки приносит задача, когда заявка создана
     request_id: int | None = None
+
+
+class ExecutorCardData(BaseDialogData):
+    # номер кладет задача, открывшая карточку; стек у карточки свой на заявку
+    request_id: int
+
+
+class ReviewData(BaseDialogData):
+    request_id: int

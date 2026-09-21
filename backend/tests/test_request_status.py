@@ -18,6 +18,7 @@ ORDER = (
 # кто по цепочке имеет право поставить каждый следующий статус
 FORWARD = (
     (RequestStatus.NEW, RequestStatus.ACCEPTED, RequestActorRole.STAFF),
+    (RequestStatus.NEW, RequestStatus.ACCEPTED, RequestActorRole.EXECUTOR),
     (RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS, RequestActorRole.EXECUTOR),
     (RequestStatus.IN_PROGRESS, RequestStatus.ON_REVIEW, RequestActorRole.EXECUTOR),
     (RequestStatus.ON_REVIEW, RequestStatus.DONE, RequestActorRole.RESIDENT),

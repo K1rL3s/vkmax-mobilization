@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, make_config
+from tests.conftest import OrgHouseFlatUser, make_config, make_notifications_service
 
 from zheka.core.enums import (
     EventType,
@@ -56,6 +56,7 @@ def _make_service(session: AsyncSession) -> RequestsService:
         OrgsRepo(session),
         FilesService(make_config().files, "test-token"),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        make_notifications_service(session),
         EventsService(EventsRepo(session)),
     )
 

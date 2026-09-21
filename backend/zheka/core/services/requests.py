@@ -1,9 +1,12 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from zheka.base import ZhekaType
+from zheka.core import texts
 from zheka.core.enums import (
     EventType,
+    NotificationCategory,
     RequestActorRole,
     RequestCategory,
     RequestChannel,
@@ -40,6 +43,7 @@ from zheka.core.models import (
 )
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
     GroupingRules,
     GroupingService,
@@ -58,6 +62,10 @@ MAX_PHOTOS = 12
 # заявку, оставленную на приемке, закрывает планировщик блока 18; тот же
 # срок карточка показывает как дедлайн автозакрытия, пока заявка ON_REVIEW
 AUTO_CLOSE_AFTER = timedelta(hours=48)
+# оценку ставят и мини-апп, и бот; кнопка бота присылает любую строку, поэтому
+# границы проверяет сервис, а схема берет их отсюда
+MIN_RATING = 1
+MAX_RATING = 5
 
 BLOCKED = "Вы заблокированы в этом доме"
 NOT_A_RESIDENT = "Дом не найден"
@@ -73,6 +81,13 @@ RATED_ALREADY = "Оценка уже поставлена"
 REPEAT_NOT_DONE = "Повторную заявку подают после приемки или по выполненной"
 REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано плохо"
 ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
+REJECT_NOT_ON_REVIEW = "Работу возвращают только с приемки"
+RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
+# from - ключевое слово питона, поэтому пара едет в record распаковкой
+_CLOSED_FROM_REVIEW: dict[str, Any] = {
+    "from": RequestStatus.ON_REVIEW.value,
+    "to": RequestStatus.DONE.value,
+}
 
 
 class RequestDraft(ZhekaType):
@@ -120,6 +135,7 @@ class RequestsService:
         "_files",
         "_grouping",
         "_houses",
+        "_notifications",
         "_orgs",
         "_requests",
         "_residents",
@@ -135,6 +151,7 @@ class RequestsService:
         orgs_repo: OrgsRepo,
         files_service: FilesService,
         grouping_service: GroupingService,
+        notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> None:
         self._requests = requests_repo
@@ -144,6 +161,7 @@ class RequestsService:
         self._orgs = orgs_repo
         self._files = files_service
         self._grouping = grouping_service
+        self._notifications = notifications_service
         self._events = events_service
 
     async def create(
@@ -193,6 +211,7 @@ class RequestsService:
         request_id: RequestId,
         description: str | None,
         photos: Sequence[str],
+        channel: RequestChannel = RequestChannel.MINIAPP,
     ) -> RequestCardData:
         parent = await self._own_request(user_id, request_id)
         rejected_on_review = parent.status is RequestStatus.ON_REVIEW
@@ -232,7 +251,7 @@ class RequestsService:
             user_id,
             parent.category,
             text,
-            RequestChannel.MINIAPP,
+            channel,
             None,
             RequestId(parent.id),
             is_staff_author=await self._is_staff(house, user_id),
@@ -244,7 +263,7 @@ class RequestsService:
             user_id=user_id,
             house_id=house_id,
             category=parent.category.value,
-            channel=RequestChannel.MINIAPP.value,
+            channel=channel.value,
             has_photo=bool(checked),
             is_repeat=True,
             parent_request_id=RequestId(parent.id),
@@ -258,6 +277,8 @@ class RequestsService:
         rating: int,
         feedback: str | None,
     ) -> RequestCardData:
+        if not MIN_RATING <= rating <= MAX_RATING:
+            raise InvalidRequest(RATING_OUT_OF_RANGE)
         request = await self._own_request(user_id, request_id)
         await self._active_resident(user_id, HouseId(request.house_id))
 
@@ -319,9 +340,22 @@ class RequestsService:
                 now,
             )
             await self._events.record(
+                EventType.REQUEST_STATUS_CHANGED,
+                request_id=RequestId(request.id),
+                **_CLOSED_FROM_REVIEW,
+                by_role=RequestActorRole.SYSTEM.value,
+            )
+            await self._events.record(
                 EventType.REQUEST_AUTO_CLOSED,
                 request_id=RequestId(request.id),
             )
+            if request.author_user_id is not None:
+                self._notifications.notify_user(
+                    UserId(request.author_user_id),
+                    texts.request_auto_closed(RequestId(request.id)),
+                    category=NotificationCategory.REQUESTS,
+                    mandatory=True,
+                )
         return len(requests)
 
     async def _complete_review(
@@ -351,6 +385,13 @@ class RequestsService:
             user_id,
             RequestActorRole.RESIDENT.value,
             at,
+        )
+        await self._events.record(
+            EventType.REQUEST_STATUS_CHANGED,
+            user_id=user_id,
+            request_id=RequestId(request.id),
+            **_CLOSED_FROM_REVIEW,
+            by_role=RequestActorRole.RESIDENT.value,
         )
         await self._events.record(
             EventType.REQUEST_REVIEWED,
@@ -532,6 +573,21 @@ class RequestsService:
         if house is None:
             raise EntityNotFound("Дом не найден")
         return house
+
+    async def reject(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        comment: str,
+        channel: RequestChannel,
+    ) -> RequestCardData:
+        # repeat принимает и выполненную заявку - это повтор мини-аппа. Отказ
+        # бота только с приемки: иначе забытое окно ввода превратило бы любое
+        # следующее сообщение жителя в повторную заявку по закрытой
+        parent = await self._own_request(user_id, request_id)
+        if parent.status is not RequestStatus.ON_REVIEW:
+            raise InvalidState(REJECT_NOT_ON_REVIEW)
+        return await self.repeat(user_id, request_id, comment, [], channel)
 
 
 async def build_rows(

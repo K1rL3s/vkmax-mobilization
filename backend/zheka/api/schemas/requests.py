@@ -25,14 +25,12 @@ from zheka.core.services.admin_requests import (
 )
 from zheka.core.services.request_groups import SimilarRequests
 from zheka.core.services.requests import (
+    MAX_RATING,
+    MIN_RATING,
     RequestCardData,
     RequestMessageView,
     RequestRow,
 )
-
-MIN_RATING = 1
-MAX_RATING = 5
-
 
 UNKNOWN_AUTHOR = "Пользователь"
 

@@ -332,15 +332,15 @@ async def test_group_catch_up_notifies_the_author_once(
     )
     session.add(group)
     await session.flush()
-    # опоздавший участник идет из NEW в ON_REVIEW тремя шагами, а житель
+    # опоздавший участник идет из NEW в IN_PROGRESS двумя шагами, а житель
     # просил один ответ, а не пачку пушей
     request = await _add_request(session, data, RequestGroupId(group.id))
-    assert len(transition_path(request.status, RequestStatus.ON_REVIEW)) == 3
+    assert len(transition_path(request.status, RequestStatus.IN_PROGRESS)) == 2
 
     await _admin_service(session, publisher).change_group_status(
         data.org_id,
         RequestGroupId(group.id),
-        RequestStatus.ON_REVIEW,
+        RequestStatus.IN_PROGRESS,
         "Сделаем завтра",
         data.user_id,
     )
@@ -348,7 +348,7 @@ async def test_group_catch_up_notifies_the_author_once(
     await publisher.flush()
     enqueued = broker.enqueued(TaskName.SEND_TO_USER)
     assert len(enqueued) == 1
-    assert "На приемке" in enqueued[0]["text"]
+    assert "В работе" in enqueued[0]["text"]
     assert "Сделаем завтра" in enqueued[0]["text"]
 
 
@@ -416,3 +416,41 @@ async def test_one_failed_task_does_not_stop_the_rest() -> None:
     assert [kwargs["user_id"] for kwargs in flaky.enqueued(TaskName.SEND_TO_USER)] == [
         2
     ]
+
+
+async def test_group_catch_up_to_review_opens_one_card_per_member(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    # групповой переход - третья дорога на приемку: каждому автору по одной
+    # карточке, и ни одного текста статуса с промежуточных шагов
+    data = await make_org_house_flat_user(
+        org_role=OrgRole.ADMIN,
+        resident_role=ResidentRole.OWNER,
+    )
+    group = RequestGroup(
+        house_id=data.house_id,
+        category=RequestCategory.LEAK,
+        window_started_at=datetime.now(UTC),
+        status=RequestGroupStatus.OPEN,
+    )
+    session.add(group)
+    await session.flush()
+    first = await _add_request(session, data, RequestGroupId(group.id))
+    second = await _add_request(session, data, RequestGroupId(group.id))
+
+    await _admin_service(session, publisher).change_group_status(
+        data.org_id,
+        RequestGroupId(group.id),
+        RequestStatus.ON_REVIEW,
+        None,
+        data.user_id,
+    )
+
+    await publisher.flush()
+    assert sorted(
+        card["request_id"] for card in broker.enqueued(TaskName.SEND_REVIEW_CARD)
+    ) == sorted([first.id, second.id])
+    assert broker.enqueued(TaskName.SEND_TO_USER) == []
