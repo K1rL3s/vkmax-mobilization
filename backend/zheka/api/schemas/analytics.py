@@ -9,7 +9,14 @@ from zheka.core.ids import HouseId, UserId
 _PERCENT = "Доля в сотых долях процента, 50% это 5000"
 _VALUE = (
     "Целое в единицах unit: count без масштаба, minutes в минутах, "
-    "percent в сотых долях процента, kopeck в копейках"
+    "percent в сотых долях процента, kopeck в копейках, points в сотых долях "
+    "балла оценки"
+)
+
+_EMPTY = "Данных нет: фронт показывает пустое состояние, а не пустоту"
+_FEW_ORGS = (
+    "null, если организаций с данными меньше трех: иначе сравнение выдает "
+    "чужое значение"
 )
 
 
@@ -38,6 +45,7 @@ class DashboardResponse(BaseSchema):
     period_to: date
     tiles: list[DashboardTile]
     charts: list[ChartSeries]
+    is_empty: bool = Field(description=_EMPTY)
 
 
 class MetersSeasonHouse(BaseSchema):
@@ -53,9 +61,13 @@ class MetersSeasonResponse(BaseSchema):
     period: date
     window_from: date
     window_to: date
+    window_open: bool = Field(
+        description="Окно подачи открыто и период текущий: кнопка напоминания активна",
+    )
     submitted: int
     not_submitted: int
     houses: list[MetersSeasonHouse]
+    is_empty: bool = Field(description=_EMPTY)
 
 
 class RemindNotSubmittedRequest(BaseSchema):
@@ -91,6 +103,7 @@ class ChannelSplitItem(BaseSchema):
 class ChannelsSplitResponse(BaseSchema):
     total: int
     items: list[ChannelSplitItem]
+    is_empty: bool = Field(description=_EMPTY)
 
 
 class BenchmarkMetric(BaseSchema):
@@ -98,9 +111,9 @@ class BenchmarkMetric(BaseSchema):
     label: str
     unit: MetricUnit
     value: int = Field(description=_VALUE)
-    platform_median: int = Field(description=_VALUE)
-    rank: int
-    total: int
+    platform_median: int | None = Field(description=f"{_VALUE}. {_FEW_ORGS}")
+    rank: int | None = Field(description=_FEW_ORGS)
+    total: int | None = Field(description=_FEW_ORGS)
 
 
 class BenchmarkRegionRow(BaseSchema):
@@ -121,3 +134,9 @@ class BenchmarkResponse(BaseSchema):
     metrics: list[BenchmarkMetric]
     regions: list[BenchmarkRegionRow]
     unconnected_houses: list[UnconnectedHouseItem]
+    is_empty: bool = Field(
+        description=(
+            "Нет ни своих метрик, ни разрезов, ни неподключенных домов: фронт "
+            "показывает пустое состояние"
+        ),
+    )

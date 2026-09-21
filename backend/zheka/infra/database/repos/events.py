@@ -1,7 +1,8 @@
 from collections.abc import Collection
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, true
 
 from zheka.core.enums import EventType
 from zheka.core.ids import UserId
@@ -28,6 +29,7 @@ class EventsRepo(BaseAlchemyRepo):
         type: EventType,
         user_ids: Collection[UserId],
         payload: dict[str, Any],
+        since: datetime | None = None,
     ) -> set[UserId]:
         # кому из user_ids событие с таким payload уже записано: отметка
         # напоминания, а не только аналитика
@@ -37,6 +39,7 @@ class EventsRepo(BaseAlchemyRepo):
             events_table.c.type == type.value,
             events_table.c.user_id.in_(user_ids),
             events_table.c.payload.contains(payload),
+            true() if since is None else events_table.c.created_at >= since,
         )
         result = await self._session.execute(stmt)
         return {UserId(user_id) for user_id in result.scalars().all()}

@@ -1,6 +1,7 @@
 from dishka import BaseScope, Provider, Scope, provide_all
 
 from zheka.infra.database.repos.access import AccessRepo
+from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
@@ -38,4 +39,5 @@ class ReposProvider(Provider):
         AnnouncementsRepo,
         ReceptionRepo,
         AccessRepo,
+        AnalyticsRepo,
     )

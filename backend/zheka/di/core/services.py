@@ -5,6 +5,7 @@ from zheka.config import DeeplinksConfig, FilesConfig, MaxConfig
 from zheka.core.services.access import AccessService
 from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
+from zheka.core.services.analytics import AnalyticsService
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.charges import ChargesService
 from zheka.core.services.chats import ChatsService
@@ -25,6 +26,7 @@ from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
 from zheka.infra.database.repos.access import AccessRepo
+from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
@@ -398,4 +400,19 @@ class ServicesProvider(Provider):
             events_repo,
             events_service,
             notifications_service,
+        )
+
+    @provide
+    def analytics_service(
+        self,
+        analytics_repo: AnalyticsRepo,
+        houses_repo: HousesRepo,
+        orgs_repo: OrgsRepo,
+        reminders_service: RemindersService,
+    ) -> AnalyticsService:
+        return AnalyticsService(
+            analytics_repo,
+            houses_repo,
+            orgs_repo,
+            reminders_service,
         )

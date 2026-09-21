@@ -135,3 +135,10 @@ def _days(count: int) -> str:
     if not teen and units in {2, 3, 4}:
         return f"{count} дня"
     return f"{count} дней"
+
+
+def reading_reminder_manual() -> str:
+    return (
+        "Управляющая организация напоминает: прием показаний открыт, а ваших "
+        "еще нет. Передайте их в мини-приложении"
+    )

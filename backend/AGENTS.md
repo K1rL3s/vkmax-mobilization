@@ -405,12 +405,48 @@ review finding.
   that dies before its commit sent nothing and stamped nothing; a rerun after
   it sees the stamps. The reminder date logic takes `today` or `now` as an
   argument and the task passes `datetime.now(UTC)`, which is what lets a test
-  pin the day. The reading reminder checks `current_period`, the very function
+  pin the day. The reading reminder checks `window_period`, the very function
   `ReadingsService.submit` writes by: another period would remind those who
-  already submitted. The access window is the one broadcast that opens a
+  already submitted, and a window across the month end is one period, the
+  month it opened in. The access window is the one broadcast that opens a
   window instead of sending text: `AccessService.create` queues
   `broadcast_access_request`, which opens `AccessSlots.pick` in the derived
   stack `access-{access_request_id}` with `ShowMode.SEND`.
+- An analytics number is computed once, in SQL. Each metric is one
+  expression in `_METRICS` in `infra/database/repos/analytics.py`, shared by
+  the dashboard tile and the benchmark, so an organization sees the same value
+  on both screens. Overdue is `overdue_at` from `repos/requests.py`, built from
+  `CATEGORY_RULES` and shared with the admin list filter - never a second
+  table of hours. A share is `share()` there: true division (SQLAlchemy 2's
+  `/` casts the divisor to numeric, `//` would floor), 1/100 of a percent, one
+  rounding. A rating goes out in `MetricUnit.POINTS`, hundredths of a point,
+  because `count` means unscaled. A median is `percentile_cont` cast to numeric before
+  its one rounding, so a half rounds away from zero like a share does.
+- The benchmark names nobody, and a name is not the only leak. A region or
+  city row with one organization is that organization's number, and a
+  platform of two hands the caller its own value, the median and "1 из 2",
+  from which the other value follows by subtraction. Hence `MIN_ORGS_FOR_CUT
+  = 3` in `core/services/analytics.py`, one constant for both: a cut with
+  fewer organizations having data is dropped in SQL, and a platform metric
+  with fewer keeps the caller's value with `platform_median`, `rank` and
+  `total` set to `None`. The caller counts toward the three. The threshold
+  covers a cut's complement too: a row stays only if the organizations of its
+  parent left outside it number 0 or at least three, since the parent's
+  median against the cut's gives the value of a lone one outside, and `total`
+  against `orgs_count` tells which region it sits in. A region's parent is
+  the platform; a city is checked against its region and against the
+  platform, because its region row may be hidden while the platform median is
+  not. Peers are
+  registered organizations of the caller's own `is_demo`: the seeded demo
+  history is invented, and a real organization ranked against it, or a demo
+  one against a real one, would be compared with fiction.
+- The manual reading reminder (`remind_not_submitted`) refuses outside the
+  window with `InvalidState` - `window_open` in the season payload is only a
+  hint for the button - and reminds the period `window_period` gives, the
+  same one `submit` writes. It reuses the scheduled reminder's selection and
+  stamps `kind: manual`, but skips anyone who got any reading reminder since
+  the start of the day, so ten presses are one message and a press yesterday
+  does not silence today.
 
 ## Orientation
 

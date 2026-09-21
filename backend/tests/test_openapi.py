@@ -352,3 +352,64 @@ def test_reception_windows_expose_capacity_additively(
     assert schema["properties"]["capacity"]["default"] == 1
     assert "capacity" not in schema["required"]
     assert CYRILLIC.search(schema["properties"]["capacity"]["description"])
+
+
+@pytest.mark.parametrize(
+    "schema_name",
+    [
+        "DashboardResponse",
+        "MetersSeasonResponse",
+        "ChannelsSplitResponse",
+        "BenchmarkResponse",
+    ],
+)
+def test_analytics_responses_flag_an_empty_state(
+    openapi: dict[str, Any],
+    schema_name: str,
+) -> None:
+    # задача 19, бриф: пустой экран аналитики объясняется флагом, а не
+    # догадкой фронта по нулям
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["properties"]["is_empty"]["type"] == "boolean"
+    assert "is_empty" in schema["required"]
+
+
+def test_meters_season_states_whether_the_window_is_open(
+    openapi: dict[str, Any],
+) -> None:
+    schema = openapi["components"]["schemas"]["MetersSeasonResponse"]
+
+    assert schema["properties"]["window_open"]["type"] == "boolean"
+    assert "window_open" in schema["required"]
+
+
+@pytest.mark.parametrize("field", ["platform_median", "rank", "total"])
+def test_benchmark_comparison_is_nullable_below_three_organizations(
+    openapi: dict[str, Any],
+    field: str,
+) -> None:
+    # задача 19, бриф: меньше трех организаций с данными - сравнения нет,
+    # иначе чужое значение получается вычитанием
+    schema = openapi["components"]["schemas"]["BenchmarkMetric"]
+
+    assert schema["properties"][field]["anyOf"] == [
+        {"type": "integer"},
+        {"type": "null"},
+    ]
+    assert field in schema["required"]
+
+
+def test_metric_unit_carries_points_additively(openapi: dict[str, Any]) -> None:
+    # задача 19, решение контроллера: оценка в сотых долях балла получила свою
+    # единицу, count остается без масштаба
+    schema = openapi["components"]["schemas"]
+
+    assert schema["MetricUnit"]["enum"] == [
+        "count",
+        "percent",
+        "minutes",
+        "kopeck",
+        "points",
+    ]
+    assert "points" in schema["BenchmarkMetric"]["properties"]["value"]["description"]

@@ -64,7 +64,7 @@ class RequestFilters(ZhekaType):
     grouped: bool = False
 
 
-def _overdue_at(now: datetime) -> ColumnElement[bool]:
+def overdue_at(now: datetime) -> ColumnElement[bool]:
     # просрочка - это срок по категории, а он разный: вместо интервала в SQL
     # считаем в питоне по одной границе на категорию и сравниваем с created_at
     return and_(
@@ -305,7 +305,7 @@ class RequestsRepo(BaseAlchemyRepo):
             stmt = stmt.where(
                 requests_table.c.executor_user_id == filters.executor_user_id,
             )
-        overdue = _overdue_at(now)
+        overdue = overdue_at(now)
         if filters.overdue:
             stmt = stmt.where(overdue)
         if filters.grouped:

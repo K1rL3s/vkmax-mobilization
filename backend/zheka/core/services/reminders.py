@@ -1,6 +1,7 @@
 import logging
 from calendar import monthrange
-from datetime import date, datetime, timedelta
+from collections.abc import Callable, Collection
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 
 from zheka.core import texts
@@ -39,6 +40,7 @@ POLL_REMINDER_BEFORE = timedelta(hours=48)
 class ReadingReminder(StrEnum):
     OPEN = "open"
     CLOSING = "closing"
+    MANUAL = "manual"
 
 
 def reading_reminder(
@@ -68,6 +70,15 @@ def reading_reminder(
     ):
         return ReadingReminder.CLOSING
     return None
+
+
+_READING_TEXTS: dict[ReadingReminder, Callable[[], str]] = {
+    ReadingReminder.OPEN: texts.reading_window_opened,
+    ReadingReminder.CLOSING: lambda: texts.reading_window_closing(
+        READING_SECOND_REMINDER_DAYS,
+    ),
+    ReadingReminder.MANUAL: texts.reading_reminder_manual,
+}
 
 
 class RemindersService:
@@ -235,6 +246,7 @@ class RemindersService:
         period: date,
         kind: ReadingReminder,
         queued: set[UserId],
+        since: datetime | None = None,
     ) -> int:
         flat_ids = await self._meters.flats_without_reading(house_id, period)
         residents = await self._residents.list_verified_for_flats(flat_ids)
@@ -245,10 +257,13 @@ class RemindersService:
             "period": period.isoformat(),
             "kind": kind.value,
         }
+        # с since гасит любое напоминание о показаниях с этого момента, какого
+        # угодно дома и вида
         reminded = await self._events_repo.users_with(
             EventType.READING_REMINDER_SENT,
             [UserId(resident.user_id) for resident in residents],
-            stamp,
+            stamp if since is None else {},
+            since,
         )
         user_ids = [
             UserId(resident.user_id)
@@ -265,12 +280,30 @@ class RemindersService:
         queued.update(fresh)
         self._notifications.notify_users(
             fresh,
-            (
-                texts.reading_window_opened()
-                if kind is ReadingReminder.OPEN
-                else texts.reading_window_closing(READING_SECOND_REMINDER_DAYS)
-            ),
+            _READING_TEXTS[kind](),
             category=NotificationCategory.METERS,
             mandatory=False,
         )
         return len(fresh)
+
+    async def remind_reading_laggards(
+        self,
+        house_ids: Collection[HouseId],
+        period: date,
+        now: datetime,
+    ) -> int:
+        # кнопка УК: кто сегодня уже получил любое напоминание о показаниях,
+        # второе не получит, поэтому десять нажатий - одно сообщение
+        since = datetime.combine(now.date(), time(), now.tzinfo)
+        queued: set[UserId] = set()
+        sent = 0
+        for house_id in house_ids:
+            sent += await self._remind_house_readings(
+                house_id,
+                period,
+                ReadingReminder.MANUAL,
+                queued,
+                since,
+            )
+        logger.info("Ручное напоминание о показаниях: адресатов %s", sent)
+        return sent

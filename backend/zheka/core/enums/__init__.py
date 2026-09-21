@@ -1,4 +1,4 @@
-from zheka.core.enums.analytics import MetricUnit
+from zheka.core.enums.analytics import AnalyticsMetric, MetricUnit
 from zheka.core.enums.announcements import AnnouncementChannel
 from zheka.core.enums.appointments import AppointmentStatus
 from zheka.core.enums.chats import ChatBinder, ChatStatus
@@ -35,6 +35,7 @@ __all__ = (
     "CATEGORY_RULES",
     "SERVICE_LABELS",
     "SERVICE_OF_METER",
+    "AnalyticsMetric",
     "AnnouncementChannel",
     "AppointmentStatus",
     "CategoryRule",
