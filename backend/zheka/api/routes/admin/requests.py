@@ -162,6 +162,7 @@ async def create_phone_request(
             flat_id=body.flat_id,
             caller_name=body.caller_name,
             caller_phone=body.caller_phone,
+            resident_id=body.resident_id,
         ),
         current_org.user_id,
     )

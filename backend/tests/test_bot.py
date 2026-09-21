@@ -51,12 +51,14 @@ from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.commands.deeplinks import (
+    DEMO_ADMIN_NOTICE,
     DEMO_RESIDENT_NOTICE,
     DEMO_STAFF_NOTICE,
 )
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
 from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
 from zheka.bot.handlers.menu.windows import MENU_TEXT
+from zheka.bot.handlers.requests.windows import NOT_CONNECTED_TEXT
 from zheka.bot.handlers.review.handlers import repeat_sent
 from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TEXT
 from zheka.bot.message_manager import ZhekaMessageManager
@@ -71,7 +73,7 @@ from zheka.broker.tasks.requests import (
     send_review_card,
 )
 from zheka.core.consent import CONSENT_TEXT
-from zheka.core.deeplinks import DeeplinkKind, house_payload, org_invite_payload
+from zheka.core.deeplinks import house_payload, org_invite_payload
 from zheka.core.enums import (
     CATEGORY_RULES,
     ChatStatus,
@@ -100,7 +102,7 @@ from zheka.core.ids import (
 from zheka.core.models import User
 from zheka.core.services.access import SLOT_FULL
 from zheka.core.services.chats import CHAT_NOT_BOUND, CHAT_TAKEN, WRONG_CODE
-from zheka.core.services.demo import DEMO_INN, demo_flat_number
+from zheka.core.services.demo import DEMO_INNS, demo_flat_number
 from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
 from zheka.core.texts import REQUEST_STATUS_LABELS
 from zheka.infra.database.models import (
@@ -506,7 +508,9 @@ async def _starts_of(session: AsyncSession, client: BotClient) -> Sequence[Row[A
     return (await session.execute(stmt)).all()
 
 
-@pytest.mark.parametrize("payload", ["не-диплинк", Omitted()])
+@pytest.mark.parametrize(
+    "payload", ["не-диплинк", "demo_admin_9", "demo_staff", Omitted()]
+)
 async def test_a_start_without_a_deeplink_falls_through_to_start(
     client: BotClient,
     message_manager: MockMessageManager,
@@ -600,14 +604,16 @@ async def test_the_request_goes_to_the_house_the_resident_linked_last(
     await client.send("/start")
     await client.click(message_manager.last_message(), ACCEPT)
     now = datetime.now(UTC)
-    first, _ = await _bot_house(bot_session)
-    last, last_address = await _bot_house(bot_session)
+    _, first = await _org_house(bot_session)
+    _, last = await _org_house(bot_session)
     await _linked(bot_session, client, first, now)
     await _linked(bot_session, client, last, now + timedelta(minutes=1))
+    last_house = await HousesRepo(bot_session).get(last)
+    assert last_house is not None
 
     address = await _draft_request(client, message_manager)
 
-    assert last_address in address
+    assert last_house.address in address
     enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)
     assert enqueued[-1]["house_id"] == int(last)
     # окно «Принял, оформляю» терминальное, а живой диалог глотает сообщения:
@@ -630,6 +636,7 @@ async def _org_house(session: AsyncSession) -> tuple[OrgId, HouseId]:
         inn=secrets.token_hex(6),
         phone="+70000000000",
         address="Тестовая область, Тестоград, Тестовая, 1",
+        registered_at=datetime.now(UTC),
     )
     session.add(org)
     await session.flush()
@@ -1677,16 +1684,16 @@ async def test_a_block_reason_with_markup_renders_in_the_access_window(
     assert "долг &lt;3 мес&gt;" in (message_manager.last_message().body.text or "")
 
 
-async def _bot_demo(session: AsyncSession) -> str:
-    # у базы бота демо-организация одна на прогон: окна коммитят по-настоящему,
-    # и второй тест находит ту, что завел первый
-    org = await OrgsRepo(session).get_by_inn(DEMO_INN)
+async def _bot_demo(session: AsyncSession, number: int = 1) -> tuple[OrgId, str]:
+    # у базы бота каждая демо-организация одна на прогон: окна коммитят
+    # по-настоящему, и следующий тест находит ту, что завел предыдущий
+    org = await OrgsRepo(session).get_by_inn(DEMO_INNS[number - 1])
     if org is not None:
         org_id = org.id
     else:
         org = Organization(
-            name="Демо-УК",
-            inn=DEMO_INN,
+            name=f"Демо-УК «{number}»",
+            inn=DEMO_INNS[number - 1],
             phone="+70000000000",
             address="Демо",
             registered_at=datetime.now(UTC),
@@ -1701,32 +1708,61 @@ async def _bot_demo(session: AsyncSession) -> str:
                 region="Демо",
                 city="Демоград",
                 street="Демо",
-                building="1",
+                building=str(number),
                 chat_binding_code=secrets.token_hex(4),
             )
         )
         await session.commit()
     houses = await HousesRepo(session).list_for_org(org_id)
-    return houses[0].address
+    return OrgId(org_id), houses[0].address
 
 
-async def test_a_demo_link_from_a_consented_user_opens_the_menu_with_the_flat(
-    client: BotClient, message_manager: MockMessageManager, bot_session: AsyncSession
+async def _demo_roles(
+    session: AsyncSession, client: BotClient
+) -> tuple[list[tuple[OrgId, OrgRole]], list[HouseId]]:
+    user = await _saved(session, MaxUserId(client.user.id))
+    assert user is not None
+    members = select(org_members_table.c.org_id, org_members_table.c.role).where(
+        org_members_table.c.user_id == user.id
+    )
+    residents = select(residents_table.c.house_id).where(
+        residents_table.c.user_id == user.id
+    )
+    return (
+        [(row.org_id, row.role) for row in await session.execute(members)],
+        list((await session.execute(residents)).scalars()),
+    )
+
+
+@pytest.mark.parametrize(
+    ("payload", "number"),
+    [("demo_resident_1", 1), ("demo_resident_2", 2)],
+)
+async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    payload: str,
+    number: int,
 ) -> None:
-    address = await _bot_demo(bot_session)
+    org_id, address = await _bot_demo(bot_session, number)
     await client.send("/start")
     await client.click(message_manager.last_message(), ACCEPT)
 
-    await _bot_started(client, DeeplinkKind.DEMO_RESIDENT.value)
+    await _bot_started(client, payload)
 
     user = await _saved(bot_session, MaxUserId(client.user.id))
     assert user is not None
     text = message_manager.last_message().body.text or ""
     assert MENU_TEXT in text
     assert (
-        DEMO_RESIDENT_NOTICE.format(flat=demo_flat_number(user.id), address=address)
+        DEMO_RESIDENT_NOTICE.format(
+            flat=demo_flat_number(user.id), address=address, org=f"Демо-УК «{number}»"
+        )
         in text
     )
+    houses = await HousesRepo(bot_session).list_for_org(org_id)
+    assert await _demo_roles(bot_session, client) == ([], [houses[0].id])
     sources = [
         event.payload["source"] for event in await _starts_of(bot_session, client)
     ]
@@ -1736,21 +1772,56 @@ async def test_a_demo_link_from_a_consented_user_opens_the_menu_with_the_flat(
 async def test_a_demo_link_without_consent_asks_for_it_and_then_grants_access(
     client: BotClient, message_manager: MockMessageManager, bot_session: AsyncSession
 ) -> None:
-    await _bot_demo(bot_session)
+    org_id, _address = await _bot_demo(bot_session)
 
-    await _bot_started(client, DeeplinkKind.DEMO_STAFF.value)
+    await _bot_started(client, "demo_staff_1")
     assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
     await client.click(message_manager.last_message(), ACCEPT)
 
     text = message_manager.last_message().body.text or ""
-    assert DEMO_STAFF_NOTICE.format(org="Демо-УК") in text
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
-    stmt = select(org_members_table.c.role).where(
-        org_members_table.c.user_id == user.id
+    assert DEMO_STAFF_NOTICE.format(org="Демо-УК «1»") in text
+    assert await _demo_roles(bot_session, client) == (
+        [(org_id, OrgRole.EMPLOYEE)],
+        [],
     )
-    assert (await bot_session.execute(stmt)).scalars().all() == [OrgRole.EMPLOYEE]
     sources = [
         event.payload["source"] for event in await _starts_of(bot_session, client)
     ]
     assert sources == [EventSource.DEEPLINK.value]
+
+
+async def test_a_demo_staff_link_lowers_a_demo_admin_to_an_employee(
+    client: BotClient, message_manager: MockMessageManager, bot_session: AsyncSession
+) -> None:
+    org_id, _address = await _bot_demo(bot_session, 3)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    await _bot_started(client, "demo_admin_3")
+    assert DEMO_ADMIN_NOTICE.format(org="Демо-УК «3»") in (
+        message_manager.last_message().body.text or ""
+    )
+    assert await _demo_roles(bot_session, client) == ([(org_id, OrgRole.ADMIN)], [])
+
+    await _bot_started(client, "demo_staff_3")
+    assert await _demo_roles(bot_session, client) == (
+        [(org_id, OrgRole.EMPLOYEE)],
+        [],
+    )
+
+
+async def test_a_house_without_a_connected_org_takes_no_request_in_the_bot(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    house_id, address = await _bot_house(bot_session)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+
+    text = message_manager.last_message().body.text or ""
+    assert NOT_CONNECTED_TEXT.format(address=address) in text
+    assert FIRST_CATEGORY.find_button(message_manager.last_message()) is None

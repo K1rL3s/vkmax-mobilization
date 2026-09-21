@@ -25,16 +25,18 @@ async def get_category(
 ) -> dict[str, Any]:
     me = await profile_service.me(dialog_user_id(dialog_manager))
     if not me.residencies:
-        return {"address": None, "categories": []}
+        return {"address": None, "connected": False, "categories": []}
 
-    # дом у жителя обычно один, а если их несколько - заявка идет в тот,
-    # который он завел последним: выбор дома живет в мини-аппе
     residency = max(me.residencies, key=lambda item: item.resident.created_at)
+    address = residency.house.address
+    if not residency.is_connected:
+        return {"address": address, "connected": False, "categories": []}
     with NewRequestData.proxy(dialog_manager) as data:
         data.house_id = residency.house.id
         data.flat_id = None if residency.flat is None else residency.flat.id
     return {
-        "address": residency.house.address,
+        "address": address,
+        "connected": True,
         "categories": [
             {"id": category.value, "label": CATEGORY_RULES[category].label}
             for category in RequestCategory
@@ -54,8 +56,6 @@ async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
 
 
 async def get_sent(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    # окно рисует и житель сразу после нажатия, и задача, когда заявка готова:
-    # номер приходит в start_data, до него его просто нет
     return {"request_id": NewRequestData.load_start(dialog_manager).request_id}
 
 
@@ -97,7 +97,6 @@ async def on_send(
     dialog_manager: DialogManager,
     publisher: FromDishka[TaskPublisher],
 ) -> None:
-    # свой stack_id: задача заменит это же окно карточкой, а не откроет второе
     data = NewRequestData.load(dialog_manager)
     publisher.publish(
         TaskName.CREATE_BOT_REQUEST,

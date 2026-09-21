@@ -843,6 +843,7 @@ async def test_an_executor_assigned_after_review_is_not_charged(
         HousesRepo(session),
         UsersRepo(session),
         OrgsRepo(session),
+        ResidentsRepo(session),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session),
         EventsService(EventsRepo(session)),

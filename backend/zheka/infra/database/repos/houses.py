@@ -21,8 +21,6 @@ from zheka.infra.database.tables.residents import demand_signals_table
 class HousesRepo(BaseAlchemyRepo):
     async def get(self, house_id: HouseId) -> House | None:
         stmt = select(House).where(houses_table.c.id == house_id)
-        # аннотация обязательна: House отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         house: House | None = await self._session.scalar(stmt)
         return house
 
@@ -59,8 +57,6 @@ class HousesRepo(BaseAlchemyRepo):
         if building is not None:
             stmt = stmt.where(houses_table.c.building.ilike(f"{building}%"))
         if query is not None:
-            # каждое слово ищется по всему адресу отдельным условием, поэтому
-            # «Баумана 12» и «12 Баумана» дают одну и ту же выдачу
             address = func.concat_ws(
                 " ", houses_table.c.city, houses_table.c.street, houses_table.c.building
             )
@@ -84,10 +80,6 @@ class HousesRepo(BaseAlchemyRepo):
         radius_degrees: Decimal,
         limit: int,
     ) -> Sequence[tuple[House, Decimal]]:
-        # квадрат расстояния в градусах широты: без PostGIS и без корня в базе,
-        # порядок сортировки от возведения в квадрат не меняется. Градус
-        # долготы короче градуса широты в cos(широты) раз, и без этого
-        # множителя радиус превращается в эллипс, вытянутый по долготе
         lat_delta = houses_table.c.lat - lat
         lon_delta = (houses_table.c.lon - lon) * lon_scale
         distance = lat_delta * lat_delta + lon_delta * lon_delta
@@ -136,8 +128,6 @@ class HousesRepo(BaseAlchemyRepo):
         return flat
 
     async def get_flat_by_number(self, house_id: HouseId, number: str) -> Flat | None:
-        # номер житель набирает руками, поэтому регистр «12А» и «12а» к делу
-        # не относится
         stmt = select(Flat).where(
             flats_table.c.house_id == house_id,
             func.lower(flats_table.c.number) == number.lower(),
@@ -181,8 +171,6 @@ class HousesRepo(BaseAlchemyRepo):
         return result.scalar_one()
 
     async def add_demand_signal(self, house_id: HouseId, user_id: UserId) -> None:
-        # идемпотентность держит уникальный индекс (house_id, user_id),
-        # а не чтение перед записью: два параллельных запроса прошли бы его оба
         stmt = (
             pg_insert(DemandSignal)
             .values(house_id=house_id, user_id=user_id)
@@ -270,9 +258,6 @@ class HousesRepo(BaseAlchemyRepo):
     async def bound_chat_titles(
         self, house_ids: Collection[HouseId]
     ) -> dict[HouseId, str | None]:
-        # ключ словаря и есть признак привязки: название чата может быть пустым.
-        # ponytail: у дома бывает несколько чатов, и название берется у
-        # последнего в выдаче; выбрать один явно, когда карточка покажет все
         if not house_ids:
             return {}
         stmt = select(chats_table.c.house_id, chats_table.c.title).where(
@@ -288,8 +273,6 @@ class HousesRepo(BaseAlchemyRepo):
     async def ids_for_org(
         self, house_ids: Collection[HouseId], org_id: OrgId
     ) -> set[HouseId]:
-        # дома приходят из тела запроса, поэтому выборка сужается тем же
-        # единственным инструментом изоляции, а не проверкой на месте вызова
         if not house_ids:
             return set()
         stmt = scoped_to_org(
@@ -308,8 +291,6 @@ class HousesRepo(BaseAlchemyRepo):
     async def list_managed_with_settings(
         self,
     ) -> Sequence[tuple[HouseId, OrgSettings | None]]:
-        # у организации из реестра строки настроек может не быть, и тогда
-        # окно показаний, как в ReadingsService, открыто всегда
         stmt = (
             select(houses_table.c.id, OrgSettings)
             .select_from(
@@ -330,8 +311,6 @@ class HousesRepo(BaseAlchemyRepo):
     async def add_flat_or_get(
         self, house_id: HouseId, number: str, area: int | None, account_no: str | None
     ) -> tuple[Flat, bool]:
-        # второй элемент - завели ли квартиру этим вызовом: два параллельных
-        # нажатия разводит уникальный индекс (house_id, number)
         stmt = (
             pg_insert(Flat)
             .values(house_id=house_id, number=number, area=area, account_no=account_no)

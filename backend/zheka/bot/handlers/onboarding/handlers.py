@@ -14,7 +14,6 @@ from zheka.bot.states import Menu, Onboarding
 from zheka.core.enums import ResidentRole
 from zheka.core.services.houses import HouseFound, HousesService
 
-# больше одной прокрутки житель все равно не пролистает, уточнить адрес дешевле
 HOUSES_LIMIT = 30
 
 
@@ -41,8 +40,6 @@ async def get_streets(
 
 
 async def get_houses(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    # ни одного запроса: дома в данные диалога кладет тот шаг, который их нашел,
-    # и выбор улицы, и геолокация, - поэтому окно у них общее
     return {"houses": OnboardingData.load(dialog_manager).houses}
 
 
@@ -69,8 +66,6 @@ async def on_city(
 @inject
 async def on_street(
     _callback: MessageCallback,
-    # Any, а не Select[str]: overload у inject разбирает четырехаргументный
-    # колбэк только с ManagedWidget, а Select им не является
     _select: Any,
     dialog_manager: DialogManager,
     street: str,
@@ -157,7 +152,6 @@ async def link_house(
     houses_service: HousesService,
     flat_number: str | None,
 ) -> None:
-    # источник и подъезд кладет сюда тот, кто привел жителя в дом
     data = OnboardingData.load(dialog_manager)
     await houses_service.link(
         dialog_user_id(dialog_manager),
@@ -176,5 +170,4 @@ async def link_house(
 
 
 async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
-    # диплинк кладет дом в start_data, выбор руками - в dialog_data
     OnboardingData.load_start(dialog_manager).dump(dialog_manager)

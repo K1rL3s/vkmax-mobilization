@@ -130,7 +130,7 @@ async def test_create_poll_allows_the_house_chairman(
     card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
 
     assert card.poll.created_by_role == "chairman"
-    assert card.poll.org_id is None
+    assert card.poll.org_id == base.org_id
 
 
 async def test_create_poll_refuses_a_plain_resident(
@@ -506,25 +506,28 @@ async def test_list_org_polls_scoped_by_org_with_a_foreign_house_404(
         )
 
 
-async def test_list_org_polls_only_shows_this_orgs_own_polls(
+async def test_org_staff_list_and_close_a_chairmans_poll(
     session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     base, chairman_id = await _chairman_setup(
-        session, make_org_house_flat_user, OrgRole.ADMIN
+        session, make_org_house_flat_user, OrgRole.EMPLOYEE
     )
     service = _make_service(session)
-    org_card = await service.create(
-        base.user_id, base.house_id, _draft(), org_id=base.org_id
+    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
+    foreign, foreign_chairman_id = await _chairman_setup(
+        session, make_org_house_flat_user
     )
-    chairman_card = await service.create(
-        chairman_id, base.house_id, _draft(), org_id=None
+    foreign_card = await service.create(
+        foreign_chairman_id, foreign.house_id, _draft(), org_id=None
     )
 
     items, total = await service.list_org_polls(
         base.org_id, base.user_id, None, None, 20, 0
     )
+    assert [item.item.poll.id for item in items] == [card.poll.id]
+    assert total == 1
 
-    ids = {item.item.poll.id for item in items}
-    assert org_card.poll.id in ids
-    assert chairman_card.poll.id not in ids
-    assert total == len(items)
+    closed = await service.close(card.poll.id, base.user_id)
+    assert closed.status is PollStatus.CLOSED
+    with pytest.raises(NotEnoughRights):
+        await service.close(foreign_card.poll.id, base.user_id)

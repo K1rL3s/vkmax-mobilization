@@ -15,8 +15,6 @@ from zheka.infra.database.tables.residents import flat_verification_requests_tab
 
 
 def _joined_to_flats() -> Select[tuple[VerificationRequest]]:
-    # у запроса подтверждения нет своего дома, он достается через квартиру:
-    # без этого соединения scoped_to_org не к чему применить
     return select(VerificationRequest).join(
         flats_table, flats_table.c.id == flat_verification_requests_table.c.flat_id
     )
@@ -26,8 +24,6 @@ class FlatsRepo(BaseAlchemyRepo):
     async def get_verification_request(
         self, verification_id: VerificationRequestId, org_id: OrgId
     ) -> VerificationRequest | None:
-        # verification_id приходит из пути, поэтому запрос сужается до домов
-        # организации: чужой запрос отвечает 404, а не 403
         stmt = scoped_to_org(
             _joined_to_flats().where(
                 flat_verification_requests_table.c.id == verification_id
@@ -35,8 +31,6 @@ class FlatsRepo(BaseAlchemyRepo):
             flats_table.c.house_id,
             org_id,
         )
-        # аннотация обязательна: VerificationRequest отображен императивно,
-        # и scalar() для такой сущности возвращает Any
         request: VerificationRequest | None = await self._session.scalar(stmt)
         return request
 
@@ -60,8 +54,6 @@ class FlatsRepo(BaseAlchemyRepo):
     ) -> Sequence[VerificationRequest]:
         if not flat_ids:
             return []
-        # DISTINCT ON оставляет от каждой квартиры одну, самую свежую запись:
-        # житель с тремя привязками стоит одного запроса, а не трех
         stmt = (
             select(VerificationRequest)
             .where(
@@ -103,9 +95,6 @@ class FlatsRepo(BaseAlchemyRepo):
     async def add_verification_request(
         self, flat_id: FlatId, user_id: UserId, account_no: str, comment: str | None
     ) -> VerificationRequest | None:
-        # None означает, что заявка по этой квартире уже ждет решения.
-        # Частичный уникальный индекс разводит два параллельных нажатия, а
-        # ON CONFLICT вместо исключения оставляет транзакцию вызывающего живой
         stmt = (
             pg_insert(VerificationRequest)
             .values(

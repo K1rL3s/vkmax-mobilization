@@ -47,7 +47,6 @@ async def get_admin_house_card(
     bot: FromDishka[Bot],
 ) -> AdminHouseCard:
     card = await houses_service.admin_card(current_org.org_id, house_id)
-    # картинку QR рисует браузер по этой ссылке, серверного рендера в проекте нет
     entrance_qrs = [
         EntranceQr(
             entrance=entrance,

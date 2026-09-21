@@ -45,7 +45,6 @@ SERVICE_LABELS: Mapping[ServiceType, str] = MappingProxyType(
     }
 )
 
-# счетчик какого типа считает расход по какой услуге тарифа: значения совпадают
 SERVICE_OF_METER: Mapping[MeterType, ServiceType] = MappingProxyType(
     {meter_type: ServiceType(meter_type) for meter_type in MeterType}
 )

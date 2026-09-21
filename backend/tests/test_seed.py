@@ -15,7 +15,7 @@ from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
 
 from zheka.core.charges import parse_lines
-from zheka.core.enums import RequestStatus
+from zheka.core.enums import OrgRole, RequestStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, MaxUserId, OrgId, UserId
 from zheka.core.services.demo import DEMO_INN, DemoService, demo_flat_number
@@ -282,11 +282,13 @@ async def test_no_seeded_request_waits_on_review(db: AsyncSession) -> None:
     assert (await db.execute(stmt)).scalar_one() == 0
 
 
-async def test_the_demo_window_is_open_all_month(db: AsyncSession) -> None:
-    settings = await OrgsRepo(db).get_settings(await _demo_org(db))
-
-    assert settings is not None
-    assert settings.meter_window_always_open
+async def test_every_demo_window_is_open_all_month(db: AsyncSession) -> None:
+    for profile in PROFILES:
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        settings = await OrgsRepo(db).get_settings(org.id)
+        assert settings is not None
+        assert settings.meter_window_always_open, profile.name
 
 
 async def test_activation_without_consent_is_refused(db: AsyncSession) -> None:
@@ -341,3 +343,27 @@ async def test_a_real_manager_is_replaced_only_in_moscow(db: AsyncSession) -> No
 
     replaced = {city for city, building in taken if (city, building) in managed}
     assert replaced == {"Москва"}
+
+
+async def test_a_flat_in_the_last_demo_organization_is_charged(
+    db: AsyncSession,
+) -> None:
+    # тарифы есть у каждой демо-организации, не только у первой: иначе
+    # квитанции квартиры проверяющего пусты
+    org, residency = await _demo(db).settle(await _positive_user(db), len(PROFILES))
+
+    assert org.inn == PROFILES[-1].inn
+    flat_id = FlatId(residency.resident.flat_id or 0)
+    charged = select(charges_table.c.total).where(charges_table.c.flat_id == flat_id)
+    totals = (await db.execute(charged)).scalars().all()
+    assert len(totals) == 6
+    assert all(total > 0 for total in totals)
+
+
+async def test_the_mini_app_activation_keeps_a_demo_admin(db: AsyncSession) -> None:
+    user_id = await _positive_user(db)
+    await _demo(db).join(user_id, 1, OrgRole.ADMIN)
+
+    access = await _demo(db).activate(user_id)
+
+    assert access.membership.member.role is OrgRole.ADMIN

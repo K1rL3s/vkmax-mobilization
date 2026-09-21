@@ -32,7 +32,6 @@ from zheka.infra.database.tables.requests import (
     requests_table,
 )
 
-# заявка считается открытой, пока ее не приняли жителем или таймаутом
 OPEN_STATUSES = (RequestStatus.NEW, RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS)
 
 _STAMP_BY_STATUS = {
@@ -53,8 +52,6 @@ class RequestFilters(ZhekaType):
 
 
 def overdue_at(now: datetime) -> ColumnElement[bool]:
-    # просрочка - это срок по категории, а он разный: вместо интервала в SQL
-    # считаем в питоне по одной границе на категорию и сравниваем с created_at
     return and_(
         or_(
             *[
@@ -106,8 +103,6 @@ class RequestsRepo(BaseAlchemyRepo):
 
     async def get(self, request_id: RequestId) -> Request | None:
         stmt = select(Request).where(requests_table.c.id == request_id)
-        # аннотация обязательна: Request отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         request: Request | None = await self._session.scalar(stmt)
         return request
 
@@ -247,7 +242,6 @@ class RequestsRepo(BaseAlchemyRepo):
         return {RequestGroupId(group_id): count for group_id, count in result.tuples()}
 
     async def get_for_org(self, request_id: RequestId, org_id: OrgId) -> Request | None:
-        # request_id приходит из пути: чужая заявка отвечает 404, а не 403
         stmt = scoped_to_org(
             select(Request).where(requests_table.c.id == request_id),
             requests_table.c.house_id,
@@ -273,7 +267,6 @@ class RequestsRepo(BaseAlchemyRepo):
         if filters.overdue:
             stmt = stmt.where(overdue)
         if filters.grouped:
-            # группа схлопывается в одну строку - самую раннюю заявку группы
             leaders = (
                 select(func.min(requests_table.c.id))
                 .where(requests_table.c.group_id.is_not(None))
@@ -287,8 +280,6 @@ class RequestsRepo(BaseAlchemyRepo):
             )
 
         total = await self._count(stmt)
-        # просроченные сверху, дальше свежие: диспетчер разбирает список
-        # сверху вниз и не ищет горящее глазами
         page_stmt = (
             stmt.order_by(overdue.desc(), requests_table.c.created_at.desc())
             .limit(limit)
@@ -314,8 +305,6 @@ class RequestsRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def list_reviewed_before(self, before: datetime) -> Sequence[Request]:
-        # блокировка строки делает запуск идемпотентным: второй воркер не
-        # увидит заявку, пока первый завершает ее по таймауту
         stmt = (
             select(Request)
             .where(

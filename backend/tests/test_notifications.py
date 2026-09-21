@@ -37,6 +37,7 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
+from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.max import MaxSender
@@ -202,6 +203,7 @@ def _admin_service(
         HousesRepo(session),
         UsersRepo(session),
         OrgsRepo(session),
+        ResidentsRepo(session),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),

@@ -27,7 +27,6 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 MIN_METER_WINDOW_DAY = 1
-# 28-е число есть в любом месяце, включая февраль невисокосного года
 MAX_METER_WINDOW_DAY = 28
 MIN_GROUP_THRESHOLD = 2
 MIN_GROUP_WINDOW_HOURS = 1
@@ -83,8 +82,6 @@ class OrgsService:
             if inn is not None
             else await self._orgs.get_by_license(cast("str", license_no))
         )
-        # это проба реестра, а не карточка: ненайденная УК отвечает флагом,
-        # а не 404
         if org is None:
             return OrgLookupView(org=None, houses=[])
 
@@ -107,7 +104,6 @@ class OrgsService:
         phone: str,
         address: str,
     ) -> OrgCardView:
-        # скрытый код проверяется до любого обращения к базе
         if not deeplink_code.isascii() or not secrets.compare_digest(
             deeplink_code, self._deeplinks.org_register
         ):
@@ -116,14 +112,12 @@ class OrgsService:
         org = await self._orgs.get_by_inn(inn)
         if org is None and license_no is not None:
             org = await self._orgs.get_by_license(license_no)
-        # привязки дома к УК руками нет: организация берется из реестра
         if org is None:
             raise EntityNotFound("Организация не найдена в реестре")
         if org.registered_at is not None:
             raise InvalidState("Организация уже зарегистрирована")
 
         org.registered_at = datetime.now(UTC)
-        # УК правит свои контакты в момент регистрации: в реестре они старые
         org.name = name
         org.phone = phone
         org.address = address
@@ -133,8 +127,6 @@ class OrgsService:
         try:
             await self._orgs.add_settings(org_id)
         except IntegrityError as error:
-            # гонку двух регистраций одного ИНН разводит первичный ключ
-            # org_settings: проигравший получает тот же ответ, что и опоздавший
             raise InvalidState("Организация уже зарегистрирована") from error
         await self._events.record(
             EventType.ORG_REGISTERED, user_id=user_id, org_id=org_id, inn=org.inn
@@ -153,12 +145,7 @@ class OrgsService:
     async def settings(self, org_id: OrgId) -> OrgSettingsView:
         org = await self._get_org(org_id)
         settings = await self._orgs.get_settings(org_id)
-        return OrgSettingsView(
-            org=org,
-            # у организации из реестра строки настроек еще нет: экран
-            # показывает значения по умолчанию, а не падает
-            settings=settings or OrgSettings(org_id=org_id),
-        )
+        return OrgSettingsView(org=org, settings=settings or OrgSettings(org_id=org_id))
 
     async def update_settings(
         self,
@@ -192,14 +179,11 @@ class OrgsService:
         if settings is None:
             settings = await self._orgs.add_settings(org_id)
 
-        # окно показаний хранит дни и при поднятом флаге: флаг снимут, и дни
-        # снова заработают
         settings.meter_window_day_from = meter_window_day_from
         settings.meter_window_day_to = meter_window_day_to
         settings.meter_window_always_open = meter_window_always_open
         settings.group_threshold = group_threshold
         settings.group_window_hours = group_window_hours
-        # телефон и заметка о приеме живут в organizations, а не в настройках
         org.phone = phone
         org.reception_note = reception_note
         return OrgSettingsView(org=org, settings=settings)
@@ -241,7 +225,6 @@ class OrgsService:
     ) -> OrgInvite:
         if not can_invite(actor_role, role):
             raise NotEnoughRights("Эту роль выдать нельзя")
-        # нулевой срок жизни выдал бы код, мертвый в момент создания
         if expires_in_hours <= 0:
             raise InvalidRequest("Срок жизни кода - больше нуля часов")
         if max_activations <= 0:
@@ -277,8 +260,6 @@ class OrgsService:
         org_id = invite.org_id
         org = await self._get_org(org_id)
 
-        # членство проверяется до списания: повышение роли уже нанятого
-        # сотрудника не должно съедать активацию
         member = await self._orgs.get_member(org_id, user_id)
         if member is not None:
             if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):

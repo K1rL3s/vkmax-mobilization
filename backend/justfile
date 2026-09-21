@@ -83,7 +83,6 @@ worker:
 scheduler:
     uv run python -m zheka.broker.scheduler
 
-# демо-данные в пустую базу; второй запуск ничего не меняет
 seed:
     uv run python -m zheka.seed
 
@@ -95,3 +94,6 @@ downgrade:
 
 migration message:
     uv run alembic revision --autogenerate -m "{{message}}"
+
+openapi:
+    uv run python scripts/export_openapi.py

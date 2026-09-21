@@ -11,8 +11,6 @@ from zheka.broker.publisher import TaskPublisher
 
 
 class TransactionMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
-    # у апдейта нет ни ответа, ни результата задачи: исход транзакции решает
-    # сам обработчик - вернулся или упал
     __slots__ = ()
 
     async def __call__(

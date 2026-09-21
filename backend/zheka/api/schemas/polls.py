@@ -20,11 +20,9 @@ from zheka.core.services.quorum import (
     area_percent_of,
 )
 
-# опрос - не голосование (ОСС) по ЖК РФ, эта фраза идет в каждой карточке
-# и в каждом результате буквально, а не только на фронте
 DISCLAIMER = (
-    "предварительный сбор позиций собственников, не является голосованием "
-    "(ОСС) по ЖК РФ"
+    "предварительный сбор позиций собственников, "
+    "не является голосованием (ОСС) по ЖК РФ"
 )
 
 _PERCENT = "Доля в сотых долях процента, 50% это 5000"
@@ -67,7 +65,6 @@ class PollCard(PollListItem):
     created_by_role: str
     can_vote: bool
     options: list[PollOptionItem]
-    # опрос не является ОСС по ЖК РФ
     disclaimer: str = DISCLAIMER
     description: str | None = None
     my_option_ids: list[PollOptionId]
@@ -143,7 +140,6 @@ class PollResults(BaseSchema):
     voted_area_percent: int = Field(description=_PERCENT)
     quorum_percent: int = Field(default=QUORUM_PERCENT, description=_PERCENT)
     quorum_reached: bool
-    # в площадь идут только подтвержденные квартиры
     unverified_flats: int
     options: list[PollOptionResult]
     disclaimer: str = DISCLAIMER

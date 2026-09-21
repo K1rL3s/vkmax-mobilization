@@ -23,7 +23,6 @@ UNKNOWN_ORG = "УК"
 class AnnouncementData(ZhekaType):
     announcement: Announcement
     org_name: str | None
-    # только у только что созданного объявления
     houses_without_chat: Sequence[HouseId] = ()
 
 
@@ -74,7 +73,6 @@ class AnnouncementsService:
 
         targets = list(dict.fromkeys(house_ids))
         picked = list(dict.fromkeys(channels))
-        # дом чужой организации отвечает 404: 403 подтвердил бы, что он есть
         known = await self._houses.ids_for_org(targets, org_id)
         if any(house_id not in known for house_id in targets):
             raise EntityNotFound(HOUSE_NOT_FOUND)
@@ -125,7 +123,6 @@ class AnnouncementsService:
     async def list_for_resident(
         self, house_id: HouseId, limit: int, offset: int
     ) -> tuple[list[AnnouncementData], int]:
-        # дом уже проверил CurrentResidency
         announcements, total = await self._announcements.list_for_house(
             house_id, limit, offset
         )

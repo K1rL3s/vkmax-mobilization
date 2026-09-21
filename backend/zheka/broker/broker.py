@@ -21,8 +21,6 @@ def main() -> AsyncBroker:
     config = load_config()
     setup_logger(config.log)
 
-    # окно рисует диспетчер того же процесса: фоновый менеджер кормит
-    # апдейтом его, а не сеть. Воркер не поллит и не слушает вебхук
     bot_setup = make_dispatcher(config.redis)
     container = make_container(
         config=config,

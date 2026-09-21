@@ -8,8 +8,6 @@ from zheka.bot.dialog_data import MenuData
 
 
 async def get_menu(bot: Bot, dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    # ни одного сервиса: с этого окна перезапускает роутер ошибок, живущий
-    # снаружи dishka. web_app у OpenAppButton - username бота, а не url
     username = bot.state.info.username
     return {
         "bot_username": username if is_defined(username) else None,

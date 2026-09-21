@@ -20,7 +20,6 @@ class EventsService:
     async def record(
         self, type: EventType, *, user_id: UserId | None = None, **payload: Any
     ) -> None:
-        # аналитика не валит бизнес-действие; default=str спасает datetime и UUID
         try:
             payload = json.loads(json.dumps(payload, default=str))
             await self._events_repo.add(type, user_id, payload)

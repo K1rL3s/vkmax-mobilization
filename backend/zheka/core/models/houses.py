@@ -19,18 +19,15 @@ class House(ZhekaMutableType):
     city: str
     street: str
     building: str
-    # в открытых данных его нет, а придумывать настоящий номер нельзя
     cadastral_no: str | None = None
     built_year: int | None = None
     floors: int | None = None
-    area: int | None = None  # 1/100 square metre
+    area: int | None = None
     entrances: int = 1
     lat: Decimal | None = None
     lon: Decimal | None = None
     chat_binding_code: str
-    # форма - в HouseOverhaul
     overhaul: Any = field(default_factory=dict)
-    # имена файлов из upload_file
     documents: Any = field(default_factory=list)
 
     @property
@@ -43,5 +40,5 @@ class Flat(ZhekaMutableType):
     house_id: HouseId
     number: str
     entrance: int | None = None
-    area: int | None = None  # 1/100 square metre
+    area: int | None = None
     account_no: str | None = None

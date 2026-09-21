@@ -13,18 +13,13 @@ from zheka.core.services.files import FilesService
 
 logger = logging.getLogger(__name__)
 
-# резидент ждет ответа синхронно, поэтому бюджет жесткий и без ретраев
 TIMEOUT_SECONDS = 3.0
 _RECOGNIZE_URL = "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText"
 _MODEL = "meter"
-
-# первое число в распознанном тексте: цифры, опционально дробная часть
-# через точку или запятую - формат табло счетчика
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 
 
 def parse_reading(text: str) -> int | None:
-    # показание счетчика в тысячных долях: "123.45" -> 123450, "0123" -> 123000
     match = _NUMBER_RE.search(text)
     if match is None:
         return None
@@ -64,7 +59,6 @@ class VisionClient:
         value = None if text is None else parse_reading(text)
         if value is None:
             return None
-        # OCR отдает одно число: счетчик с двумя зонами резидент правит руками
         return {TariffZone.SINGLE: value}
 
     async def _call(self, content: bytes) -> dict[str, Any] | None:

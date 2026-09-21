@@ -15,7 +15,6 @@ REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
     RequestStatus.DONE: "Выполнена",
 }
 
-# бот шлет HTML, и незакрытая угловая скобка от УК или жителя роняет отправку
 _plain = escape
 
 
@@ -43,9 +42,10 @@ def flat_verification_rejected(flat_number: str, address: str, reason: str) -> s
     )
 
 
-def resident_blocked(address: str, reason: str) -> str:
+def resident_blocked(address: str, reason: str, contact: str) -> str:
     return (
-        f"УК закрыла вам доступ к дому {_plain(address)}\n\nПричина: {_plain(reason)}"
+        f"УК закрыла вам доступ к дому {_plain(address)}\n\n"
+        f"Причина: {_plain(reason)}\n\n{contact}"
     )
 
 
@@ -58,7 +58,6 @@ def announcement(org_name: str, text: str) -> str:
 
 
 def blocked_detail(reason: str | None) -> str:
-    # без _plain: уходит в detail ответа API, для бота есть resident_blocked
     return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
 
 
@@ -109,7 +108,6 @@ def verification_expired(meter: str, serial: str) -> str:
 
 
 def appointment_reminder(starts_at: datetime, address: str) -> str:
-    # настенные часы хранятся как UTC и показываются без перевода в пояс
     return (
         f"Напоминаем: завтра в {starts_at:%H:%M} вы записаны на прием в УК "
         f"по дому {_plain(address)}"
@@ -135,3 +133,17 @@ def reading_reminder_manual() -> str:
 REQUEST_EXPORT_DISCLAIMER = (
     "Документ сформирован автоматически и юридической силы не имеет."
 )
+
+
+def org_contact(name: str, phone: str) -> str:
+    contact = _plain(name)
+    if phone.strip():
+        contact = f"{contact}, {_plain(phone)}"
+    return f"Связаться с УК: {contact}"
+
+
+def flat_verification_revoked(address: str, reason: str, contact: str) -> str:
+    return (
+        f"УК отозвала подтверждение вашей квартиры в доме {_plain(address)}\n\n"
+        f"Причина: {_plain(reason)}\n\n{contact}"
+    )

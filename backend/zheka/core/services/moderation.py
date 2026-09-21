@@ -7,12 +7,20 @@ from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseResidentView
 from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.houses import HousesRepo
+from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 
 class ModerationService:
-    __slots__ = ("_events", "_houses", "_notifications", "_residents", "_users")
+    __slots__ = (
+        "_events",
+        "_houses",
+        "_notifications",
+        "_orgs",
+        "_residents",
+        "_users",
+    )
 
     def __init__(
         self,
@@ -21,23 +29,24 @@ class ModerationService:
         houses_repo: HousesRepo,
         notifications_service: NotificationsService,
         events_service: EventsService,
+        orgs_repo: OrgsRepo,
     ) -> None:
         self._residents = residents_repo
         self._users = users_repo
         self._houses = houses_repo
         self._notifications = notifications_service
         self._events = events_service
+        self._orgs = orgs_repo
 
     async def block(
         self, org_id: OrgId, resident_id: ResidentId, reason: str, by: UserId
     ) -> HouseResidentView:
         stated = _require_reason(reason)
         resident = await self._get_resident(org_id, resident_id)
-        # председателя блокирует только снятие председательства
         if resident.is_chairman:
             raise InvalidState("Нельзя заблокировать председателя совета дома")
+        contact = await self._contact(org_id)
 
-        # блокировка ничего не удаляет: заявки, показания и голоса остаются
         await self._residents.set_status(resident, ResidentStatus.BLOCKED, stated)
         await self._events.record(
             EventType.RESIDENT_BLOCKED,
@@ -46,7 +55,8 @@ class ModerationService:
             reason=stated,
         )
         self._notify(
-            resident, texts.resident_blocked(await self._address(resident), stated)
+            resident,
+            texts.resident_blocked(await self._address(resident), stated, contact),
         )
         return await self._view(resident)
 
@@ -71,15 +81,20 @@ class ModerationService:
         resident = await self._get_resident(org_id, resident_id)
         if resident.verified_at is None:
             raise InvalidState("Квартира жителя не подтверждена")
+        contact = await self._contact(org_id)
 
-        # привязка к дому остается, снимается подтверждение квартиры и вместе
-        # с ним председательство: председателем бывает только подтвержденный
         await self._residents.revoke_verification(resident)
         await self._events.record(
             EventType.FLAT_VERIFICATION_REVOKED,
             user_id=by,
             resident_id=resident_id,
             reason=stated,
+        )
+        self._notify(
+            resident,
+            texts.flat_verification_revoked(
+                await self._address(resident), stated, contact
+            ),
         )
         return await self._view(resident)
 
@@ -92,8 +107,6 @@ class ModerationService:
                 raise InvalidState(
                     "Председателем становится житель с подтвержденной квартирой"
                 )
-            # председатель в доме один, поэтому прошлый снимается той же
-            # транзакцией
             await self._residents.clear_chairman(resident.house_id)
         await self._residents.set_chairman(resident, value)
         return await self._view(resident)
@@ -103,8 +116,6 @@ class ModerationService:
         return "" if house is None else house.address
 
     def _notify(self, resident: Resident, text: str) -> None:
-        # закрытый и открытый доступ житель должен увидеть при любых
-        # настройках, поэтому сообщение обязательное
         self._notifications.notify_user(
             resident.user_id,
             text,
@@ -129,10 +140,14 @@ class ModerationService:
         )
         return HouseResidentView(resident=resident, user=user, flat=flat)
 
+    async def _contact(self, org_id: OrgId) -> str:
+        org = await self._orgs.get(org_id)
+        if org is None:
+            raise EntityNotFound("Организация не найдена")
+        return texts.org_contact(org.name, org.phone)
+
 
 def _require_reason(reason: str) -> str:
-    # строка из пробелов - это пустая причина, и она не должна доехать до
-    # уведомления жителю
     stripped = reason.strip()
     if not stripped:
         raise InvalidRequest("Укажите причину")

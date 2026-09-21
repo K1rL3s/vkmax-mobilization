@@ -24,7 +24,6 @@ from zheka.core.services.requests import (
 )
 from zheka.core.texts import REQUEST_STATUS_LABELS
 
-# ponytail: пополам «было» и «стало», свободную половину не добираем
 PHOTOS_PER_SIDE = MAX_PHOTOS // 2
 
 
@@ -39,8 +38,6 @@ async def get_review(
     files_service: FromDishka[FilesService],
     **_: Any,
 ) -> dict[str, Any]:
-    # после автозакрытия или приемки в мини-аппе следующая отрисовка покажет
-    # закрытую заявку и ни одной кнопки
     request_id = _request_id(dialog_manager)
     card = await requests_service.get_card(dialog_user_id(dialog_manager), request_id)
     request = card.request
@@ -97,8 +94,6 @@ async def on_reject(
 @inject
 async def on_rating(
     callback: MessageCallback,
-    # Any по той же причине, что в онбординге: overload у inject не разбирает
-    # четырехаргументный колбэк с Select
     _select: Any,
     dialog_manager: DialogManager,
     rating: int,
@@ -129,8 +124,6 @@ async def on_rejection(
             RequestChannel.BOT,
         )
     except ZhekaError as error:
-        # приемку успели закрыть, пока было открыто окно: текст жителя не
-        # должен стать повторной заявкой по закрытой
         await back_to_menu(dialog_manager, str(error))
         return
     await back_to_menu(dialog_manager, repeat_sent(card.request.id))

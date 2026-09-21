@@ -10,7 +10,6 @@ def can_manage_houses(role: OrgRole) -> bool:
 
 
 def can_invite(role: OrgRole, target_role: OrgRole) -> bool:
-    # второго создателя не выдает никто: создатель один и неисключаем
     return target_role is not OrgRole.CREATOR and (
         role is OrgRole.CREATOR
         or (
@@ -28,6 +27,4 @@ def can_remove_member(actor_role: OrgRole, target_role: OrgRole) -> bool:
 
 
 def higher_role(first: OrgRole, second: OrgRole) -> OrgRole:
-    # старшинство ролей - это порядок объявления OrgRole, от создателя
-    # к исполнителю: отдельная таблица рангов молча разошлась бы с ним
     return min(first, second, key=list(OrgRole).index)

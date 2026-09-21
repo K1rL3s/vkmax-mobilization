@@ -25,8 +25,6 @@ class NotificationsService:
     async def levels(
         self, user_id: UserId
     ) -> dict[NotificationCategory, NotificationLevel]:
-        # мини-апп рисует все три переключателя, поэтому недостающие строки
-        # добираются дефолтом, а не пропускаются
         stored = await self._notifications.get_levels(user_id)
         return {
             category: stored.get(category, DEFAULT_LEVEL)
@@ -56,8 +54,6 @@ class NotificationsService:
         category: NotificationCategory,
         mandatory: bool,
     ) -> None:
-        # уровень уведомления разрешает сама задача, на месте отправки: так в
-        # очереди лежит только id, а настройки читаются в момент доставки
         self._publisher.publish(
             TaskName.SEND_TO_USER,
             user_id=user_id,
@@ -94,9 +90,6 @@ class NotificationsService:
     def open_executor_card(
         self, request_id: RequestId, user_id: UserId | None = None
     ) -> None:
-        # карточка - окно диалога, а не текст: получателя и его уровень
-        # задача найдет сама, по заявке, уже после коммита. user_id - это
-        # перерисовка для того, кто сам нажал, а не весть назначенному
         self._publisher.publish(
             TaskName.SEND_EXECUTOR_CARD, request_id=request_id, user_id=user_id
         )
@@ -105,15 +98,11 @@ class NotificationsService:
         self._publisher.publish(TaskName.SEND_REVIEW_CARD, request_id=request_id)
 
     def welcome_chat(self, chat_id: MaxChatId, house_id: HouseId) -> None:
-        # ссылку на дом строит задача: имя бота знает только maxo, а core о
-        # нем не знает
         self._publisher.publish(
             TaskName.WELCOME_CHAT, chat_id=chat_id, house_id=house_id
         )
 
     def open_access_slots(self, access_request_id: AccessRequestId) -> None:
-        # адресатов и их уровень задача найдет сама, после коммита: окно
-        # читает запрос из другой сессии
         self._publisher.publish(
             TaskName.BROADCAST_ACCESS_REQUEST, access_request_id=access_request_id
         )

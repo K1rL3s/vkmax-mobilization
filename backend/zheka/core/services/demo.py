@@ -14,7 +14,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import UserId
-from zheka.core.models import Flat
+from zheka.core.models import Flat, Organization
 from zheka.core.services.houses import CONSENT_REQUIRED, ResidencyView
 from zheka.core.services.profile import OrgMembershipView
 from zheka.core.services.readings import current_period
@@ -25,16 +25,13 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-# ИНН не проходит контрольную сумму и не столкнется ни с одной настоящей УК
-DEMO_INN = "9900000001"
+DEMO_INNS = ("9900000001", "9900000010", "9900000020", "9900000030", "9900000040")
+DEMO_INN = DEMO_INNS[0]
 NOT_SEEDED = "Демо-доступ еще не готов: демо-данные не загружены"
 
-# сколько закрытых периодов у квартиры: первое показание - точка отсчета, по
-# нему нет расхода, поэтому показаний на одно больше, чем квитанций
 CHARGED_MONTHS = 6
 VERIFICATION_SOON = timedelta(days=21)
 
-# расход в месяц, тысячные единицы: вода в кубометрах, свет в кВт·ч по зонам
 _MONTHLY: dict[MeterType, dict[TariffZone, int]] = {
     MeterType.COLD_WATER: {TariffZone.SINGLE: 7_000},
     MeterType.HOT_WATER: {TariffZone.SINGLE: 4_500},
@@ -56,8 +53,6 @@ class DemoAccess(ZhekaType):
 
 
 def demo_flat_number(user_id: UserId) -> str:
-    # номер от пользователя: два проверяющих в одну секунду не спорят за
-    # следующий свободный номер, и блокировка не нужна
     return f"Д{user_id}"
 
 
@@ -81,46 +76,10 @@ class DemoService:
         self._users = users_repo
 
     async def activate(self, user_id: UserId) -> DemoAccess:
-        # согласие проверяется и здесь: житель заводится не через HousesService.link
-        user = await self._users.get_by_id(user_id)
-        if user is None or user.consent_at is None:
-            raise NotEnoughRights(CONSENT_REQUIRED)
-        org = await self._orgs.get_by_inn(DEMO_INN)
-        if org is None:
-            raise EntityNotFound(NOT_SEEDED)
-        # у демо-организации ровно один дом - демо-дом, так его кладет сид
-        houses = await self._houses.list_for_org(org.id)
-        if not houses:
-            raise EntityNotFound(NOT_SEEDED)
-        house = houses[0]
-        house_id = house.id
-
+        org, residency = await self.settle(user_id, 1)
         member = await self._orgs.add_member_or_get(org.id, user_id, OrgRole.EMPLOYEE)
-        now = datetime.now(UTC)
-        rng = Random(f"demo-flat:{user_id}")
-        flat, created = await self._houses.add_flat_or_get(
-            house_id,
-            demo_flat_number(user_id),
-            area=rng.randint(3_800, 7_800),
-            # номер квартиры с буквой: у засеянных квартир номера из цифр, и
-            # лицевые счета не совпадут
-            account_no=f"ДЕМО-{house_id}-{demo_flat_number(user_id)}",
-        )
-        if created:
-            # чистая история без скачка: первое свое показание проверяющий
-            # сравнивает со спокойным фоном
-            await self.furnish(flat, user_id, now.date(), verification_soon=True)
-
-        resident, _created = await self._residents.add_or_get(
-            user_id, house_id, flat.id, None, ResidentRole.OWNER
-        )
-        if resident.verified_at is None:
-            await self._residents.set_verified(resident, flat.id, now, None)
         return DemoAccess(
-            membership=OrgMembershipView(member=member, org=org),
-            residency=ResidencyView(
-                resident=resident, house=house, flat=flat, is_connected=True
-            ),
+            membership=OrgMembershipView(member=member, org=org), residency=residency
         )
 
     async def furnish(
@@ -133,19 +92,14 @@ class DemoService:
         below: bool = False,
         verification_soon: bool = False,
     ) -> None:
-        # счетчики, показания и квитанции квартиры за полгода до today.
-        # Текущий период остается открытым: подать его - то, ради чего
-        # проверяющий пришел
         rng = Random(f"flat:{flat.house_id}:{flat.number}")
         months = [current_period(today)]
         for _ in range(CHARGED_MONTHS + 1):
             months.insert(0, previous_period(months[0]))
         periods = months[:-1]
 
-        # по счетчику: показания по периодам и расход по периодам
         usage: dict[MeterType, list[dict[TariffZone, int]]] = {}
         for meter_type, monthly in _MONTHLY.items():
-            # горячая вода с поверкой через три недели - сценарий предупреждения бота
             soon = verification_soon and meter_type is MeterType.HOT_WATER
             meter = await self._meters.add(
                 flat.id,
@@ -202,7 +156,6 @@ class DemoService:
                 {meter_type: used[index] for meter_type, used in usage.items()},
             )
             issued = datetime.combine(months[index + 1], time(6), UTC)
-            # оплачены все, кроме последней: демо-оплате есть что оплатить
             paid_at = (
                 None
                 if index == len(periods) - 1
@@ -228,8 +181,6 @@ class DemoService:
             if tariff is None:
                 continue
             below = any(value < 0 for value in zones.values())
-            # начисление по показанию меньше предыдущего не выставляется в
-            # минус: объем ноль, пока УК его не проверит
             volumes = {zone: max(value, 0) for zone, value in zones.items()}
             lines.append(
                 ChargeLine(
@@ -259,3 +210,50 @@ class DemoService:
                 )
             )
         return lines
+
+    async def join(
+        self, user_id: UserId, number: int, role: OrgRole
+    ) -> OrgMembershipView:
+        org = await self._org(user_id, number)
+        member = await self._orgs.add_member_or_get(org.id, user_id, role)
+        await self._orgs.set_member_role(member, role)
+        return OrgMembershipView(member=member, org=org)
+
+    async def settle(
+        self, user_id: UserId, number: int
+    ) -> tuple[Organization, ResidencyView]:
+        org = await self._org(user_id, number)
+        houses = await self._houses.list_for_org(org.id)
+        if not houses:
+            raise EntityNotFound(NOT_SEEDED)
+        house = houses[0]
+        house_id = house.id
+
+        now = datetime.now(UTC)
+        rng = Random(f"demo-flat:{user_id}")
+        flat, created = await self._houses.add_flat_or_get(
+            house_id,
+            demo_flat_number(user_id),
+            area=rng.randint(3_800, 7_800),
+            account_no=f"ДЕМО-{house_id}-{demo_flat_number(user_id)}",
+        )
+        if created:
+            await self.furnish(flat, user_id, now.date(), verification_soon=True)
+
+        resident, _created = await self._residents.add_or_get(
+            user_id, house_id, flat.id, None, ResidentRole.OWNER
+        )
+        if resident.verified_at is None:
+            await self._residents.set_verified(resident, flat.id, now, None)
+        return org, ResidencyView(
+            resident=resident, house=house, flat=flat, is_connected=True
+        )
+
+    async def _org(self, user_id: UserId, number: int) -> Organization:
+        user = await self._users.get_by_id(user_id)
+        if user is None or user.consent_at is None:
+            raise NotEnoughRights(CONSENT_REQUIRED)
+        org = await self._orgs.get_by_inn(DEMO_INNS[number - 1])
+        if org is None:
+            raise EntityNotFound(NOT_SEEDED)
+        return org

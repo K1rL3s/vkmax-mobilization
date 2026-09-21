@@ -32,7 +32,6 @@ async def _fan_out(
     category: str,
     mandatory: bool,
 ) -> int:
-    # уровень читается при доставке, а не при постановке в очередь
     recipients = await notifications_repo.recipients(
         user_ids, NotificationCategory(category)
     )
@@ -43,7 +42,6 @@ async def _fan_out(
         notify = resolve_notify(recipient.level, mandatory=mandatory)
         if notify is None:
             continue
-        # недоступного получателя MaxSender проглатывает и возвращает None
         await sender.send_message(text, user_id=recipient.max_user_id, notify=notify)
         sent += 1
 
@@ -91,7 +89,6 @@ async def broadcast_to_chats(
     chats_service: FromDishka[ChatsService],
     users_repo: FromDishka[UsersRepo],
 ) -> int:
-    # у чата нет уровня, notify=False повторяет DEFAULT_LEVEL
     logger.info("Рассылка по чатам: чатов %s", len(chat_ids))
     sent = 0
     for chat_id in chat_ids:
@@ -100,8 +97,6 @@ async def broadcast_to_chats(
             sent += 1
             continue
 
-        # события о смене прав MAX не шлет: не ушло - перепроверяем права и
-        # зовем того, кто привязывал, на единственную кнопку, которая это чинит
         try:
             is_admin = await is_chat_admin(bot, chat_id)
             chat = await chats_service.set_admin(chat_id, is_admin)
@@ -115,7 +110,6 @@ async def broadcast_to_chats(
         )
         if binder is None:
             continue
-        # со звуком: бот без прав глушит весь дом, пока кто-то не нажмет
         await sender.start_dialog(
             ChatBinding.rights,
             binder,

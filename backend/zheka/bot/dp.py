@@ -40,13 +40,10 @@ from zheka.config import RedisConfig
 
 STATE_TTL = timedelta(days=30)
 
-# висит на общем родителе: не пройдя фильтр, роутер до детей не спускается.
-# На Dialog его вешать нельзя - filter() присваивает и затер бы IntentFilter
 PRIVATE_ONLY = MagicData(F.update_context.chat_type == ChatType.DIALOG)
 
 
 class BotSetup(ZhekaType):
-    # фабрику отдает только setup_dialogs, другую собрать нельзя
     dp: Dispatcher
     bg_manager_factory: BgManagerFactory
 
@@ -70,13 +67,10 @@ def make_dispatcher(
                 "retry_on_timeout": True,
             },
         )
-        # межпроцессная: два нажатия одного жителя попадают в разные воркеры
         events_isolation = storage.create_isolation()
 
     dp = Dispatcher(
         storage=storage,
-        # контекст диалога запирает events_isolation из setup_dialogs, а
-        # сырого состояния FSM у бота нет
         events_isolation=DisabledEventIsolation(),
         key_builder=key_builder,
     )
@@ -84,18 +78,13 @@ def make_dispatcher(
     dp.update.middleware.outer(LoggingMiddleware())
     dp.message_created.middleware.outer(ThrottlingMiddleware())
     dp.message_callback.middleware.outer(ThrottlingMiddleware())
-    # inner: DishkaMiddleware регистрирует setup_dishka позже, outer был бы
-    # снаружи контейнера
     dp.update.middleware.inner(TransactionMiddleware())
-    # после транзакции, чтобы апсерт попал внутрь той, которая его закоммитит
     dp.update.middleware.inner(UserMiddleware())
 
     private_router = Router(name="private")
     private_router.message_created.filter(PRIVATE_ONLY)
     private_router.message_callback.filter(PRIVATE_ONLY)
     private_router.bot_started.filter(PRIVATE_ONLY)
-    # диплинки раньше команд: у ссылки и у /start один bot_started, а maxo
-    # останавливается на первом ответившем. fallback последним
     private_router.include(
         deeplinks_router,
         commands_router,
@@ -110,7 +99,6 @@ def make_dispatcher(
         fallback_router,
     )
 
-    # события жизни бота и чата дома - не окна личного потока
     dp.include(error_router, lifecycle_router, chats_router, private_router)
 
     media_id_storage = MediaIdStorage()

@@ -50,8 +50,6 @@ async def request_logging_middleware(request: Request, call_next: Call) -> Respo
 
 
 async def transaction_middleware(request: Request, call_next: Call) -> Response:
-    # доменные ошибки приезжают сюда уже ответом, а не исключением, поэтому
-    # транзакцию закрывает ответ, а не провайдер сессии
     container = request.state.dishka_container
     session: AsyncSession = await container.get(AsyncSession)
     publisher: TaskPublisher = await container.get(TaskPublisher)

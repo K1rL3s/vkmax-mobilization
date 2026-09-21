@@ -39,8 +39,6 @@ async def get_slots(
             dialog_user_id(dialog_manager), _access_request_id(dialog_manager)
         )
     except ZhekaError as error:
-        # квартиру отвязали или заблокировали, пока окно висело: геттер,
-        # который упал бы, отдал бы окно роутеру ошибок
         return {"available": False, "notice": escape(str(error)), "slots": []}
 
     request = view.request
@@ -61,7 +59,6 @@ async def get_slots(
         "address": escape(view.address),
         "date": f"{request.date:%d.%m.%Y}",
         "reason": escape(request.reason),
-        # отказ несет причину блокировки от УК, а бот пишет в HTML
         "notice": None if notice is None else escape(notice),
         "slots": slots,
     }
@@ -70,8 +67,6 @@ async def get_slots(
 @inject
 async def on_slot(
     _callback: MessageCallback,
-    # Any по той же причине, что в онбординге: overload у inject не разбирает
-    # четырехаргументный колбэк с Select
     _select: Any,
     dialog_manager: DialogManager,
     slot_id: int,
@@ -85,8 +80,6 @@ async def on_slot(
             AccessSlotId(slot_id),
         )
     except ZhekaError as error:
-        # окно заняли, пока клавиатура висела: отказ ничего не записал, и
-        # следующий ход жителя - другое окно, а не роутер ошибок
         notice = str(error)
     with AccessSlotsData.proxy(dialog_manager) as data:
         data.notice = notice

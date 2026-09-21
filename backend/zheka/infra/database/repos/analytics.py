@@ -48,8 +48,6 @@ _R = requests_table.c
 
 
 def share(part: Any, whole: Any) -> ColumnElement[int]:
-    # / в SQLAlchemy 2 - истинное деление в numeric, // округлил бы вниз.
-    # Пустое целое дает NULL, а не деление на ноль
     return cast(func.round(part * 10000 / func.nullif(whole, 0)), Integer)
 
 
@@ -58,21 +56,15 @@ def _seconds(since: Any, until: Any) -> ColumnElement[Any]:
 
 
 def _median_minutes(seconds: Any) -> ColumnElement[int]:
-    # percentile_cont считает в double: numeric возвращает точность до того,
-    # как значение поделят на минуты и округлят один раз
     median = func.percentile_cont(0.5).within_group(seconds)
     return cast(func.round(cast(median, Numeric) / 60), Integer)
 
 
 def _median(value: Any) -> ColumnElement[int]:
-    # середина между двумя целыми - ровно .5, и numeric округляет ее от нуля,
-    # как и доли, а не к четному, как double
     median = func.percentile_cont(0.5).within_group(value)
     return cast(func.round(cast(median, Numeric)), Integer)
 
 
-# одно выражение на метрику: плитка кабинета и бенчмарк считают одно и то же
-# число, и организация видит на обоих экранах одинаковое значение
 _METRICS: dict[AnalyticsMetric, Callable[[datetime], ColumnElement[int]]] = {
     AnalyticsMetric.ACCEPT_TIME: lambda _: cast(
         func.round(func.avg(_seconds(_R.created_at, _R.accepted_at)) / 60), Integer
@@ -217,8 +209,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
         return dict(result.tuples().all())
 
     async def season(self, org_id: OrgId, period: date) -> dict[HouseId, SeasonCount]:
-        # те же квартиры, что у flats_without_reading: без счетчика подавать
-        # нечем, и такая квартира не считается ни сдавшей, ни должником
         has_meter = exists().where(meters_table.c.flat_id == flats_table.c.id)
         submitted = exists().where(
             meters_table.c.flat_id == flats_table.c.id,
@@ -246,9 +236,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
         self, org_id: OrgId, since: datetime, until: datetime
     ) -> list[ExecutorRow]:
         e = events_table.c
-        # часы исполнителя идут с последнего назначения: оно всегда называет
-        # текущего исполнителя, переназначение запускает часы заново, и
-        # прежнему не засчитывается
         assigned_at = (
             select(func.max(e.created_at))
             .where(
@@ -261,13 +248,10 @@ class AnalyticsRepo(BaseAlchemyRepo):
             _R.status == RequestStatus.DONE, _R.done_at >= since, _R.done_at < until
         )
         child = aliased(requests_table)
-        # повторная заявка - знак того, что закрытую им работу не доделали
         repeated = exists().where(child.c.parent_request_id == _R.id)
         closed_count = func.count().filter(closed)
         reviewed = case(
             (
-                # назначенный после проверки ее не делал: его часы были бы
-                # отрицательными или чужими, и в медиану заявка не идет
                 and_(
                     _R.reviewed_at >= since,
                     _R.reviewed_at < until,
@@ -395,15 +379,9 @@ class AnalyticsRepo(BaseAlchemyRepo):
             cut = [houses_table.c.region]
             if by_city:
                 cut.append(houses_table.c.city)
-            # организация входит в каждый регион и город, где у нее есть дом,
-            # со значением по своим домам там
             peers = _peers(metric, is_demo, since, now, *cut)
             orgs_count = func.count()
             keys = [peers.c[column.name] for column in cut]
-            # порог держит и дополнение разреза: медиана родителя без медианы
-            # разреза дает значение того, кто остался снаружи, а total против
-            # orgs_count называет, где он. Родитель региона - платформа,
-            # города - его регион и платформа, ведь регион может быть скрыт
             complements = []
             for depth in range(len(cut)):
                 parent = _peers(metric, is_demo, since, now, *cut[:depth])
@@ -440,8 +418,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
         return rows
 
     async def unconnected_houses(self, limit: int) -> Sequence[tuple[House, int]]:
-        # дом не подключен, если у него нет УК или его УК не дошла до
-        # регистрации - то же, что is_connected в HousesService
         waiting = func.count(demand_signals_table.c.id)
         stmt = (
             select(House, waiting)
@@ -471,8 +447,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
 def _peers(
     metric: AnalyticsMetric, is_demo: bool, since: datetime, now: datetime, *cut: Any
 ) -> Any:
-    # сравнение только с организациями того же is_demo: настоящая УК не
-    # встает в один ряд с придуманной историей демо, а демо - с настоящей
     value = _METRICS[metric](now)
     stmt = (
         select(houses_table.c.org_id, *cut, value.label("value"))

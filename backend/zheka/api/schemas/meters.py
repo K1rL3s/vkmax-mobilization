@@ -87,19 +87,15 @@ class SubmitReadingResponse(BaseSchema):
     reading: ReadingItem
     house_average: int | None = Field(default=None, description=_CONSUMPTION)
     warning: str | None = None
-    # резкий рост расхода предлагает завести заявку
     suggested_category: RequestCategory | None = None
 
 
 class RecognizeReadingRequest(BaseSchema):
-    # имя файла из upload_file, не ссылка
     photo_path: str
     meter_type: MeterType
 
 
 class RecognizeReadingResponse(BaseSchema):
-    # None при любой ошибке, таймауте или отсутствующем ключе - житель просто
-    # вводит значение руками
     values: dict[TariffZone, int] | None = Field(default=None, description=_READING)
 
 

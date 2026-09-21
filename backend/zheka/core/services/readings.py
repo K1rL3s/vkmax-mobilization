@@ -22,21 +22,13 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 
-# сколько периодов назад предлагается житель за пределами окна подачи
 PERIODS_BACK = 3
-# скачок - расход минимум в 200% (2 раза) от медианы истории, никакого float
 SPIKE_PERCENT = 200
-# медиане нужно SPIKE_MIN_HISTORY прошлых расходов, а расход - это дельта
-# между двумя показаниями, поэтому для порога нужно на одно показание больше
 SPIKE_MIN_HISTORY = 3
-# за сколько до конца поверки житель получает первое предупреждение
 VERIFICATION_WARNING = timedelta(days=30)
 
-# сколько прошлых показаний тянуть для истории и для расчета скачка
 HISTORY_LIMIT = 50
 _SPIKE_FETCH_LIMIT = 20
-# house_average считается по всем показаниям периода разом, без постраничной
-# отсечки - домов немного, а показание за период у каждого счетчика одно
 _HOUSE_AVERAGE_LIMIT = 10_000
 
 BELOW_PREVIOUS_WARNING = "Новое значение меньше предыдущего, уточните показание"
@@ -118,8 +110,6 @@ def available_periods(
 def consumption(
     values: Mapping[TariffZone, int], previous_values: Mapping[TariffZone, int] | None
 ) -> dict[TariffZone, int]:
-    # без предыдущего показания расход не посчитать: первая подача счетчика
-    # не порождает начисление, а не мнимый расход от нуля
     if previous_values is None:
         return dict.fromkeys(values, 0)
     return {
@@ -141,7 +131,6 @@ def is_spike(current: int, history: Sequence[int]) -> bool:
     if len(history) < SPIKE_MIN_HISTORY:
         return False
     ordered = sorted(history)
-    # при нечетной длине оба индекса указывают на одну середину
     median = (ordered[(len(ordered) - 1) // 2] + ordered[len(ordered) // 2]) // 2
     return current * 100 >= median * SPIKE_PERCENT
 
@@ -368,8 +357,6 @@ class ReadingsService:
         readings, _total = await self._meters.list_house_readings(
             house_id, period=period, meter_type=meter_type, limit=_HOUSE_AVERAGE_LIMIT
         )
-        # первое по meter_id и есть самое свежее: readings отсортированы по
-        # submitted_at по убыванию, а повторная подача чинит именно значение
         latest_by_meter: dict[MeterId, Reading] = {}
         for reading in readings:
             latest_by_meter.setdefault(reading.meter_id, reading)
@@ -391,7 +378,6 @@ class ReadingsService:
         for reading in readings:
             if reading.period >= period:
                 continue
-            # первое увиденное на период и есть самое свежее (submitted_at desc)
             by_period.setdefault(reading.period, reading)
         ordered = sorted(by_period.values(), key=lambda reading: reading.period)
 
@@ -406,7 +392,6 @@ class ReadingsService:
 
 
 def window_accepts(today: date, settings: OrgSettings | None) -> bool:
-    # без организации или без строки настроек окно открыто всегда
     if settings is None:
         return True
     return window_is_open(
@@ -418,8 +403,6 @@ def window_accepts(today: date, settings: OrgSettings | None) -> bool:
 
 
 def window_period(today: date, settings: OrgSettings | None) -> date:
-    # окно через конец месяца - один период, месяц его открытия: показание,
-    # поданное 3-го в окно 25-5, относится к тому же месяцу, что и поданное 27-го
     if (
         settings is not None
         and not settings.meter_window_always_open

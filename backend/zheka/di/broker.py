@@ -40,8 +40,6 @@ class BrokerProvider(Provider):
 
 
 def make_broker(config: RedisConfig) -> RedisStreamBroker:
-    # xread_block меньше socket_timeout, иначе redis-py обрывает чтение
-    # раньше, чем брокер вернёт пустой ответ
     return RedisStreamBroker(
         url=config.url,
         queue_name="zheka-tasks",

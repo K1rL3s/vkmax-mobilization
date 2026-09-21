@@ -34,7 +34,6 @@ class AnnouncementsRepo(BaseAlchemyRepo):
     async def list_for_house(
         self, house_id: HouseId, limit: int, offset: int
     ) -> tuple[Sequence[Announcement], int]:
-        # contains - оператор @>, по нему и работает GIN-индекс на house_ids
         stmt = select(Announcement).where(
             announcements_table.c.house_ids.contains([house_id])
         )
@@ -52,8 +51,6 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         self, stmt: Select[tuple[Announcement]], limit: int, offset: int
     ) -> tuple[Sequence[Announcement], int]:
         total = await self._count(stmt)
-        # id вторым ключом: created_at у двух объявлений одной транзакции
-        # совпадает, now() в PostgreSQL общий на транзакцию
         page_stmt = (
             stmt.order_by(
                 announcements_table.c.created_at.desc(), announcements_table.c.id.desc()

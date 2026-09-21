@@ -52,7 +52,7 @@ from zheka.core.models import (
     Tariff,
     User,
 )
-from zheka.core.services.demo import DEMO_INN, DemoService
+from zheka.core.services.demo import DEMO_INN, DEMO_INNS, DemoService
 from zheka.core.services.readings import current_period
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.seed.directory import DATA_DIR, DirectoryHouse, load_directory
@@ -64,7 +64,6 @@ DOCUMENTS = (
     "5e4d464bd16d444f8024c2cfd616c0e2.png",
     "9f63808559da4ca9a4ace56a7ddf160a.png",
 )
-# фото результата и заявки, работу по которым оно показывает
 RESULT_PHOTOS = {
     "fa678cbaf3614e0a95540b46f24227db.png": frozenset(
         {RequestCategory.LEAK, RequestCategory.WATER_SUPPLY}
@@ -80,16 +79,11 @@ RECENT = timedelta(days=30)
 AUTO_CLOSE_AFTER = timedelta(hours=48)
 RESIDENTS_PER_HOUSE = 8
 DEMO_AUTHORS = 15
-# явка опроса демо-дома по площади в сотых процента: чуть ниже кворума в 50%
 POLL_TURNOUT = 4_870
 DEMAND = (7, 5, 4, 2, 1)
-# доля принятых жителем заявок, у которых есть оценка
 RATED_PERCENT = 85
-# квартир в доме с историей: демо-дом целиком, с кворумом по площади
 MIN_FLATS = 40
 MAX_FLATS = 250
-# ключ транзакционной advisory-блокировки сида: второй запуск ждет первый и
-# видит его демо, а не падает на уникальном ИНН
 SEED_LOCK = 1
 
 
@@ -100,20 +94,16 @@ class OrgProfile(ZhekaType):
     accept_minutes: int
     phone_percent: int
     repeat_percent: int
-    # повторных за последний месяц на каждый дом
     recent_repeats: int
     auto_close_percent: int
     ratings: tuple[int, ...]
-    # сколько заявок последнего месяца оставить открытыми сверх норматива
     overdue: int
 
 
-# все пять в Москве: там регион и город совпадают, и оба разреза бенчмарка
-# видны. Профили разные на каждой метрике, иначе места делились бы поровну
 PROFILES = (
     OrgProfile(
         name="Демо-УК «Жэка Коммуналкин»",
-        inn=DEMO_INN,
+        inn=DEMO_INNS[0],
         cities=("Москва",),
         accept_minutes=40,
         phone_percent=3,
@@ -125,7 +115,7 @@ PROFILES = (
     ),
     OrgProfile(
         name="Демо-УК «Северный квартал»",
-        inn="9900000010",
+        inn=DEMO_INNS[1],
         cities=("Москва", "Санкт-Петербург"),
         accept_minutes=20,
         phone_percent=25,
@@ -137,7 +127,7 @@ PROFILES = (
     ),
     OrgProfile(
         name="Демо-УК «Надежный дом»",
-        inn="9900000020",
+        inn=DEMO_INNS[2],
         cities=("Москва", "Казань"),
         accept_minutes=75,
         phone_percent=15,
@@ -149,7 +139,7 @@ PROFILES = (
     ),
     OrgProfile(
         name="Демо-УК «Уютный двор»",
-        inn="9900000030",
+        inn=DEMO_INNS[3],
         cities=("Москва", "Казань"),
         accept_minutes=150,
         phone_percent=40,
@@ -161,7 +151,7 @@ PROFILES = (
     ),
     OrgProfile(
         name="Демо-УК «Городской сервис»",
-        inn="9900000040",
+        inn=DEMO_INNS[4],
         cities=("Москва", "Казань"),
         accept_minutes=300,
         phone_percent=35,
@@ -269,8 +259,6 @@ async def seed(
 ) -> bool:
     stmt = select(func.pg_advisory_xact_lock(SEED_LOCK))
     await session.execute(stmt)
-    # один страж на весь сид: демо-организация есть - сид уже прошел. Он
-    # одна транзакция, так что наполовину засеянной базы не бывает
     if await OrgsRepo(session).get_by_inn(DEMO_INN) is not None:
         logger.info("Демо-организация уже есть, сид пропущен")
         return False
@@ -282,7 +270,6 @@ async def seed(
 
 
 def _copy_files(files_dir: Path) -> None:
-    # фото и документы - наши сгенерированные картинки, а не чужие снимки
     files_dir.mkdir(parents=True, exist_ok=True)
     for name in (*DOCUMENTS, *RESULT_PHOTOS):
         target = files_dir / name
@@ -293,9 +280,6 @@ def _copy_files(files_dir: Path) -> None:
 def _history_houses(
     directory: Sequence[DirectoryHouse],
 ) -> dict[str, list[DirectoryHouse]]:
-    # сперва дома без УК из карточки. Их на улицу один-два, а Москве нужно
-    # пять, поэтому дальше идут дома с УК: придуманная организация занимает
-    # ее место в доме, но о настоящей ничего не утверждает
     by_city: dict[str, list[DirectoryHouse]] = {}
     for item in sorted(directory, key=lambda item: item.house.org_id is not None):
         house = item.house
@@ -311,10 +295,7 @@ class Seeder:
         self._session = session
         self._demo = demo
         self._today = today
-        # вся история строго до начала today
         self._now = datetime.combine(today, time(), UTC)
-        # отрицательный max_user_id не выдаст MAX: настоящий приходит только
-        # подписанным в initData и всегда положителен
         self._max_ids: Iterator[int] = itertools.count(-1, -1)
         self._names = Random("names")
 
@@ -331,6 +312,7 @@ class Seeder:
                 taken.add(item.house.id)
                 await self._session.flush()
                 flats = await self._flats(item)
+                await self._tariffs(item.house, item.overhaul_rate)
                 if profile.inn == DEMO_INN:
                     authors, voters = await self._demo_house(item, org, staff, flats)
                 else:
@@ -346,7 +328,6 @@ class Seeder:
         )
 
     async def _user(self) -> User:
-        # max_chat_id пуст: MaxSender и рассылки такого жителя пропускают
         name = f"{self._names.choice(FIRST_NAMES)} {self._names.choice(INITIALS)}."
         user = User(max_user_id=MaxUserId(next(self._max_ids)), name=name)
         self._session.add(user)
@@ -357,7 +338,6 @@ class Seeder:
         org = Organization(
             name=profile.name,
             inn=profile.inn,
-            # код 000 не выдан ни одному оператору: номер никуда не дозвонится
             phone=f"+7 (000) 000-00-{PROFILES.index(profile) + 1:02d}",
             address="Адрес вымышлен, организация создана для демо",
             reception_note="Прием по вторникам и четвергам, запись в приложении",
@@ -366,11 +346,7 @@ class Seeder:
         )
         self._session.add(org)
         await self._session.flush()
-        # у демо-организации окно подачи открыто весь месяц: проверяющий не
-        # попадет мимо окна и увидит главную новую функцию
-        self._session.add(
-            OrgSettings(org_id=org.id, meter_window_always_open=profile.inn == DEMO_INN)
-        )
+        self._session.add(OrgSettings(org_id=org.id, meter_window_always_open=True))
         await self._session.flush()
         return org
 
@@ -391,8 +367,6 @@ class Seeder:
         )
 
     async def _flats(self, item: DirectoryHouse) -> list[Flat]:
-        # квартиры по реальному числу жилых помещений и их площади, поровну
-        # по подъездам
         house = item.house
         rng = Random(f"flats:{house.city}:{house.street}:{house.building}")
         count = item.living_flats
@@ -449,7 +423,6 @@ class Seeder:
         flats: Sequence[Flat],
     ) -> tuple[list[Author], list[User]]:
         house = item.house
-        await self._tariffs(house, item.overhaul_rate)
         house.overhaul = {
             "program": f"Региональная программа капитального ремонта, {house.region}",
             "works": [
@@ -476,8 +449,6 @@ class Seeder:
         shuffled = rng.sample(list(flats), len(flats))
         main, others = shuffled[:3], shuffled[3:]
         owners: list[tuple[User, Resident]] = []
-        # три квартиры демо-дома: со скачком, с показанием ниже прошлого и с
-        # поверкой через три недели; в первой живет еще и арендатор
         for flat, scenario in zip(
             main, ("spike", "below", "verification"), strict=True
         ):
@@ -523,8 +494,6 @@ class Seeder:
         return authors, [user for user, _resident in owners]
 
     async def _tariffs(self, house: House, overhaul_rate: int) -> None:
-        # одно повышение в истории, и приходится оно на последнюю квитанцию:
-        # ее проверяющий открывает первой, и разбор показывает тарифный эффект
         current = current_period(self._today)
         raised = previous_period(current)
         since = date(current.year - 1, current.month, 1)
@@ -535,7 +504,6 @@ class Seeder:
             (ServiceType.HOT_WATER, "м³", 3_190_000, raised),
             (ServiceType.ELECTRICITY, "кВт·ч", 79_900, since),
             (ServiceType.ELECTRICITY, "кВт·ч", 89_300, raised),
-            # содержание - модельное, взнос на капремонт - настоящий, из КР 1.1
             (ServiceType.MAINTENANCE, "м²", 350_000, since),
             (ServiceType.OVERHAUL, "м²", overhaul_rate, since),
         ]
@@ -596,7 +564,6 @@ class Seeder:
     async def _reception(
         self, house: House, org: Organization, owners: Sequence[tuple[User, Resident]]
     ) -> None:
-        # прием хранит настенные часы как UTC, как и ReceptionService
         self._session.add_all(
             ReceptionWindow(
                 org_id=org.id,
@@ -643,8 +610,6 @@ class Seeder:
         await self._session.flush()
 
     async def _demand(self, houses: Sequence[House], users: Sequence[User]) -> None:
-        # спрос на неподключенные дома: у бенчмарка есть что показать в
-        # списке «ждут УК»
         rng = Random("demand")
         signals: list[DemandSignal] = []
         for house, count in zip(houses, DEMAND, strict=False):
@@ -714,10 +679,6 @@ class Seeder:
         self._session.add_all(plan.request for plan in plans)
         await self._session.flush()
 
-        # повторная идет к закрытой заявке жителя через несколько дней после
-        # закрытия. Бенчмарк видит только последний месяц, а процент от
-        # десятка заявок округлялся бы у всех к одному числу, поэтому
-        # повторные месяца заданы счетом, а более старые - долей
         recent_since = self._now - RECENT
         old: list[tuple[Request, datetime, Author]] = []
         recent: list[tuple[Request, datetime, Author]] = []
@@ -754,7 +715,6 @@ class Seeder:
 
         for plan in plans:
             request = plan.request
-            # у каждого статуса своя строка журнала, как у живой заявки
             self._session.add_all(
                 RequestStatusLog(
                     request_id=request.id,
@@ -767,7 +727,6 @@ class Seeder:
                 for index, step in enumerate(plan.steps)
             )
             if plan.assigned_at is not None:
-                # с последнего назначения аналитика считает часы исполнителя
                 self._session.add(
                     Event(
                         user_id=staff.admin,
@@ -780,8 +739,6 @@ class Seeder:
                     )
                 )
         if profile.inn == DEMO_INN:
-            # фото результата у последней принятой жителем заявки той работы,
-            # что на фото: ее закрыл исполнитель, и житель видел фото при приемке
             accepted = sorted(
                 (
                     plan.request.created_at,
@@ -820,7 +777,6 @@ class Seeder:
         staff: Staff,
         authors: Sequence[Author],
     ) -> list[Plan]:
-        # коллективная заявка: трое жителей про один лифт в одном окне склейки
         started = self._now - timedelta(days=41)
         group = RequestGroup(
             house_id=house.id,
@@ -870,7 +826,6 @@ class Seeder:
         reviewed = started + timedelta(hours=rng.randint(1, 30))
         reason: RequestCompletionReason | None
         if author is None:
-            # заявку по звонку закрывает УК: принять работу некому
             closer = Step(
                 status=RequestStatus.DONE,
                 at=reviewed + timedelta(hours=rng.randint(1, 6)),
@@ -927,8 +882,6 @@ class Seeder:
         steps = [step for step in steps if step.at < self._now]
         if keep_open:
             steps = steps[: rng.randint(1, 3)]
-        # на проверке заявку не оставляем: планировщик закрыл бы ее по
-        # таймауту и написал бы автору
         if steps[-1].status is RequestStatus.ON_REVIEW:
             steps.pop()
         reached = {step.status: step.at for step in steps}

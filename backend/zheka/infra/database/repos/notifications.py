@@ -30,9 +30,6 @@ class NotificationsRepo(BaseAlchemyRepo):
     async def set_level(
         self, user_id: UserId, category: NotificationCategory, level: NotificationLevel
     ) -> bool:
-        # хранится только то, что житель менял руками, отсюда апсерт. Ветка
-        # DO UPDATE отсечена по тому же уровню, поэтому пустой RETURNING и
-        # есть ответ "ничего не поменялось" - без чтения перед записью
         stmt = (
             pg_insert(notification_settings_table)
             .values(user_id=user_id, category=category, level=level)
@@ -52,8 +49,6 @@ class NotificationsRepo(BaseAlchemyRepo):
     async def recipients(
         self, user_ids: Collection[UserId], category: NotificationCategory
     ) -> Sequence[Recipient]:
-        # уровень приезжает тем же запросом: у жителя, который настройки не
-        # трогал, строки нет, и за него отвечает DEFAULT_LEVEL
         joined = users_table.outerjoin(
             notification_settings_table,
             and_(
@@ -70,7 +65,6 @@ class NotificationsRepo(BaseAlchemyRepo):
             .select_from(joined)
             .where(
                 users_table.c.id.in_(user_ids),
-                # остановленному боту MAX отвечает 403, а не доставкой
                 users_table.c.bot_stopped_at.is_(None),
             )
         )

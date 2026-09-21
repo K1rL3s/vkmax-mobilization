@@ -21,8 +21,6 @@ STALE_WINDOW = "Это окно устарело, открываю меню за
 router = Router(name=__name__)
 
 
-# ни одного сервиса: ErrorMiddleware стоит снаружи DishkaMiddleware, и к
-# этому моменту сессия откачена, а запросный контейнер закрыт
 @router.exception(
     ExceptionTypeFilter(UnknownIntent, OutdatedIntent, InvalidStackIdError)
 )
@@ -45,13 +43,10 @@ async def unexpected_error_handler(event: ErrorEvent[Any, Any]) -> None:
 
 
 async def _notify(event: ErrorEvent[Any, Any], text: str) -> None:
-    # обработчик, вернувший None, для ErrorMiddleware разобран: ветка без
-    # ответа потеряла бы ошибку совсем
     update = event.update.update
     if isinstance(update, MessageCallback):
         await update.callback_answer(notification=text)
     elif isinstance(update, MessageCreated):
         await update.answer_text(text, notify=False)
     elif isinstance(update, BotStarted):
-        # мертвая ссылка приглашения: ответить можно только в сам чат
         await update.send_message(text=text, notify=False)

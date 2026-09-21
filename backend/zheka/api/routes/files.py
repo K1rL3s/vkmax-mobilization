@@ -10,7 +10,6 @@ from zheka.api.schemas.files import FileRef
 from zheka.core.errors import EntityNotFound
 from zheka.core.services.files import FilesService
 
-# роутер подключается без API_PREFIX: отдача файлов живет на своем пути nginx
 router = APIRouter(tags=["Файлы"], route_class=DishkaRoute)
 
 
@@ -33,8 +32,6 @@ async def upload_file(
 async def download_file(
     name: str, exp: int, sig: str, files_service: FromDishka[FilesService]
 ) -> FileResponse:
-    # без current_account: тег <img> не может отправить заголовок initData,
-    # право на файл уже проверено при выпуске подписанной ссылки
     files_service.verify(name, exp, sig)
     path = files_service.path_of(name)
     if not path.is_file():

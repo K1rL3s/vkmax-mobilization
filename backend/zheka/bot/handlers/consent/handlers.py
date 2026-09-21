@@ -30,8 +30,6 @@ async def on_accept(
     user: User = dialog_manager.middleware_data[USER_KEY]
     me = await profile_service.accept_consent(user.id, CONSENT_VERSION)
 
-    # диплинк, приведший сюда, ждет в start_data: без него житель после
-    # «Согласен» уезжал бы в меню и терял то, на что нажал
     payload = ConsentData.load_start(dialog_manager).payload
     if payload is not None:
         deeplink = parse_deeplink(payload)

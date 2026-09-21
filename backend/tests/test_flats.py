@@ -20,6 +20,7 @@ from zheka.core.errors import (
 from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.flats import ALREADY_VERIFIED_DETAIL, FlatsService
+from zheka.core.services.houses import NOT_CONNECTED
 from zheka.infra.database.models import Flat, Resident, User, VerificationRequest
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -546,3 +547,17 @@ async def test_flat_card_is_refused_to_a_resident_of_another_flat(
 
     with pytest.raises(NotEnoughRights):
         await _make_service(session).flat_card(neighbour, own.flat_id)
+
+
+async def test_request_verification_is_refused_while_the_org_is_not_connected(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    own = await make_org_house_flat_user(registered=False)
+    await _add_resident(session, own.user_id, own.house_id, None)
+
+    with pytest.raises(InvalidState, match=NOT_CONNECTED):
+        await _make_service(session).request_verification(
+            own.user_id, own.flat_id, ACCOUNT, None
+        )
+
+    assert await FlatsRepo(session).get_latest_request(own.user_id, own.flat_id) is None

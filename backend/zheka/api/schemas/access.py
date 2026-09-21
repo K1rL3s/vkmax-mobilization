@@ -39,7 +39,6 @@ class AccessRequestItem(BaseSchema):
     slots: list[AccessSlotItem]
     responded_count: int
     targets_count: int
-    # заполняется только в списке жителя
     my_flat_id: FlatId | None = None
     my_slot_id: AccessSlotId | None = None
 

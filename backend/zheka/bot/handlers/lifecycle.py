@@ -19,8 +19,6 @@ async def bot_stopped_handler(
     users_repo: FromDishka[UsersRepo],
     events_service: FromDishka[EventsService],
 ) -> None:
-    # UserMiddleware только что снял отметку, как на любом личном апдейте, и
-    # здесь она ставится снова в той же транзакции
     await users_repo.set_bot_stopped(user.max_user_id, datetime.now(UTC))
     await events_service.record(EventType.BOT_STOPPED, user_id=user.id)
 
@@ -29,7 +27,6 @@ async def bot_stopped_handler(
 async def dialog_muted_handler(
     _update: DialogMuted, user: User, events_service: FromDishka[EventsService]
 ) -> None:
-    # доставку заглушение не меняет: житель выключил у себя только звук
     await events_service.record(EventType.BOT_MUTED, user_id=user.id)
 
 

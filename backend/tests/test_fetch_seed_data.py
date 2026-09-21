@@ -52,3 +52,23 @@ def test_a_registry_phone_is_dialable_or_empty(
     raw: str, area_code: str | None, expected: str
 ) -> None:
     assert SCRIPT.phone(raw, area_code) == expected
+
+
+def test_an_osm_address_matches_a_card_number() -> None:
+    addresses = {
+        "70": ("0", "0"),
+        "70/11": ("1", "1"),
+        "15": ("0", "0"),
+        "15к1": ("2", "2"),
+        "47": ("3", "3"),
+        "47к2": ("4", "4"),
+    }
+    assert SCRIPT.osm_match("70/11", addresses) == ("1", "1")
+    assert SCRIPT.osm_match("15/1", addresses) == ("2", "2")
+    assert SCRIPT.osm_match("47к1", addresses) == ("3", "3")
+    assert SCRIPT.osm_match("48", addresses) == ("", "")
+
+
+def test_a_litera_is_dropped_in_both_spellings() -> None:
+    assert SCRIPT.house_number("9А литБ") == "9а"
+    assert SCRIPT.house_number("9А литера Б") == "9а"

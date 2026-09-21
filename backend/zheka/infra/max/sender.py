@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 BOT_RATE_LIMIT = RateLimiter(max_calls=30)
 
-# звук окна диалога для ZhekaMessageManager, поднимает его только start_dialog
 dialog_notify: ContextVar[bool] = ContextVar("dialog_notify", default=False)
 
 
@@ -97,8 +96,6 @@ class MaxSender:
         stack_id: str | None = None,
         show_mode: ShowMode | None = None,
     ) -> None:
-        # RESET_STACK, а не NEW_STACK: тот снова уходит через call_soon и
-        # возвращается раньше отправки, от чего здесь и стоит fg()
         if user.max_chat_id is None or user.bot_stopped_at is not None:
             logger.info(
                 "У пользователя %s нет живого личного чата с ботом, окно не открыто",
@@ -115,13 +112,9 @@ class MaxSender:
         )
         token = dialog_notify.set(notify)
         try:
-            # fg(), а не bg().start(): тот отдает апдейт в call_soon, и задача
-            # закоммитилась бы раньше отправки
             with _undelivered():
                 async with (
                     BOT_RATE_LIMIT,
-                    # по max_user_id, как и рассылка: ведро на max_chat_id было
-                    # бы вторым на тот же чат
                     _chat_rate_limit(user.max_user_id),
                     manager.fg() as dialog_manager,
                 ):
@@ -136,8 +129,6 @@ class MaxSender:
 
 
 async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:
-    # 403 и 404 значат, что бота в чате уже нет, а сбой сети или сервера
-    # ничего о правах не говорит и поднимается дальше
     try:
         async with BOT_RATE_LIMIT:
             member = await bot.get_membership(chat_id=chat_id)

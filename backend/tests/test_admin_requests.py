@@ -12,6 +12,7 @@ from tests.test_requests import (
     _complain,
     _events,
     _group_of_three,
+    _make_service,
     _member,
     _neighbour,
 )
@@ -25,9 +26,11 @@ from zheka.core.enums import (
     RequestActorRole,
     RequestCategory,
     RequestChannel,
+    RequestCompletionReason,
     RequestGroupStatus,
     RequestStatus,
     ResidentRole,
+    ResidentStatus,
 )
 from zheka.core.errors import (
     EntityNotFound,
@@ -35,11 +38,12 @@ from zheka.core.errors import (
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import RequestId, UserId
-from zheka.core.services.admin_requests import PhoneRequestDraft
+from zheka.core.ids import RequestId, ResidentId, UserId
+from zheka.core.services.admin_requests import RESIDENT_BLOCKED, PhoneRequestDraft
 from zheka.infra.database.models import Flat
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters
+from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.tables.requests import request_status_log_table
 
 NO_FILTERS = RequestFilters()
@@ -588,3 +592,107 @@ async def test_only_the_assigned_executor_of_the_org_can_advance(
             executor, request_id, RequestStatus.ACCEPTED, []
         )
     assert await _admin(session).executor_card(executor, request_id) is None
+
+
+async def _resident_id(session: AsyncSession, own: OrgHouseFlatUser) -> ResidentId:
+    resident = await ResidentsRepo(session).get_for_house(own.user_id, own.house_id)
+    assert resident is not None
+    return resident.id
+
+
+async def test_a_phone_request_for_a_resident_runs_the_ordinary_road(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    service = _admin(session, publisher)
+
+    card = await service.create_phone(
+        own.org_id,
+        _phone_draft(own, resident_id=await _resident_id(session, own)),
+        staff,
+    )
+    request = card.card.request
+    request_id = request.id
+    assert request.channel is RequestChannel.PHONE
+    assert request.author_user_id == own.user_id
+    assert request.flat_id == own.flat_id
+    assert request.is_staff_author is False
+
+    await service.change_status(
+        own.org_id, request_id, RequestStatus.ACCEPTED, None, staff
+    )
+    await service.change_status(
+        own.org_id, request_id, RequestStatus.IN_PROGRESS, None, staff
+    )
+    await service.change_status(
+        own.org_id, request_id, RequestStatus.ON_REVIEW, None, staff
+    )
+    # у заявки есть автор, поэтому закрывает ее он, а не УК
+    with pytest.raises(InvalidState):
+        await service.change_status(
+            own.org_id, request_id, RequestStatus.DONE, None, staff
+        )
+    residents = _make_service(session)
+    await residents.accept(own.user_id, request_id)
+    rated = await residents.rate(own.user_id, request_id, 5, None)
+
+    assert rated.request.completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED
+    assert rated.request.rating == 5
+    await publisher.flush()
+    assert [
+        message["user_id"] for message in broker.enqueued(TaskName.SEND_TO_USER)
+    ] == [own.user_id, own.user_id]
+    assert broker.enqueued(TaskName.SEND_REVIEW_CARD) == [{"request_id": request_id}]
+
+
+async def test_a_phone_request_refuses_a_resident_of_another_house(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    own = await make_org_house_flat_user()
+    foreign = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+
+    with pytest.raises(EntityNotFound):
+        await _admin(session).create_phone(
+            own.org_id,
+            _phone_draft(own, resident_id=await _resident_id(session, foreign)),
+            await _member(session, own.org_id, OrgRole.EMPLOYEE),
+        )
+
+
+async def test_a_phone_request_refuses_a_blocked_resident(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    residents = ResidentsRepo(session)
+    resident = await residents.get(await _resident_id(session, own))
+    assert resident is not None
+    await residents.set_status(resident, ResidentStatus.BLOCKED, "Задолженность")
+
+    with pytest.raises(InvalidState, match=RESIDENT_BLOCKED):
+        await _admin(session).create_phone(
+            own.org_id,
+            _phone_draft(own, resident_id=resident.id),
+            await _member(session, own.org_id, OrgRole.EMPLOYEE),
+        )
+
+
+async def test_a_phone_request_refuses_a_flat_other_than_the_residents(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    other = Flat(house_id=own.house_id, number="2")
+    session.add(other)
+    await session.flush()
+
+    with pytest.raises(InvalidRequest):
+        await _admin(session).create_phone(
+            own.org_id,
+            _phone_draft(
+                own, resident_id=await _resident_id(session, own), flat_id=other.id
+            ),
+            await _member(session, own.org_id, OrgRole.EMPLOYEE),
+        )

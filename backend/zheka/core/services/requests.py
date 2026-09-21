@@ -38,6 +38,7 @@ from zheka.core.models import (
 )
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.houses import NOT_CONNECTED, is_connected
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
     GroupingRules,
@@ -52,13 +53,8 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.yandex import YandexClassifier
 
-# потолок вложений в одном сообщении MAX, он же потолок фото у заявки
 MAX_PHOTOS = 12
-# заявку, оставленную на приемке, закрывает auto_close_reviewed_requests; тот же
-# срок карточка показывает как дедлайн автозакрытия, пока заявка ON_REVIEW
 AUTO_CLOSE_AFTER = timedelta(hours=48)
-# оценку ставят и мини-апп, и бот; кнопка бота присылает любую строку, поэтому
-# границы проверяет сервис, а схема берет их отсюда
 MIN_RATING = 1
 MAX_RATING = 5
 
@@ -163,9 +159,10 @@ class RequestsService:
     ) -> RequestCardData:
         resident = await self._active_resident(user_id, house_id)
         house = await self._get_house(house_id)
+        org = None if house.org_id is None else await self._orgs.get(house.org_id)
+        if not is_connected(house, org):
+            raise InvalidState(NOT_CONNECTED)
         description = _stated(draft.description)
-        # заявку про свою квартиру житель подает по своей квартире, про общее
-        # имущество - без квартиры вовсе
         if draft.flat_id is not None and resident.flat_id != draft.flat_id:
             raise EntityNotFound(FLAT_NOT_FOUND)
         photos = self._checked_photos(draft.photos)
@@ -196,7 +193,6 @@ class RequestsService:
             llm_suggested=draft.llm_suggested,
             llm_accepted=draft.llm_accepted,
         )
-        # принять можно только то, что было подсказано; флаги присылает клиент
         if draft.llm_suggested and draft.llm_accepted:
             await self._events.record(
                 EventType.LLM_ACCEPTED,
@@ -222,9 +218,7 @@ class RequestsService:
         house_id = parent.house_id
         await self._active_resident(user_id, house_id)
         house = await self._get_house(house_id)
-        # описание и фото у повтора свои, остальное - копия родителя
         if rejected_on_review:
-            # отказ объясняет исполнителю, почему работа вернулась
             text = (description or "").strip()
             if not text:
                 raise InvalidRequest(REJECTION_COMMENT_REQUIRED)
@@ -391,7 +385,6 @@ class RequestsService:
     async def _group(
         self, request: Request, house: House, joined_group_id: RequestGroupId | None
     ) -> None:
-        # житель, нажавший «присоединиться», уже в группе - искать нечего
         if joined_group_id is not None:
             await self._grouping.joined(request, joined_group_id)
             return
@@ -411,7 +404,6 @@ class RequestsService:
         )
 
     async def _open(self, request: Request, user_id: UserId) -> None:
-        # ни один путь не меняет requests.status без строки в журнале, NEW тоже
         await self._requests.add_log(
             request.id,
             None,
@@ -432,15 +424,12 @@ class RequestsService:
     def _checked_photos(self, photos: Sequence[str]) -> Sequence[str]:
         if len(photos) > MAX_PHOTOS:
             raise InvalidRequest(TOO_MANY_PHOTOS)
-        # имя из upload_file, а не произвольная строка: подделка иначе дожила
-        # бы до карточки и уронила бы ее целиком на подписи ссылки
         for name in photos:
             self._files.path_of(name)
         return photos
 
     async def _active_resident(self, user_id: UserId, house_id: HouseId) -> Resident:
         resident = await self._residents.get_for_house(user_id, house_id)
-        # чужой дом отвечает 404, а не 403: 403 подтвердил бы, что дом есть
         if resident is None:
             raise EntityNotFound(NOT_A_RESIDENT)
         if resident.status is ResidentStatus.BLOCKED:
@@ -449,7 +438,6 @@ class RequestsService:
 
     async def _own_request(self, user_id: UserId, request_id: RequestId) -> Request:
         request = await self._requests.get(request_id)
-        # чужая заявка неотличима от несуществующей
         if request is None or request.author_user_id != user_id:
             raise EntityNotFound(REQUEST_NOT_FOUND)
         return request
@@ -490,9 +478,6 @@ class RequestsService:
         comment: str,
         channel: RequestChannel,
     ) -> RequestCardData:
-        # repeat принимает и выполненную заявку - это повтор мини-аппа. Отказ
-        # бота только с приемки: иначе забытое окно ввода превратило бы любое
-        # следующее сообщение жителя в повторную заявку по закрытой
         parent = await self._own_request(user_id, request_id)
         if parent.status is not RequestStatus.ON_REVIEW:
             raise InvalidState(REJECT_NOT_ON_REVIEW)
@@ -500,15 +485,12 @@ class RequestsService:
 
     async def export(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         card = await self.get_card(user_id, request_id)
-        # каждое открытие печатной страницы - отдельная выгрузка
         await self._events.record(
             EventType.REQUEST_EXPORTED, user_id=user_id, request_id=request_id
         )
         return card
 
     async def classify(self, user_id: UserId, text: str) -> RequestCategory | None:
-        # ponytail: каждый вызов - платный запрос, и сдерживает их только
-        # debounce фронта; лимит на пользователя - когда об этом скажет счет
         category = await self._classifier.classify(text)
         if category is not None:
             await self._events.record(
@@ -523,14 +505,12 @@ async def build_rows(
     users_repo: UsersRepo,
     requests: Sequence[Request],
 ) -> list[RequestRow]:
-    # один запрос на весь список, а не по одному на заявку
     photo_counts = await requests_repo.count_photos(
         [request.id for request in requests]
     )
     group_sizes = await requests_repo.count_by_group(
         {request.group_id for request in requests if request.group_id is not None}
     )
-    # ключ с None: у заявки без квартиры get отдает None без проверки
     flats: dict[FlatId | None, Flat] = {
         flat.id: flat
         for flat in await houses_repo.list_flats_by_ids(
@@ -607,7 +587,6 @@ async def build_card(
             )
             for message in messages
         ],
-        # у заявки не больше одной группы
         group_size=sum(group_sizes.values()),
         executor=executor,
         can_review=request.status is RequestStatus.ON_REVIEW,

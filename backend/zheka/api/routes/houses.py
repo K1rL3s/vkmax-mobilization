@@ -99,8 +99,6 @@ async def link_house(
     houses_service: FromDishka[HousesService],
     body: LinkHouseRequest,
 ) -> ResidencySummary:
-    # account_no из тела здесь не используется: сверка лицевого счета - это
-    # верификация квартиры, у нее свой эндпоинт
     view = await houses_service.link(
         current_account.user_id,
         house_id,

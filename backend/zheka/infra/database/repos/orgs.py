@@ -96,8 +96,6 @@ class OrgsRepo(BaseAlchemyRepo):
     async def add_member_or_get(
         self, org_id: OrgId, user_id: UserId, role: OrgRole
     ) -> OrgMember:
-        # второе нажатие того же диплинка разводит уникальный индекс
-        # (org_id, user_id), и прежняя роль остается как была
         stmt = (
             pg_insert(OrgMember)
             .values(org_id=org_id, user_id=user_id, role=role)

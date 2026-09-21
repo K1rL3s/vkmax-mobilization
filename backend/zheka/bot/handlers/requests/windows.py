@@ -28,6 +28,11 @@ PAGE = 6
 
 NO_HOUSE_TEXT = "Сначала найди свой дом - тогда будет кому передать заявку."
 CATEGORY_TEXT = "{address}\n\nЧто случилось?"
+NOT_CONNECTED_TEXT = (
+    "{address}\n\nУправляющая компания этого дома еще не подключена к Жэке, "
+    "заявку передать некому. Нажми «Мне нужен» в карточке дома в приложении - "
+    "так УК узнает, что сервис здесь ждут."
+)
 DESCRIPTION_TEXT = "Опиши проблему одним сообщением"
 PHOTO_TEXT = "Пришли фото, если есть. Приложено: {photos}"
 CONFIRM_TEXT = "{category}\n\n{description}\n\nФото: {photos}"
@@ -36,7 +41,8 @@ CREATED_TEXT = "Заявка №{request_id} принята"
 request_dialog = Dialog(
     Window(
         Const(NO_HOUSE_TEXT, when=~F["address"]),
-        Format(CATEGORY_TEXT, when=F["address"]),
+        Format(NOT_CONNECTED_TEXT, when=F["address"] & ~F["connected"]),
+        Format(CATEGORY_TEXT, when=F["connected"]),
         ScrollingGroup(
             Select(
                 Format("{item[label]}"),

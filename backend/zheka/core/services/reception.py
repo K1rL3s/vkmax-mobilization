@@ -20,8 +20,6 @@ from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-# без даты житель видит две недели вперед: дальше часы приема все равно
-# успевают поменяться
 RECEPTION_HORIZON_DAYS = 14
 LAST_WEEKDAY = 6
 MIN_SLOT_MINUTES = 5
@@ -48,7 +46,6 @@ class AppointmentData(ZhekaType):
     address: str
     org_address: str
     org_phone: str
-    # заполняет только список УК: жителю незачем видеть самого себя
     user_name: str | None = None
     flat_number: str | None = None
 
@@ -62,14 +59,11 @@ class ReceptionWindowDraft(ZhekaType):
 
 
 def expand_slots(window: ReceptionWindow, day: date) -> list[datetime]:
-    # время приема - наивные настенные часы, которые хранятся как UTC:
-    # часовых поясов в проекте пока нет ни в одной таблице
     if window.slot_minutes <= 0:
         return []
     step = timedelta(minutes=window.slot_minutes)
     starts_at = datetime.combine(day, window.time_from, tzinfo=UTC)
     ends_at = datetime.combine(day, window.time_to, tzinfo=UTC)
-    # хвост окна короче слота не предлагается
     return [
         starts_at + step * number for number in range((ends_at - starts_at) // step)
     ]
@@ -78,8 +72,6 @@ def expand_slots(window: ReceptionWindow, day: date) -> list[datetime]:
 def slot_capacities(
     windows: Sequence[ReceptionWindow], date_from: date, date_to: date
 ) -> dict[datetime, int]:
-    # одно и то же время может попасть в два окна дня: мест в нем столько,
-    # сколько дает самое просторное из них
     capacities: dict[datetime, int] = {}
     day = date_from
     while day <= date_to:
@@ -100,7 +92,6 @@ def horizon(on_date: date | None) -> tuple[date, date]:
 
 
 def as_utc(moment: datetime) -> datetime:
-    # наивное время от клиента - это те же настенные часы, что и в окне
     if moment.tzinfo is None:
         return moment.replace(tzinfo=UTC)
     return moment.astimezone(UTC)
@@ -141,8 +132,6 @@ class ReceptionService:
         house = await self._houses.get(house_id)
         if house is None:
             raise EntityNotFound(HOUSE_NOT_FOUND)
-        # дом без УК никого не принимает, и это не ошибка: житель видит
-        # пустую сетку, как и у организации без часов приема
         if house.org_id is None:
             return []
         org_id = house.org_id
@@ -150,7 +139,6 @@ class ReceptionService:
         taken = await self._reception.taken_counts(org_id, date_from, date_to)
         capacities = slot_capacities(windows, date_from, date_to)
 
-        # прошедший слот не выбор, а полный - выбор чужой: его видно серым
         now = datetime.now(UTC)
         return [
             ReceptionSlot(starts_at=moment, is_free=taken.get(moment, 0) < capacity)
@@ -174,14 +162,10 @@ class ReceptionService:
 
         moment = as_utc(starts_at)
         day = moment.date()
-        # окна дня недели берутся под блокировкой: внутри нее считаются
-        # занятые места, и две одновременные записи не переполняют слот
         windows = await self._reception.lock_windows(org_id, day.weekday())
         capacity = slot_capacities(windows, day, day).get(moment)
         if capacity is None or moment <= datetime.now(UTC):
             raise InvalidState(SLOT_UNKNOWN)
-        # свою запись житель видит раньше чужих: при вместимости в одно место
-        # иначе ему ответят «слот занят» про его же запись
         if await self._reception.has_booking(org_id, user_id, moment):
             raise InvalidState(ALREADY_BOOKED)
         if await self._reception.count_booked(org_id, moment) >= capacity:
@@ -189,7 +173,6 @@ class ReceptionService:
 
         if request_id is not None:
             request = await self._requests.get(request_id)
-            # «обсудить заявку №142» - только свою и только по этому дому
             if (
                 request is None
                 or request.author_user_id != user_id
@@ -215,7 +198,6 @@ class ReceptionService:
             raise EntityNotFound(APPOINTMENT_NOT_FOUND)
         if appointment.status is AppointmentStatus.DONE:
             raise InvalidState(ALREADY_DONE)
-        # повторная отмена ничего не пишет и отвечает тем же ok
         if appointment.status is AppointmentStatus.CANCELLED:
             return
         await self._reception.cancel_appointment(appointment)
@@ -242,8 +224,6 @@ class ReceptionService:
     async def set_windows(
         self, org_id: OrgId, drafts: Sequence[ReceptionWindowDraft]
     ) -> Sequence[ReceptionWindow]:
-        # окна проверяются поодиночке: несколько окон в один день - это
-        # обеденный перерыв, обычная форма работы кабинета
         for draft in drafts:
             if not 0 <= draft.weekday <= LAST_WEEKDAY:
                 raise InvalidRequest(BAD_WEEKDAY)
@@ -321,8 +301,6 @@ class ReceptionService:
                 }
             )
         }
-        # неподтвержденный житель называет квартиру строкой, и это все,
-        # что о нем известно УК до подтверждения
         flat_numbers = {
             (resident.user_id, resident.house_id): (
                 numbers.get(resident.flat_id)

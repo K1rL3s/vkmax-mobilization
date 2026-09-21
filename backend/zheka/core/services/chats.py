@@ -42,8 +42,6 @@ class ChatsService:
         self._events = events_service
 
     async def bindable_houses(self, user_id: UserId) -> list[House]:
-        # сотрудник привязывает к любому дому своих УК, председатель - к
-        # своему дому. Исполнитель в сотрудники не входит
         houses: list[House] = []
         for member in await self._orgs.list_for_user(user_id):
             if is_staff(member.role):
@@ -72,8 +70,6 @@ class ChatsService:
     async def bind(
         self, user_id: UserId, chat_id: MaxChatId, house_id: HouseId
     ) -> None:
-        # дом приходит сырой строкой колбэка Select, поэтому право на него
-        # проверяется здесь, а не списком кнопок
         chat = await self._free_chat(chat_id)
         house = await self._houses.get(house_id)
         binder = None if house is None else await self._binder(user_id, house)
@@ -84,8 +80,6 @@ class ChatsService:
     async def bind_by_code(
         self, user_id: UserId, chat_id: MaxChatId, code: str
     ) -> None:
-        # ponytail: код - 8 hex-символов, и перебор тормозит только
-        # ThrottlingMiddleware. Счетчик попыток - когда код хоть раз подберут
         chat = await self._free_chat(chat_id)
         house = await self._houses.get_by_binding_code(code.strip().lower())
         if house is None:
@@ -103,8 +97,6 @@ class ChatsService:
             raise InvalidState(CHAT_NOT_BOUND)
         granted = is_admin and not chat.bot_is_admin
         await self._chats.set_admin(chat, is_admin)
-        # только на переходе false -> true: второе нажатие «Готово» не
-        # вторая выдача прав и не второе приветствие
         if granted:
             await self._events.record(
                 EventType.CHAT_ADMIN_GRANTED,

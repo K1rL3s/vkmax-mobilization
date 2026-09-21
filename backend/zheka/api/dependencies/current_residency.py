@@ -35,10 +35,6 @@ class CurrentResidency(ZhekaType):
 
 
 def residency_of(resident: Resident | None, not_found: str) -> CurrentResidency:
-    # чужой дом и чужая квартира отвечают 404, потому что 403 подтвердил бы,
-    # что такой id есть. Заблокированный житель - обратный случай: он и так
-    # знает, что дом существует, его оттуда выселила УК, и молчаливый 404
-    # вместо прямого отказа был бы худшим ответом
     if resident is None:
         raise EntityNotFound(not_found)
     if resident.status is ResidentStatus.BLOCKED:
@@ -122,9 +118,6 @@ async def residency_for_flat_house(
     residents_repo: FromDishka[ResidentsRepo],
     houses_repo: FromDishka[HousesRepo],
 ) -> CurrentResidency:
-    # подтверждение квартиры и есть тот момент, когда residents.flat_id
-    # проставляется, поэтому доступ сюда дает дом квартиры, а не сама
-    # квартира: иначе житель, пришедший по диплинку дома, не дошел бы никогда
     flat = await houses_repo.get_flat(flat_id)
     if flat is None:
         raise EntityNotFound(FLAT_NOT_FOUND)

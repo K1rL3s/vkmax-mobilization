@@ -1,7 +1,9 @@
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from fastapi import FastAPI
 
 from tests.conftest import empty_bot_setup, make_config
@@ -302,3 +304,11 @@ def test_request_export_is_the_card_and_the_disclaimer(openapi: dict[str, Any]) 
     schema = openapi["components"]["schemas"]["RequestExport"]
 
     assert set(schema["properties"]) == {"request", "disclaimer"}
+
+
+def test_committed_openapi_yaml_matches_the_app(openapi: dict[str, Any]) -> None:
+    committed = Path(__file__).resolve().parents[2] / "openapi.yaml"
+
+    assert yaml.safe_load(committed.read_text(encoding="utf-8")) == openapi, (
+        "openapi.yaml устарел: запустите just openapi"
+    )

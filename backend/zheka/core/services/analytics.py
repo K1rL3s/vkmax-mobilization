@@ -32,7 +32,6 @@ WEEKS = 12
 UNCONNECTED_LIMIT = 50
 _NO_FLATS = SeasonCount(flats_total=0, submitted=0, percent=0)
 
-# разрез из меньшего числа организаций с данными выдает чужое значение
 MIN_ORGS_FOR_CUT = 3
 
 
@@ -43,7 +42,6 @@ class BenchmarkSpec(ZhekaType):
     lower_is_better: bool
 
 
-# направление метрики живет рядом с ней: по нему SQL строит место в рейтинге
 BENCHMARK: tuple[BenchmarkSpec, ...] = (
     BenchmarkSpec(
         metric=AnalyticsMetric.ACCEPT_TIME,
@@ -82,8 +80,6 @@ BENCHMARK: tuple[BenchmarkSpec, ...] = (
         lower_is_better=False,
     ),
 )
-# у строки разреза в контракте нет ключа метрики, поэтому разрез один -
-# время до принятия, пример из спеки
 CUT_METRIC = BENCHMARK[0]
 
 
@@ -192,8 +188,6 @@ def _window(period: date, settings: OrgSettings | None) -> tuple[date, date]:
     day_from = settings.meter_window_day_from
     day_to = settings.meter_window_day_to
     window_to = period.replace(day=day_to)
-    # окно через конец месяца - период месяца открытия, закрывается в
-    # следующем
     if day_from > day_to:
         window_to = period + timedelta(days=last_day + day_to - 1)
     return period.replace(day=day_from), window_to
@@ -268,7 +262,6 @@ class AnalyticsService:
                     for category, count in categories
                 ],
             ),
-            # пустая неделя - точка с нулем, а не дыра в графике
             Series(
                 key="by_week",
                 title="Заявки по неделям",
@@ -291,8 +284,6 @@ class AnalyticsService:
     async def season(self, org_id: OrgId, period: date | None, now: datetime) -> Season:
         settings = await self._orgs.get_settings(org_id)
         today = now.date()
-        # период окна, а не календарный месяц: окно через конец месяца
-        # принимает показания периода месяца открытия
         current = window_period(today, settings)
         period = current if period is None else period.replace(day=1)
         counts = await self._analytics.season(org_id, period)
@@ -330,8 +321,6 @@ class AnalyticsService:
     ) -> int:
         settings = await self._orgs.get_settings(org_id)
         today = now.date()
-        # флаг window_open в ответе сезона - только подсказка кнопке, правило
-        # здесь
         if not window_accepts(today, settings):
             raise InvalidState(WINDOW_CLOSED)
         current = window_period(today, settings)
@@ -385,8 +374,6 @@ class AnalyticsService:
             )
             if rank is None:
                 continue
-            # организация сама входит в три: без двух других ее место и
-            # медиана раскрыли бы значение соседа
             comparable = rank.total >= MIN_ORGS_FOR_CUT
             metrics.append(
                 BenchmarkValue(
@@ -429,6 +416,5 @@ class AnalyticsService:
         )
 
     async def _own_houses(self, org_id: OrgId, house_ids: Sequence[HouseId]) -> None:
-        # чужой дом неотличим от несуществующего: 404, а не пустой дашборд
         if await self._houses.ids_for_org(house_ids, org_id) != set(house_ids):
             raise EntityNotFound(HOUSE_NOT_FOUND)

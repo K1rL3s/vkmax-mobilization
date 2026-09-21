@@ -7,10 +7,8 @@ from zheka.core.enums import CATEGORY_RULES, RequestCategory
 
 logger = logging.getLogger(__name__)
 
-# резидент ждет подсказку, набирая описание, поэтому бюджет жесткий и без ретраев
 LLM_TIMEOUT = 3.0
 COMPLETION_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
-# самое длинное значение RequestCategory укладывается в несколько токенов
 _MAX_TOKENS = "20"
 _KEY_REFUSED = (httpx.codes.UNAUTHORIZED, httpx.codes.FORBIDDEN)
 
@@ -34,8 +32,6 @@ class YandexClassifier:
     ) -> None:
         self._config = config
         self._transport = transport
-        # отвергнутый ключ сам не оживет, а каждый вызов с ним - лишние
-        # секунды ожидания для жителя
         self._refused = False
 
     async def classify(self, text: str) -> RequestCategory | None:
@@ -59,10 +55,8 @@ class YandexClassifier:
                     COMPLETION_URL, headers=headers, json=payload
                 )
         except UnicodeEncodeError:
-            # httpx кодирует заголовки в ASCII, и ключ с неразрывным пробелом или
-            # кириллицей из консоли не уйдет ни в одном вызове
             self._refused = True
-            logger.error(  # noqa: TRY400 - трейсбек ничего не добавит к причине
+            logger.error(  # noqa: TRY400
                 "Ключ Yandex AI Studio содержит символы не из ASCII, подсказки "
                 "категорий выключены до перезапуска процесса"
             )
@@ -88,8 +82,6 @@ class YandexClassifier:
 
         try:
             data = response.json()
-            # api-ref рисует alternatives на верхнем уровне, а REST-пример из
-            # structured-output - внутри result; без ключа не проверить, чей прав
             answer = data.get("result", data)["alternatives"][0]["message"]["text"]
             return RequestCategory(answer.strip())
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):

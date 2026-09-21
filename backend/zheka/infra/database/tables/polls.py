@@ -34,7 +34,6 @@ polls_table = Table(
     Column("starts_at", DateTime(timezone=True), nullable=False),
     Column("ends_at", DateTime(timezone=True), nullable=False),
     Column("status", pg_enum(PollStatus, "poll_status"), nullable=False),
-    # напоминание об опросе уходит один раз: повторный прогон видит отметку
     Column("reminder_sent_at", DateTime(timezone=True), nullable=True),
 )
 
@@ -55,7 +54,6 @@ poll_votes_table = Table(
     Column("poll_id", BigInteger, ForeignKey("polls.id"), nullable=False),
     Column("option_id", BigInteger, ForeignKey("poll_options.id"), nullable=False),
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
-    # голос переживает отвязку жителя от дома: история собрания не переписывается
     Column(
         "resident_id",
         BigInteger,
@@ -64,7 +62,5 @@ poll_votes_table = Table(
     ),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True),
     Column("counted_by_area", Boolean, nullable=False),
-    # multiple-choice пишет строку на вариант, поэтому "один голос на человека"
-    # держит PollsService.vote, а индекс - цель ON CONFLICT в add_vote
     UniqueConstraint("poll_id", "user_id", "option_id"),
 )

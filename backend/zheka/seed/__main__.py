@@ -16,7 +16,6 @@ async def main() -> None:
     setup_logger(config.log)
     container = make_container(config=config)
     try:
-        # TaskPublisher не сбрасывается: засеянное никому ничего не отправляет
         async with container() as request_container:
             session = await request_container.get(AsyncSession)
             demo = await request_container.get(DemoService)

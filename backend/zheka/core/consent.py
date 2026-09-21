@@ -1,6 +1,5 @@
 CONSENT_VERSION = "1.0"
 
-# статичная страница фронта, на нее ссылается и чекбокс онбординга, и бот
 CONSENT_POLICY_PATH = "/policy"
 
 CONSENT_TEXT = (

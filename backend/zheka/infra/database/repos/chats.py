@@ -10,7 +10,6 @@ from zheka.infra.database.models import Chat
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.chats import chats_table
 
-# удаленный из чата бот оставляет bound_at, поэтому одного bound_at мало
 BOUND_CHAT = and_(
     chats_table.c.house_id.is_not(None),
     chats_table.c.bound_at.is_not(None),
@@ -22,8 +21,6 @@ class ChatsRepo(BaseAlchemyRepo):
     async def list_for_houses(self, house_ids: Collection[HouseId]) -> Sequence[Chat]:
         if not house_ids:
             return []
-        # без прав администратора бот в чат MAX не пишет, и отправка туда
-        # была бы гарантированной ошибкой на каждом объявлении
         stmt = select(Chat).where(
             chats_table.c.house_id.in_(house_ids),
             BOUND_CHAT,
@@ -38,8 +35,6 @@ class ChatsRepo(BaseAlchemyRepo):
         return chat
 
     async def upsert_added(self, chat_id: MaxChatId, title: str) -> None:
-        # каждое добавление - новая привязка: вернувший бота может быть не тем,
-        # кто привязывал, и унаследованная привязка обошла бы проверку его прав
         fresh = {
             "title": title,
             "status": ChatStatus.ACTIVE,

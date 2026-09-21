@@ -27,8 +27,6 @@ async def seed_demo(
     notifications: FromDishka[NotificationsService],
 ) -> bool:
     seeded = await seed(session, demo, Path(files.dir), datetime.now(UTC).date())
-    # через публикатор, чтобы ответ ушел после коммита сида, а не до него.
-    # mandatory: выключенные объявления гасят звук, но не ответ на команду
     notifications.notify_user(
         user_id,
         SEEDED if seeded else ALREADY_SEEDED,

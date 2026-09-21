@@ -21,20 +21,17 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-# один градус широты в метрах, грубо
 NEARBY_METERS_PER_DEGREE = 111_320
 
 CONSENT_REQUIRED = "Сначала примите согласие на обработку персональных данных"
+NOT_CONNECTED = "Управляющая компания дома еще не подключена к сервису"
 
 
 def stated(value: str | None) -> str | None:
-    # строка из пробелов приходит от пустого поля формы и означает то же,
-    # что и отсутствие параметра
     return None if value is None or not value.strip() else value.strip()
 
 
 def is_connected(house: House, org: Organization | None) -> bool:
-    # дом без УК и УК, не дошедшая до регистрации, для жителя одно и то же
     return (
         house.org_id is not None and org is not None and org.registered_at is not None
     )
@@ -52,8 +49,6 @@ class ResidencyView(ZhekaType):
     house: House
     flat: Flat | None
     is_connected: bool
-    # статус последнего запроса подтверждения по квартире привязки: экран
-    # подтверждения решает по нему, что показать, еще до карточки квартиры
     verification_status: VerificationStatus | None = None
     verification_reject_reason: str | None = None
 
@@ -139,7 +134,6 @@ class HousesService:
             stated(building),
             stated(query),
         )
-        # без города и без строки поиска запрос перебрал бы весь справочник
         if city is None and query is None:
             raise InvalidRequest("Укажите адрес или город")
 
@@ -192,8 +186,6 @@ class HousesService:
                 else await self._view(resident, house, connected)
             ),
             is_connected=connected,
-            # счетчик спроса и своя отметка живут только в состоянии
-            # «дом без подключенной УК»
             demand_count=0 if connected else await self._houses.count_demand(house_id),
             demand_sent=(
                 not connected
@@ -219,7 +211,6 @@ class HousesService:
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise EntityNotFound("Пользователь не найден")
-        # согласие одно на сервис, а не по одному на дом
         if user.consent_at is None:
             raise NotEnoughRights(CONSENT_REQUIRED)
 
@@ -229,14 +220,10 @@ class HousesService:
             if flat is None or flat.house_id != house_id:
                 raise EntityNotFound("Квартира не найдена")
         if number is not None:
-            # номер уже заведенной квартиры превращается в привязку к ней,
-            # иначе у дома завелся бы второй житель той же квартиры без flat_id
             known = await self._houses.get_flat_by_number(house_id, number)
             if known is not None:
                 flat_id, number = known.id, None
 
-        # квартиру житель выбирает до всякого подтверждения, и до него повторная
-        # привязка ее меняет. Из подтвержденной квартиры жителя уводит только УК
         existing = await self._residents.get_for_house(user_id, house_id)
         if (
             existing is not None
@@ -268,12 +255,10 @@ class HousesService:
 
     async def unlink(self, user_id: UserId, resident_id: ResidentId) -> None:
         resident = await self._residents.get(resident_id)
-        # чужая привязка отвечает 404: 403 подтвердил бы, что resident_id существует
         if resident is None or resident.user_id != user_id:
             raise EntityNotFound("Привязка к дому не найдена")
 
         house_id = resident.house_id
-        # удаляется только строка жителя: заявки, показания и голоса остаются
         await self._residents.delete(resident)
         await self._events.record(
             EventType.HOUSE_LEFT, user_id=user_id, house_id=house_id
@@ -300,8 +285,6 @@ class HousesService:
         limit: int,
         offset: int,
     ) -> tuple[Sequence[Flat], int, set[FlatId]]:
-        # is_taken выдает, где живут наши пользователи, поэтому список только
-        # для жителей дома. Маршрут проверяет то же, но сервис зовут и мимо него
         resident = await self._residents.get_for_house(user_id, house_id)
         if resident is None:
             raise EntityNotFound("Дом не найден")
@@ -396,7 +379,6 @@ class HousesService:
 
     async def rotate_binding_code(self, org_id: OrgId, house_id: HouseId) -> House:
         house = await self._org_house(org_id, house_id)
-        # houses.chat_binding_code - это String(8), token_hex(4) дает ровно 8
         await self._houses.set_binding_code(house, secrets.token_hex(4))
         return house
 
@@ -439,7 +421,6 @@ class HousesService:
         return views, total
 
     async def _org_house(self, org_id: OrgId, house_id: HouseId) -> House:
-        # дом чужой организации отвечает 404: 403 подтвердил бы, что он есть
         house = await self._houses.get_for_org(house_id, org_id)
         if house is None:
             raise EntityNotFound("Дом не найден")

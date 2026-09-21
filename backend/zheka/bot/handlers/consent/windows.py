@@ -6,8 +6,6 @@ from zheka.bot.handlers.consent.handlers import on_accept
 from zheka.bot.states import Consent
 from zheka.core.consent import CONSENT_TEXT
 
-# текст один на бота и на чекбокс мини-аппа: два разошедшихся согласия - это
-# не удобство, а юридическая проблема
 consent_dialog = Dialog(
     Window(
         Const(CONSENT_TEXT),

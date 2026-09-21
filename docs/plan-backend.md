@@ -21,20 +21,37 @@
 ## Архитектурные решения, принятые заранее
 
 - Мультитенант на общей схеме. Никакого RLS и никаких схем на организацию.
-- Изоляция данных - одна зависимость FastAPI, которая достает организацию
-  текущего сотрудника. Все запросы админки идут только через нее.
-- Один домен, nginx разводит по путям: `/` - статика фронта, `/api/` -
-  FastAPI, `/webhook` - вебхук, `/files/` - защищенная отдача файлов.
-- Вебхук обязан ответить 200 за 30 секунд. Любая отправка сообщений, вызов
-  OCR и любой вызов LLM уходят в фоновую задачу, обработчик апдейта только
-  принимает и ставит в очередь.
+- Изоляция данных - зависимость FastAPI, которая достает организацию
+  текущего сотрудника, и один фильтр `scoped_to_org` в репозиториях. Все
+  запросы админки идут только через них, чужой id - 404.
+- Один процесс API: FastAPI под gunicorn (ASGI-воркер, без uvicorn), в нем же
+  бот maxo. `MAX_BOT_MODE=polling` по умолчанию (один воркер), `webhook` в
+  проде (нужен `MAX_WEBHOOK_URL`). Фоновые задачи - taskiq на Redis:
+  отдельные сервисы `worker` и `scheduler`.
+- Один домен, nginx разводит по путям: `/` - контейнер `web` со статикой
+  фронта, `/api/` - FastAPI, `= /webhook` - вебхук, `/files/` - отдача файлов.
+- Вебхук обязан ответить 200 за 30 секунд. Обработчик апдейта не делает IO
+  неизвестной длины (скачивание файла, рассылка) и ставит задачу taskiq. OCR
+  и LLM - синхронные вызовы из API мини-аппа с таймаутом 3 секунды, бот их не
+  использует.
 - HTTPS строго на 443, сертификат Let's Encrypt. Самоподписанный MAX
-  отвергает, нестандартный порт не примет.
-- Файлы лежат на bind mount (`backend/content`) под UUID-именами, отдаются
-  эндпоинтом с проверкой прав. MinIO не заводим.
-- Отправка сообщений идет через один хелпер, который берет уровень
-  уведомления из настроек жителя. Дефолт продукта - без звука, дефолт API -
-  со звуком, поэтому `notify=false` передается явно.
+  отвергает, нестандартный порт не примет. TLS в репозитории нет, nginx
+  отдает только HTTP (не сделано).
+- Файлы лежат на bind mount (`backend/content`) под UUID-именами, отдаются по
+  ссылке, подписанной HMAC на токене бота и живущей час; ссылку API выдает
+  только тому, кому файл положено видеть. MinIO не заводим.
+- Уведомления и рассылки отправляют фоновые задачи после коммита транзакции:
+  задача берет уровень уведомления из настроек жителя (`resolve_notify`), а
+  `MaxSender` держит лимиты MAX (30 в секунду на бота, 2 на чат, в памяти
+  процесса). Дефолт продукта - без звука, дефолт API - со звуком, поэтому
+  `notify` передается всегда явно. Обработчики бота отвечают пользователю
+  сами, без очереди.
+- Расписание по Москве: напоминания о показаниях и опросах и автозакрытие
+  опросов в 10:00, предупреждение о поверке в 09:00, напоминание о приеме в
+  19:00 накануне, автозакрытие приемки проверяется каждую минуту.
+- Дробные величины - масштабированные целые: деньги в копейках, тариф в
+  1/10000 рубля, площадь в 1/100 м2, объем и показания в 1/1000, проценты в
+  1/100.
 - Склейка заявок считается на записи, а не агрегатом на чтении: группа
   ищется до сохранения, иначе жителю нечего показать вместо кнопки создания.
 - «Готово» от исполнителя не закрывает заявку. Закрывает житель или таймаут
@@ -52,54 +69,74 @@
 
 Ядро:
 
-- `organizations` - id, name, inn, license_no, created_at
+- `organizations` - id, name, inn, license_no, phone, address,
+  reception_note, registered_at (пусто у незарегистрированных из реестра),
+  is_demo
+- `org_settings` - org_id, meter_window_day_from / _to (по умолчанию 15 и
+  25), meter_window_always_open, group_threshold, group_window_hours
 - `org_members` - org_id, user_id, role (`creator` / `admin` / `employee` /
   `executor`)
 - `org_invites` - code, org_id, role, expires_at, max_activations,
-  activations_used, created_by
+  activations_used, created_by, revoked_at
 - `flat_invites` - code, flat_id, created_by, expires_at, max_activations,
-  activations_used
-- `houses` - id, org_id (nullable), регион/город/улица/дом, кадастр, год,
-  этажность, площадь, число подъездов, lat, lon
+  activations_used, revoked_at
+- `houses` - id, org_id (nullable), region, city, street, building,
+  cadastral_no, built_year, floors, area, entrances, lat, lon,
+  chat_binding_code, overhaul (JSONB), documents
 - `flats` - id, house_id, number, entrance, area, account_no
-- `users` - max_user_id, name, consent_version, consent_at
-- `residents` - user_id, house_id, flat_id (nullable), role (`owner` /
-  `tenant`), can_see_charges, can_vote, verified_at, verified_by, status
-  (`active` / `blocked`), block_reason
-- `notification_settings` - user_id, category, level (`sound` / `silent` /
-  `off`)
+- `users` - id, max_user_id, name, username, consent_version, consent_at,
+  bot_stopped_at, max_chat_id
+- `residents` - user_id, house_id, flat_id (nullable), flat_number, role
+  (`owner` / `tenant`), can_see_charges, can_vote, verified_at, verified_by,
+  status (`active` / `blocked`), block_reason, is_chairman
+- `flat_verification_requests` - flat_id, user_id, account_no, comment,
+  status (`pending` / `approved` / `rejected`), decided_by, decided_at, reason
+- `notification_settings` - user_id, category (`requests` / `announcements`
+  / `meters`), level (`sound` / `silent` / `off`)
 - `events` - id, user_id, type, payload (JSONB), created_at
 
 Заявки:
 
-- `requests` - id, house_id, flat_id, author_user_id, category, description,
-  status, parent_request_id, group_id, channel (`miniapp` / `bot` / `chat` /
-  `phone`), caller_name, caller_phone, executor_user_id, rating, feedback,
-  created_at, accepted_at, done_at, reviewed_at, is_staff_author
+- `requests` - id, house_id, flat_id, author_user_id (nullable), category,
+  description, status, completion_reason (`resident_accepted` /
+  `resident_rejected` / `auto_closed`), parent_request_id, group_id, channel
+  (`miniapp` / `bot` / `chat` / `phone`), caller_name, caller_phone,
+  executor_user_id, rating, feedback, created_at, accepted_at, done_at,
+  reviewed_at, is_staff_author
 - `request_groups` - id, house_id, category, window_started_at, status
-- `request_photos` - request_id, path, kind (`issue` / `result`)
-- `request_status_log` - request_id, from, to, by_user_id, by_role, at
+- `request_photos` - request_id, path, kind (`issue` / `result`),
+  uploaded_by
+- `request_status_log` - request_id, from_status, to_status, by_user_id,
+  by_role (`resident` / `staff` / `executor` / `system`), at
+- `request_messages` - request_id, author_user_id, author_role, text
 
-Счетчики:
+Счетчики и начисления:
 
 - `meters` - id, flat_id, type (`hot_water` / `cold_water` / `electricity` /
   `gas` / `heating`), tariff_zones (1 или 2), serial,
-  next_verification_date
-- `readings` - id, meter_id, period (год-месяц), values (JSONB, по зонам),
-  photo_paths, ocr_used, ocr_accepted, is_below_previous, submitted_at,
-  submitted_by
-- `meter_windows` - org_id, day_from, day_to
-- `tariffs` - house_id, service, value, unit, valid_from
-- `charges` - flat_id, period, lines (JSONB), total, is_closed
+  next_verification_date, verification_warned_at
+- `readings` - id, meter_id, period (первое число месяца), values (JSONB, по
+  зонам), photo_paths, ocr_used, ocr_accepted, is_below_previous,
+  submitted_at, submitted_by
+- `tariffs` - house_id, service, value, unit, valid_from, document_url
+- `charges` - flat_id, period, lines (JSONB), total, is_closed, paid_at
 
 Остальное:
 
-- `polls`, `poll_options`, `poll_votes`
-- `announcements` - org_id, house_ids, text, channels (чат / лс), created_by
-- `chats` - chat_id, house_id, bound_by, bot_is_admin, bound_at
+- `polls` - house_id, org_id, created_by_user_id, created_by_role, title,
+  description, is_multiple, starts_at, ends_at, status, reminder_sent_at
+- `poll_options` - poll_id, text, position
+- `poll_votes` - poll_id, option_id, user_id, resident_id, flat_id,
+  counted_by_area
+- `announcements` - org_id, house_ids, text, channels (чат / лс), created_by,
+  recipients_count
+- `chats` - chat_id, house_id, title, bound_by, bot_is_admin, bound_at,
+  status (`active` / `removed`)
 - `demand_signals` - house_id, user_id
-- `reception_windows` - org_id, weekday, time_from, time_to, slot_minutes
-- `appointments` - org_id, user_id, request_id (nullable), starts_at, status
+- `reception_windows` - org_id, weekday, time_from, time_to, slot_minutes,
+  capacity
+- `appointments` - org_id, house_id, user_id, request_id (nullable),
+  starts_at, status (`booked` / `cancelled` / `done`), reminder_sent_at
 - `access_requests` - id, org_id, house_id, reason, date, created_by
 - `access_slots` - access_request_id, starts_at, capacity
 - `access_targets` - access_request_id, flat_id, slot_id (nullable),
@@ -108,8 +145,8 @@
 ## Роли
 
 Внутри организации четыре роли. `creator` может все и не может быть
-исключен. `admin` управляет домами, приглашает только сотрудников, не может
-исключать других админов. `employee` работает с заявками, объявлениями и
+исключен. `admin` управляет домами, приглашает сотрудников и исполнителей, не
+может исключать других админов. `employee` работает с заявками, объявлениями и
 счетчиками, настройки организации только читает. `executor` видит только
 назначенные ему заявки и только в диалоге с ботом, мини-апп ему не нужен.
 
@@ -119,8 +156,10 @@
 Житель квартиры - собственник или арендатор. Арендатор не видит начислений и
 не голосует в опросах, в остальном это обычный житель квартиры.
 
-Приглашение - диплинк с кодом, у кода есть срок жизни и лимит активаций. Такой
-же код собственник выдает на свою квартиру, чтобы завести туда арендатора.
+Приглашение - диплинк с кодом, у кода есть срок жизни и лимит активаций (по
+умолчанию 72 часа и одна). Код на роль выше текущей повышает уже состоящего в
+организации. Такой же код подтвержденный собственник выдает на свою квартиру,
+чтобы завести туда арендатора; арендатор по нему сразу подтвержден.
 
 ## По дням
 
@@ -128,16 +167,21 @@
 
 Поток A:
 
-- compose: postgres, backend, nginx. `.env.example`, `.dockerignore`
-- FastAPI, maxo 0.9.0 через `FastApiWebAdapter` в том же приложении
-- `/webhook` с проверкой заголовка `X-Max-Bot-Api-Secret`, ответ 200 сразу
-- очередь фоновых задач, все исходящие вызовы только через нее
-- alembic, первая миграция
-- авторизация по подписанному initData, HMAC на токене бота, зависимость
-  `current_user`
-- деплой на VPS, nginx, Let's Encrypt, домен на 443
-- `/start` с `DeeplinkFilter`, `/help`, кнопка `open_app`, ник бота из
-  `GET /me` при старте
+- compose: `web`, `api`, `nginx`, `worker`, `scheduler`, `migrations`,
+  `database` (PostgreSQL 16), `redis`. `.env.example`, `.dockerignore`
+- FastAPI под gunicorn, maxo 0.9.0 в том же процессе: polling по умолчанию,
+  вебхук при `MAX_BOT_MODE=webhook`
+- `/webhook` с проверкой секретного заголовка, если задан
+  `MAX_SECRET_TOKEN`, ответ 200 сразу
+- очередь фоновых задач taskiq на Redis, воркер и планировщик; уведомления и
+  рассылки уходят только через нее, после коммита
+- alembic, первая миграция, ее прогоняет сервис `migrations`
+- авторизация по подписанному initData, HMAC на токене бота, initData старше
+  суток - 401, зависимость `current_user`
+- деплой на VPS, nginx, Let's Encrypt, домен на 443 (в репозитории только
+  HTTP на 80, TLS не сделан)
+- `/start`, `/help`, кнопка «Открыть приложение», ник бота из `get_my_info`
+  при старте
 
 Поток B:
 
@@ -151,32 +195,39 @@
 
 Поток A:
 
-- FSM-онбординг в боте, три пути к дому: пикер, геопозиция через
-  `request_geo_location`, диплинк
-- подача простой заявки прямо в чате бота
+- онбординг в боте на `maxo.dialogs`, три пути к дому: пикер, геопозиция
+  (дома в радиусе 700 м), диплинк; затем номер квартиры, его можно
+  пропустить
+- подача простой заявки прямо в чате бота: категория - описание - фото -
+  подтверждение, заявку создает фоновая задача
 - запись событий: `bot_start`, `miniapp_open`, `house_search`,
   `house_linked`
 - согласие на обработку ПД: чекбокс до выбора дома, запись `consent_version`
-  и даты, статичная страница политики
-- четвертый путь к дому: подъездный QR, в диплинке дом и подъезд, онбординг
-  схлопывается до одного согласия
-- `source` в событиях различает QR, домовой чат и прямой запуск
+  и даты, статичная страница политики; диплинк продолжается после согласия
+- четвертый путь к дому: подъездный QR, в диплинке дом и подъезд; остаются
+  согласие и номер квартиры
+- `source` в событиях различает QR, домовой чат, прочие диплинки, мини-апп и
+  прямой запуск
 
 Поток B:
 
-- регистрация организации по скрытому диплинку: ввод ИНН или номера
-  лицензии, проверка существования в сиде, показ найденных домов,
+- регистрация организации по скрытому коду: бот по диплинку `reg_...` ведет в
+  мини-апп, там код, ввод ИНН или номера лицензии, поиск среди
+  незарегистрированных организаций сида, показ найденных домов,
   подтверждение
 - приглашения сотрудников: генерация кода, срок жизни, лимит активаций,
   активация, отзыв
 - API домов: поиск, привязка, отвязка, свитчер, карточка дома
 - сценарий дома без подключенной УК: карточка и контакты видны, заявки и
-  счетчики закрыты плашкой, кнопка спроса пишет `demand_signals`
-- API заявок: создание, список, статусы, оценка, повторная заявка со
-  ссылкой на родителя
+  счетчики закрыты плашкой, кнопка спроса пишет `demand_signals`; заявку
+  такой дом не принимает ни из мини-аппа, ни из бота (бот по «Подать заявку»
+  отправляет к кнопке «Мне нужен» в карточке дома), запрос подтверждения
+  квартиры в УК тоже (409)
+- API заявок: создание, список, статусы, оценка (1-5, один раз, после приемки
+  жителем), повторная заявка со ссылкой на родителя
 - склейка коллективных заявок: при создании поиск группы по дому, категории и
   окну, ответ «пожаловались N соседей» и присоединение вместо дубля, порог и
-  окно в настройках организации
+  окно в настройках организации (по умолчанию 3 заявки за 24 часа)
 - подъездные коды на карточке дома, печатную форму рисует фронт
 - инвайт арендатору: код на квартиру от подтвержденного собственника,
   активация заводит жителя с флагами «не видит начисления, не голосует»
@@ -186,75 +237,99 @@
 Поток A:
 
 - уведомления: три уровня через `notify`, категории заявок / объявлений /
-  счетчиков, статусы своих заявок выключить нельзя
+  счетчиков, по умолчанию без звука; обязательные (статусы и ответы по своим
+  заявкам, карточки исполнителя и приемки, окна доступа, напоминание о
+  приеме, итог подтверждения квартиры, блокировка) можно только лишить звука
 - обработка `dialog_muted`, `dialog_unmuted`, `bot_stopped` в события
-- рассылка: фоновая задача, потолок 30 rps, отсев по `Chat.status` и по
-  `bot_stopped`, замьютившим шлем как обычно
-- домовые чаты: `bot_added`, определение инициатора, привязка через личку,
-  код привязки для жителя, выход из чата для неизвестного аккаунта
+  `bot_muted`, `bot_unmuted`, `bot_stopped`; `bot_removed` помечает чат
+  удаленным
+- рассылка: фоновая задача, потолок 30 rps на бота и 2 в секунду на чат,
+  отсев удаленных чатов и остановивших бота, замьютившим шлем как обычно
+- домовые чаты: `bot_added` ставит задачу, та определяет инициатора, привязка
+  через личку, код привязки для жителя, выход из канала и из чата для
+  неизвестного или недостижимого аккаунта; каждое добавление - привязка с
+  нуля
 - проверка прав бота по кнопке через `GET /chats/{chatId}/members/me`,
-  перепроверка при любой неудачной отправке в чат
+  перепроверка при любой неудачной отправке в чат и сообщение со звуком
+  тому, кто привязал
 - приветствие в чат с кнопкой-диплинком
 - диалог исполнителя: карточка назначенной заявки с адресом, категорией и фото
   жителя, кнопки «принял» / «выехал» / «готово», каждое нажатие редактирует ту
   же карточку, «готово» требует фото результата
 - приемка жителем: два фото рядом, кнопки «принять» и «сделано плохо», вторая
   создает повторную заявку с `parent_request_id`
-- закрытие по таймауту 48 часов задачей планировщика
+- закрытие по таймауту 48 часов задачей планировщика, проверка каждую минуту
 
 Поток B:
 
-- админка УК: входящие заявки, смена статусов, ответы, пометка заявки от
+- админка УК: входящие заявки с фильтрами по дому, категории, статусу,
+  каналу, исполнителю и просрочке, свертка групп, просроченные сверху; смена
+  статусов строго по одному шагу, ответы жителю, пометка заявки от
   сотрудника организации
-- объявления: выбор домов, галочки каналов, дефолт только чат
-- управление жителями: отзыв верификации квартиры и блокировка в доме,
-  обязательная причина, уведомление жителю; председателя заблокировать
+- объявления: выбор домов, галочки каналов, дефолт только чат, в ответе дома
+  без привязанного чата
+- управление жителями: отзыв верификации квартиры, блокировка и
+  разблокировка в доме, обязательная причина, уведомление жителю с причиной
+  и контактом организации (название и телефон); председателя заблокировать
   нельзя
 - назначение председателя из верифицированных жителей дома
-- роль `executor` в инвайтах, назначение заявки исполнителю в админке
+- роль `executor` в инвайтах, список исполнителей с числом активных заявок,
+  назначение заявки исполнителю в админке
 - группа в админке как одна заявка: число квартир, раскрывающийся список
   авторов, смена статуса на всю группу, уведомления всем участникам
-- заявка по звонку: сотрудник выбирает квартиру и жителя или заполняет
-  свободную запись о звонившем, `channel = phone`, тот же конвейер статусов;
-  писать первым бот не может, сотрудник перезванивает сам
+- заявка по звонку: сотрудник привязывает ее к жителю дома (тот становится
+  автором: получает уведомления, принимает работу, ставит оценку), к
+  квартире или только к дому с именем и телефоном звонившего, `channel =
+  phone`, тот же конвейер статусов; заблокированный житель - 409, житель
+  другого дома - 404; звонившему без MAX бот писать первым не может,
+  сотрудник перезванивает сам
 - журнал смен статуса пишется на каждом переходе
 
 ### Дни 9-10: собрания, квартира, счетчики
 
 Поток A:
 
-- напоминания об опросах и об окне подачи показаний, не более двух за окно,
-  не приходят тому, кто уже сдал
-- предупреждение об истечении поверки за месяц
+- напоминания об окне подачи показаний: в первый день окна и за два дня до
+  конца, по одному на дом, период и вид, не приходят квартире, которая уже
+  сдала; ручное напоминание УК в открытое окно не чаще раза в день
+- напоминание об опросе один раз, когда до конца меньше 48 часов:
+  непроголосовавшим собственникам в личку и в привязанные чаты; опросы после
+  даты окончания закрываются сами
+- предупреждение об истечении поверки за 30 дней и сообщение после истечения
 - напоминание о записи на прием вечером накануне
 - рассылка окон доступа: одно сообщение на подтвержденные квартиры с кнопками
   слотов, выбор редактирует то же сообщение
 
 Поток B:
 
-- опросы: создание УК и председателем, голосование, результаты, пометка
-  что это не ОСС по ЖК РФ
+- опросы: создание УК и председателем, опрос председателя принадлежит
+  организации дома (сотрудники видят, закрывают, смотрят результаты и
+  непроголосовавших), голосование, результаты, пометка что это не ОСС по ЖК
+  РФ
 - верификация квартиры: лицевой счет против сид-биллинга, fallback -
   запрос в админку УК
 - начисления и квитанции, демо-оплата с пометкой
-- счетчики: список счетчиков квартиры, окно подачи из настроек
-  организации, выбор месяца вне окна, закрытые периоды недоступны с
-  объяснением, переподача внутри окна, многотарифность
+- счетчики: список счетчиков квартиры (по одному каждого вида, заводят
+  собственник и сотрудники), окно подачи из настроек организации (по
+  умолчанию 15-25 число или весь месяц), вне окна текущий и два прошлых
+  месяца, закрытые периоды недоступны с объяснением, переподача внутри окна,
+  многотарифность, фото обязательно
 - валидация: показание ниже предыдущего разрешено, но с предупреждением
   жителю и флагом в админке
 - расчет после подачи: расход, предварительная сумма по тарифам,
   сравнение со средним по дому
-- резкий рост расхода - предложение создать заявку с предзаполненной
-  категорией
+- резкий рост расхода (не меньше 200% медианы минимум трех прошлых) -
+  предложение создать заявку о протечке
 - просроченная поверка закрывает подачу
-- прием: часы и длина слота в настройках организации, запись жителя с
-  привязкой своей заявки, вкладка «Прием» со списком на сегодня
+- прием: часы по дням недели, длина слота и число мест в настройках
+  организации, запись жителя на 14 дней вперед с привязкой своей заявки,
+  отмена записи, вкладка «Прием» со списком на сегодня
 - обратный сбор доступа: заявка на список квартир с датой и слотами, сетка
   «квартиры на слоты», счетчик ответивших
 - прогноз кворума: результат опроса в квартирах и в процентах площади, линия
   50%, в площадь идут только подтвержденные, неподтвержденные отдельной
-  строкой, инициатору список непроголосовавших квартир по подъездам; кто как
-  проголосовал, не отдается никогда
+  строкой, инициатору и УК список непроголосовавших квартир с номером
+  подъезда; кто как проголосовал, не отдается никогда
 - разбор квитанции: дельта к прошлому периоду построчно, каждая строка делится
   на тарифный и расходный эффект, появившиеся и исчезнувшие строки отдельно,
   кнопка «оспорить начисление» создает заявку с расчетом и фото счетчиков за
@@ -264,63 +339,106 @@
 
 Поток A:
 
-- демо-диплинки: один выдает роль сотрудника демо-УК, второй создает
-  жителю собственную квартиру в демо-доме с историей; оба выдают обе роли
-- у демо-организации окно подачи показаний открыто весь месяц
+- демо-диплинки на пять демо-организаций (N от 1 до 5 - порядок в сиде, 1
+  «Жэка Коммуналкин»): `demo_admin_N` - админ, `demo_staff_N` - сотрудник,
+  `demo_resident_N` - собственная подтвержденная квартира `Д{user_id}` в
+  первом доме организации (по улице, затем по номеру; у организации 2 он в
+  Санкт-Петербурге) с шестью месяцами показаний и начислений. Ссылок без
+  номера нет. Каждая ссылка ставит ровно свою роль, в том числе понижает
+  (админ по ссылке сотрудника становится сотрудником). `POST /demo/activate`
+  выдает сотрудника и квартиру в организации 1, уже выданную роль не меняет
+- у каждой демо-организации тарифы в домах и окно подачи показаний открыто
+  весь месяц
+- `/seed` в боте (не рекламируется): засевает пустую базу фоновой задачей и
+  отвечает после коммита
 - нагрузочная проверка рассылки, проверка 30 секунд на вебхуке
 
 Поток B:
 
-- эндпоинты дашборда: четыре плитки, два графика, сезонный блок счетчиков
-  с кнопкой напоминания не сдавшим
-- обезличенный бенчмарк: агрегаты по платформе, позиция УК в рейтинге,
-  разрезы по регионам и городам без названий организаций, список
-  неподключенных домов с числом ожидающих
-- LLM-классификация заявки через Yandex AI Studio, кнопки как fallback при
-  любой ошибке, события `llm_suggested` и `llm_accepted`
-- таблица по исполнителям: закрыто, медиана времени, оценка, доля повторных;
-  доля закрытых по таймауту идет в обезличенный бенчмарк
+- эндпоинты дашборда: четыре плитки, два графика (по категориям и по 12
+  неделям), период по умолчанию 30 дней, фильтр по дому, сезонный блок
+  счетчиков по домам с кнопкой напоминания не сдавшим
+- обезличенный бенчмарк за 30 дней: шесть метрик (время до принятия, доли
+  просроченных, повторных, закрытых по таймауту и цифровых, оценка) с
+  медианой платформы и местом; разрез по регионам и городам для времени до
+  принятия; без названий организаций; при меньше чем трех организациях
+  медиана и место скрыты, разрез не показывается; демо сравниваются только с
+  демо; список до 50 неподключенных домов платформы с числом ожидающих
+- LLM-классификация заявки через Yandex AI Studio: синхронный
+  `POST /requests/classify` из мини-аппа, таймаут 3 секунды, модель выбирает
+  только категорию, без ключа вызова нет, кнопки как fallback при любой
+  ошибке, события `llm_suggested` и `llm_accepted`
+- таблица по исполнителям: закрыто, доля повторных, медиана времени от
+  назначения до сдачи на приемку, оценка; доля закрытых по таймауту идет в
+  обезличенный бенчмарк
 - разрез заявок по каналу, цифра против телефона
-- экспорт заявки в акт: печатная страница с таймлайном, фото, ответами УК и
-  оценкой, с пометкой, что документ юридической силы не имеет
+- экспорт заявки в акт: `GET /requests/{id}/export` отдает автору данные для
+  печатной страницы с таймлайном, фото, ответами УК и оценкой, с пометкой,
+  что документ юридической силы не имеет
 
 ### Дни 13-14: сдача
 
 - чистая сборка из пустого клона одной командой, до пяти минут
-- `openapi.yaml` и `DATA-API.yaml` в репозиторий
+- `openapi.yaml` и `DATA-API.yaml` в репозиторий (не сделано)
 - проверка, что в репозитории нет секретов
 - полный прогон основного сценария на проде обоими каналами
 - фиксация commit hash
 
 ## Перечень событий
 
-Константы в одном модуле, не строки по месту:
+45 членов `EventType` в одном модуле, не строки по месту (payload в скобках):
 
-`bot_start(source)`, `miniapp_open(source, tab)`, `house_search(method)`,
-`house_linked(method)`, `house_left`, `flat_verification_requested(method)`,
-`flat_verified(by)`, `flat_verification_revoked(reason_code)`,
-`request_created(category, channel, has_photo, is_repeat, llm_suggested,
-llm_accepted)`, `request_joined(group_size)`, `request_group_formed(category,
-size)`, `request_assigned`, `executor_status_changed(to)`,
-`request_reviewed(accepted)`, `request_auto_closed`, `request_exported`,
-`request_status_changed(from, to, by_role)`,
-`request_rated(score, has_comment)`, `reading_submitted(meter_type,
-ocr_used, ocr_accepted, is_below_previous, out_of_window)`,
-`reading_reminder_sent`, `poll_created(by_role)`, `poll_voted`,
-`announcement_sent(channel, houses_count)`, `announcement_click`,
-`chat_bound(by_role)`, `chat_admin_granted`,
-`notification_settings_changed(category, level)`, `demand_signal(house_id)`,
-`staff_invited(role)`, `flat_invite_created`, `flat_invite_activated`,
-`appointment_booked(has_request)`, `appointment_reminder_sent`,
-`access_request_sent(flats_count)`, `access_slot_picked`,
-`charge_breakdown_opened`, `charge_disputed`, `org_registered`, `bot_muted`,
-`bot_unmuted`, `bot_stopped`.
+`bot_start(source)`, `bot_muted`, `bot_unmuted`, `bot_stopped`,
+`miniapp_open(source, tab, announcement_id)`,
+`announcement_click(source, tab, announcement_id)`,
+`house_search(method, city, street, query | found)`,
+`house_linked(house_id, flat_id, flat_number, source, entrance)`,
+`house_left(house_id)`, `demand_signal(house_id, total)`,
+`flat_verification_requested(flat_id, method, matched)`,
+`flat_verified(flat_id, by, decided_by)`,
+`flat_verification_revoked(resident_id, reason)`,
+`flat_invite_created(flat_id, max_activations)`,
+`flat_invite_activated(flat_id, invited_by)`,
+`request_created(house_id, category, channel, has_photo, is_repeat,
+llm_suggested, llm_accepted, parent_request_id)`,
+`request_status_changed(request_id, from, to, by_role)`,
+`request_rated(request_id, score, has_comment)`,
+`request_joined(request_id, group_id, group_size)`,
+`request_group_formed(house_id, category, size)`,
+`request_assigned(request_id, executor_user_id)`,
+`executor_status_changed(request_id, to)`,
+`request_reviewed(request_id, accepted)`, `request_auto_closed(request_id)`,
+`request_exported(request_id)`, `llm_suggested(category)`,
+`llm_accepted(house_id, category)`, `reading_submitted(meter_type, ocr_used,
+ocr_accepted, is_below_previous, out_of_window)`,
+`reading_reminder_sent(house_id, period, kind)`,
+`poll_created(poll_id, by_role)`, `poll_voted(poll_id)`,
+`announcement_sent(announcement_id, channel, houses_count)`,
+`chat_bound(chat_id, house_id, by_role)`,
+`chat_admin_granted(chat_id, house_id)`,
+`notification_settings_changed(category, level)`,
+`org_registered(org_id, inn)`, `staff_invited(org_id, role)`,
+`resident_blocked(resident_id, reason)`,
+`resident_unblocked(resident_id, reason)` (reason всегда пуст),
+`appointment_booked(appointment_id, has_request)`,
+`appointment_reminder_sent(appointment_id)`,
+`access_request_sent(access_request_id, flats_count)`,
+`access_slot_picked(access_request_id, slot_id)`,
+`charge_breakdown_opened(charge_id)`, `charge_disputed(charge_id,
+request_id)`.
 
-`source` пишется и в `bot_start`, и в `miniapp_open` - без этого не доказать,
-что домовые чаты приводят пользователей и что подъездный QR работает.
-`by_role` в смене статуса отличает действие УК от системного. `channel` в
-`request_created` отличает заявку по звонку от цифровых, без него доля заявок
-с прозрачным статусом считается по выжившим.
+`source` (`EventSource`: `direct`, `qr`, `chat`, `deeplink`, `miniapp`)
+пишется и в `bot_start`, и в `miniapp_open` - без этого не доказать, что
+домовые чаты приводят пользователей и что подъездный QR работает.
+`miniapp_open` и `announcement_click` присылает мини-апп через `POST /events`
+(других типов эндпоинт не принимает), остальные 43 пишет сервер: 39 в
+сервисах `core/services/`, четыре бот (`bot_start`, `bot_muted`,
+`bot_unmuted`, `bot_stopped`). `by_role` в смене статуса отличает действие
+УК от системного. `channel` в `request_created` отличает заявку по звонку от
+цифровых, без него доля заявок с прозрачным статусом считается по выжившим.
+У заявки по звонку и повторной нет ключей `llm_*`. `reading_reminder_sent`
+заодно служит меткой, что напоминание уже ушло (`kind`: `open` / `closing` /
+`manual`).
 
 ## Ограничения платформы, которые нельзя забыть
 

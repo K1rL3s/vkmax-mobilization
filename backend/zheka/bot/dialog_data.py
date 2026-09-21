@@ -12,14 +12,11 @@ from zheka.core.ids import HouseId
 
 
 class BaseDialogData(ZhekaMutableType, slots=True):
-    # не ZhekaType(frozen=False): mypy не наследует frozen=False от базы.
-    # slots=True роняет присваивание в поле с опечаткой
     retort: ClassVar[Retort] = Retort()
 
     @classmethod
     @contextmanager
     def proxy(cls, dialog_manager: DialogManager) -> Iterator[Self]:
-        # без try/finally: упавшее тело не должно записать полумутацию
         dialog_data = cls.load(dialog_manager)
         yield dialog_data
         dialog_data.dump(dialog_manager)
@@ -30,7 +27,6 @@ class BaseDialogData(ZhekaMutableType, slots=True):
 
     @classmethod
     def load_start(cls, dialog_manager: DialogManager) -> Self:
-        # битые данные должны упасть, а не стать значениями по умолчанию
         start_data = dialog_manager.start_data
         return cls.retort.load({} if start_data is None else start_data, cls)
 
@@ -39,12 +35,10 @@ class BaseDialogData(ZhekaMutableType, slots=True):
         return data
 
     def dump(self, dialog_manager: DialogManager) -> None:
-        # update, а не присваивание: чужие ключи в dialog_data переживают запись
         dialog_manager.dialog_data.update(self.to_data())
 
 
 class ConsentData(BaseDialogData):
-    # диплинк, который привел к согласию: после «Согласен» житель едет туда
     payload: str | None = None
 
 
@@ -88,7 +82,6 @@ class ReviewData(BaseDialogData):
 
 
 class ChatBindingData(BaseDialogData):
-    # окно рисует другая сессия и строку chats из задачи не увидит
     chat_id: int
     title: str
     notice: str | None = None

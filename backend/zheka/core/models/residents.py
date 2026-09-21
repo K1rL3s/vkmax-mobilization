@@ -24,7 +24,6 @@ class Resident(ZhekaMutableType):
     user_id: UserId
     house_id: HouseId
     flat_id: FlatId | None = None
-    # номер квартиры, которой еще нет в доме: УК заводит квартиры не везде
     flat_number: str | None = None
     role: ResidentRole
     can_see_charges: bool = True

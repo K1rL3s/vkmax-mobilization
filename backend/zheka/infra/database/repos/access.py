@@ -44,8 +44,6 @@ class AccessRepo(BaseAlchemyRepo):
     async def get_for_org(
         self, access_request_id: AccessRequestId, org_id: OrgId
     ) -> AccessRequest | None:
-        # id приходит из пути, поэтому запрос сужается до домов организации:
-        # чужой запрос отвечает 404, а не 403
         stmt = scoped_to_org(
             select(AccessRequest).where(
                 access_requests_table.c.id == access_request_id
@@ -69,8 +67,6 @@ class AccessRepo(BaseAlchemyRepo):
     async def list_for_flat(
         self, flat_id: FlatId
     ) -> Sequence[tuple[AccessRequest, AccessTarget]]:
-        # запрос и своя ячейка в нем одним запросом: без нее жителю нечего
-        # подсветить в списке
         stmt = (
             select(AccessRequest, AccessTarget)
             .join(
@@ -134,8 +130,6 @@ class AccessRepo(BaseAlchemyRepo):
     async def target_for_flats(
         self, access_request_id: AccessRequestId, flat_ids: Collection[FlatId]
     ) -> AccessTarget | None:
-        # житель приходит сюда без зависимости о доме, поэтому ячейку ищет
-        # его собственная подтвержденная квартира, а не id из тела запроса
         stmt = select(AccessTarget).where(
             access_targets_table.c.access_request_id == access_request_id,
             access_targets_table.c.flat_id.in_(flat_ids),
@@ -146,8 +140,6 @@ class AccessRepo(BaseAlchemyRepo):
     async def lock_slot(
         self, access_request_id: AccessRequestId, slot_id: AccessSlotId
     ) -> AccessSlot | None:
-        # вместимость больше единицы, поэтому уникальный индекс ее не удержит:
-        # блокировка строки слота выстраивает выборы этого окна в очередь
         stmt = (
             select(AccessSlot)
             .where(
@@ -172,8 +164,6 @@ class AccessRepo(BaseAlchemyRepo):
         self, target: AccessTarget, slot_id: AccessSlotId, at: datetime
     ) -> None:
         target.slot_id = slot_id
-        # ответил житель один раз: смена решения не новый ответ, и счетчик
-        # «ответили 9 из 14» от нее не двигается
         if target.responded_at is None:
             target.responded_at = at
         await self._session.flush()

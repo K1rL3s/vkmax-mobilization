@@ -14,8 +14,6 @@ from zheka.infra.database.tables.houses import flats_table
 from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 
-# заблокированный житель не адресат: запрос доступа к его квартире некому
-# было бы закрыть. То же правило держит MeterAccess.verified_resident
 VERIFIED_RESIDENT = and_(
     residents_table.c.verified_at.is_not(None),
     residents_table.c.status != ResidentStatus.BLOCKED,
@@ -24,8 +22,6 @@ VERIFIED_RESIDENT = and_(
 
 class ResidentsRepo(BaseAlchemyRepo):
     async def list_for_user(self, user_id: UserId) -> Sequence[Resident]:
-        # без явного порядка выдача меняется после любого обновления строки,
-        # и вызывающий, берущий из списка один дом, брал бы разные
         stmt = (
             select(Resident)
             .where(residents_table.c.user_id == user_id)
@@ -73,8 +69,6 @@ class ResidentsRepo(BaseAlchemyRepo):
         flat_number: str | None,
         role: ResidentRole,
     ) -> tuple[Resident, bool]:
-        # идемпотентность держит уникальный индекс (user_id, house_id), а не
-        # чтение перед записью. Второй элемент - завели ли жителя этим вызовом
         is_owner = role is ResidentRole.OWNER
         stmt = (
             pg_insert(Resident)
@@ -84,7 +78,6 @@ class ResidentsRepo(BaseAlchemyRepo):
                 flat_id=flat_id,
                 flat_number=flat_number,
                 role=role,
-                # арендатор не видит начислений и не голосует
                 can_see_charges=is_owner,
                 can_vote=is_owner,
             )
@@ -101,15 +94,12 @@ class ResidentsRepo(BaseAlchemyRepo):
         existing = await self.get_for_house(user_id, house_id)
         if existing is None:
             raise EntityNotFound("Житель не найден")
-        # квартира из повторной привязки перебивает прежнюю, право на это
-        # проверяет вызывающий
         if flat_id is not None:
             existing.flat_id = flat_id
             existing.flat_number = None
         elif flat_number is not None:
             existing.flat_id = None
             existing.flat_number = flat_number
-        # иначе вошедший однажды арендатором остался бы без начислений и голоса
         existing.role = role
         existing.can_see_charges = is_owner
         existing.can_vote = is_owner
@@ -118,14 +108,11 @@ class ResidentsRepo(BaseAlchemyRepo):
 
     async def delete(self, resident: Resident) -> None:
         await self._session.delete(resident)
-        # запись события идет по savepoint поверх этой же сессии, поэтому
-        # удаление доводится до базы до нее, а не внутри нее
         await self._session.flush()
 
     async def get_for_org(
         self, resident_id: ResidentId, org_id: OrgId
     ) -> Resident | None:
-        # resident_id приходит из пути: чужой житель отвечает 404, а не 403
         stmt = scoped_to_org(
             select(Resident).where(residents_table.c.id == resident_id),
             residents_table.c.house_id,
@@ -224,8 +211,6 @@ class ResidentsRepo(BaseAlchemyRepo):
     async def set_verified(
         self, resident: Resident, flat_id: FlatId, at: datetime, by: UserId | None
     ) -> None:
-        # подтверждение и есть привязка к квартире: у жителя, пришедшего по
-        # диплинку домового чата, flat_id до этого момента пустой
         resident.flat_id = flat_id
         resident.flat_number = None
         resident.verified_at = at
@@ -233,7 +218,6 @@ class ResidentsRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def active_user_ids(self, house_ids: Collection[HouseId]) -> Sequence[UserId]:
-        # житель нескольких домов рассылки иначе получил бы объявление дважды
         if not house_ids:
             return []
         stmt = (

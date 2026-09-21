@@ -20,9 +20,9 @@ from zheka.infra.max import MaxSender
 logger = logging.getLogger(__name__)
 
 
-# крон планировщика taskiq сверяется с datetime.now(tz=UTC): время меток в UTC
 @async_shared_broker.task(
-    task_name=TaskName.REMIND_READINGS.value, schedule=[{"cron": "0 10 * * *"}]
+    task_name=TaskName.REMIND_READINGS.value,
+    schedule=[{"cron": "0 10 * * *", "cron_offset": "Europe/Moscow"}],
 )
 @inject(patch_module=True)
 async def remind_readings(reminders_service: FromDishka[RemindersService]) -> int:
@@ -30,7 +30,8 @@ async def remind_readings(reminders_service: FromDishka[RemindersService]) -> in
 
 
 @async_shared_broker.task(
-    task_name=TaskName.REMIND_POLLS.value, schedule=[{"cron": "0 10 * * *"}]
+    task_name=TaskName.REMIND_POLLS.value,
+    schedule=[{"cron": "0 10 * * *", "cron_offset": "Europe/Moscow"}],
 )
 @inject(patch_module=True)
 async def remind_polls(reminders_service: FromDishka[RemindersService]) -> int:
@@ -38,7 +39,8 @@ async def remind_polls(reminders_service: FromDishka[RemindersService]) -> int:
 
 
 @async_shared_broker.task(
-    task_name=TaskName.CLOSE_EXPIRED_POLLS.value, schedule=[{"cron": "0 10 * * *"}]
+    task_name=TaskName.CLOSE_EXPIRED_POLLS.value,
+    schedule=[{"cron": "0 10 * * *", "cron_offset": "Europe/Moscow"}],
 )
 @inject(patch_module=True)
 async def close_expired_polls(reminders_service: FromDishka[RemindersService]) -> int:
@@ -46,16 +48,17 @@ async def close_expired_polls(reminders_service: FromDishka[RemindersService]) -
 
 
 @async_shared_broker.task(
-    task_name=TaskName.WARN_VERIFICATION.value, schedule=[{"cron": "0 9 * * *"}]
+    task_name=TaskName.WARN_VERIFICATION.value,
+    schedule=[{"cron": "0 9 * * *", "cron_offset": "Europe/Moscow"}],
 )
 @inject(patch_module=True)
 async def warn_verification(reminders_service: FromDishka[RemindersService]) -> int:
     return await reminders_service.warn_verification(datetime.now(UTC).date())
 
 
-# 16:00 UTC - 19:00 по Москве, вечер накануне приема
 @async_shared_broker.task(
-    task_name=TaskName.REMIND_APPOINTMENTS.value, schedule=[{"cron": "0 16 * * *"}]
+    task_name=TaskName.REMIND_APPOINTMENTS.value,
+    schedule=[{"cron": "0 19 * * *", "cron_offset": "Europe/Moscow"}],
 )
 @inject(patch_module=True)
 async def remind_appointments(reminders_service: FromDishka[RemindersService]) -> int:
@@ -77,8 +80,6 @@ async def broadcast_access_request(
         [target.flat_id for target in targets]
     )
     for resident in residents:
-        # обязательное окно: без ответа жителя сбор доступа ничего не
-        # собирает. Стек выводится из запроса, SEND - это весть, а не правка
         await open_card(
             users_repo,
             notifications_service,

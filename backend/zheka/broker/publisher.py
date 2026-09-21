@@ -17,18 +17,13 @@ class TaskPublisher:
         self._pending: list[tuple[TaskName, dict[str, Any]]] = []
 
     def publish(self, name: TaskName, **kwargs: Any) -> None:
-        # синхронно и без сети: задача уезжает во flush, после коммита, иначе
-        # откатившийся запрос успел бы разослать сообщения о том, чего нет
         self._pending.append((name, kwargs))
 
     async def flush(self) -> None:
-        # список забирается целиком: повторный flush не отправит то же самое
         pending, self._pending = self._pending, []
         for name, kwargs in pending:
             kicker: AsyncKicker[..., Any] = AsyncKicker(name.value, self._broker, {})
             try:
                 await kicker.kiq(**kwargs)
             except Exception:
-                # одна не уехавшая задача не отменяет остальные: транзакция
-                # уже закоммичена, откатывать нечего
                 logger.exception("Не удалось поставить задачу %s", name.value)

@@ -30,15 +30,9 @@ class UsersRepo(BaseAlchemyRepo):
             set_={
                 "name": name,
                 "username": username,
-                # мини-апп апсертит на каждом запросе без id личного диалога, и
-                # NULL оттуда навсегда отрезал бы жителя от окон, которые
-                # открывает задача: у нее нет другого адреса, кроме max_chat_id
                 "max_chat_id": func.coalesce(
                     insert.excluded.max_chat_id, users_table.c.max_chat_id
                 ),
-                # апдейт из личного диалога доказывает, что бот снова жив, а
-                # иначе однажды остановивший его житель не получил бы больше ни
-                # окна, ни рассылки
                 "bot_stopped_at": case(
                     (
                         insert.excluded.max_chat_id.is_(None),
@@ -49,8 +43,6 @@ class UsersRepo(BaseAlchemyRepo):
                 "updated_at": fresh_timestamp(),
             },
         ).returning(User)
-        # populate_existing: без него уже загруженный в identity map объект
-        # не подхватит name/username, обновлённые веткой DO UPDATE
         result = await self._session.execute(
             stmt, execution_options={"populate_existing": True}
         )

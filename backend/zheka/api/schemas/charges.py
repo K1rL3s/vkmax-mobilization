@@ -91,7 +91,6 @@ class ChargeBreakdownLine(BaseSchema):
     label: str
     amount: int = Field(description=_MONEY)
     delta: int = Field(description=_MONEY)
-    # дельта раскладывается на тарифный и расходный эффект
     tariff_effect: int = Field(description=_MONEY)
     volume_effect: int = Field(description=_MONEY)
     appeared: bool

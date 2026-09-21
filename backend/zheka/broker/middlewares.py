@@ -25,7 +25,6 @@ class CommitMiddleware(TaskiqMiddleware):
         container = self._container(message)
         session = await container.get(AsyncSession)
         await session.commit()
-        # задачи, поставленные этой задачей, уезжают после ее коммита
         publisher = await container.get(TaskPublisher)
         await publisher.flush()
 

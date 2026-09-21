@@ -58,6 +58,7 @@ from zheka.core.ids import (
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.houses import NOT_CONNECTED
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import (
     AUTO_CLOSE_AFTER,
@@ -123,6 +124,7 @@ def _admin(
         HousesRepo(session),
         UsersRepo(session),
         OrgsRepo(session),
+        ResidentsRepo(session),
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
@@ -475,13 +477,15 @@ async def test_card_without_a_house_org_serializes_an_explicit_null(
     session: AsyncSession, make_org_house_flat_user: Fixture
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
     house = await HousesRepo(session).get(own.house_id)
     assert house is not None
     house.org_id = None
     await session.flush()
 
     card = RequestCard.of(
-        await _make_service(session).create(own.user_id, own.house_id, _draft()), [], []
+        await service.get_card(own.user_id, created.request.id), [], []
     )
 
     assert card.model_dump(mode="json")["org_name"] is None
@@ -938,3 +942,18 @@ async def test_create_records_an_accepted_suggestion_only_when_accepted(
         (event.user_id, event.payload["house_id"], event.payload["category"])
         for event in events
     ] == (expected if recorded else [])
+
+
+async def test_create_refuses_a_house_whose_org_is_not_connected(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    own = await make_org_house_flat_user(
+        resident_role=ResidentRole.OWNER, registered=False
+    )
+    service = _make_service(session)
+
+    with pytest.raises(InvalidState, match=NOT_CONNECTED):
+        await service.create(own.user_id, own.house_id, _draft())
+
+    _, total = await service.list_mine(own.user_id, own.house_id, None, 20, 0)
+    assert total == 0

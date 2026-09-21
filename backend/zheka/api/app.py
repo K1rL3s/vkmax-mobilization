@@ -83,8 +83,6 @@ def app_factory(
     config = config or load_config()
     setup_logger(config.log)
 
-    # второй make_dispatcher поднимет RouterAlreadyIncludedError, поэтому
-    # тест, которому нужен свой диспетчер, передает готовый
     bot_setup = bot_setup or make_dispatcher(config.redis)
     dp = bot_setup.dp
     container = make_container(
@@ -133,7 +131,6 @@ def app_factory(
     ):
         app.include_router(module.router, prefix=API_PREFIX, responses=ERROR_RESPONSES)
 
-    # пути файлов зафиксированы целиком, nginx разводит /api/ и /files/ сам
     app.include_router(files.router, responses=ERROR_RESPONSES)
 
     setup_middlewares(app, container, config.api.cors)
@@ -144,9 +141,6 @@ def app_factory(
 def setup_middlewares(
     app: FastAPI, container: AsyncContainer, cors: Sequence[str]
 ) -> None:
-    # зарегистрированный последним оказывается снаружи. Транзакция стоит
-    # внутри контейнера dishka и снаружи ExceptionMiddleware, чтобы видеть
-    # 404 ответом; trace id снаружи всего, чтобы попасть в каждую строку лога
     app.middleware("http")(transaction_middleware)
     app.middleware("http")(request_logging_middleware)
     app.middleware("http")(trace_id_middleware)

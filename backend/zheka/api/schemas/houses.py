@@ -50,7 +50,6 @@ class HouseListItem(BaseSchema):
     building: str
     is_connected: bool
     org_name: str | None = None
-    # заполняется только в поиске по геопозиции
     distance_m: int | None = None
 
     @classmethod
@@ -129,8 +128,6 @@ class HouseCard(BaseSchema):
     entrances: int
     is_connected: bool
     demand_count: int
-    # нажимал ли кнопку спроса сам текущий житель: сигнал идемпотентен,
-    # и без этого флага фронт рисует кнопку ненажатой
     demand_sent: bool
     built_year: int | None = None
     floors: int | None = None
@@ -141,7 +138,6 @@ class HouseCard(BaseSchema):
     lon: float | None = None
     org: OrgContacts | None = None
     my_residency: ResidencySummary | None = None
-    # код привязки чата заводит УК, житель видит его только как председатель
     chat_binding_code: str | None = None
     chat_bound: bool = False
     overhaul: HouseOverhaul | None = None
@@ -204,8 +200,6 @@ class FlatListItem(BaseSchema):
 
 class LinkHouseRequest(BaseSchema):
     flat_id: FlatId | None = None
-    # номер квартиры, которой может не быть в справочнике дома;
-    # взаимоисключающий с flat_id
     flat_number: str | None = None
     role: ResidentRole = ResidentRole.OWNER
     account_no: str | None = None
@@ -261,7 +255,6 @@ class AdminHouseCard(BaseSchema):
     pending_verifications: int
     open_requests: int
     chat_bound: bool
-    # код привязки домового чата, его УК диктует жителю или председателю
     chat_binding_code: str
     entrance_qrs: list[EntranceQr]
     built_year: int | None = None

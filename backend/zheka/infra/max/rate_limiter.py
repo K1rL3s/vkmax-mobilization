@@ -6,7 +6,6 @@ from typing import Self
 
 
 class RateLimiter:
-    # не больше max_calls вызовов за скользящую секунду
     __slots__ = ("_calls", "_lock", "max_calls")
 
     def __init__(self, max_calls: int) -> None:

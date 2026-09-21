@@ -49,7 +49,6 @@ def _card(card: RequestCardData, files_service: FilesService) -> RequestCard:
 async def list_request_categories(
     current_account: RequireConsentDep,  # noqa: ARG001
 ) -> list[RequestCategoryItem]:
-    # кнопки рисует фронт по этому списку, зашивать категории у себя ему нечем
     return [
         RequestCategoryItem.of(category, rule)
         for category, rule in CATEGORY_RULES.items()
@@ -174,7 +173,5 @@ async def classify_request_text(
     requests_service: FromDishka[RequestsService],
     body: ClassifyRequestRequest,
 ) -> ClassifyRequestResponse:
-    # без ключа и при любом сбое модели ответ - null с 200: кнопки категорий
-    # остаются у жителя, и о подсказке он просто не узнает
     category = await requests_service.classify(current_account.user_id, body.text)
     return ClassifyRequestResponse.of(category)

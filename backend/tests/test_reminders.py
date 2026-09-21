@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from taskiq import InMemoryBroker
+from taskiq import AsyncTaskiqDecoratedTask, InMemoryBroker
 
 from tests.conftest import RecordingBroker, make_notifications_service
 
@@ -18,6 +18,7 @@ from zheka.broker.tasks.reminders import (
     remind_readings,
     warn_verification,
 )
+from zheka.broker.tasks.requests import auto_close_reviewed_requests
 from zheka.core.enums import (
     AppointmentStatus,
     ChatStatus,
@@ -673,3 +674,29 @@ async def test_an_uncounted_vote_leaves_the_flat_reminded_but_not_the_voter(
 
     assert _to_users(bot_broker, owner)
     assert _to_users(bot_broker, co_owner) == []
+
+
+def test_schedules_are_in_moscow_time() -> None:
+    tasks: list[AsyncTaskiqDecoratedTask[Any, Any]] = [
+        remind_readings,
+        remind_polls,
+        close_expired_polls,
+        warn_verification,
+        remind_appointments,
+        auto_close_reviewed_requests,
+    ]
+
+    assert {
+        task.task_name: [
+            (schedule["cron"], schedule["cron_offset"])
+            for schedule in task.labels["schedule"]
+        ]
+        for task in tasks
+    } == {
+        TaskName.REMIND_READINGS: [("0 10 * * *", "Europe/Moscow")],
+        TaskName.REMIND_POLLS: [("0 10 * * *", "Europe/Moscow")],
+        TaskName.CLOSE_EXPIRED_POLLS: [("0 10 * * *", "Europe/Moscow")],
+        TaskName.WARN_VERIFICATION: [("0 9 * * *", "Europe/Moscow")],
+        TaskName.REMIND_APPOINTMENTS: [("0 19 * * *", "Europe/Moscow")],
+        TaskName.AUTO_CLOSE_REVIEWED_REQUESTS: [("* * * * *", "Europe/Moscow")],
+    }

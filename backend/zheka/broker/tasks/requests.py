@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 @async_shared_broker.task(
     task_name=TaskName.AUTO_CLOSE_REVIEWED_REQUESTS.value,
-    schedule=[{"cron": "* * * * *"}],
+    schedule=[{"cron": "* * * * *", "cron_offset": "Europe/Moscow"}],
 )
 @inject(patch_module=True)
 async def auto_close_reviewed_requests(
@@ -48,8 +48,6 @@ async def send_executor_card(
     sender: FromDishka[MaxSender],
     user_id: UserId | None = None,
 ) -> None:
-    # без user_id - новость назначенному, с user_id - перерисовка для того,
-    # кто нажал сам, даже если заявку уже передали другому
     request = await requests_repo.get(request_id)
     if request is None:
         return
@@ -103,17 +101,13 @@ async def attach_result_photo(
     admin_requests_service: FromDishka[AdminRequestsService],
     notifications_service: FromDishka[NotificationsService],
 ) -> None:
-    # ponytail: фото, сохраненные перед отказом, остаются на диске без
-    # ссылок, как и в create_bot_request; чистить, если диск станет тесен
     names = await save_photos(bot, files_service, photo_urls)
     try:
         await admin_requests_service.executor_advance(
             user_id, request_id, RequestStatus.ON_REVIEW, names
         )
     except ZhekaError as error:
-        # отказ ничего не записал, а карточку исполнитель все равно должен увидеть
         logger.warning("Результат по заявке %s не принят: %s", request_id, error)
-    # геттер окна читает в другой сессии и до коммита увидел бы старый статус
     notifications_service.open_executor_card(request_id, user_id)
 
 
@@ -131,7 +125,6 @@ async def open_card(
     if user is None:
         return
     levels = await notifications_service.levels(user_id)
-    # карточка обязательна: при OFF гаснет только звук, None тут не бывает
     notify = bool(resolve_notify(levels[NotificationCategory.REQUESTS], mandatory=True))
     await sender.start_dialog(
         state, user, notify=notify, data=data, stack_id=stack_id, show_mode=show_mode

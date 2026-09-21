@@ -34,6 +34,8 @@ no evidence in a report or review.
 - `zheka/api/asgi.py` builds the app at import and needs a real env (excluded
   from slotscheck); import `app_factory` from `zheka.api.app` instead. Env var
   names follow the family canon (`POSTGRES_*`, `REDIS_DB`, `LOG_LEVEL`).
+- An API change regenerates the root `openapi.yaml` with `just openapi`;
+  `test_committed_openapi_yaml_matches_the_app` fails on a stale one.
 
 ### Code conventions
 
@@ -178,6 +180,11 @@ no evidence in a report or review.
   `executor_card` returns `None` instead of raising.
 - The author's review card is queued only in `AdminRequestsService._move`, the
   one road into `ON_REVIEW`; it replaces the status text.
+- A house not `is_connected` takes no request and no flat verification request
+  (`InvalidState(NOT_CONNECTED)`, 409); the bot's category window says so
+  first. `make_org_house_flat_user` registers its org unless `registered=False`.
+- A phone request with `resident_id` is that resident's own request (author,
+  flat, notifications, review, rating); without one it has no author.
 - The LLM category hint (`YandexClassifier`,
   `zheka/infra/yandex/classifier.py`) is optional: no call without
   `YANDEX_API_KEY` / `YANDEX_FOLDER_ID`; 401, 403 or a non-ASCII key disables
@@ -220,6 +227,9 @@ no evidence in a report or review.
   `READING_REMINDER_SENT` event with `house_id`, `period`, `kind`) and hands
   the text to `NotificationsService`, which sends after the commit. Date logic
   takes `today` / `now` as an argument.
+- Schedule labels are Moscow time with `"cron_offset": "Europe/Moscow"`
+  (taskiq's cron is UTC otherwise); tasks pass the UTC date, equal to
+  Moscow's at every scheduled hour, so a label before 03:00 needs a Moscow date.
 - `broadcast_access_request` (from `AccessService.create`) is the one
   broadcast that opens a window (`AccessSlots.pick`, `ShowMode.SEND`).
 - `remind_not_submitted` refuses outside the window with `InvalidState`
@@ -243,12 +253,14 @@ no evidence in a report or review.
   organizations (`zheka/seed/data/organizations.csv`) are seeded unregistered
   and without history, linked only to houses whose reformagkh card names them
   unambiguously. Registered organizations are fictional «Демо-УК ...»,
-  `is_demo = True`, with checksum-failing INNs (`DEMO_INN`, `PROFILES`). No
-  invented licence or cadastral numbers (`houses.cadastral_no` is nullable),
-  images are generated (`zheka/seed/data/files/`). In Москва, where only
-  61/1 (the demo house) has no manager, fictional organizations replace real
-  links on Ленинский проспект 7 (ГБУ «Жилищник района Якиманка»), 13 (ГБУ
-  ЭВАЖД), 16 and 20 (ООО «Жилищник»);
+  `is_demo = True`, with checksum-failing INNs (`DEMO_INNS`, numbered 1-5 in
+  `PROFILES` order). No invented licence or cadastral numbers
+  (`houses.cadastral_no` is nullable), images are generated
+  (`zheka/seed/data/files/`). In Москва, where 61/1 (the demo house) is the
+  only unmanaged house within `MIN_FLATS`..`MAX_FLATS` (74 has 273 flats),
+  fictional organizations replace real
+  links on Ленинский проспект 7 (ГБУ «Жилищник района Якиманка»), 11 с.1
+  and 13 (ГБУ ЭВАЖД), 12 (ООО «Жилищник»);
   `test_a_real_manager_is_replaced_only_in_moscow` holds that; moving a peer's
   second house from Казань to Санкт-Петербург breaks it.
 - Seeded users have negative `max_user_id` and `max_chat_id NULL`: unreachable.
@@ -265,11 +277,16 @@ no evidence in a report or review.
   so both benchmark cuts survive `MIN_ORGS_FOR_CUT`; `test_seed.py` asserts five
   distinct ranks per metric. Recent repeats are a count per house
   (`recent_repeats`), not a share.
-- `DemoService.activate(user_id)` (both demo deeplinks and
-  `POST /demo/activate`) grants `EMPLOYEE` in the demo organization and the
-  verified flat `Д{user_id}` in the demo house, all inserts `ON CONFLICT DO
-  NOTHING`, filled by `DemoService.furnish` (shared with the seed). No seed is
-  `EntityNotFound`, no `consent_at` is `NotEnoughRights`.
+- Demo deeplinks are only `demo_{admin,staff,resident}_N`, N 1-5 (anything
+  else is `UNHANDLED`), and grant only their role in demo organization N:
+  `DemoService.join` sets exactly ADMIN or EMPLOYEE, lowering included;
+  `DemoService.settle` gives the verified flat `Д{user_id}` in the first house
+  of `list_for_org` (street, then building: org 2's is in Санкт-Петербург),
+  filled by `DemoService.furnish`. `POST /demo/activate` does both for org 1
+  and keeps an existing role. Inserts are `ON CONFLICT DO NOTHING`. `furnish`
+  charges from tariffs, so the seed gives every demo house tariffs and every
+  demo org `meter_window_always_open`. No seed is `EntityNotFound`, no
+  `consent_at` is `NotEnoughRights`.
 
 ## Orientation
 
@@ -283,7 +300,7 @@ no evidence in a report or review.
   handlers: `BOT_START` (`bot/handlers/commands/start.py`, `deeplinks.py`), `BOT_STOPPED`,
   `BOT_MUTED`, `BOT_UNMUTED` (`bot/handlers/lifecycle.py`); `BOT_START` never
   in the fallback router or a getter. `MINIAPP_OPEN` / `ANNOUNCEMENT_CLICK` come
-  from the client via `POST /me/events` (whitelist:
+  from the client via `POST /api/events` (whitelist:
   the `Literal` in `TrackEventRequest`), so no `record` call names them.
 - maxo's truth is `.venv/lib/python3.12/site-packages/maxo/`, not the plan or
   memory; `python -c "import inspect, X; print(inspect.getsource(X.f))"`.

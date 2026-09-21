@@ -13,8 +13,6 @@ from zheka.infra.database.repos.users import UsersRepo
 
 
 def reject_reason(request: VerificationRequest | None) -> str | None:
-    # причина принадлежит отказу: у одобренного запроса в этом поле лежит
-    # заметка УК, которой жителю видеть незачем
     if request is None or request.status is not VerificationStatus.REJECTED:
         return None
     return request.reason
@@ -109,7 +107,6 @@ class ProfileService:
             user=user,
             residencies=residencies,
             orgs=memberships,
-            # демо-режим красит весь кабинет, поэтому достаточно одной демо-УК
             is_demo=any(org.is_demo for org in orgs.values()),
         )
 

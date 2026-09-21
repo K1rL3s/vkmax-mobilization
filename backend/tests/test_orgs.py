@@ -14,6 +14,7 @@ from tests.conftest import (
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
+from zheka.core import texts
 from zheka.core.deeplinks import Deeplink, DeeplinkKind, parse_deeplink
 from zheka.core.enums import EventType, OrgRole, ResidentRole, ResidentStatus
 from zheka.core.errors import (
@@ -55,6 +56,7 @@ def make_moderation_service(
         HousesRepo(session),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
+        OrgsRepo(session),
     )
 
 
@@ -91,7 +93,13 @@ async def test_single_use_invite_is_not_activated_twice(
     [
         ("reg_secret", Deeplink(kind=DeeplinkKind.ORG_REGISTER, value="secret")),
         ("qr_12_3", Deeplink(kind=DeeplinkKind.ENTRANCE_QR, value="12_3")),
-        ("demo_staff", Deeplink(kind=DeeplinkKind.DEMO_STAFF)),
+        ("demo_staff_1", Deeplink(kind=DeeplinkKind.DEMO_STAFF, value="1")),
+        ("demo_admin_5", Deeplink(kind=DeeplinkKind.DEMO_ADMIN, value="5")),
+        ("demo_staff", None),
+        ("demo_resident", None),
+        ("demo_admin", None),
+        ("demo_staff_6", None),
+        ("demo_resident_0", None),
         ("house_", None),
         ("wat_1", None),
         ("", None),
@@ -158,7 +166,7 @@ async def test_register(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
-    seeded = await make_org_house_flat_user()
+    seeded = await make_org_house_flat_user(registered=False)
     orgs_service = make_orgs_service(session)
     org = await OrgsRepo(session).get(seeded.org_id)
     assert org is not None
@@ -217,6 +225,10 @@ async def test_moderation(
     assert blocked["user_id"] == unblocked["user_id"] == own.user_id
     assert blocked["mandatory"] is unblocked["mandatory"] is True
     assert "мусорит" in blocked["text"]
+    org = await OrgsRepo(session).get(own.org_id)
+    assert org is not None
+    contact = texts.org_contact(org.name, org.phone)
+    assert contact in blocked["text"]
     assert "вернула" in unblocked["text"]
 
     # в строке жителя нет ни автора, ни времени блокировки, след - только событие
@@ -245,6 +257,13 @@ async def test_moderation(
     assert view.resident.verified_at is None
     # председателем бывает только подтвержденный житель
     assert view.resident.is_chairman is False
+
+    await publisher.flush()
+    revoked = broker.enqueued(TaskName.SEND_TO_USER)[-1]
+    assert revoked["user_id"] == own.user_id
+    assert revoked["mandatory"] is True
+    assert "нет подтверждения" in revoked["text"]
+    assert contact in revoked["text"]
 
 
 async def test_foreign_resident_is_not_found_for_another_org(
@@ -341,3 +360,8 @@ async def test_create_invite_rejects_dead_limits(
             expires_in_hours=expires_in_hours,
             max_activations=max_activations,
         )
+
+
+def test_org_contact_without_a_phone_is_the_name_alone() -> None:
+    assert texts.org_contact("УК Дом", " ") == "Связаться с УК: УК Дом"
+    assert texts.org_contact("УК Дом", "+7 1") == "Связаться с УК: УК Дом, +7 1"

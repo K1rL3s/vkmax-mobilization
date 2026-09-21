@@ -66,7 +66,6 @@ class UpdateNotificationSettingsRequest(BaseSchema):
 
 
 class TrackEventRequest(BaseSchema):
-    # клиенту разрешены ровно два события, остальные пишет сервер
     type: Literal[EventType.MINIAPP_OPEN, EventType.ANNOUNCEMENT_CLICK]
     source: EventSource | None = None
     tab: str | None = None

@@ -14,8 +14,6 @@ router = Router(name=__name__)
 async def bot_added_handler(
     update: BotAddedToChat, publisher: FromDishka[TaskPublisher]
 ) -> None:
-    # название чата, выход из него и окно в личке - вызовы MAX, и решает о
-    # них задача, а не вебхук с его тридцатью секундами
     publisher.publish(
         TaskName.ON_BOT_ADDED,
         chat_id=update.chat_id,

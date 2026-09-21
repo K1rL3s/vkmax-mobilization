@@ -14,13 +14,11 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 class DirectoryHouse(ZhekaType):
     house: House
     living_flats: int
-    living_area: int  # 1/100 square metre
-    overhaul_rate: int  # 1/10000 rouble per square metre
+    living_area: int
+    overhaul_rate: int
 
 
 async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
-    # организации из реестра остаются незарегистрированными и без
-    # сотрудников: «УК не подключена» про них - правда
     orgs: dict[str, Organization] = {}
     with (DATA_DIR / "organizations.csv").open(encoding="utf-8") as file:
         for row in csv.DictReader(file):
@@ -36,8 +34,6 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
     directory = []
     with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
         for row in csv.DictReader(file):
-            # дом связан с организацией, только если так сказано в карточке
-            # дома, а кадастрового номера в открытых данных нет вовсе
             org = orgs.get(row["org_inn"])
             house = House(
                 org_id=None if org is None else org.id,
@@ -51,7 +47,6 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
                 entrances=int(row["entrances"]),
                 lat=Decimal(row["lat"]) if row["lat"] else None,
                 lon=Decimal(row["lon"]) if row["lon"] else None,
-                # код привязки чата - секрет, а не функция от адреса
                 chat_binding_code=secrets.token_hex(4),
             )
             directory.append(

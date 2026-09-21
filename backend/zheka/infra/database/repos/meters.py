@@ -24,8 +24,6 @@ class MetersRepo(BaseAlchemyRepo):
 
     async def get(self, meter_id: MeterId) -> Meter | None:
         stmt = select(Meter).where(meters_table.c.id == meter_id)
-        # аннотация обязательна: Meter отображен императивно, и scalar()
-        # для такой сущности возвращает Any
         meter: Meter | None = await self._session.scalar(stmt)
         return meter
 
@@ -44,9 +42,6 @@ class MetersRepo(BaseAlchemyRepo):
         serial: str,
         next_verification_date: date | None,
     ) -> Meter | None:
-        # None значит, что у квартиры уже есть счетчик такого типа. Уникальный
-        # индекс разводит два параллельных нажатия, а ON CONFLICT вместо
-        # исключения оставляет транзакцию вызывающего живой
         stmt = (
             pg_insert(Meter)
             .values(
@@ -89,8 +84,6 @@ class MetersRepo(BaseAlchemyRepo):
         return reading
 
     async def previous_reading(self, meter_id: MeterId, period: date) -> Reading | None:
-        # последняя подача самого свежего периода строго раньше данного -
-        # период мог быть пропущен, поэтому не обязательно предыдущий месяц
         stmt = (
             select(Reading)
             .where(
@@ -177,8 +170,6 @@ class MetersRepo(BaseAlchemyRepo):
     async def flats_without_reading(
         self, house_id: HouseId, period: date
     ) -> Sequence[FlatId]:
-        # только квартиры, у которых вообще есть счетчик - без него подавать
-        # показание нечем, и напоминание о показаниях такой квартире не нужно
         has_meter = select(meters_table.c.flat_id).distinct()
         submitted = (
             select(meters_table.c.flat_id)
@@ -199,9 +190,6 @@ class MetersRepo(BaseAlchemyRepo):
         return [FlatId(flat_id) for flat_id in result.scalars().all()]
 
     async def list_to_warn(self, until: date) -> Sequence[Meter]:
-        # поверка кончается не позже until, а предупреждение о текущей дате
-        # поверки еще не дошло до стадии «истекла». Какая из двух стадий
-        # нужна, решает вызывающий
         stmt = (
             select(Meter)
             .where(

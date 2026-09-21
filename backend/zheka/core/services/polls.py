@@ -22,7 +22,6 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-# столько квартир в доме не бывает, а кворум не может потерять ни одной
 _ALL_FLATS_LIMIT = 10_000
 MIN_POLL_OPTIONS = 2
 
@@ -67,7 +66,7 @@ class PollCardData(ZhekaType):
 class PollOptionCount(ZhekaType):
     option: PollOption
     flats_count: int
-    area: int  # 1/100 square metre
+    area: int
 
 
 class PollResultsData(ZhekaType):
@@ -84,7 +83,6 @@ class AdminPollListItemData(ZhekaType):
 
 
 def _effective_status(poll: Poll, now: datetime) -> PollStatus:
-    # close_expired_polls закрывает строку раз в сутки, до нее статус врет
     if poll.status is PollStatus.CLOSED or poll.ends_at <= now:
         return PollStatus.CLOSED
     return PollStatus.ACTIVE
@@ -142,20 +140,21 @@ class PollsService:
         options = _clean_options(draft.options)
 
         if org_id is not None:
-            # право сотрудника уже проверил CurrentOrgDep, здесь - что дом его
             house = await self._houses.get_for_org(house_id, org_id)
             if house is None:
                 raise EntityNotFound(HOUSE_NOT_FOUND)
             role = "staff"
         else:
+            house = await self._houses.get(house_id)
             resident = await self._residents.get_for_house(user_id, house_id)
-            if resident is None:
+            if house is None or resident is None:
                 raise EntityNotFound(HOUSE_NOT_FOUND)
             if resident.status is ResidentStatus.BLOCKED:
                 raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
             if not resident.is_chairman:
                 raise NotEnoughRights(NOT_A_CHAIRMAN)
             role = "chairman"
+            org_id = house.org_id
 
         poll = await self._polls.create(
             house_id,
@@ -252,7 +251,6 @@ class PollsService:
             counted_by_area=counted_by_area,
         )
         if len(inserted) != len(chosen):
-            # гонка: параллельный запрос вставил эти же строки первым
             raise InvalidState(ALREADY_VOTED)
 
         await self._events.record(
@@ -408,8 +406,6 @@ def _by_status(
     dated = [(poll, _effective_status(poll, now)) for poll in polls]
     if status is not None:
         dated = [pair for pair in dated if pair[1] is status]
-    # свежие сверху, затем активные перед закрытыми. id - второй ключ: now()
-    # в PostgreSQL общий на транзакцию, и created_at двух опросов совпадает
     dated.sort(key=lambda pair: (pair[0].created_at, pair[0].id), reverse=True)
     dated.sort(key=lambda pair: pair[1] is PollStatus.CLOSED)
     return dated

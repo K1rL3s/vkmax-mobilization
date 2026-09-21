@@ -10,7 +10,7 @@ from maxo.types import BotStarted
 from zheka.bot.dialog_data import ConsentData, MenuData, OnboardingData
 from zheka.bot.states import Consent, Menu, Onboarding
 from zheka.core.deeplinks import Deeplink, DeeplinkKind, parse_deeplink
-from zheka.core.enums import EventSource, EventType
+from zheka.core.enums import EventSource, EventType, OrgRole
 from zheka.core.models import User
 from zheka.core.services.demo import DemoService, demo_flat_number
 from zheka.core.services.events import EventsService
@@ -22,15 +22,20 @@ router = Router(name=__name__)
 REGISTER_NOTICE = "Регистрация управляющей компании открывается в приложении"
 ORG_JOINED = "Вы в команде «{name}»"
 FLAT_JOINED = "Квартира подтверждена"
-DEMO_STAFF_NOTICE = (
-    "Демо-доступ открыт: вы сотрудник «{org}». Кабинет УК - в приложении, "
-    "там же ваша демо-квартира"
+DEMO_ADMIN_NOTICE = (
+    "Демо-доступ открыт: вы администратор {org}. Кабинет УК с командой и "
+    "настройками - в приложении"
 )
+DEMO_STAFF_NOTICE = "Демо-доступ открыт: вы сотрудник {org}. Кабинет УК - в приложении"
 DEMO_RESIDENT_NOTICE = (
-    "Демо-доступ открыт: квартира {flat}, {address}. Подайте показания за этот "
-    "месяц в приложении, кабинет УК там же"
+    "Демо-доступ открыт: ваша квартира {flat}, {address}, дом обслуживает "
+    "{org}. Подайте показания за этот месяц в приложении"
 )
 
+_DEMO_STAFF = {
+    DeeplinkKind.DEMO_ADMIN: (OrgRole.ADMIN, DEMO_ADMIN_NOTICE),
+    DeeplinkKind.DEMO_STAFF: (OrgRole.EMPLOYEE, DEMO_STAFF_NOTICE),
+}
 _HOUSE_SOURCES = {
     DeeplinkKind.HOUSE: EventSource.CHAT,
     DeeplinkKind.ENTRANCE_QR: EventSource.QR,
@@ -47,8 +52,6 @@ async def deeplink_handler(
     flats_service: FromDishka[FlatsService],
     demo_service: FromDishka[DemoService],
 ) -> Any:
-    # неразобранная ссылка обязана вернуть UNHANDLED и провалиться в /start:
-    # None съел бы апдейт и оставил жителя с немым ботом
     payload = update.payload
     if is_not_defined(payload) or not payload:
         return UNHANDLED
@@ -82,7 +85,6 @@ async def open_deeplink(
     flats_service: FlatsService,
     demo_service: DemoService,
 ) -> None:
-    # ссылка едет в start_data, чтобы после «Согласен» житель попал куда шел
     if user.consent_at is None:
         await dialog_manager.start(
             Consent.ask,
@@ -99,26 +101,24 @@ async def open_deeplink(
         await flats_service.activate_invite(user_id, deeplink.value)
         await _menu(dialog_manager, FLAT_JOINED)
     elif deeplink.kind is DeeplinkKind.ORG_REGISTER:
-        # фронт по startParam не роутит, поэтому код вводится в приложении руками
         await _menu(dialog_manager, REGISTER_NOTICE)
     elif deeplink.kind in _HOUSE_SOURCES:
         await _start_house(deeplink, dialog_manager)
-    else:
-        # обе демо-ссылки выдают обе роли, вид меняет только текст
-        access = await demo_service.activate(user_id)
-        notice = (
-            DEMO_STAFF_NOTICE.format(org=access.membership.org.name)
-            if deeplink.kind is DeeplinkKind.DEMO_STAFF
-            else DEMO_RESIDENT_NOTICE.format(
-                flat=demo_flat_number(user_id), address=access.residency.house.address
-            )
+    elif deeplink.kind is DeeplinkKind.DEMO_RESIDENT:
+        org, residency = await demo_service.settle(user_id, int(deeplink.value))
+        notice = DEMO_RESIDENT_NOTICE.format(
+            flat=demo_flat_number(user_id),
+            address=residency.house.address,
+            org=org.name,
         )
         await _menu(dialog_manager, notice)
+    else:
+        role, notice = _DEMO_STAFF[deeplink.kind]
+        access = await demo_service.join(user_id, int(deeplink.value), role)
+        await _menu(dialog_manager, notice.format(org=access.org.name))
 
 
 async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> None:
-    # в value qr-ссылки лежит и подъезд. Смазанная цифра на печатном коде
-    # не роняет вход, а вырождается в обычный вход в дом
     house_id, _, entrance = deeplink.value.partition("_")
     if not house_id.isdigit():
         await dialog_manager.start(Onboarding.method, mode=StartMode.RESET_STACK)

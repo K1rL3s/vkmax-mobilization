@@ -51,8 +51,6 @@ class FlatCard(BaseSchema):
             residents_count=card.residents_count,
             entrance=card.flat.entrance,
             area=card.flat.area,
-            # хвост лицевого счета видит только подтвержденный житель с
-            # доступом к начислениям: арендатору счет не показывают вовсе
             account_no=(
                 account_no[-ACCOUNT_TAIL:]
                 if verified and resident.can_see_charges and account_no is not None
@@ -68,7 +66,6 @@ class VerifyFlatRequest(BaseSchema):
 
 class VerifyFlatResponse(BaseSchema):
     verified: bool
-    # что делать дальше, если лицевой счет не сошелся
     detail: str
     verification_status: VerificationStatus | None = None
 
@@ -89,7 +86,6 @@ class VerificationRequestItem(BaseSchema):
     user_name: str
     account_no: str
     status: VerificationStatus
-    # пояснение жителя к запросу и причина отказа УК
     comment: str | None = None
     reason: str | None = None
 

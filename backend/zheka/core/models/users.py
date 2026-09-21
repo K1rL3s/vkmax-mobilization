@@ -20,7 +20,6 @@ class User(ZhekaMutableType):
     consent_version: str | None = None
     consent_at: datetime | None = None
     bot_stopped_at: datetime | None = None
-    # личный диалог с ботом; NULL - бот не запущен, окно открывать некуда
     max_chat_id: MaxChatId | None = None
 
 

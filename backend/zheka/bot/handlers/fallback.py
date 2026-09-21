@@ -12,5 +12,4 @@ router = Router(name=__name__)
 async def no_state_handler(
     _update: MessageCreated, dialog_manager: DialogManager, user: User
 ) -> None:
-    # BOT_START здесь не пишется: апдейт без состояния - не старт
     await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)

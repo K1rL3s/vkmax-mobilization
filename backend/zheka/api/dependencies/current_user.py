@@ -1,4 +1,5 @@
 import urllib.parse
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from dishka import FromDishka
@@ -12,6 +13,8 @@ from zheka.config import MaxConfig
 from zheka.core.errors import Unauthorized
 from zheka.core.ids import MaxUserId
 
+INIT_DATA_TTL = timedelta(days=1)
+
 
 class CurrentUser(ZhekaType):
     max_user_id: MaxUserId
@@ -20,9 +23,13 @@ class CurrentUser(ZhekaType):
 
 def parse_init_data(token: str, raw: str) -> WebAppInitData:
     try:
-        return safe_parse_webapp_init_data(token, raw)
+        init_data = safe_parse_webapp_init_data(token, raw)
     except (InvalidWebAppInitDataError, ValueError):
-        return safe_parse_webapp_init_data(token, urllib.parse.unquote(raw))
+        init_data = safe_parse_webapp_init_data(token, urllib.parse.unquote(raw))
+    signed_at = datetime.fromtimestamp(int(init_data.auth_date or 0), UTC)
+    if datetime.now(UTC) - signed_at > INIT_DATA_TTL:
+        raise InvalidWebAppInitDataError("initData старше суток")
+    return init_data
 
 
 @inject
@@ -32,7 +39,7 @@ async def get_current_user(
     try:
         init_data = parse_init_data(config.token, raw_init_data)
     except (InvalidWebAppInitDataError, ValueError) as error:
-        raise Unauthorized("Невалидная подпись initData") from error
+        raise Unauthorized("Невалидная или устаревшая initData") from error
 
     return CurrentUser(max_user_id=MaxUserId(init_data.user.id), init_data=init_data)
 

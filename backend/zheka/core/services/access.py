@@ -45,7 +45,6 @@ class AccessRequestData(ZhekaType):
     slots: list[AccessSlotData]
     responded_count: int
     targets_count: int
-    # только в ответах жителю
     my_flat_id: FlatId | None = None
     my_slot_id: AccessSlotId | None = None
 
@@ -58,8 +57,6 @@ class AccessTargetData(ZhekaType):
 class AccessGridData(ZhekaType):
     request: AccessRequestData
     targets: list[AccessTargetData]
-    # заполняет только create: квартире без подтвержденного жителя некому
-    # написать, поэтому ячейки у нее нет
     flats_without_residents: Sequence[FlatId] = ()
 
 
@@ -110,7 +107,6 @@ class AccessService:
         starts = [as_utc(slot.starts_at) for slot in draft.slots]
         if len(set(starts)) != len(starts):
             raise InvalidRequest(DUPLICATE_SLOTS)
-        # сетка дня, у которой окна стоят в другом дне, не сетка ни для кого
         if any(start.date() != draft.date for start in starts):
             raise InvalidRequest(SLOT_OFF_DATE)
 
@@ -183,13 +179,10 @@ class AccessService:
         self, user_id: UserId, access_request_id: AccessRequestId, slot_id: AccessSlotId
     ) -> AccessRequestData:
         target = await self._target(user_id, access_request_id)
-        # слот чужого запроса доступа сюда не проходит: выборка сужена
-        # запросом, в котором стоит ячейка жителя
         slot = await self._access.lock_slot(access_request_id, slot_id)
         if slot is None:
             raise EntityNotFound(SLOT_NOT_FOUND)
 
-        # повторный выбор того же окна ничего не пишет и не дает события
         if target.slot_id != slot_id:
             if await self._access.count_picks(slot_id) >= slot.capacity:
                 raise InvalidState(SLOT_FULL)
@@ -217,7 +210,6 @@ class AccessService:
     async def list_for_resident(
         self, flat_id: FlatId | None
     ) -> list[AccessRequestData]:
-        # житель без подтвержденной квартиры не адресат ни одного запроса
         if flat_id is None:
             return []
         pairs = await self._access.list_for_flat(flat_id)
@@ -283,9 +275,6 @@ class AccessService:
         )
         if target is None:
             raise EntityNotFound(REQUEST_NOT_FOUND)
-        # сначала ячейка, потом блокировка: чужому достается 404, из которого
-        # он ничего не узнает, а заблокированному - прямой отказ с причиной,
-        # которую УК ему уже назвала
         resident = residencies[target.flat_id]
         if resident.status is ResidentStatus.BLOCKED:
             raise NotEnoughRights(texts.blocked_detail(resident.block_reason))

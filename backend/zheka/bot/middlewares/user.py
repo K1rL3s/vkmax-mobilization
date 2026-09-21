@@ -33,8 +33,6 @@ class UserMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
         max_user = context.user
 
         if isinstance(max_user, FakeUser) or context.chat_type is not ChatType.DIALOG:
-            # FakeUser окна задачи собран из одних id с пустым именем, а в чате
-            # дома согласия на запись в users никто не давал
             user = await users_repo.get_by_max_id(MaxUserId(max_user.id))
         else:
             user = await users_repo.upsert_by_max_id(

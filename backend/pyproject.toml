@@ -49,6 +49,7 @@ dev = [
     "slotscheck==0.21.0",
     "mypy==2.3.1",
     "bump2version==1.0.1",
+    "pyyaml==6.0.3",
 ]
 tests = [
     "pytest==9.1.1",

@@ -15,7 +15,14 @@ from zheka.core.enums import (
     RequestStatus,
     ResponsibilityZone,
 )
-from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
+from zheka.core.ids import (
+    FlatId,
+    HouseId,
+    RequestGroupId,
+    RequestId,
+    ResidentId,
+    UserId,
+)
 from zheka.core.services.admin_requests import (
     AdminRequestCardData,
     AdminRequestRow,
@@ -85,7 +92,6 @@ class RequestListItem(BaseSchema):
             group_id=request.group_id,
             executor_name=None if row.executor is None else row.executor.name,
             rating=request.rating,
-            # фронт красит просрочку сам, поэтому отдается срок, а не флаг
             deadline_at=request.created_at + timedelta(hours=rule.normative_hours),
             completion_reason=request.completion_reason,
         )
@@ -189,7 +195,6 @@ class SimilarRequestsResponse(BaseSchema):
         return cls(
             category=similar.category,
             neighbours_count=similar.flats_count,
-            # присоединиться можно к собранной группе, а не к россыпи жалоб
             can_join=similar.group_id is not None,
             group_id=similar.group_id,
             window_started_at=similar.window_started_at,
@@ -280,6 +285,14 @@ class CreatePhoneRequestRequest(BaseSchema):
     flat_id: FlatId | None = None
     caller_name: str | None = None
     caller_phone: str | None = None
+    resident_id: ResidentId | None = Field(
+        default=None,
+        description=(
+            "Житель дома, от чьего имени заявка: он становится ее автором, "
+            "получает уведомления, принимает и оценивает работу. Квартира - "
+            "его, имя и телефон звонившего тогда необязательны"
+        ),
+    )
 
 
 class RequestGroupCard(BaseSchema):
@@ -331,9 +344,6 @@ class ExecutorItem(BaseSchema):
 
 
 class ClassifyRequestRequest(BaseSchema):
-    # у описания заявки своего потолка нет, а здесь каждый символ - платные
-    # токены. 4000 - потолок текста сообщения MAX: описание длиннее не влезло бы
-    # и в карточку заявки, которую бот шлет исполнителю
     text: str = Field(max_length=4000, description="Описание проблемы жителем")
 
 

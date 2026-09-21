@@ -100,9 +100,6 @@ exception_handlers: dict[Any, Any] = {
 }
 
 
-# один и тот же конверт на всех маршрутах, иначе ApiError не попадает
-# в OpenAPI и фронт не может сгенерировать тип ошибки. "default" закрывает
-# автоматический 422: валидация отвечает 400 тем же конвертом
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     code: {"model": ApiError[BaseError], "description": description}
     for code, description in (

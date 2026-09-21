@@ -24,7 +24,7 @@ class ReceptionWindow(ZhekaMutableType):
     time_from: time
     time_to: time
     slot_minutes: int
-    capacity: int = 1  # сколько жителей принимают в один слот
+    capacity: int = 1
 
 
 class Appointment(ZhekaMutableType):

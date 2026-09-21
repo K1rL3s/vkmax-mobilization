@@ -14,7 +14,7 @@ class Tariff(ZhekaMutableType):
     id: TariffId = _UNSET_TARIFF_ID
     house_id: HouseId
     service: ServiceType
-    value: int  # 1/10000 rouble per unit
+    value: int
     unit: str
     valid_from: date
     document_url: str | None = None
@@ -26,6 +26,6 @@ class Charge(ZhekaMutableType):
     flat_id: FlatId
     period: date
     lines: Any
-    total: int  # kopeck
+    total: int
     is_closed: bool = True
     paid_at: datetime | None = None

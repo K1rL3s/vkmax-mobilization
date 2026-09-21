@@ -23,8 +23,6 @@ JOIN_HOUSE = "Присоединиться к дому"
 
 
 def chat_stack(chat_id: MaxChatId) -> str:
-    # стек выводится из чата: повторное окно по тому же чату ложится в него,
-    # а не заводит вторую живую копию
     return f"chat-{chat_id}"
 
 
@@ -39,8 +37,6 @@ async def on_bot_added(
     users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
 ) -> None:
-    # канал - не чат дома. Инициатор, до которого бот не достучится в личке,
-    # чат не привяжет, а больше некому
     user = None if is_channel else await users_repo.get_by_max_id(initiator_max_user_id)
     if user is None or user.max_chat_id is None or user.bot_stopped_at is not None:
         await bot.leave_chat(chat_id=chat_id)
@@ -50,9 +46,6 @@ async def on_bot_added(
     if await chats_service.bindable_houses(user_id):
         state, stack_id = ChatBinding.house, chat_stack(chat_id)
     elif await chats_service.is_resident(user_id):
-        # код ждет текст, а текст maxo доставляет только в стек по
-        # умолчанию. Затереть там окно можно: житель только что сам добавил
-        # бота и ждет этого сообщения
         state, stack_id = ChatBinding.code, None
     else:
         await bot.leave_chat(chat_id=chat_id)
@@ -79,7 +72,6 @@ async def welcome_chat(
     bot: FromDishka[Bot],
     sender: FromDishka[MaxSender],
 ) -> None:
-    # в группе нет интерактива: одна кнопка-ссылка, а не окно диалога
     await sender.send_message(
         WELCOME_TEXT,
         chat_id=chat_id,

@@ -4,6 +4,7 @@ import tempfile
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -139,7 +140,10 @@ async def make_org_house_flat_user(
     session: AsyncSession,
 ) -> Callable[..., Awaitable[OrgHouseFlatUser]]:
     async def _make(
-        *, org_role: OrgRole | None = None, resident_role: ResidentRole | None = None
+        *,
+        org_role: OrgRole | None = None,
+        resident_role: ResidentRole | None = None,
+        registered: bool = True,
     ) -> OrgHouseFlatUser:
         unique = secrets.token_hex(4)
         org = Organization(
@@ -147,6 +151,7 @@ async def make_org_house_flat_user(
             inn=secrets.token_hex(6),
             phone="+70000000000",
             address="Тестовая область, Тестоград, Тестовая, 1",
+            registered_at=datetime.now(UTC) if registered else None,
         )
         user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Тест Тестов")
         session.add_all([org, user])

@@ -5,8 +5,6 @@ from sqlalchemy import URL
 
 from zheka.base import ZhekaType
 
-# самая дешевая текстовая модель AI Studio: выбрать одну категорию из закрытого
-# списка ей по силам
 YANDEX_DEFAULT_MODEL = "yandexgpt-5-lite"
 
 
@@ -97,9 +95,7 @@ def load_config(env_path: str | None = None) -> Config:
     env = Env()
     env.read_env(env_path, recurse=True)
 
-    # без умолчания: молча работающий пустой секрет хуже ошибки на старте
     org_register = env.str("DEEPLINK_ORG_REGISTER")
-    # secrets.compare_digest бросает TypeError на не-ASCII, то есть 500 на запросе
     if not org_register.isascii():
         raise ValueError("DEEPLINK_ORG_REGISTER должен состоять только из ASCII")
 
@@ -108,7 +104,6 @@ def load_config(env_path: str | None = None) -> Config:
             level=env.str("LOG_LEVEL", "INFO").upper(),
             format=LogFormat(env.str("LOG_FORMAT", LogFormat.JSON).upper()),
         ),
-        # адрес, порт и число воркеров читает gunicorn из своих флагов
         api=ApiConfig(cors=tuple(env.list("API_CORS", []))),
         db=DbConfig(
             host=env.str("POSTGRES_HOST"),

@@ -19,8 +19,6 @@ from zheka.infra.max import MaxSender
 
 logger = logging.getLogger(__name__)
 
-# MAX отдает вложения-изображения по ссылке и без mime: тип уже проверил
-# MessageInput, а FilesService из него выводит суффикс и потолок размера
 PHOTO_MIME = "image/jpeg"
 
 
@@ -57,8 +55,6 @@ async def create_bot_request(
     request_id = card.request.id
     user = await users_repo.get_by_id(user_id)
     if user is not None:
-        # тот же стек, что у окна «Принял, оформляю»: житель видит, как оно
-        # превращается в номер заявки, а не получает второе окно
         await sender.start_dialog(
             NewRequest.sent,
             user,

@@ -36,8 +36,6 @@ async def get_card(
     files_service: FromDishka[FilesService],
     **_: Any,
 ) -> dict[str, Any]:
-    # заявку перечитывает каждая отрисовка: после переназначения или
-    # автозакрытия следующее нажатие показывает правду, а не старые кнопки
     request_id = _request_id(dialog_manager)
     card = await admin_requests_service.executor_card(
         dialog_user_id(dialog_manager), request_id
@@ -68,8 +66,6 @@ async def on_advance(
     dialog_manager: DialogManager,
     admin_requests_service: FromDishka[AdminRequestsService],
 ) -> None:
-    # id кнопки и есть целевой статус. Кнопку, скрытую when=, старая
-    # клавиатура все равно пришлет - переход проверяет сервис
     try:
         await admin_requests_service.executor_advance(
             dialog_user_id(dialog_manager),
@@ -84,7 +80,6 @@ async def on_advance(
 async def on_ready(
     _callback: MessageCallback, _button: Button, dialog_manager: DialogManager
 ) -> None:
-    # фото спрашивается всегда: есть ли оно уже, решает сервис при переходе
     await ask_in_default_stack(
         dialog_manager,
         ExecutorCard.result_photo,
@@ -99,8 +94,6 @@ async def on_result_photo(
     dialog_manager: DialogManager,
     publisher: FromDishka[TaskPublisher],
 ) -> None:
-    # скачивает задача, а не вебхук с его тридцатью секундами; карточку в ее
-    # стеке она же и перерисует, когда статус уже закоммичен
     urls = [
         attach.payload.url
         for attach in update.message.body.attachments or []

@@ -51,7 +51,6 @@ class AnnouncementItem(BaseSchema):
 class CreateAnnouncementRequest(BaseSchema):
     house_ids: list[HouseId]
     text: str
-    # дефолт продукта - только домовой чат
     channels: list[AnnouncementChannel] = Field(
         default_factory=lambda: [AnnouncementChannel.CHAT]
     )

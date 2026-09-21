@@ -21,9 +21,6 @@ class InvitesRepo(BaseAlchemyRepo):
         max_activations: int,
         created_by: UserId,
     ) -> OrgInvite | None:
-        # None означает, что код уже занят: вызывающий берет следующий. Через
-        # ON CONFLICT, а не через исключение, - иначе транзакция вызывающего
-        # уйдет в откат целиком
         stmt = (
             pg_insert(OrgInvite)
             .values(
@@ -69,7 +66,6 @@ class InvitesRepo(BaseAlchemyRepo):
         max_activations: int,
         created_by: UserId,
     ) -> FlatInvite | None:
-        # None означает, что код уже занят: вызывающий берет следующий
         stmt = (
             pg_insert(FlatInvite)
             .values(
@@ -109,8 +105,6 @@ class InvitesRepo(BaseAlchemyRepo):
     async def _consume[InviteT](
         self, model: type[InviteT], table: Table, code: str
     ) -> InviteT | None:
-        # проверка и инкремент одним UPDATE: два параллельных запроса на
-        # последнюю активацию иначе прошли бы лимит оба
         stmt = (
             update(model)
             .where(

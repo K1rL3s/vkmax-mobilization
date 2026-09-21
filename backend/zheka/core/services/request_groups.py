@@ -8,7 +8,6 @@ from zheka.core.models import OrgSettings, Request
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.requests import RequestsRepo
 
-# дом без подключенной УК и УК без строки настроек считаются по умолчанию
 DEFAULT_GROUP_THRESHOLD = 3
 DEFAULT_GROUP_WINDOW_HOURS = 24
 
@@ -36,11 +35,6 @@ def rules_of(settings: OrgSettings | None) -> GroupingRules:
 
 
 def complaint_sources(requests: Sequence[Request]) -> set[tuple[str, int]]:
-    # склейка считает жалобщиков, а не заявки: три жалобы из одной квартиры -
-    # это одна протечка. Квартира важнее автора, потому что жильцы одной
-    # квартиры жалуются на одно и то же; заявка про общее имущество квартиры
-    # не имеет вовсе, и тогда жалобщик - сам житель. У заявки по звонку нет
-    # ни того, ни другого, и в счет она не идет
     sources: set[tuple[str, int]] = set()
     for request in requests:
         if request.flat_id is not None:
@@ -62,8 +56,6 @@ class GroupingService:
     async def attach(
         self, request: Request, rules: GroupingRules, now: datetime
     ) -> None:
-        # склейка считается на записи, до того как житель увидит заявку:
-        # иначе вместо кнопки «присоединиться» ему нечего показать
         since = now - timedelta(hours=rules.window_hours)
         house_id = request.house_id
         group = await self._requests.find_open_group(house_id, request.category, since)
@@ -78,8 +70,6 @@ class GroupingService:
         if len(complaint_sources(open_requests)) < rules.threshold:
             return
 
-        # окно группы начинается с самой ранней из собранных заявок, а не
-        # с «сейчас»: иначе следующая жалоба посчитает окно заново
         oldest = min(item.created_at for item in open_requests)
         group = await self._requests.create_group(house_id, request.category, oldest)
         await self._requests.attach_to_group(open_requests, group.id)
@@ -100,13 +90,11 @@ class GroupingService:
         exclude_flat_id: FlatId | None,
         exclude_user_id: UserId,
     ) -> SimilarRequests:
-        # тот же набор, что считает склейка, но ничего не пишет
         since = now - timedelta(hours=rules.window_hours)
         group = await self._requests.find_open_group(house_id, category, since)
         open_requests = await self._requests.list_open_in_window(
             house_id, category, since
         )
-        # «пожаловались N соседей» - соседей, а не считая себя
         sources = complaint_sources(open_requests) - {
             ("flat", exclude_flat_id),
             ("user", exclude_user_id),

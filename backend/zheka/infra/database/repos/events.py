@@ -15,7 +15,6 @@ class EventsRepo(BaseAlchemyRepo):
     async def add(
         self, type: EventType, user_id: UserId | None, payload: dict[str, Any]
     ) -> None:
-        # savepoint: неудачная запись события не откатывает транзакцию вызывающего
         async with self._session.begin_nested():
             self._session.add(Event(user_id=user_id, type=type.value, payload=payload))
 

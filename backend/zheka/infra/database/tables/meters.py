@@ -28,7 +28,6 @@ meters_table = Table(
     Column("tariff_zones", Integer, default=1, server_default="1", nullable=False),
     Column("serial", String(32), nullable=False),
     Column("next_verification_date", Date, nullable=True),
-    # отметку никто не сбрасывает: новая дата поверки обнуляет обе стадии сама
     Column("verification_warned_at", Date, nullable=True),
     UniqueConstraint("flat_id", "type"),
 )

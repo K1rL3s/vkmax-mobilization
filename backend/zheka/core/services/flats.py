@@ -27,7 +27,7 @@ from zheka.core.models import (
     VerificationRequest,
 )
 from zheka.core.services.events import EventsService
-from zheka.core.services.houses import ResidencyView, is_connected
+from zheka.core.services.houses import NOT_CONNECTED, ResidencyView, is_connected
 from zheka.core.services.invites import issue_invite
 from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -52,8 +52,6 @@ NOT_A_RESIDENT = "Вы не житель этой квартиры"
 
 
 def normalize_account(account_no: str) -> str:
-    # житель набирает счет с квитанции руками, поэтому пробелы и регистр
-    # к делу не относятся
     return "".join(account_no.split()).casefold()
 
 
@@ -139,8 +137,6 @@ class FlatsService:
         self._ensure_not_moving(resident, flat_id)
 
         if resident.verified_at is not None:
-            # повторное подтверждение той же квартиры ничего не меняет и не
-            # попадает в воронку событий
             return VerifyResult(
                 verified=True, detail=ALREADY_VERIFIED_DETAIL, verification_status=None
             )
@@ -188,6 +184,9 @@ class FlatsService:
         self._ensure_not_moving(resident, flat_id)
         if resident.verified_at is not None:
             raise InvalidState(ALREADY_VERIFIED_DETAIL)
+        org = None if house.org_id is None else await self._orgs.get(house.org_id)
+        if not is_connected(house, org):
+            raise InvalidState(NOT_CONNECTED)
 
         request = await self._flats.add_verification_request(
             flat_id,
@@ -223,7 +222,6 @@ class FlatsService:
     ) -> VerificationRequestView:
         request, flat, house = await self._pending_request(org_id, verification_id)
         resident = await self._residents.get_for_house(request.user_id, flat.house_id)
-        # житель мог отвязаться от дома, пока запрос ждал решения
         if resident is None:
             raise EntityNotFound("Житель не найден")
         flat_id = flat.id
@@ -251,8 +249,6 @@ class FlatsService:
         by: UserId,
         reason: str,
     ) -> VerificationRequestView:
-        # строка из пробелов - это пустая причина, а житель должен узнать,
-        # что исправить
         stated = reason.strip()
         if not stated:
             raise InvalidRequest("Укажите причину отказа")
@@ -296,7 +292,6 @@ class FlatsService:
         expires_in_hours: int,
         max_activations: int,
     ) -> FlatInvite:
-        # нулевой срок жизни выдал бы код, мертвый в момент создания
         if expires_in_hours <= 0:
             raise InvalidRequest("Срок жизни кода - больше нуля часов")
         if max_activations <= 0:
@@ -325,8 +320,6 @@ class FlatsService:
         invite = await self._invites.get_flat(code)
         if invite is None:
             raise EntityNotFound(INVITE_NOT_FOUND)
-        # в пути нет ничего о квартире кода, поэтому отказ по правам
-        # превращается в 404: 403 подтвердил бы, что такой код существует
         try:
             await self._verified_owner(user_id, invite.flat_id)
         except NotEnoughRights as error:
@@ -343,8 +336,6 @@ class FlatsService:
         house_id = flat.house_id
         existing = await self._residents.get_for_house(user_id, house_id)
         if existing is not None and existing.flat_id == flat_id:
-            # житель этой же квартиры не тратит активацию: код у него уже
-            # сработал или он сам его и выдал
             if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):
                 raise InvalidState("Код приглашения истек или отозван")
             return await self._residency_view(existing, house, flat)
@@ -355,7 +346,6 @@ class FlatsService:
         if consumed is None:
             raise InvalidState("Код приглашения истек, отозван или исчерпан")
 
-        # роль арендатора снимает начисления и голос, это делает add_or_get
         resident, _ = await self._residents.add_or_get(
             user_id, house_id, flat_id, None, ResidentRole.TENANT
         )
@@ -371,8 +361,6 @@ class FlatsService:
         return await self._residency_view(resident, house, flat)
 
     def _ensure_not_moving(self, resident: Resident, flat_id: FlatId) -> None:
-        # переезд из подтвержденной квартиры оформляет УК, а до подтверждения
-        # житель волен исправить опечатку в номере
         if (
             resident.verified_at is not None
             and resident.flat_id is not None
@@ -391,8 +379,6 @@ class FlatsService:
 
     async def _resident_of_house(self, user_id: UserId, house_id: HouseId) -> Resident:
         resident = await self._residents.get_for_house(user_id, house_id)
-        # квартира чужого дома отвечает 404, а не 403: 403 подтвердил бы, что
-        # такой flat_id существует
         if resident is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         return resident
@@ -476,8 +462,6 @@ class FlatsService:
         ]
 
     def _notify(self, user_id: UserId, text: str) -> None:
-        # решение по заявке на подтверждение житель ждет, поэтому оно
-        # приходит при любых настройках
         self._notifications.notify_user(
             user_id, text, category=NotificationCategory.REQUESTS, mandatory=True
         )

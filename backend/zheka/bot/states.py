@@ -12,8 +12,6 @@ class Menu(StatesGroup):
 
 
 def entry_state(user: User) -> State:
-    # каждая дорога в дом начинается с согласия на обработку ПД. Живет в bot/,
-    # а не методом User: состояния диалогов - слой бота, core/ о них не знает
     return Menu.main if user.consent_at is not None else Consent.ask
 
 

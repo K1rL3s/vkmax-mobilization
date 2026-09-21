@@ -36,8 +36,6 @@ class ReceptionRepo(BaseAlchemyRepo):
     async def replace_windows(
         self, org_id: OrgId, windows: Sequence[ReceptionWindow]
     ) -> Sequence[ReceptionWindow]:
-        # часы приема задаются целиком: редактируется вся сетка кабинета, и
-        # сведение старых строк с новыми стоило бы дороже полной замены
         stmt = delete(reception_windows_table).where(
             reception_windows_table.c.org_id == org_id
         )
@@ -72,8 +70,6 @@ class ReceptionRepo(BaseAlchemyRepo):
     async def taken_counts(
         self, org_id: OrgId, date_from: date, date_to: date
     ) -> dict[datetime, int]:
-        # весь горизонт одним запросом: по запросу на день это четырнадцать
-        # обращений к базе на одно открытие экрана
         stmt = (
             select(appointments_table.c.starts_at, func.count())
             .where(
@@ -90,12 +86,6 @@ class ReceptionRepo(BaseAlchemyRepo):
     async def lock_windows(
         self, org_id: OrgId, weekday: int
     ) -> Sequence[ReceptionWindow]:
-        # места в слоте держит блокировка окон этого дня недели, а не
-        # уникальный индекс: в слот помещается столько жителей, сколько в
-        # кабинете сотрудников. Порядок по id - чтобы две одновременные записи
-        # брали строки в одном порядке и не вставали в тупик.
-        # Блокировка грубее слота - на весь день недели организации,
-        # разбивать по слотам есть смысл только при очереди на запись
         stmt = (
             select(ReceptionWindow)
             .where(
@@ -144,8 +134,6 @@ class ReceptionRepo(BaseAlchemyRepo):
     async def get_for_user(
         self, appointment_id: AppointmentId, user_id: UserId
     ) -> Appointment | None:
-        # id приходит из пути, поэтому запрос сужается до записей жителя:
-        # чужая запись отвечает 404, а не 403
         stmt = select(Appointment).where(
             appointments_table.c.id == appointment_id,
             appointments_table.c.user_id == user_id,
@@ -160,8 +148,6 @@ class ReceptionRepo(BaseAlchemyRepo):
     async def has_booking(
         self, org_id: OrgId, user_id: UserId, starts_at: datetime
     ) -> bool:
-        # запрос сужен организацией, как и блокировка окон, внутри которой он
-        # выполняется: прием в двух кабинетах разом житель все равно не берет
         stmt = select(
             exists().where(
                 appointments_table.c.org_id == org_id,

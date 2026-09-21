@@ -27,8 +27,6 @@ async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
 
 
 async def get_binding(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    # ни одно окно привязки не читает строку chats: окно, которое открыла
-    # задача, рисует другая сессия, и незакоммиченной строки она не видит
     data = ChatBindingData.load(dialog_manager)
     return {"title": escape(data.title), "notice": data.notice}
 
@@ -49,8 +47,6 @@ async def get_houses(
 @inject
 async def on_house(
     callback: MessageCallback,
-    # Any по той же причине, что в онбординге: overload у inject не разбирает
-    # четырехаргументный колбэк с Select
     _select: Any,
     dialog_manager: DialogManager,
     house_id: int,
@@ -81,13 +77,10 @@ async def on_code(
             dialog_user_id(dialog_manager), MaxChatId(data.chat_id), code
         )
     except InvalidRequest as error:
-        # неверный код: окно остается ждать следующий
         with ChatBindingData.proxy(dialog_manager) as binding:
             binding.notice = str(error)
         return
     except ZhekaError as error:
-        # чат привязали или удалили, пока окно ждало: в стеке по умолчанию
-        # остается меню, а не окно кода, которое глотает каждое сообщение
         await back_to_menu(dialog_manager, str(error))
         return
     with ChatBindingData.proxy(dialog_manager) as binding:
@@ -104,15 +97,11 @@ async def on_rights(
 ) -> None:
     data = ChatBindingData.load(dialog_manager)
     chat_id = MaxChatId(data.chat_id)
-    # один вызов известной длины, как отрисовка окна, - не та загрузка
-    # неизвестной длины, которую правило вебхука отдает задаче
     is_admin = await is_chat_admin(callback.bot, chat_id)
     try:
         await chats_service.set_admin(chat_id, is_admin)
     except ZhekaError as error:
         if dialog_manager.current_stack().id == DEFAULT_STACK_ID:
-            # геттер строку чата не читает, и перерисовка показала бы ту же
-            # кнопку, которая уже не сработает, а окно глотало бы сообщения
             await back_to_menu(dialog_manager, str(error))
             return
         await refused(callback, error)
@@ -122,8 +111,6 @@ async def on_rights(
             binding.notice = NO_RIGHTS_YET
         return
     if dialog_manager.current_stack().id == DEFAULT_STACK_ID:
-        # привязка по коду шла в стеке по умолчанию, и окно без кнопок и
-        # ввода глотало бы там каждое сообщение
         await back_to_menu(dialog_manager, BOUND_TEXT.format(title=escape(data.title)))
         return
     await dialog_manager.switch_to(ChatBinding.done)

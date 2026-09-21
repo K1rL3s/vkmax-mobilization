@@ -58,7 +58,6 @@ class PollsRepo(BaseAlchemyRepo):
 
     async def get(self, poll_id: PollId) -> Poll | None:
         stmt = select(Poll).where(polls_table.c.id == poll_id)
-        # scalar() для императивно отображенной сущности возвращает Any
         poll: Poll | None = await self._session.scalar(stmt)
         return poll
 
@@ -79,7 +78,6 @@ class PollsRepo(BaseAlchemyRepo):
     async def list_for_org(
         self, org_id: OrgId, house_id: HouseId | None
     ) -> Sequence[Poll]:
-        # org_id есть только у опроса от УК, поэтому scoped_to_org не нужен
         stmt = select(Poll).where(polls_table.c.org_id == org_id)
         if house_id is not None:
             stmt = stmt.where(polls_table.c.house_id == house_id)
@@ -108,7 +106,6 @@ class PollsRepo(BaseAlchemyRepo):
         *,
         counted_by_area: bool,
     ) -> Sequence[PollVote]:
-        # повтор гасит уникальный индекс (poll_id, user_id, option_id)
         stmt = (
             pg_insert(PollVote)
             .values(
@@ -139,8 +136,6 @@ class PollsRepo(BaseAlchemyRepo):
     async def voted_flat_ids(
         self, poll_id: PollId, *, verified_only: bool
     ) -> Sequence[FlatId]:
-        # не джойн на residents: отвязавшийся после голоса житель выпал бы
-        # из кворума
         stmt = (
             select(poll_votes_table.c.flat_id)
             .where(

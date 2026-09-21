@@ -13,6 +13,7 @@ from zheka.core.enums import (
     RequestGroupStatus,
     RequestPhotoKind,
     RequestStatus,
+    ResidentStatus,
 )
 from zheka.core.errors import (
     FLAT_NOT_FOUND,
@@ -24,8 +25,16 @@ from zheka.core.errors import (
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
-from zheka.core.models import House, Request, RequestGroup, User
+from zheka.core.ids import (
+    FlatId,
+    HouseId,
+    OrgId,
+    RequestGroupId,
+    RequestId,
+    ResidentId,
+    UserId,
+)
+from zheka.core.models import House, Request, RequestGroup, Resident, User
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
@@ -43,6 +52,7 @@ from zheka.core.services.requests import (
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters, RequestsRepo
+from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 EXECUTOR_NOT_FOUND = "Исполнитель не найден"
@@ -53,6 +63,9 @@ GROUP_ALREADY_THERE = "Все заявки группы уже в этом ст�
 NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
 NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнитель"
 RESULT_PHOTO_REQUIRED = "Пришлите фото результата"
+RESIDENT_NOT_FOUND = "Житель не найден"
+RESIDENT_BLOCKED = "Житель заблокирован в доме"
+FLAT_NOT_RESIDENTS = "Квартира не совпадает с квартирой жителя"
 
 
 class AdminRequestRow(RequestRow):
@@ -84,6 +97,7 @@ class PhoneRequestDraft(ZhekaType):
     flat_id: FlatId | None = None
     caller_name: str | None = None
     caller_phone: str | None = None
+    resident_id: ResidentId | None = None
 
 
 class AdminRequestsService:
@@ -94,6 +108,7 @@ class AdminRequestsService:
         "_notifications",
         "_orgs",
         "_requests",
+        "_residents",
         "_users",
     )
 
@@ -103,6 +118,7 @@ class AdminRequestsService:
         houses_repo: HousesRepo,
         users_repo: UsersRepo,
         orgs_repo: OrgsRepo,
+        residents_repo: ResidentsRepo,
         grouping_service: GroupingService,
         notifications_service: NotificationsService,
         events_service: EventsService,
@@ -111,6 +127,7 @@ class AdminRequestsService:
         self._houses = houses_repo
         self._users = users_repo
         self._orgs = orgs_repo
+        self._residents = residents_repo
         self._grouping = grouping_service
         self._notifications = notifications_service
         self._events = events_service
@@ -147,7 +164,6 @@ class AdminRequestsService:
         if not stated:
             raise InvalidRequest(EMPTY_REPLY)
 
-        # ответ УК - транзакционное сообщение, его не выключают настройками
         await self._requests.add_message(
             request.id, actor, RequestActorRole.STAFF.value, stated
         )
@@ -163,14 +179,11 @@ class AdminRequestsService:
     ) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
         member = await self._orgs.get_member(org_id, executor_user_id)
-        # чужой пользователь неотличим от несуществующего
         if member is None:
             raise EntityNotFound(EXECUTOR_NOT_FOUND)
         if member.role is not OrgRole.EXECUTOR:
             raise InvalidRequest(NOT_AN_EXECUTOR)
 
-        # назначение само по себе статуса не двигает: в работу заявку
-        # переводит исполнитель, когда берет ее
         await self._requests.set_executor(request, executor_user_id)
         await self._events.record(
             EventType.REQUEST_ASSIGNED,
@@ -197,15 +210,10 @@ class AdminRequestsService:
     ) -> RequestGroupCardData:
         group = await self._org_group(org_id, group_id)
         members = await self._requests.list_for_group(group.id)
-        # опоздавший участник идет через промежуточные статусы, с логом и
-        # событием на каждый шаг. Обогнавший цель ломает вызов целиком:
-        # transition_path поднимет InvalidState до первой записи
         paths = [(member, transition_path(member.status, target)) for member in members]
         if all(not path for _, path in paths):
             raise InvalidState(GROUP_ALREADY_THERE)
 
-        # комментарий и уведомление - только у последнего шага, того, что
-        # попросил диспетчер, а не у каждого промежуточного
         for member, path in paths:
             for step in path:
                 last = step is target
@@ -232,26 +240,30 @@ class AdminRequestsService:
             raise InvalidRequest(EMPTY_DESCRIPTION)
         caller_name = (draft.caller_name or "").strip() or None
         caller_phone = (draft.caller_phone or "").strip() or None
-        # без квартиры и без звонившего заявку некому показать и некому звонить
-        if draft.flat_id is None and not (caller_name and caller_phone):
+        resident = await self._caller(draft)
+        flat_id = draft.flat_id if resident is None else resident.flat_id
+        if resident is None and flat_id is None and not (caller_name and caller_phone):
             raise InvalidRequest(NO_CALLER_IDENTIFICATION)
 
-        if draft.flat_id is not None:
-            flat = await self._houses.get_flat(draft.flat_id)
+        if resident is None and flat_id is not None:
+            flat = await self._houses.get_flat(flat_id)
             if flat is None or flat.house_id != draft.house_id:
                 raise EntityNotFound(FLAT_NOT_FOUND)
 
-        # у заявки по звонку нет автора, поэтому закрывает ее УК
+        author = None if resident is None else resident.user_id
         request = await self._requests.create(
             draft.house_id,
-            draft.flat_id,
-            None,
+            flat_id,
+            author,
             draft.category,
             description,
             RequestChannel.PHONE,
             None,
             None,
-            is_staff_author=True,
+            is_staff_author=(
+                author is None
+                or await self._orgs.get_member(org_id, author) is not None
+            ),
             caller_name=caller_name,
             caller_phone=caller_phone,
         )
@@ -309,7 +321,6 @@ class AdminRequestsService:
         )
         stated = None if comment is None else comment.strip()
         if stated:
-            # пояснение к статусу житель видит там же, где ответы УК
             await self._requests.add_message(request.id, actor, by_role.value, stated)
         await self._events.record(
             EventType.REQUEST_STATUS_CHANGED,
@@ -320,8 +331,6 @@ class AdminRequestsService:
         )
         if not notify_author:
             return
-        # на приемку заявку уводит только _move; карточка приемки заменяет
-        # текст статуса. У заявки по звонку нет ни того, ни другого
         if target is RequestStatus.ON_REVIEW and request.author_user_id is not None:
             self._notifications.open_review_card(request.id)
         else:
@@ -330,7 +339,6 @@ class AdminRequestsService:
             )
 
     def _notify_author(self, request: Request, text: str) -> None:
-        # автора звонка бот не знает, а первым не пишет
         if request.author_user_id is None:
             return
         self._notifications.notify_user(
@@ -364,7 +372,6 @@ class AdminRequestsService:
             group=group,
             house=await self._house(group.house_id),
             rows=rows,
-            # тот же счет жалобщиков, что и у склейки
             flats_count=len(complaint_sources(members)),
         )
 
@@ -426,8 +433,6 @@ class AdminRequestsService:
         target: RequestStatus,
         photo_names: Sequence[str],
     ) -> None:
-        # все проверки до первой записи: задача с фото ловит отказ и все
-        # равно коммитит
         request = await self._requests.get(request_id)
         if request is None:
             raise EntityNotFound(REQUEST_NOT_FOUND)
@@ -459,7 +464,6 @@ class AdminRequestsService:
     async def executor_card(
         self, user_id: UserId, request_id: RequestId
     ) -> RequestCardData | None:
-        # None, а не отказ: геттер, упавший на старой карточке, увел бы ее в меню
         request = await self._requests.get(request_id)
         if request is None:
             raise EntityNotFound(REQUEST_NOT_FOUND)
@@ -468,8 +472,6 @@ class AdminRequestsService:
         return (await self._card(request)).card
 
     async def _can_act(self, request: Request, user_id: UserId) -> bool:
-        # назначение без членства не в счет: убранный из УК исполнитель
-        # остается в executor_user_id и с живой карточкой на руках
         if request.executor_user_id != user_id:
             return False
         house = await self._house(request.house_id)
@@ -477,3 +479,15 @@ class AdminRequestsService:
             return False
         member = await self._orgs.get_member(house.org_id, user_id)
         return member is not None and member.role is OrgRole.EXECUTOR
+
+    async def _caller(self, draft: PhoneRequestDraft) -> Resident | None:
+        if draft.resident_id is None:
+            return None
+        resident = await self._residents.get(draft.resident_id)
+        if resident is None or resident.house_id != draft.house_id:
+            raise EntityNotFound(RESIDENT_NOT_FOUND)
+        if resident.status is not ResidentStatus.ACTIVE:
+            raise InvalidState(RESIDENT_BLOCKED)
+        if draft.flat_id is not None and draft.flat_id != resident.flat_id:
+            raise InvalidRequest(FLAT_NOT_RESIDENTS)
+        return resident

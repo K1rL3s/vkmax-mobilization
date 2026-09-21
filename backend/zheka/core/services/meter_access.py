@@ -27,7 +27,6 @@ class MeterCard(ZhekaType):
 
 
 def zones_of(raw: dict[str, int]) -> dict[TariffZone, int]:
-    # JSONB отдает ключи обратно строками, а не TariffZone
     return {TariffZone(key): value for key, value in raw.items()}
 
 
@@ -62,7 +61,6 @@ class MeterAccess:
 
     async def verified_resident(self, user_id: UserId, flat_id: FlatId) -> Resident:
         resident = await self.resident_of_flat(user_id, flat_id)
-        # чужая квартира неотличима от несуществующей
         if resident is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         if resident.status is ResidentStatus.BLOCKED:

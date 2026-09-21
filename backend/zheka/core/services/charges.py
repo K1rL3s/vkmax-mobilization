@@ -36,20 +36,19 @@ from zheka.infra.database.repos.meters import MetersRepo
 NOT_VERIFIED = "Подтвердите квартиру, чтобы видеть начисления"
 CANNOT_SEE_CHARGES = "Начисления недоступны для вашей роли"
 
-# сколько последних периодов расхода показывать рядом с разбором начисления
 CONSUMPTION_POINTS = 6
 
 
 class ConsumptionPoint(ZhekaType):
     period: date
-    consumption: int  # тысячные единицы измерения
+    consumption: int
 
 
 class ServiceConsumption(ZhekaType):
     service: ServiceType
     meter_id: MeterId
     points: list[ConsumptionPoint]
-    house_average: int | None  # тысячные единицы измерения
+    house_average: int | None
 
 
 class ChargeCardData(ZhekaType):
@@ -279,7 +278,6 @@ class ChargesService:
             for row in history:
                 if row.reading.period > period:
                     continue
-                # history() отдает свежую подачу периода первой
                 by_period.setdefault(row.reading.period, sum(row.consumption.values()))
             recent_periods = sorted(by_period)[-CONSUMPTION_POINTS:]
             points = [

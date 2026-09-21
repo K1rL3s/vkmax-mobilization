@@ -21,11 +21,9 @@ _SUFFIX_BY_MIME = {
 }
 FILE_URL_TTL = timedelta(hours=1)
 
-# ровно то, что генерирует save: так настоящее имя не спутать с подставленным путем
 _SUFFIX_PATTERN = "|".join(re.escape(suffix) for suffix in _SUFFIX_BY_MIME.values())
 _NAME_RE = re.compile(f"^[0-9a-f]{{32}}(?:{_SUFFIX_PATTERN})$")
 
-# небольшой шаг, чтобы лимит размера ловился с точностью до куска, а не до мегабайта
 _CHUNK_SIZE = 64 * 1024
 
 
@@ -72,7 +70,6 @@ class FilesService:
     async def save_download(
         self, content_type: str, download: Callable[[BinaryIO], Awaitable[object]]
     ) -> str:
-        # потолок стоит на самой записи: bot.download тянет поток до таймаута
         suffix = _SUFFIX_BY_MIME.get(content_type)
         if suffix is None:
             raise InvalidRequest("Поддерживаются только изображения")
@@ -90,8 +87,6 @@ class FilesService:
 
 
 class _CappedWriter:
-    # maxo зовет у destination только write и flush, поэтому cast вместо BinaryIO
-
     __slots__ = ("_max_size_mb", "_out", "_written")
 
     def __init__(self, out: BinaryIO, max_size_mb: int) -> None:

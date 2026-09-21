@@ -31,9 +31,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 
 logger = logging.getLogger(__name__)
 
-# второе напоминание о показаниях - за столько дней до закрытия окна
 READING_SECOND_REMINDER_DAYS = 2
-# раньше напоминание об опросе легло бы рядом с объявлением о нем самом
 POLL_REMINDER_BEFORE = timedelta(hours=48)
 
 
@@ -47,8 +45,6 @@ def reading_reminder(
     today: date, settings: OrgSettings | None
 ) -> ReadingReminder | None:
     last_day = monthrange(today.year, today.month)[1]
-    # у окна «всегда открыто» ни открытия, ни закрытия нет, поэтому оно
-    # считается целым месяцем. Дом без настроек, как и в submit, открыт всегда
     if settings is None or settings.meter_window_always_open:
         day_from, day_to = 1, last_day
     else:
@@ -56,12 +52,9 @@ def reading_reminder(
         day_to = settings.meter_window_day_to
     closing = day_to - READING_SECOND_REMINDER_DAYS
     if closing < 1 and day_from > day_to:
-        # окно через конец месяца закрывается в первые его дни, и за два дня
-        # до этого - конец предыдущего
         closing += last_day
     if today.day == day_from:
         return ReadingReminder.OPEN
-    # у окна короче трех дней канун закрытия приходится на день до открытия
     if today.day == closing and window_is_open(
         today.day, day_from, day_to, always_open=False
     ):
@@ -79,8 +72,6 @@ _READING_TEXTS: dict[ReadingReminder, Callable[[], str]] = {
 
 
 class RemindersService:
-    # отметка и рассылка в одной транзакции, а рассылка уходит после коммита:
-    # упавший прогон ничего не отправил и не отметил
     __slots__ = (
         "_chats",
         "_events",
@@ -116,8 +107,6 @@ class RemindersService:
         self._notifications = notifications_service
 
     async def remind_readings(self, today: date) -> int:
-        # житель двух домов, где окна сошлись в один день, получает один текст
-        # на оба, а отметку - в каждом доме, чтобы повторный прогон видел обе
         queued: dict[ReadingReminder, set[UserId]] = {
             kind: set() for kind in ReadingReminder
         }
@@ -126,8 +115,6 @@ class RemindersService:
             kind = reading_reminder(today, settings)
             if kind is None:
                 continue
-            # период тот же, что запишет submit в этот день: напоминание по
-            # другому периоду дошло бы до тех, кто уже сдал
             period = window_period(today, settings)
             sent += await self._remind_house_readings(
                 house_id, period, kind, queued[kind]
@@ -138,9 +125,6 @@ class RemindersService:
     async def remind_polls(self, now: datetime) -> int:
         polls = await self._polls.list_to_remind(now, now + POLL_REMINDER_BEFORE)
         for poll in polls:
-            # квартира проголосовала, если ее голос идет в кворум: голос
-            # неподтвержденного совладельца не снимает напоминания с того, чей
-            # голос засчитался бы. Сам проголосовавший не получает его никогда
             voted = set(await self._polls.voted_flat_ids(poll.id, verified_only=True))
             voters = set(await self._polls.voter_ids(poll.id))
             user_ids = [
@@ -202,8 +186,6 @@ class RemindersService:
         return warned
 
     async def remind_appointments(self, now: datetime) -> int:
-        # прием хранит настенные часы как UTC, поэтому «завтра» считается
-        # по той же дате starts_at, без перевода в пояс
         appointments = await self._reception.list_to_remind(
             now.date() + timedelta(days=1)
         )
@@ -236,11 +218,7 @@ class RemindersService:
     ) -> int:
         flat_ids = await self._meters.flats_without_reading(house_id, period)
         residents = await self._residents.list_verified_for_flats(flat_ids)
-        # у каждого дома свое окно: без дома отметка первого глушила бы
-        # напоминание второго, открывшегося в другой день
         stamp = {"house_id": house_id, "period": period.isoformat(), "kind": kind.value}
-        # с since гасит любое напоминание о показаниях с этого момента, какого
-        # угодно дома и вида
         reminded = await self._events_repo.users_with(
             EventType.READING_REMINDER_SENT,
             [resident.user_id for resident in residents],
@@ -269,8 +247,6 @@ class RemindersService:
     async def remind_reading_laggards(
         self, house_ids: Collection[HouseId], period: date, now: datetime
     ) -> int:
-        # кнопка УК: кто сегодня уже получил любое напоминание о показаниях,
-        # второе не получит, поэтому десять нажатий - одно сообщение
         since = datetime.combine(now.date(), time(), now.tzinfo)
         queued: set[UserId] = set()
         sent = 0

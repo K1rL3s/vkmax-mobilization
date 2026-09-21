@@ -6,42 +6,40 @@ from zheka.base import ZhekaType
 from zheka.core.enums import ServiceType
 from zheka.core.errors import InvalidValue
 
-# тысячные объема (1/1000 ед.) * тариф (1/10000 руб/ед.) = 1/10_000_000 руб =
-# 1/100_000 копейки
+# тысячные объема (1/1000 ед.) * тариф (1/10000 руб/ед.) =
+# = 1/10_000_000 рублей = 1/100_000 копейки
 _VOLUME_DIVISOR = 100_000
-# сотые площади (1/100 кв.м) * тариф (1/10000 руб/ед.) = 1/1_000_000 руб =
-# 1/10_000 копейки
+# сотые площади (1/100 кв.м) * тариф (1/10000 руб/ед.) =
+# = 1/1_000_000 рублей = 1/10_000 копейки
 _AREA_DIVISOR = 10_000
 
 LineDeltaKind = Literal["changed", "appeared", "disappeared"]
 
 
 def to_kopecks(product: int, *, is_area: bool = False) -> int:
-    # единственная функция проекта, которая делит деньги: произведение двух
-    # масштабированных целых переводится в копейки округлением вверх-от-половины
     divisor = _AREA_DIVISOR if is_area else _VOLUME_DIVISOR
     return (product + divisor // 2) // divisor
 
 
 class ChargeLine(ZhekaType):
     service: ServiceType
-    amount: int  # копейки
-    volume: int | None = None  # тысячные единицы измерения
-    tariff: int | None = None  # 1/10000 рубля за единицу
+    amount: int
+    volume: int | None = None
+    tariff: int | None = None
     unit: str | None = None
     note: str | None = None
 
 
 class LineDelta(ZhekaType):
     service: ServiceType
-    delta: int  # копейки
-    tariff_effect: int  # копейки, эффект от изменения тарифа на новый объем
-    volume_effect: int  # копейки, остаток дельты после тарифного эффекта
+    delta: int
+    tariff_effect: int
+    volume_effect: int
     kind: LineDeltaKind
 
 
 class ChargeBreakdown(ZhekaType):
-    delta: int  # копейки, суммарная дельта по всем строкам
+    delta: int
     lines: list[LineDelta]
 
 
@@ -82,15 +80,11 @@ def _changed_line(current: ChargeLine, previous: ChargeLine) -> LineDelta:
     ):
         tariff_effect = to_kopecks((current.tariff - previous.tariff) * current.volume)
     else:
-        # разовая сумма (содержание, пени) - тариф ни на что не множится,
-        # вся дельта уходит в расходный эффект
         tariff_effect = 0
     return LineDelta(
         service=current.service,
         delta=delta,
         tariff_effect=tariff_effect,
-        # вычитание, а не независимое произведение - тогда сумма двух эффектов
-        # всегда равна дельте строки, даже после округления
         volume_effect=delta - tariff_effect,
         kind="changed",
     )
