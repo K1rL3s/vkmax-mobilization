@@ -7,6 +7,7 @@ from maxo.dialogs.widgets.input import ManagedTextInput, MessageInput
 from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import MessageCallback, MessageCreated, PhotoAttachment
 
+from zheka.bot.dialog_data import NewRequestData
 from zheka.bot.middlewares.user import USER_KEY
 from zheka.bot.states import NewRequest
 from zheka.broker.publisher import TaskPublisher
@@ -38,9 +39,9 @@ async def get_category(
     # дом у жителя обычно один, а если их несколько - заявка идет в тот,
     # который он завел последним: выбор дома живет в мини-аппе
     residency = max(me.residencies, key=lambda item: item.resident.created_at)
-    data = dialog_manager.dialog_data
-    data["house_id"] = int(residency.house.id)
-    data["flat_id"] = None if residency.flat is None else int(residency.flat.id)
+    with NewRequestData.proxy(dialog_manager) as data:
+        data.house_id = int(residency.house.id)
+        data.flat_id = None if residency.flat is None else int(residency.flat.id)
     return {
         "address": residency.house.address,
         "categories": [
@@ -51,23 +52,20 @@ async def get_category(
 
 
 async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    data = dialog_manager.dialog_data
-    category = data.get("category")
+    data = NewRequestData.load(dialog_manager)
     return {
         "category": None
-        if category is None
-        else CATEGORY_RULES[RequestCategory(category)].label,
-        "description": data.get("description", ""),
-        "photos": len(data.get("photos", [])),
+        if data.category is None
+        else CATEGORY_RULES[data.category].label,
+        "description": data.description,
+        "photos": len(data.photos),
     }
 
 
 async def get_sent(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
     # окно рисует и житель сразу после нажатия, и задача, когда заявка готова:
     # номер приходит в start_data, до него его просто нет
-    start_data = dialog_manager.start_data
-    request_id = start_data.get("request_id") if isinstance(start_data, dict) else None
-    return {"request_id": request_id}
+    return {"request_id": NewRequestData.load_start(dialog_manager).request_id}
 
 
 async def on_category(
@@ -76,7 +74,8 @@ async def on_category(
     dialog_manager: DialogManager,
     category: str,
 ) -> None:
-    dialog_manager.dialog_data["category"] = RequestCategory(category).value
+    with NewRequestData.proxy(dialog_manager) as data:
+        data.category = RequestCategory(category)
     await dialog_manager.switch_to(NewRequest.description)
 
 
@@ -86,7 +85,8 @@ async def on_description(
     dialog_manager: DialogManager,
     description: str,
 ) -> None:
-    dialog_manager.dialog_data["description"] = description
+    with NewRequestData.proxy(dialog_manager) as data:
+        data.description = description
     await dialog_manager.switch_to(NewRequest.photo)
 
 
@@ -95,10 +95,10 @@ async def on_photo(
     _widget: MessageInput,
     dialog_manager: DialogManager,
 ) -> None:
-    photos: list[str] = dialog_manager.dialog_data.setdefault("photos", [])
-    for attach in update.message.body.attachments or []:
-        if isinstance(attach, PhotoAttachment) and len(photos) < MAX_PHOTOS:
-            photos.append(attach.payload.url)
+    with NewRequestData.proxy(dialog_manager) as data:
+        for attach in update.message.body.attachments or []:
+            if isinstance(attach, PhotoAttachment) and len(data.photos) < MAX_PHOTOS:
+                data.photos.append(attach.payload.url)
 
 
 @inject
@@ -109,15 +109,15 @@ async def on_send(
     publisher: FromDishka[TaskPublisher],
 ) -> None:
     # свой stack_id: задача заменит это же окно карточкой, а не откроет второе
-    data = dialog_manager.dialog_data
+    data = NewRequestData.load(dialog_manager)
     publisher.publish(
         TaskName.CREATE_BOT_REQUEST,
         user_id=int(_user_id(dialog_manager)),
-        house_id=data["house_id"],
-        flat_id=data.get("flat_id"),
-        category=data["category"],
-        description=data["description"],
-        photo_urls=data.get("photos", []),
+        house_id=data.house_id,
+        flat_id=data.flat_id,
+        category=data.category,
+        description=data.description,
+        photo_urls=data.photos,
         channel=RequestChannel.BOT.value,
         stack_id=dialog_manager.current_stack().id,
     )

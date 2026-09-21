@@ -4,6 +4,8 @@ from maxo import Bot
 from maxo.dialogs import DialogManager
 from maxo.omit import is_defined
 
+from zheka.bot.dialog_data import MenuData
+
 
 async def get_menu(
     bot: Bot,
@@ -15,9 +17,7 @@ async def get_menu(
     # web_app у OpenAppButton - это username бота, а не url, поэтому ссылка на
     # мини-апп берется у самого бота, а не из второго источника правды в конфиге
     username = bot.state.info.username
-    start_data = dialog_manager.start_data
-    notice = start_data.get("notice") if isinstance(start_data, dict) else None
     return {
         "bot_username": username if is_defined(username) else None,
-        "notice": notice,
+        "notice": MenuData.load_start(dialog_manager).notice,
     }

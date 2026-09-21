@@ -54,6 +54,14 @@ review finding.
   a stored message id. A handler answers through its dialog manager, and a new
   flow is a package under `zheka/bot/handlers/` added to the include list in
   `make_dispatcher`.
+- Dialog state goes through a `BaseDialogData` subclass from
+  `zheka/bot/dialog_data.py`, one per dialog, serving both `start_data` and
+  `dialog_data`, and is never read or written by string key. A start site
+  passes `SomeData(...).to_data()`, a reader calls `load` or `load_start`, a
+  writer goes through `proxy`. `dump` merges with `update` so foreign keys
+  survive, and `proxy` has no `try/finally` so a body that raised persists no
+  half-mutation. A dialog whose start data must outlive the first window
+  copies it into `dialog_data` once, in its `on_start`, as onboarding does.
 - `MaxSender` is for broadcasts and for opening a window from a task. It owns
   the platform ceilings (30 rps per bot, 2 messages per second per chat),
   which earn their bookkeeping when one event fans out to many chats. One
@@ -290,10 +298,9 @@ the next agent does not pay for them again.
   `task-N-brief.md` the controller decisions for a block and
   `task-N-review.md` its review findings. The ledger answers "which commit
   belongs to which block" more reliably than `git log` does.
-- Two refactors are decided and waiting, both before block 16:
-  `refactor-dialog-data.md` (typed `dialog_data` and `start_data` instead of
-  raw dict keys) and `refactor-startapp-routing.md` (base64 json in
-  `startParam` so a deeplink can land on a mini-app screen).
+- One refactor is decided and waiting, before block 16:
+  `refactor-startapp-routing.md` (base64 json in `startParam` so a deeplink
+  can land on a mini-app screen).
 - The forty-five `EventType` members divide with nothing left over: 31 + 1 + 2
   + 11. Thirty-one are recorded **inside** `core/services/`, so a bot handler
   or a route that records one of those again doubles the statistic - pass the

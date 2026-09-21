@@ -8,10 +8,11 @@ from maxo.dialogs.widgets.input import ManagedTextInput, MessageInput
 from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import LocationAttachment, MessageCallback, MessageCreated
 
+from zheka.bot.dialog_data import HouseItem, MenuData, OnboardingData
 from zheka.bot.middlewares.user import USER_KEY
 from zheka.bot.states import Menu, Onboarding
-from zheka.core.enums import EventSource, ResidentRole
-from zheka.core.ids import HouseId, UserId
+from zheka.core.enums import ResidentRole
+from zheka.core.ids import UserId
 from zheka.core.models import User
 from zheka.core.services.houses import HouseFound, HousesService
 
@@ -22,22 +23,15 @@ NEARBY_RADIUS_M = 700
 LINKED = "Дом добавлен"
 
 
-def _house_items(found: Sequence[HouseFound]) -> list[dict[str, Any]]:
-    return [{"id": int(item.house.id), "title": item.house.address} for item in found]
+def _house_items(found: Sequence[HouseFound]) -> list[HouseItem]:
+    return [
+        HouseItem(id=int(item.house.id), title=item.house.address) for item in found
+    ]
 
 
 def _user_id(dialog_manager: DialogManager) -> UserId:
     user: User = dialog_manager.middleware_data[USER_KEY]
     return UserId(user.id)
-
-
-def _context(dialog_manager: DialogManager) -> dict[str, Any]:
-    # диплинк приводит жителя сразу на шаг квартиры и кладет дом, подъезд и
-    # источник в start_data, а выбор адреса руками - в данные диалога
-    start_data = dialog_manager.start_data
-    data = dict(start_data) if isinstance(start_data, dict) else {}
-    data.update(dialog_manager.dialog_data)
-    return data
 
 
 @inject
@@ -55,14 +49,14 @@ async def get_streets(
     houses_service: FromDishka[HousesService],
     **_: Any,
 ) -> dict[str, Any]:
-    city = dialog_manager.dialog_data["city"]
+    city = OnboardingData.load(dialog_manager).city
     return {"city": city, "streets": await houses_service.streets(city, None, None)}
 
 
 async def get_houses(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
     # ни одного запроса: дома в данные диалога кладет тот шаг, который их нашел,
     # и выбор улицы, и геолокация, - поэтому окно у них общее
-    return {"houses": dialog_manager.dialog_data.get("houses", [])}
+    return {"houses": OnboardingData.load(dialog_manager).houses}
 
 
 @inject
@@ -71,7 +65,7 @@ async def get_flat(
     houses_service: FromDishka[HousesService],
     **_: Any,
 ) -> dict[str, Any]:
-    house_id = HouseId(_context(dialog_manager)["house_id"])
+    house_id = OnboardingData.load(dialog_manager).chosen_house()
     card = await houses_service.house_card(house_id, _user_id(dialog_manager))
     return {"address": card.house.address}
 
@@ -82,7 +76,8 @@ async def on_city(
     dialog_manager: DialogManager,
     city: str,
 ) -> None:
-    dialog_manager.dialog_data["city"] = city
+    with OnboardingData.proxy(dialog_manager) as data:
+        data.city = city
     await dialog_manager.switch_to(Onboarding.street)
 
 
@@ -96,16 +91,17 @@ async def on_street(
     street: str,
     houses_service: FromDishka[HousesService],
 ) -> None:
-    found, _total = await houses_service.search(
-        _user_id(dialog_manager),
-        dialog_manager.dialog_data["city"],
-        street,
-        None,
-        None,
-        HOUSES_LIMIT,
-        0,
-    )
-    dialog_manager.dialog_data["houses"] = _house_items(found)
+    with OnboardingData.proxy(dialog_manager) as data:
+        found, _total = await houses_service.search(
+            _user_id(dialog_manager),
+            data.city,
+            street,
+            None,
+            None,
+            HOUSES_LIMIT,
+            0,
+        )
+        data.houses = _house_items(found)
     await dialog_manager.switch_to(Onboarding.house)
 
 
@@ -115,7 +111,8 @@ async def on_house(
     dialog_manager: DialogManager,
     house_id: int,
 ) -> None:
-    dialog_manager.dialog_data["house_id"] = house_id
+    with OnboardingData.proxy(dialog_manager) as data:
+        data.house_id = house_id
     await dialog_manager.switch_to(Onboarding.flat)
 
 
@@ -144,7 +141,8 @@ async def on_location(
         NEARBY_RADIUS_M,
         HOUSES_LIMIT,
     )
-    dialog_manager.dialog_data["houses"] = _house_items(found)
+    with OnboardingData.proxy(dialog_manager) as data:
+        data.houses = _house_items(found)
     await dialog_manager.switch_to(Onboarding.house)
 
 
@@ -176,18 +174,25 @@ async def link_house(
 ) -> None:
     # источник и подъезд кладет сюда тот, кто привел жителя в дом. HOUSE_LINKED
     # пишет сам сервис, и второй записи тут быть не должно
-    data = _context(dialog_manager)
+    data = OnboardingData.load(dialog_manager)
     await houses_service.link(
         _user_id(dialog_manager),
-        HouseId(data["house_id"]),
+        data.chosen_house(),
         None,
         flat_number,
         ResidentRole.OWNER,
-        EventSource(data.get("source", EventSource.DIRECT)),
-        data.get("entrance"),
+        data.source,
+        data.entrance,
     )
     await dialog_manager.start(
         Menu.main,
-        data={"notice": LINKED},
+        data=MenuData(notice=LINKED).to_data(),
         mode=StartMode.RESET_STACK,
     )
+
+
+async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
+    # диплинк кладет дом, подъезд и источник в start_data, а выбор адреса
+    # руками - в данные диалога. Одна копия на старте, и дальше читается
+    # только dialog_data
+    OnboardingData.load_start(dialog_manager).dump(dialog_manager)

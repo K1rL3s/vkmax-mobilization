@@ -4,6 +4,7 @@ from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.kbd import Button
 from maxo.types import MessageCallback
 
+from zheka.bot.dialog_data import ConsentData
 from zheka.bot.handlers.commands.deeplinks import open_deeplink
 from zheka.bot.middlewares.user import USER_KEY
 from zheka.bot.states import Menu
@@ -32,8 +33,8 @@ async def on_accept(
 
     # диплинк, приведший сюда, ждет в start_data: без него житель после
     # «Согласен» уезжал бы в меню и терял то, на что нажал
-    payload = dialog_manager.start_data
-    if isinstance(payload, str):
+    payload = ConsentData.load_start(dialog_manager).payload
+    if payload is not None:
         deeplink = parse_deeplink(payload)
         if deeplink is not None:
             await open_deeplink(

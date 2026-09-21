@@ -6,6 +6,7 @@ from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from taskiq import async_shared_broker
 
+from zheka.bot.dialog_data import NewRequestData
 from zheka.bot.states import NewRequest
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import RequestCategory, RequestChannel
@@ -74,7 +75,7 @@ async def create_bot_request(
         await sender.start_dialog(
             NewRequest.sent,
             user,
-            data={"request_id": int(request_id)},
+            data=NewRequestData(request_id=int(request_id)).to_data(),
             stack_id=stack_id,
             notify=False,
         )

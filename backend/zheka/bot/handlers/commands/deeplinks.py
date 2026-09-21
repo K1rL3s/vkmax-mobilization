@@ -7,6 +7,7 @@ from maxo.omit import is_not_defined
 from maxo.routing.sentinels import UNHANDLED
 from maxo.types import BotStarted
 
+from zheka.bot.dialog_data import ConsentData, MenuData, OnboardingData
 from zheka.bot.states import Consent, Menu, Onboarding
 from zheka.core.deeplinks import Deeplink, DeeplinkKind, parse_deeplink
 from zheka.core.enums import EventSource, EventType
@@ -83,7 +84,7 @@ async def open_deeplink(
     if user.consent_at is None:
         await dialog_manager.start(
             Consent.ask,
-            data=payload,
+            data=ConsentData(payload=payload).to_data(),
             mode=StartMode.RESET_STACK,
         )
         return
@@ -115,11 +116,11 @@ async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> Non
 
     await dialog_manager.start(
         Onboarding.flat,
-        data={
-            "house_id": int(house_id),
-            "entrance": int(entrance) if entrance.isdigit() else None,
-            "source": _SOURCE_BY_KIND[deeplink.kind].value,
-        },
+        data=OnboardingData(
+            house_id=int(house_id),
+            entrance=int(entrance) if entrance.isdigit() else None,
+            source=_SOURCE_BY_KIND[deeplink.kind],
+        ).to_data(),
         mode=StartMode.RESET_STACK,
     )
 
@@ -127,6 +128,6 @@ async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> Non
 async def _menu(dialog_manager: DialogManager, notice: str) -> None:
     await dialog_manager.start(
         Menu.main,
-        data={"notice": notice},
+        data=MenuData(notice=notice).to_data(),
         mode=StartMode.RESET_STACK,
     )

@@ -22,6 +22,7 @@ from zheka.bot.handlers.onboarding.handlers import (
     on_flat_skip,
     on_house,
     on_location,
+    on_start,
     on_street,
 )
 from zheka.bot.states import Onboarding
@@ -84,9 +85,9 @@ onboarding_dialog = Dialog(
         Const(NO_HOUSES_TEXT, when=~F["houses"]),
         ScrollingGroup(
             Select(
-                Format("{item[title]}"),
+                Format("{item.title}"),
                 id="house",
-                item_id_getter=lambda house: house["id"],
+                item_id_getter=lambda house: house.id,
                 type_factory=int,
                 items="houses",
                 on_click=on_house,
@@ -113,4 +114,5 @@ onboarding_dialog = Dialog(
         state=Onboarding.flat,
         getter=get_flat,
     ),
+    on_start=on_start,
 )

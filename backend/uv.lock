@@ -1290,6 +1290,7 @@ name = "zheka"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "adaptix" },
     { name = "alembic" },
     { name = "alembic-postgresql-enum" },
     { name = "dishka" },
@@ -1331,6 +1332,7 @@ tests = [
 
 [package.metadata]
 requires-dist = [
+    { name = "adaptix", specifier = "==3.0.0b12" },
     { name = "alembic", specifier = "==1.20.0" },
     { name = "alembic-postgresql-enum", specifier = "==1.10.0" },
     { name = "dishka", specifier = "==1.10.1" },
