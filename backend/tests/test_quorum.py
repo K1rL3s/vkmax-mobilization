@@ -31,3 +31,4 @@ def test_total_area_zero_gives_zero_percent_and_no_quorum() -> None:
     assert result.total_area == 0
     assert result.area_percent == 0
     assert result.quorum_reached is False
+    assert (result.voted_flats, result.total_flats) == (0, 2)

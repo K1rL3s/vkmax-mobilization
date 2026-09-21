@@ -26,8 +26,8 @@ def check_transition(
 ) -> None:
     if _CHAIN.index(target) != _CHAIN.index(current) + 1:
         raise InvalidState(BACKWARD)
-    # исполнитель, которому назначили NEW, принимает ее сам
     if target is not RequestStatus.DONE:
+        # исполнитель, которому назначили NEW, принимает ее сам
         if by_role in {RequestActorRole.STAFF, RequestActorRole.EXECUTOR}:
             return
         raise InvalidState(ROLE_CANNOT)

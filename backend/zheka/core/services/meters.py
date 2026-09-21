@@ -13,18 +13,17 @@ class MeterUpdateDraft(ZhekaType):
     serial: str
     next_verification_date: date | None = None
 
+    def checked_serial(self) -> str:
+        if self.tariff_zones not in {1, 2}:
+            raise InvalidValue("У счетчика может быть одна или две тарифные зоны")
+        serial = self.serial.strip()
+        if not serial:
+            raise InvalidRequest("Укажите номер счетчика")
+        return serial
+
 
 class MeterDraft(MeterUpdateDraft):
     type: MeterType
-
-
-def _checked_serial(draft: MeterUpdateDraft) -> str:
-    if draft.tariff_zones not in {1, 2}:
-        raise InvalidValue("У счетчика может быть одна или две тарифные зоны")
-    serial = draft.serial.strip()
-    if not serial:
-        raise InvalidRequest("Укажите номер счетчика")
-    return serial
 
 
 class MetersService:
@@ -38,7 +37,7 @@ class MetersService:
         self, user_id: UserId, flat_id: FlatId, draft: MeterDraft
     ) -> MeterCard:
         await self._access.can_manage_meter(user_id, flat_id)
-        serial = _checked_serial(draft)
+        serial = draft.checked_serial()
 
         meter = await self._meters.add(
             flat_id,
@@ -56,7 +55,7 @@ class MetersService:
     ) -> MeterCard:
         meter = await self._access.get_meter(meter_id)
         await self._access.can_manage_meter(user_id, meter.flat_id)
-        serial = _checked_serial(draft)
+        serial = draft.checked_serial()
 
         await self._meters.update(
             meter, draft.tariff_zones, serial, draft.next_verification_date

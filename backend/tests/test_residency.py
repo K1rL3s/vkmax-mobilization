@@ -90,8 +90,14 @@ async def _block(
     await residents_repo.set_status(resident, ResidentStatus.BLOCKED, reason)
 
 
-@pytest.mark.parametrize("reason", [BLOCK_REASON, None])
-def test_resolve_residency_refuses_a_blocked_resident(reason: str | None) -> None:
+@pytest.mark.parametrize(
+    ("reason", "detail"),
+    [(BLOCK_REASON, f"{BLOCKED}: {BLOCK_REASON}"), (None, BLOCKED)],
+    ids=["reason", "no-reason"],
+)
+def test_resolve_residency_refuses_a_blocked_resident(
+    reason: str | None, detail: str
+) -> None:
     resident = Resident(
         user_id=UserId(1),
         house_id=HouseId(1),
@@ -103,7 +109,7 @@ def test_resolve_residency_refuses_a_blocked_resident(reason: str | None) -> Non
     with pytest.raises(NotEnoughRights) as refused:
         resolve_residency([resident], None)
 
-    assert (reason or BLOCKED) in str(refused.value)
+    assert str(refused.value) == detail
 
 
 DEPENDENCIES = [residency_for, residency_for_flat, residency_for_flat_house]

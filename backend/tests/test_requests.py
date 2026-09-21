@@ -17,7 +17,11 @@ from tests.conftest import (
 
 from zheka.api.dependencies.current_account import CurrentAccount
 from zheka.api.routes.requests import classify_request_text, export_request
-from zheka.api.schemas.requests import ClassifyRequestRequest, RequestCard
+from zheka.api.schemas.requests import (
+    AdminRequestCard,
+    ClassifyRequestRequest,
+    RequestCard,
+)
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.config import YandexConfig
@@ -387,6 +391,7 @@ async def test_create_joins_an_open_group_of_the_same_house_and_category(
 
     assert first.request.group_id == group_id
     assert second.group_size == 2
+    assert RequestCard.of(second, [], []).group_id == group_id
 
 
 async def test_create_refuses_a_group_of_another_house(
@@ -460,6 +465,10 @@ async def test_card_takes_the_current_house_org_and_the_category_hours(
 
     assert card.org_name == org.name
     assert card.normative_hours == 24
+    admin_card = AdminRequestCard.of_admin(
+        await _admin(session).card(other.org_id, created.request.id), [], []
+    )
+    assert (admin_card.org_name, admin_card.normative_hours) == (org.name, 24)
 
 
 async def test_card_without_a_house_org_serializes_an_explicit_null(
@@ -606,6 +615,7 @@ async def test_auto_close_ends_an_expired_review_once_and_tells_the_author(
     assert logs[-1].by_role == RequestActorRole.SYSTEM
     [event] = await _events(session, EventType.REQUEST_AUTO_CLOSED)
     assert event.payload == {"request_id": stale}
+    assert await _events(session, EventType.REQUEST_REVIEWED) == []
     [changed] = await _events(session, EventType.REQUEST_STATUS_CHANGED)
     assert changed.user_id is None
     assert changed.payload["by_role"] == RequestActorRole.SYSTEM.value

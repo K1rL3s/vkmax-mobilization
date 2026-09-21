@@ -155,7 +155,7 @@ ignore = [
 known-local-folder = ["zheka"]
 case-sensitive = true
 combine-as-imports = true
-split-on-trailing-comma = false
+split-on-trailing-comma = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "PLR2004", "D", "A005"]

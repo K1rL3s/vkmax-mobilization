@@ -29,7 +29,10 @@ def parse_reading(text: str) -> int | None:
     if match is None:
         return None
     whole, _, frac = match.group().replace(",", ".").partition(".")
-    return int(whole) * 1000 + int((frac + "000")[:3])
+    try:
+        return int(whole) * 1000 + int((frac + "000")[:3])
+    except ValueError:
+        return None
 
 
 def _full_text(data: Mapping[str, Any]) -> str | None:

@@ -22,22 +22,31 @@ def test_to_kopecks_rounds_half_up(product: int, is_area: bool, kopecks: int) ->
     assert to_kopecks(product, is_area=is_area) == kopecks
 
 
-def test_effects_always_sum_to_the_line_delta_even_where_naive_rounding_breaks_it() -> (
-    None
-):
-    # тариф вырос с 0 до 33_334 (1/10000 руб/ед), объем - с 5 до 7 (1/1000 ед).
-    # amount задан как есть, breakdown() его не пересчитывает.
-    # Наивный (v_now - v_prev) * t_prev = 0 дал бы tariff_effect(2) + 0 != delta(3)
-    previous = ChargeLine(service=ServiceType.COLD_WATER, amount=2, tariff=0, volume=5)
-    current = ChargeLine(
-        service=ServiceType.COLD_WATER, amount=5, tariff=33_334, volume=7
-    )
+@pytest.mark.parametrize(
+    ("previous", "current", "effects"),
+    [
+        # тариф вырос с 0 до 33_334 (1/10000 руб/ед), объем - с 5 до 7 (1/1000 ед).
+        # amount задан как есть, breakdown() его не пересчитывает.
+        # Наивный (v_now - v_prev) * t_prev = 0 дал бы tariff_effect(2) + 0 != delta(3)
+        pytest.param((2, 0, 5), (5, 33_334, 7), (3, 2, 1), id="naive-rounding"),
+        pytest.param(
+            (500, 100_000, 500), (800, 100_000, 800), (300, 0, 300), id="volume-only"
+        ),
+    ],
+)
+def test_effects_always_sum_to_the_line_delta_even_where_naive_rounding_breaks_it(
+    previous: tuple[int, int, int],
+    current: tuple[int, int, int],
+    effects: tuple[int, int, int],
+) -> None:
+    def line_of(amount: int, tariff: int, volume: int) -> ChargeLine:
+        return ChargeLine(
+            service=ServiceType.COLD_WATER, amount=amount, tariff=tariff, volume=volume
+        )
 
-    line = breakdown([current], [previous]).lines[0]
+    line = breakdown([line_of(*current)], [line_of(*previous)]).lines[0]
 
-    assert line.delta == 3
-    assert line.tariff_effect == 2
-    assert line.volume_effect == 1
+    assert (line.delta, line.tariff_effect, line.volume_effect) == effects
 
 
 @pytest.mark.parametrize(

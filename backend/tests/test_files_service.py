@@ -39,11 +39,16 @@ def _generated_name() -> str:
     return f"{uuid4().hex}.jpg"
 
 
-async def test_save_rejects_oversized_upload_before_reading_it_fully(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("content_type", "size"),
+    [("image/png", 5 * 1024 * 1024), ("application/pdf", 1024)],
+    ids=["oversized", "not-an-image"],
+)
+async def test_save_rejects_an_upload_before_reading_it_fully(
+    tmp_path: Path, content_type: str, size: int
 ) -> None:
     service = _make_service(tmp_path, max_size_mb=1)
-    upload = _FakeUpload("image/png", size=5 * 1024 * 1024)
+    upload = _FakeUpload(content_type, size=size)
 
     with pytest.raises(InvalidRequest):
         await service.save(upload)  # type: ignore[arg-type]

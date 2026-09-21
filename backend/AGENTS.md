@@ -280,7 +280,7 @@ no evidence in a report or review.
   `core/services/` (e.g. `HOUSE_SEARCH` / `HOUSE_LINKED` in `HousesService`,
   `CHAT_BOUND`, `LLM_SUGGESTED`), so a handler or route recording them doubles
   the count: pass the service `source`, `method` or `entrance`. 4 in bot
-  handlers: `BOT_START` (`bot/handlers/commands/start.py`), `BOT_STOPPED`,
+  handlers: `BOT_START` (`bot/handlers/commands/start.py`, `deeplinks.py`), `BOT_STOPPED`,
   `BOT_MUTED`, `BOT_UNMUTED` (`bot/handlers/lifecycle.py`); `BOT_START` never
   in the fallback router or a getter. `MINIAPP_OPEN` / `ANNOUNCEMENT_CLICK` come
   from the client via `POST /me/events` (whitelist:

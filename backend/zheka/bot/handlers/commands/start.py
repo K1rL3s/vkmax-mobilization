@@ -23,22 +23,22 @@ HELP_TEXT = (
 SEEDING_TEXT = "Заполняю демо-данные, это займет до минуты"
 
 
+@router.bot_started()
+@router.message_created(CommandStart())
 async def start_handler(
     _update: BotStarted | MessageCreated,
     dialog_manager: DialogManager,
     user: User,
     events_service: FromDishka[EventsService],
 ) -> None:
-    # единственное место BOT_START: апдейт без состояния - не старт, а геттер
-    # окна перерисовывается на каждое нажатие
+    # BOT_START пишут только этот обработчик и deeplink_handler, по разу на старт:
+    # апдейт без состояния - не старт, а геттер окна перерисовывается на каждое нажатие
     await events_service.record(
-        EventType.BOT_START, user_id=user.id, source=EventSource.DIRECT.value
+        EventType.BOT_START,
+        user_id=user.id,
+        source=EventSource.DIRECT.value,
     )
     await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)
-
-
-router.bot_started()(start_handler)
-router.message_created(CommandStart())(start_handler)
 
 
 @router.message_created(Command("help"))

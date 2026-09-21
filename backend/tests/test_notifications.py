@@ -50,16 +50,17 @@ class _FakeSender(MaxSender):
     __slots__ = ("sent",)
 
     def __init__(self) -> None:
-        self.sent: list[bool] = []
+        self.sent: list[tuple[MaxUserId | None, bool]] = []
 
     async def send_message(
         self,
         text: str,  # noqa: ARG002
         *,
+        user_id: MaxUserId | None = None,
         notify: bool = False,
         **kwargs: Any,  # noqa: ARG002
     ) -> SendMessageResult | None:
-        self.sent.append(notify)
+        self.sent.append((user_id, notify))
         return None
 
 
@@ -174,8 +175,10 @@ async def test_fan_out_sends_with_the_resolved_sound(
 
     count = await _fan_out(sender, repo, [data.user_id], TEXT, category, mandatory)
 
+    user = await UsersRepo(session).get_by_id(data.user_id)
+    assert user is not None
     assert count == len(sent)
-    assert sender.sent == sent
+    assert sender.sent == [(user.max_user_id, flag) for flag in sent]
 
 
 async def test_notify_user_reaches_the_broker(

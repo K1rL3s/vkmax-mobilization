@@ -283,7 +283,13 @@ def test_is_spike(current: int, history: list[int], spike: bool) -> None:
 
 @pytest.mark.parametrize(
     ("text", "value"),
-    [("123.45", 123_450), ("123,45", 123_450), ("0123", 123_000), ("garbage", None)],
+    [
+        ("123.45", 123_450),
+        ("123,45", 123_450),
+        ("0123", 123_000),
+        ("garbage", None),
+        pytest.param("1" * 4301, None, id="over-int-digit-limit"),
+    ],
 )
 def test_parse_reading(text: str, value: int | None) -> None:
     assert parse_reading(text) == value

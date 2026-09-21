@@ -321,7 +321,9 @@ async def test_update_settings_rejects_values_outside_the_limits(
         )
 
 
-@pytest.mark.parametrize(("expires_in_hours", "max_activations"), [(0, 1), (72, 0)])
+@pytest.mark.parametrize(
+    ("expires_in_hours", "max_activations"), [(0, 1), (-1, 1), (72, 0)]
+)
 async def test_create_invite_rejects_dead_limits(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],

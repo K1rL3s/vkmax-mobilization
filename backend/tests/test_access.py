@@ -303,7 +303,8 @@ async def test_a_repeated_pick_is_a_no_op_and_a_move_keeps_the_first_answer(
 
     assert again.my_slot_id == first_slot
     assert [data.taken for data in again.slots] == [1, 0]
-    assert len(await _events(session, EventType.ACCESS_SLOT_PICKED)) == 1
+    [event] = await _events(session, EventType.ACCESS_SLOT_PICKED)
+    assert event.payload["slot_id"] == first_slot
 
     moved = await service.pick(user_id, request_id, second_slot)
     after = await service.grid(fixture.org_id, request_id)
