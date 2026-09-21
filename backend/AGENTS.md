@@ -525,22 +525,22 @@ the next agent does not pay for them again.
   json in `startParam` so a deeplink can land on a mini-app screen). It waits
   for its frontend half and blocks no backend block; block 16 has no mini-app
   screen to route to.
-- The forty-five `EventType` members divide with nothing left over: 36 + 4
-  + 2 + 3. Thirty-six are recorded **inside** `core/services/`, so a bot
-  handler or a route that records one of those again doubles the statistic -
-  pass the service the right `source` or `method` and let it write; `CHAT_BOUND`
-  and `CHAT_ADMIN_GRANTED` are among them, in `ChatsService`, and so are
-  `READING_REMINDER_SENT` and `APPOINTMENT_REMINDER_SENT`, in
-  `RemindersService`. Four are recorded
-  in bot handlers: `BOT_START` in `bot/handlers/commands/start.py`,
-  `BOT_STOPPED`, `BOT_MUTED` and `BOT_UNMUTED` in `bot/handlers/lifecycle.py`.
+- The forty-five `EventType` members divide with nothing left over:
+  37 + 4 + 2 + 2. Thirty-seven are recorded **inside** `core/services/`, so a
+  bot handler or a route that records one of those again doubles the
+  statistic - pass the service the right `source` or `method` and let it
+  write; `CHAT_BOUND` and `CHAT_ADMIN_GRANTED` are among them, in
+  `ChatsService`, so are `READING_REMINDER_SENT` and
+  `APPOINTMENT_REMINDER_SENT`, in `RemindersService`, and so is
+  `REQUEST_EXPORTED`, in `RequestsService.export`. Four are recorded in bot
+  handlers: `BOT_START` in `bot/handlers/commands/start.py`, `BOT_STOPPED`,
+  `BOT_MUTED` and `BOT_UNMUTED` in `bot/handlers/lifecycle.py`.
   `MINIAPP_OPEN` and `ANNOUNCEMENT_CLICK` are recorded by `POST /me/events`,
   where the client sends the type in the body, so no `EventType.MINIAPP_OPEN`
   appears at any `record` call and grep alone will tell you they are written
   nowhere; the `Literal` in `TrackEventRequest` is the whitelist, and those two
-  are the only events a client may send. The remaining three have no writer yet
-  and get one in their own block: `REQUEST_EXPORTED`, `LLM_SUGGESTED`,
-  `LLM_ACCEPTED`.
+  are the only events a client may send. The remaining two have no writer yet
+  and get one in their own block: `LLM_SUGGESTED` and `LLM_ACCEPTED`.
 - The truth about maxo is in the installed sources,
   `.venv/lib/python3.12/site-packages/maxo/`, never in the plan and never from
   memory - the plan was wrong four times in block 15 and reading the source

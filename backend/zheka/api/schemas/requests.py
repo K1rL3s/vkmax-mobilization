@@ -238,8 +238,6 @@ class RepeatRequestRequest(BaseSchema):
 
 class RequestExport(BaseSchema):
     request: RequestCard
-    org_name: str | None
-    # документ юридической силы не имеет, текст рисует фронт
     disclaimer: str
 
 

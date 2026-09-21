@@ -589,6 +589,16 @@ class RequestsService:
             raise InvalidState(REJECT_NOT_ON_REVIEW)
         return await self.repeat(user_id, request_id, comment, [], channel)
 
+    async def export(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
+        card = await self.get_card(user_id, request_id)
+        # каждое открытие печатной страницы - отдельная выгрузка
+        await self._events.record(
+            EventType.REQUEST_EXPORTED,
+            user_id=user_id,
+            request_id=request_id,
+        )
+        return card
+
 
 async def build_rows(
     requests_repo: RequestsRepo,

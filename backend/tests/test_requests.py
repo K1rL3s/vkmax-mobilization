@@ -14,6 +14,8 @@ from tests.conftest import (
     make_notifications_service,
 )
 
+from zheka.api.dependencies.current_account import CurrentAccount
+from zheka.api.routes.requests import export_request
 from zheka.api.schemas.requests import RequestCard, RequestCategoryItem
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -38,6 +40,7 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import FlatId, HouseId, MaxUserId, RequestGroupId, RequestId, UserId
+from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.request_groups import GroupingService
@@ -47,9 +50,11 @@ from zheka.core.services.requests import (
     RequestDraft,
     RequestsService,
 )
+from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
 from zheka.infra.database.models import (
     Event,
     Flat,
+    OrgMember,
     Request,
     RequestGroup,
     RequestPhoto,
@@ -947,3 +952,93 @@ async def test_closing_a_review_records_the_status_change(
     assert {(event.payload["from"], event.payload["to"]) for event in events} == {
         (RequestStatus.ON_REVIEW.value, RequestStatus.DONE.value)
     }
+
+
+async def test_export_prints_the_whole_life_of_the_request(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    staff = await _add_user(session)
+    session.add(OrgMember(org_id=own.org_id, user_id=staff, role=OrgRole.EMPLOYEE))
+    await session.flush()
+    service = _make_service(session)
+    admin = AdminRequestsService(
+        RequestsRepo(session),
+        HousesRepo(session),
+        UsersRepo(session),
+        OrgsRepo(session),
+        GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        make_notifications_service(session),
+        EventsService(EventsRepo(session)),
+    )
+    issue = _photo()
+    result = _photo()
+    created = await service.create(own.user_id, own.house_id, _draft(photos=[issue]))
+    request_id = RequestId(created.request.id)
+    await admin.reply(own.org_id, request_id, "Сантехник будет завтра", staff)
+    for target in (
+        RequestStatus.ACCEPTED,
+        RequestStatus.IN_PROGRESS,
+        RequestStatus.ON_REVIEW,
+    ):
+        await admin.change_status(own.org_id, request_id, target, None, staff)
+    await RequestsRepo(session).add_photo(
+        request_id,
+        result,
+        RequestPhotoKind.RESULT,
+        staff,
+    )
+    await service.accept(own.user_id, request_id)
+    await service.rate(own.user_id, request_id, 4, "Быстро, но натоптали")
+    account = CurrentAccount(
+        user_id=own.user_id,
+        max_user_id=MaxUserId(secrets.randbits(48)),
+        name="Житель",
+        consent_at=datetime.now(UTC),
+    )
+
+    export = await export_request(
+        request_id,
+        account,
+        service,
+        FilesService(make_config().files, "test-token"),
+    )
+
+    card = export.request
+    assert export.disclaimer == REQUEST_EXPORT_DISCLAIMER
+    assert card.id == request_id
+    assert [message.text for message in card.messages] == ["Сантехник будет завтра"]
+    assert [(row.to_status, row.by_role) for row in card.timeline] == [
+        (RequestStatus.NEW, RequestActorRole.RESIDENT),
+        (RequestStatus.ACCEPTED, RequestActorRole.STAFF),
+        (RequestStatus.IN_PROGRESS, RequestActorRole.STAFF),
+        (RequestStatus.ON_REVIEW, RequestActorRole.STAFF),
+        (RequestStatus.DONE, RequestActorRole.RESIDENT),
+    ]
+    assert card.rating == 4
+    assert card.feedback == "Быстро, но натоптали"
+    # фото результата в "было" выдало бы работу УК за ущерб
+    assert [photo.name for photo in card.photos] == [issue]
+    assert [photo.name for photo in card.result_photos] == [result]
+    assert all("sig=" in photo.url for photo in [*card.photos, *card.result_photos])
+    events = await _events(session, EventType.REQUEST_EXPORTED)
+    assert [(event.user_id, event.payload["request_id"]) for event in events] == [
+        (own.user_id, request_id),
+    ]
+
+
+async def test_export_hides_a_request_of_another_resident_and_records_nothing(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    neighbour = await _add_user(session)
+    await _add_resident(session, neighbour, own.house_id)
+    service = _make_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+
+    with pytest.raises(EntityNotFound):
+        await service.export(neighbour, RequestId(created.request.id))
+
+    assert await _events(session, EventType.REQUEST_EXPORTED) == []

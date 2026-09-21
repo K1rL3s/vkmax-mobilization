@@ -19,6 +19,7 @@ from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
+from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
 
 router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
 
@@ -163,5 +164,11 @@ async def accept_request(
 async def export_request(
     request_id: RequestId,
     current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
 ) -> RequestExport:
-    raise NotImplementedError("ещё не реализовано")
+    card = await requests_service.export(current_account.user_id, request_id)
+    return RequestExport(
+        request=_card(card, files_service),
+        disclaimer=REQUEST_EXPORT_DISCLAIMER,
+    )

@@ -413,3 +413,12 @@ def test_metric_unit_carries_points_additively(openapi: dict[str, Any]) -> None:
         "points",
     ]
     assert "points" in schema["BenchmarkMetric"]["properties"]["value"]["description"]
+
+
+def test_request_export_is_the_card_and_the_disclaimer(
+    openapi: dict[str, Any],
+) -> None:
+    # название УК уже есть в карточке, второе поле с тем же значением разъедется
+    schema = openapi["components"]["schemas"]["RequestExport"]
+
+    assert set(schema["properties"]) == {"request", "disclaimer"}
