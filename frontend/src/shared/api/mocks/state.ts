@@ -858,6 +858,15 @@ const SEED_POLLS: MockPoll[] = [
 const seedPolls = (): MockPoll[] =>
   SEED_POLLS.map((poll) => ({ ...poll, votes: [...poll.votes] }));
 
+const SEED_ORGS: Schemas["OrgMembership"][] = [
+  {
+    org_id: ZHILSERVIS.id,
+    name: ZHILSERVIS.name,
+    role: "creator",
+    is_demo: true,
+  },
+];
+
 const TAKEN_FLAT_IDS = new Set<number>([103]);
 
 const state = {
@@ -868,6 +877,9 @@ const state = {
     consent_version: null as string | null,
   },
   residencies: [] as MockResidency[],
+  // сотрудник УК часто живёт в доме своей же организации - мок-пользователь
+  // держит обе роли, иначе кабинет УК локально не открыть
+  orgs: [...SEED_ORGS],
   verifications: [] as MockVerification[],
   demand: new Map<number, number>([[4, 11]]),
   demandSent: new Set<number>(),
@@ -888,6 +900,7 @@ export const resetState = (): void => {
   state.user.consent_at = null;
   state.user.consent_version = null;
   state.residencies = [];
+  state.orgs = [...SEED_ORGS];
   state.verifications = [];
   state.demand = new Map([[4, 11]]);
   state.demandSent = new Set();
@@ -1460,7 +1473,7 @@ export const me = (): Schemas["MeResponse"] => ({
   consent_at: state.user.consent_at,
   consent_version: state.user.consent_version,
   residencies: state.residencies.map(residencySummary),
-  orgs: [],
+  orgs: state.orgs,
   is_demo: true,
 });
 

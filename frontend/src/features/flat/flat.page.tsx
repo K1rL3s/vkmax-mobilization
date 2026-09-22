@@ -1,7 +1,9 @@
 import { Button, Flex, Panel, Tappable, Typography } from "@maxhub/max-ui";
 import { generatePath, Link, Navigate, useNavigate } from "react-router-dom";
 
+import { ChargesSection } from "@/features/charges";
 import type { ConfirmationView } from "@/features/flat-confirmation";
+import { FlatResidentsSection } from "@/features/flat-invite";
 import { Routes } from "@/shared/model/routes";
 import { Chevron } from "@/shared/ui/chevron";
 import { homeIcon } from "@/shared/ui/icon";
@@ -131,6 +133,9 @@ const FlatPage = () => {
           {about()}
         </section>
       </Flex>
+
+      <ChargesSection />
+      <FlatResidentsSection />
     </Panel>
   );
 };

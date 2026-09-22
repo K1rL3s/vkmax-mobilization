@@ -32,6 +32,16 @@ export const welcomeLoader = async () => {
   return null;
 };
 
+export const adminLoader = async () => {
+  const session = await loadSession();
+
+  if (session.orgs.length === 0) {
+    throw redirect(Routes.HOME);
+  }
+
+  return null;
+};
+
 export const sessionLoader = async () => {
   await loadSession();
 
