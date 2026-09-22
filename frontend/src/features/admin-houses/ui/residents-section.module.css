@@ -1,0 +1,24 @@
+.Title {
+  margin: 0;
+}
+
+.Row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* строки одной высоты по имени: длинное полностью видно в шторке действий */
+.Ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

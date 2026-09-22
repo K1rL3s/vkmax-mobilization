@@ -1,0 +1,35 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px 24px;
+
+  h1 {
+    margin: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .CellIcon {
+    color: var(--icon-primary);
+  }
+}

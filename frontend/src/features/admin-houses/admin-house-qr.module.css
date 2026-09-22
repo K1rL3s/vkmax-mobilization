@@ -1,0 +1,106 @@
+.Page {
+  flex: 1;
+  gap: 16px;
+  padding: 16px 16px 24px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+/* у Flex кита свой display, поэтому прячется обёртка, а не он */
+.Screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* лист всегда чёрным по белому: QR на тёмной подложке камера читает хуже,
+   а на бумаге тёмной темы нет */
+.Sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border-radius: 16px;
+  background-color: #fff;
+  color: #000;
+  text-align: center;
+}
+
+.Code {
+  width: min(220px, 100%);
+  height: auto;
+}
+
+.Entrance {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+}
+
+.Address {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.Hint {
+  margin: 0;
+  color: #555;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+@page {
+  size: A4;
+  margin: 20mm;
+}
+
+/* печать - по подъезду на лист A4, без заголовка экрана и кнопки */
+@media print {
+  .Page {
+    padding: 0;
+    gap: 0;
+    background-color: #fff;
+  }
+
+  .Screen {
+    display: none;
+  }
+
+  .Sheet {
+    box-sizing: border-box;
+    justify-content: center;
+    gap: 8mm;
+    height: 250mm;
+    padding: 0;
+    border-radius: 0;
+    break-after: page;
+  }
+
+  .Sheet:last-child {
+    break-after: auto;
+  }
+
+  .Code {
+    width: 130mm;
+  }
+
+  .Entrance {
+    font-size: 44pt;
+    line-height: 1.1;
+  }
+
+  .Address {
+    font-size: 20pt;
+    line-height: 1.3;
+  }
+
+  .Hint {
+    max-width: 170mm;
+    font-size: 15pt;
+    line-height: 1.4;
+  }
+}

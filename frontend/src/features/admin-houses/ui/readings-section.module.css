@@ -1,0 +1,18 @@
+.Title {
+  margin: 0;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Row {
+  gap: 4px;
+}
+
+.Toggle {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}

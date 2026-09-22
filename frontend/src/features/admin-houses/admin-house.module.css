@@ -1,0 +1,50 @@
+.Page {
+  flex: 1;
+  gap: 20px;
+  padding: 16px 16px 24px;
+
+  h1 {
+    margin: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .Stat {
+    min-width: 0;
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .wide {
+    grid-column: 1 / -1;
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .CellIcon {
+    color: var(--icon-primary);
+  }
+}

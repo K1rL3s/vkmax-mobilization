@@ -1,0 +1,32 @@
+.Title {
+  margin: 0;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.CodeBox {
+  padding: 12px;
+  border-radius: 12px;
+  background-color: var(--controls-inactive);
+}
+
+.Code {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 32px;
+  letter-spacing: 0.06em;
+}
+
+.Steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
