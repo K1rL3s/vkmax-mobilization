@@ -245,8 +245,9 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   only on `false -> true`. A failed send without rights opens
   `ChatBinding.rights` for `bound_by` with sound.
 - Pins (`/pin`, `/unpin`, bound chats only, any other chat is ignored
-  silently) live in `chat_pins`; a command that worked gets a reply, so the
-  chat sees the bot reacted. The bot sends with link previews off
+  silently) live in `chat_pins`; an `/unpin` that worked gets a reply, so the
+  chat sees the bot reacted, and `/pin` gets none, since the list pinned again
+  with sound is its answer. The bot sends with link previews off
   (`BotDefaults` in `zheka/di/max_bot.py`), but MAX takes no such flag on an
   edit. `ChatsService` writes pins under the chat row lock (`ChatsRepo.lock`);
   only `sync_chat_pins` sends the list, rendered by `pins_text` from the

@@ -207,10 +207,10 @@ class ChatsService:
         chat_id: MaxChatId,
         target: MessageRef | None,
         text: str | None,
-    ) -> bool:
+    ) -> None:
         bound = await self._bound(chat_id)
         if bound is None:
-            return False
+            return
         chat, house_id = bound
         author, binder = await self._pinner(user_id, chat, house_id)
         if target is None:
@@ -245,7 +245,6 @@ class ChatsService:
                 by_role=binder.value,
             )
         self._notifications.sync_chat_pins(chat_id, notify=True)
-        return True
 
     async def unpin(
         self,

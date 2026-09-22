@@ -21,7 +21,6 @@ from zheka.core.services.chats import ChatsService, MessageRef
 
 router = Router(name=__name__)
 
-PINNED = "📌 Добавил в список закрепленных"
 UNPINNED = "🗑 Убрал из списка закрепленных"
 
 
@@ -56,14 +55,12 @@ async def pin_handler(
     chats_service: FromDishka[ChatsService],
     user: User | None = None,
 ) -> None:
-    pinned = await chats_service.pin(
+    await chats_service.pin(
         None if user is None else user.id,
         MaxChatId(update.message.recipient.unsafe_chat_id),
         _replied(update),
         command.args,
     )
-    if pinned:
-        await update.reply_text(PINNED, notify=False)
 
 
 @router.message_created(Command("unpin"), IN_CHAT)

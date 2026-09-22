@@ -61,7 +61,7 @@ from zheka.bot import BotSetup
 from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
-from zheka.bot.handlers.chats.router import PINNED, UNPINNED
+from zheka.bot.handlers.chats.router import UNPINNED
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.commands.deeplinks import (
     DEMO_ADMIN_NOTICE,
@@ -2181,8 +2181,7 @@ async def test_a_pin_in_the_house_chat_lists_the_replied_message(
         "chat_id": chat_id,
         "notify": True,
     }
-    assert recorder.texts == [PINNED]
-    assert [link.type for link in recorder.links] == [MessageLinkType.REPLY]
+    assert recorder.texts == []
 
 
 async def test_unpin_takes_a_number_and_replies_in_the_chat(
