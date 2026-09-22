@@ -5,6 +5,7 @@ import secrets
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, time, timedelta
+from decimal import Decimal
 from html import escape
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -30,6 +31,7 @@ from maxo.types import (
     BotStopped,
     DialogMuted,
     DialogUnmuted,
+    LocationAttachment,
     Message,
     MessageBody,
     MessageCreated,
@@ -38,6 +40,7 @@ from maxo.types import (
     PhotoAttachment,
     PhotoAttachmentPayload,
     Recipient,
+    RequestGeoLocationButton,
     SendMessageResult,
 )
 from maxo.types.chat import Chat as MaxChat
@@ -67,7 +70,24 @@ from zheka.bot.handlers.consent.windows import GIVEN_TEXT
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
 from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
 from zheka.bot.handlers.menu.windows import MENU_TEXT
-from zheka.bot.handlers.requests.windows import NOT_CONNECTED_TEXT
+from zheka.bot.handlers.onboarding.handlers import HOUSE_LINKED
+from zheka.bot.handlers.onboarding.windows import (
+    CITY_TEXT,
+    FLAT_LIST_TEXT,
+    FLAT_NUMBER_TEXT,
+    HOUSE_TEXT as SEARCH_HOUSE_TEXT,
+    METHOD_TEXT,
+    MISSED_TEXT,
+    NEARBY_TEXT,
+    STREET_TEXT,
+)
+from zheka.bot.handlers.requests.windows import (
+    CATEGORY_TEXT,
+    CONFIRM_TEXT,
+    DESCRIPTION_TEXT,
+    NOT_CONNECTED_TEXT,
+    PHOTO_TEXT,
+)
 from zheka.bot.handlers.review.handlers import repeat_sent
 from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TEXT
 from zheka.bot.message_manager import ZhekaMessageManager
@@ -150,6 +170,7 @@ from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
 from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.events import events_table
+from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import residents_table
@@ -501,15 +522,25 @@ async def _bot_started(client: BotClient, payload: Omittable[str | None]) -> Non
     )
 
 
-async def _bot_house(session: AsyncSession) -> tuple[HouseId, str]:
+async def _bot_house(
+    session: AsyncSession,
+    *,
+    city: str = "Тестоград",
+    street: str = "Диплинковая",
+    building: str | None = None,
+    lat: Decimal | None = None,
+    lon: Decimal | None = None,
+) -> tuple[HouseId, str]:
     house = House(
         timezone="Europe/Moscow",
         region="Тестовая область",
-        city="Тестоград",
-        street="Диплинковая",
-        building=secrets.token_hex(2),
+        city=city,
+        street=street,
+        building=building or secrets.token_hex(2),
         cadastral_no=secrets.token_hex(8),
         chat_binding_code=secrets.token_hex(4),
+        lat=lat,
+        lon=lon,
     )
     session.add(house)
     await session.commit()
@@ -2402,6 +2433,438 @@ async def test_the_org_name_is_escaped_in_the_invite_notice(
     assert notices.texts == [notice]
 
 
+FIND_HOUSE = InlineButtonTextLocator("🔎 Найти дом")
+BY_ADDRESS = InlineButtonTextLocator("🗺 Выбрать адрес")
+BACK_BUTTON = InlineButtonTextLocator("⬅️ Назад")
+NAVIGATION = ["⬅️ Назад", "🏠 Меню"]
+
+
+async def _search_by_address(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    await client.click(message_manager.last_message(), FIND_HOUSE)
+    await client.click(message_manager.last_message(), BY_ADDRESS)
+
+
+def _button_texts(message: Message) -> list[str]:
+    keyboard = message.body.keyboard
+    if keyboard is None:
+        return []
+    return [str(button.text) for row in keyboard.buttons for button in row]
+
+
+def _spot() -> tuple[Decimal, Decimal]:
+    return (
+        Decimal(secrets.randbelow(60_000_000) + 10_000_000) / 1_000_000,
+        Decimal(secrets.randbelow(170_000_000)) / 1_000_000,
+    )
+
+
+async def _send_location(client: BotClient, lat: Decimal, lon: Decimal) -> None:
+    message = Message(
+        sender=client.user,
+        recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=client.chat.chat_id),
+        timestamp=datetime.now(UTC),
+        body=MessageBody(
+            mid=secrets.token_hex(4),
+            seq=1,
+            text=None,
+            attachments=[LocationAttachment(latitude=float(lat), longitude=float(lon))],
+        ),
+    )
+    await _feed(client, MessageCreated(message=message, timestamp=datetime.now(UTC)))
+
+
+def _text(message_manager: MockMessageManager) -> str:
+    return message_manager.last_message().body.text or ""
+
+
+async def test_typing_narrows_each_address_step_and_picks_a_single_match(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    tag = secrets.token_hex(3)
+    city, other_city = f"Ввод{tag}а", f"Ввод{tag}б"
+    street, other_street = f"Улица{tag}а", f"Улица{tag}б"
+    for building in ("5а", "5б", "9"):
+        await _bot_house(bot_session, city=city, street=street, building=building)
+    await _bot_house(bot_session, city=city, street=other_street)
+    await _bot_house(bot_session, city=other_city, street=street)
+    await _bot_house(bot_session, city=f"Прочий{tag}", street=street)
+    await _bot_house(bot_session, city=city, street=f"Прочая{tag}")
+    await _search_by_address(client, message_manager)
+
+    await client.send(f"Ввод{tag}")
+    assert _button_texts(message_manager.last_message()) == [
+        f"🏙 {city}",
+        f"🏙 {other_city}",
+        *NAVIGATION,
+    ]
+    await client.send(f"Нет{tag}")
+    assert MISSED_TEXT.format(missed=f"Нет{tag}") in _text(message_manager)
+    await client.send(city)
+    assert STREET_TEXT.format(city=city) in _text(message_manager)
+
+    await client.send(f"Улица{tag}")
+    assert _button_texts(message_manager.last_message()) == [
+        f"🛣 {street}",
+        f"🛣 {other_street}",
+        *NAVIGATION,
+    ]
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert CITY_TEXT in _text(message_manager)
+    assert _button_texts(message_manager.last_message()) != NAVIGATION
+    await client.send(city)
+    await client.send(f"Нет{tag}")
+    assert MISSED_TEXT.format(missed=f"Нет{tag}") in _text(message_manager)
+    await client.send(street)
+    assert SEARCH_HOUSE_TEXT.format(street=street) in _text(message_manager)
+
+    await client.send("5")
+    assert _button_texts(message_manager.last_message()) == [
+        "🏢 5а",
+        "🏢 5б",
+        *NAVIGATION,
+    ]
+    await client.send("7")
+    assert MISSED_TEXT.format(missed="7") in _text(message_manager)
+    await client.send("9")
+    assert f"{city}, {street}, 9" in _text(message_manager)
+
+
+async def test_the_location_button_on_the_method_window_lists_houses_nearby(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    lat, lon = _spot()
+    await _bot_house(
+        bot_session,
+        street="Геопозиционная",
+        building="3",
+        lat=lat,
+        lon=lon,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    await client.click(message_manager.last_message(), FIND_HOUSE)
+
+    keyboard = message_manager.last_message().body.keyboard
+    assert keyboard is not None
+    [geo] = [
+        button
+        for row in keyboard.buttons
+        for button in row
+        if isinstance(button, RequestGeoLocationButton)
+    ]
+    assert geo.text == "📍 По геолокации"
+    await _send_location(client, lat, lon)
+
+    assert NEARBY_TEXT in _text(message_manager)
+    assert _button_texts(message_manager.last_message()) == [
+        "🏢 Геопозиционная, 3",
+        *NAVIGATION,
+    ]
+
+
+@pytest.mark.parametrize("by_geo", [False, True])
+async def test_back_from_the_house_list_returns_to_where_it_came_from(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    by_geo: bool,
+) -> None:
+    tag = secrets.token_hex(3)
+    lat, lon = _spot()
+    await _bot_house(
+        bot_session,
+        city=f"Назад{tag}",
+        street=f"Улица{tag}",
+        building="1",
+        lat=lat,
+        lon=lon,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    await client.click(message_manager.last_message(), FIND_HOUSE)
+    if by_geo:
+        await _send_location(client, lat, lon)
+    else:
+        await client.click(message_manager.last_message(), BY_ADDRESS)
+        await client.send(f"Назад{tag}")
+        await client.send(f"Улица{tag}")
+    await client.send("нет такого")
+
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+
+    text = _text(message_manager)
+    assert (METHOD_TEXT if by_geo else STREET_TEXT.format(city=f"Назад{tag}")) in text
+    assert "Не нашлось" not in text
+
+
+async def test_the_menu_button_leaves_the_house_search(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await _search_by_address(client, message_manager)
+
+    await client.click(message_manager.last_message(), TO_MENU)
+
+    assert MENU_TEXT in _text(message_manager)
+
+
+async def test_the_search_escapes_the_address_it_prints(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    tag = secrets.token_hex(3)
+    city, street = f"Разметка{tag} <&>", f"Улица{tag} <&>"
+    _house_id, address = await _bot_house(
+        bot_session,
+        city=city,
+        street=street,
+        building="1",
+    )
+    await _search_by_address(client, message_manager)
+
+    await client.send(f"<{tag}>")
+    assert MISSED_TEXT.format(missed=escape(f"<{tag}>")) in _text(message_manager)
+    await client.send(f"Разметка{tag}")
+    assert STREET_TEXT.format(city=escape(city)) in _text(message_manager)
+    await client.send(f"Улица{tag}")
+    assert SEARCH_HOUSE_TEXT.format(street=escape(street)) in _text(message_manager)
+    await client.send("1")
+    assert escape(address) in _text(message_manager)
+
+
+async def test_a_flat_picked_from_the_list_is_linked(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    tag = secrets.token_hex(3)
+    house_id, address = await _bot_house(
+        bot_session,
+        city=f"Квартиры{tag}",
+        street=f"Улица{tag}",
+        building="1",
+    )
+    bot_session.add_all(
+        [Flat(house_id=house_id, number=number) for number in ("10", "2", "1")],
+    )
+    await bot_session.commit()
+    await _search_by_address(client, message_manager)
+    await client.send(f"Квартиры{tag}")
+    await client.send(f"Улица{tag}")
+    await client.send("1")
+
+    assert _text(message_manager) == FLAT_LIST_TEXT.format(address=address)
+    assert _button_texts(message_manager.last_message()) == [
+        "🚪 1",
+        "🚪 2",
+        "🚪 10",
+        "⏭ Пропустить",
+        *NAVIGATION,
+    ]
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert SEARCH_HOUSE_TEXT.format(street=f"Улица{tag}") in _text(message_manager)
+    await client.send("1")
+    await client.click(message_manager.last_message(), InlineButtonTextLocator("🚪 10"))
+
+    user = await _saved(bot_session, MaxUserId(client.user.id))
+    assert user is not None
+    flat = await HousesRepo(bot_session).get_flat_by_number(house_id, "10")
+    assert flat is not None
+    stmt = select(residents_table.c.flat_id).where(
+        residents_table.c.user_id == user.id,
+        residents_table.c.house_id == house_id,
+    )
+    assert (await bot_session.execute(stmt)).scalars().all() == [flat.id]
+    assert HOUSE_LINKED.format(address=address) in notices.texts
+
+
+async def test_a_deeplinked_flat_step_asks_the_number_and_goes_back_to_the_method(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, address = await _bot_house(bot_session)
+    await _bot_started(client, house_payload(house_id))
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    assert _text(message_manager) == FLAT_NUMBER_TEXT.format(address=address)
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+
+    assert METHOD_TEXT in _text(message_manager)
+
+
+async def test_back_and_menu_walk_the_request_draft(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    _, house_id = await _org_house(bot_session)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert "🛠 Что случилось?" in _text(message_manager)
+
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.send("Течет кран на кухне")
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert DESCRIPTION_TEXT in _text(message_manager)
+
+    await client.send("Течет кран на кухне")
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert PHOTO_TEXT.format(photos=0) in _text(message_manager)
+
+    await client.click(message_manager.last_message(), TO_MENU)
+    assert MENU_TEXT in _text(message_manager)
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), TO_MENU)
+    assert MENU_TEXT in _text(message_manager)
+
+
+async def test_typing_near_a_location_filters_the_whole_list_every_time(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    lat, lon = _spot()
+    for building in ("15", "51", "151"):
+        await _bot_house(
+            bot_session,
+            street="Сужения",
+            building=building,
+            lat=lat,
+            lon=lon,
+        )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    await client.click(message_manager.last_message(), FIND_HOUSE)
+    await _send_location(client, lat, lon)
+
+    await client.send("51")
+    assert sorted(_button_texts(message_manager.last_message())) == sorted(
+        ["🏢 Сужения, 51", "🏢 Сужения, 151", *NAVIGATION],
+    )
+    await client.send("15")
+    assert sorted(_button_texts(message_manager.last_message())) == sorted(
+        ["🏢 Сужения, 15", "🏢 Сужения, 151", *NAVIGATION],
+    )
+
+
+async def test_a_list_whose_content_changed_opens_on_its_first_page(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    tag = secrets.token_hex(3)
+    city, first, second = f"Страницы{tag}", f"Первая{tag}", f"Вторая{tag}"
+    for number in range(1, 21):
+        await _bot_house(bot_session, city=city, street=first, building=str(number))
+    for number in range(1, 11):
+        await _bot_house(bot_session, city=city, street=second, building=str(number))
+    await _search_by_address(client, message_manager)
+    await client.send(city)
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator(f"🛣 {first}"),
+    )
+    await client.click(message_manager.last_message(), InlineButtonTextLocator("3"))
+
+    await client.send("1")
+    assert _button_texts(message_manager.last_message())[0] == "🏢 1"
+
+    await client.click(message_manager.last_message(), InlineButtonTextLocator("2"))
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator(f"🛣 {second}"),
+    )
+    assert _button_texts(message_manager.last_message())[0] == "🏢 1"
+
+
+async def test_the_request_draft_escapes_the_address_and_the_description(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    _, house_id = await _org_house(bot_session)
+    stmt = (
+        update(houses_table)
+        .where(houses_table.c.id == house_id)
+        .values(street=f"Разметки <&> {secrets.token_hex(3)}")
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    await bot_session.refresh(house)
+    address = house.address
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    description = "Давление <2 & <b>течет</b>"
+
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    assert CATEGORY_TEXT.format(address=escape(address)) in _text(message_manager)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.send(description)
+    await client.click(message_manager.last_message(), NEXT)
+
+    assert f"\n\n{escape(description)}\n\n" in _text(message_manager)
+    assert CONFIRM_TEXT.split("{", 1)[0] in _text(message_manager)
+
+
+async def test_back_from_a_deeplinked_flat_step_forgets_the_deeplink(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    tag = secrets.token_hex(3)
+    deeplinked, _ = await _bot_house(bot_session)
+    picked, _ = await _bot_house(
+        bot_session,
+        city=f"Забытый{tag}",
+        street=f"Улица{tag}",
+        building="1",
+    )
+    await _bot_started(client, entrance_qr_payload(deeplinked, 3))
+    await client.click(message_manager.last_message(), ACCEPT)
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    await client.click(message_manager.last_message(), BY_ADDRESS)
+    await client.send(f"Забытый{tag}")
+    await client.send(f"Улица{tag}")
+    await client.send("1")
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator("⏭ Пропустить"),
+    )
+
+    user = await _saved(bot_session, MaxUserId(client.user.id))
+    assert user is not None
+    stmt = select(events_table.c.payload).where(
+        events_table.c.type == EventType.HOUSE_LINKED,
+        events_table.c.user_id == user.id,
+    )
+    [payload] = (await bot_session.execute(stmt)).scalars().all()
+    assert payload["house_id"] == picked
+    assert payload["source"] == EventSource.DIRECT.value
+    assert payload["entrance"] is None
+
+
 async def test_a_refused_deeplink_of_a_consented_user_ends_on_the_menu(
     client: BotClient,
     message_manager: MockMessageManager,
@@ -2419,5 +2882,5 @@ async def test_a_refused_deeplink_of_a_consented_user_ends_on_the_menu(
     assert notices.notifies == [False]
     assert notices.chat_ids == [client.chat.chat_id]
     assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
-    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+    assert MENU_TEXT in _text(message_manager)
     assert await _events_of(bot_session, user_id, EventType.BOT_START) == 2

@@ -3,7 +3,7 @@ from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import MessageInput, TextInput
 from maxo.dialogs.widgets.kbd import (
     Button,
-    Cancel,
+    Row,
     ScrollingGroup,
     Select,
     Start,
@@ -12,7 +12,7 @@ from maxo.dialogs.widgets.kbd import (
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 
-from zheka.bot.cards import TO_MENU
+from zheka.bot.cards import BACK, TO_MENU
 from zheka.bot.handlers.requests.handlers import (
     SENT_TEXT,
     get_category,
@@ -62,27 +62,28 @@ request_dialog = Dialog(
             state=Onboarding.method,
             when=~F["address"],
         ),
-        Cancel(Const("❌ Отмена")),
+        TO_MENU,
         state=NewRequest.category,
         getter=get_category,
     ),
     Window(
         Const(DESCRIPTION_TEXT),
         TextInput(id="description", on_success=on_description),
-        SwitchTo(Const("⬅️ Назад"), id="to_category", state=NewRequest.category),
+        Row(SwitchTo(BACK, id="to_category", state=NewRequest.category), TO_MENU),
         state=NewRequest.description,
     ),
     Window(
         Format(PHOTO_TEXT),
         MessageInput(on_photo, content_types=[AttachmentType.IMAGE]),
         SwitchTo(Const("➡️ Дальше"), id="to_confirm", state=NewRequest.confirm),
+        Row(SwitchTo(BACK, id="photo_back", state=NewRequest.description), TO_MENU),
         state=NewRequest.photo,
         getter=get_draft,
     ),
     Window(
         Format(CONFIRM_TEXT),
         Button(Const("📨 Отправить"), id="send", on_click=on_send),
-        SwitchTo(Const("📷 Изменить фото"), id="to_photo", state=NewRequest.photo),
+        Row(SwitchTo(BACK, id="to_photo", state=NewRequest.photo), TO_MENU),
         state=NewRequest.confirm,
         getter=get_draft,
     ),

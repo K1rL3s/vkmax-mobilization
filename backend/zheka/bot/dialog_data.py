@@ -50,6 +50,10 @@ class HouseItem(ZhekaType):
 
 class OnboardingData(BaseDialogData):
     city: str = ""
+    street: str = ""
+    query: str = ""
+    missed: str | None = None
+    by_geo: bool = False
     houses: list[HouseItem] = field(default_factory=list)
     house_id: int | None = None
     entrance: int | None = None

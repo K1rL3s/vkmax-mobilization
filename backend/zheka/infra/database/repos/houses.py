@@ -165,7 +165,12 @@ class HousesRepo(BaseAlchemyRepo):
             stmt = stmt.where(flats_table.c.entrance == entrance)
 
         total = await self._count(stmt)
-        page_stmt = stmt.order_by(flats_table.c.number).limit(limit).offset(offset)
+        # номера строками, а житель ищет 2 перед 10
+        page_stmt = (
+            stmt.order_by(func.length(flats_table.c.number), flats_table.c.number)
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self._session.execute(page_stmt)
         return result.scalars().all(), total
 

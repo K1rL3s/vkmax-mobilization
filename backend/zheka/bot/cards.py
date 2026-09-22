@@ -71,3 +71,6 @@ TO_MENU = Start(
     state=Menu.main,
     mode=StartMode.RESET_STACK,
 )
+
+
+BACK = Const("⬅️ Назад")

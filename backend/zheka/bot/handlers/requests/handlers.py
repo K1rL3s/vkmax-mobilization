@@ -1,3 +1,4 @@
+from html import escape
 from typing import Any
 
 from dishka import FromDishka
@@ -30,7 +31,7 @@ async def get_category(
         return {"address": None, "connected": False, "categories": []}
 
     residency = max(me.residencies, key=lambda item: item.resident.created_at)
-    address = residency.house.address
+    address = escape(residency.house.address)
     if not residency.is_connected:
         return {"address": address, "connected": False, "categories": []}
     with NewRequestData.proxy(dialog_manager) as data:
@@ -52,7 +53,7 @@ async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
         "category": (
             None if data.category is None else CATEGORY_RULES[data.category].caption
         ),
-        "description": data.description,
+        "description": escape(data.description),
         "photos": len(data.photos),
     }
 

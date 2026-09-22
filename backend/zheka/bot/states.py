@@ -20,7 +20,6 @@ class Onboarding(StatesGroup):
     city = State()
     street = State()
     house = State()
-    geo = State()
     flat = State()
 
 

@@ -412,3 +412,19 @@ async def test_a_chat_the_bot_was_removed_from_is_not_bound(
 
     assert await repo.is_chat_bound(data.house_id) is False
     assert await repo.bound_chat_titles([data.house_id]) == {}
+
+
+async def test_house_flats_are_ordered_as_numbers_before_the_limit(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    house_id = await _add_house(session, fixture.org_id)
+    session.add_all(
+        [Flat(house_id=house_id, number=number) for number in ("10", "2", "1")],
+    )
+    await session.flush()
+
+    flats = await _make_service(session).house_flats(house_id, 2)
+
+    assert [flat.number for flat in flats] == ["1", "2"]

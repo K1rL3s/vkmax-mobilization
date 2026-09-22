@@ -471,3 +471,7 @@ class HousesService:
         if house is None:
             raise EntityNotFound("Дом не найден")
         return house
+
+    async def house_flats(self, house_id: HouseId, limit: int) -> Sequence[Flat]:
+        flats, _total = await self._houses.list_flats(house_id, None, None, limit, 0)
+        return flats

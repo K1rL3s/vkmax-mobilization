@@ -193,6 +193,11 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   policy button opens the mini-app with `startParam`
   `encode_payload('{"path":"/privacy"}')`; the frontend half that decodes and
   routes it is pending, so today the button opens the start screen.
+- Every step of the house search and the request draft carries «🏠 Меню»
+  and, past the first, «⬅️ Назад» (`TO_MENU`, `BACK` in `zheka/bot/cards.py`).
+  A list step of the search also takes typed text: one match is chosen,
+  several narrow the list, none leaves the list and says so; `on_back` clears
+  that state.
 
 ### Requests and chats
 
