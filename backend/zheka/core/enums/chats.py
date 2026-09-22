@@ -16,3 +16,4 @@ class UnpinMethod(StrEnum):
     REPLY = "reply"
     NUMBER = "number"
     LIST_DELETED = "list_deleted"
+    MESSAGE_DELETED = "message_deleted"

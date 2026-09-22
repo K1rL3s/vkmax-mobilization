@@ -6,7 +6,7 @@ from functools import lru_cache
 
 from maxo import Bot
 from maxo.dialogs import BgManagerFactory, Data, ShowMode, StartMode
-from maxo.enums import ChatType
+from maxo.enums import ChatType, MessageLinkType
 from maxo.errors import (
     MaxBotApiError,
     MaxBotForbiddenError,
@@ -14,8 +14,8 @@ from maxo.errors import (
     MaxBotNotFoundError,
 )
 from maxo.fsm import State
-from maxo.omit import Omitted
-from maxo.types import Attachments, AttachmentsRequests
+from maxo.omit import Omitted, is_defined
+from maxo.types import Attachments, AttachmentsRequests, NewMessageLink
 from maxo.types.buttons import InlineButtons
 from maxo.types.inline_keyboard_attachment_request import (
     InlineKeyboardAttachmentRequest,
@@ -63,12 +63,18 @@ class MaxSender:
         user_id: MaxUserId | None = None,
         notify: bool = False,
         keyboard: Sequence[Sequence[InlineButtons]] | None = None,
+        reply_to: str | None = None,
     ) -> SendMessageResult | None:
         recipient = chat_id if chat_id is not None else user_id
         if recipient is None:
             raise ValueError("Нужен либо chat_id, либо user_id")
 
         attachments = None if keyboard is None else _keyboard(keyboard)
+        link = (
+            None
+            if reply_to is None
+            else NewMessageLink(mid=reply_to, type=MessageLinkType.REPLY)
+        )
 
         result: SendMessageResult | None = None
         with _undelivered():
@@ -79,6 +85,7 @@ class MaxSender:
                     user_id=Omitted() if user_id is None else user_id,
                     notify=notify,
                     attachments=attachments,
+                    link=link,
                 )
         return result
 
@@ -161,6 +168,16 @@ class MaxSender:
                 await self._bot.delete_message(message_id=mid)
                 done = True
         return done
+
+    async def is_pinned(self, chat_id: MaxChatId, mid: str) -> bool:
+        # без ответа MAX считаем закреп на месте, чтобы не звать список зря
+        pinned = True
+        with _undelivered():
+            async with BOT_RATE_LIMIT:
+                result = await self._bot.get_pinned_message(chat_id=chat_id)
+                message = result.message if is_defined(result.message) else None
+                pinned = message is not None and message.body.mid == mid
+        return pinned
 
 
 async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:

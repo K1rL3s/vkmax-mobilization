@@ -33,6 +33,7 @@ WELCOME_TEXT = (
 )
 JOIN_HOUSE = "🏠 Присоединиться к дому"
 PINS_TITLE = "📌 Закреплено в чате:"
+PINS_HERE = "📌 Список закрепленных никуда не делся, он здесь"
 
 
 def chat_stack(chat_id: MaxChatId) -> str:
@@ -137,18 +138,24 @@ async def sync_chat_pins(
             ),
         ],
     ]
-    if mid is None or not await sender.edit_message(chat_id, mid, text, keyboard):
-        sent = await sender.send_message(
-            text,
-            chat_id=chat_id,
-            notify=False,
-            keyboard=keyboard,
-        )
-        if sent is None:
-            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
-            return
-        mid = sent.message.body.mid
-        await chats_repo.set_pins_mid(chat, mid)
+    if mid is not None and await sender.edit_message(chat_id, mid, text, keyboard):
+        # список открепили или закрепили поверх свое: бот не спорит,
+        # а показывает, где список
+        if not await sender.is_pinned(chat_id, mid):
+            await sender.send_message(PINS_HERE, chat_id=chat_id, reply_to=mid)
+        return
+
+    sent = await sender.send_message(
+        text,
+        chat_id=chat_id,
+        notify=False,
+        keyboard=keyboard,
+    )
+    if sent is None:
+        await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+        return
+    mid = sent.message.body.mid
+    await chats_repo.set_pins_mid(chat, mid)
     if not await sender.pin_message(chat_id, mid):
         await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
 

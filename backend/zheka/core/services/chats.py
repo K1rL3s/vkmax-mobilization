@@ -33,6 +33,18 @@ UNPIN_HINT = (
     "💡 Ответьте командой /unpin на закрепленное сообщение или укажите номер "
     "из списка, например /unpin 2"
 )
+PIN_THE_LIST = (
+    "😊 Этот список и так закреплен. Чтобы добавить в него сообщение, ответьте "
+    "командой /pin на само сообщение"
+)
+UNPIN_THE_LIST = (
+    "😊 Это сам список закрепленных, он остается на месте. Чтобы убрать пункт, "
+    "укажите его номер, например /unpin 2"
+)
+PINS_ERASED = (
+    "🗑 Сообщение со списком закрепленных удалили, и я очистил список. "
+    "Закрепить заново можно командой /pin в ответ на нужное сообщение"
+)
 
 
 class MessageRef(ZhekaType):
@@ -195,6 +207,8 @@ class ChatsService:
         author, binder = await self._pinner(user_id, chat, house_id)
         if target is None:
             raise InvalidRequest(PIN_HINT)
+        if target.mid == chat.pins_mid:
+            raise InvalidRequest(PIN_THE_LIST)
         text = (text or "").strip()[:PIN_TEXT_LIMIT] or None
         pins = await self._chats.list_pins(chat_id)
         listed = next((pin for pin in pins if pin.mid == target.mid), None)
@@ -237,6 +251,8 @@ class ChatsService:
         pins = await self._chats.list_pins(chat_id)
         pin: ChatPin | None = None
         method = UnpinMethod.REPLY
+        if target is not None and target.mid == chat.pins_mid:
+            raise InvalidRequest(UNPIN_THE_LIST)
         if target is not None:
             pin = next((listed for listed in pins if listed.mid == target.mid), None)
         elif number is not None and 1 <= number <= len(pins):
@@ -257,17 +273,26 @@ class ChatsService:
 
     async def on_message_removed(self, chat_id: MaxChatId, mid: str) -> None:
         chat = await self._chats.lock(chat_id)
-        if chat is None or chat.pins_mid != mid:
+        if chat is None:
             return
         pins = await self._chats.list_pins(chat_id)
+        if chat.pins_mid == mid:
+            method = UnpinMethod.LIST_DELETED
+            await self._chats.set_pins_mid(chat, None)
+            self._notifications.notify_chats([chat_id], PINS_ERASED)
+        else:
+            method = UnpinMethod.MESSAGE_DELETED
+            pins = [pin for pin in pins if pin.mid == mid]
+            if not pins:
+                return
+            self._notifications.sync_chat_pins(chat_id)
         await self._chats.unpin(pins, datetime.now(UTC))
-        await self._chats.set_pins_mid(chat, None)
         for _ in pins:
             await self._events.record(
                 EventType.CHAT_UNPINNED,
                 chat_id=chat_id,
                 house_id=chat.house_id,
-                method=UnpinMethod.LIST_DELETED.value,
+                method=method.value,
             )
 
     async def pin_list(self, chat_id: MaxChatId) -> PinList | None:

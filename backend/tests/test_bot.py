@@ -31,11 +31,13 @@ from maxo.types import (
     BotStopped,
     DialogMuted,
     DialogUnmuted,
+    GetPinnedMessageResult,
     LocationAttachment,
     Message,
     MessageBody,
     MessageCreated,
     MessageRemoved,
+    NewMessageLink,
     OpenAppButton,
     PhotoAttachment,
     PhotoAttachmentPayload,
@@ -96,6 +98,7 @@ from zheka.bot.states import Consent, Menu
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
+    PINS_HERE,
     PINS_TITLE,
     on_bot_added,
     sync_chat_pins,
@@ -1909,6 +1912,7 @@ class _PinApi:
         self.pinned: list[dict[str, Any]] = []
         self.deleted: list[str] = []
         self.edit_fails = False
+        self.current: str | None = None
 
     async def send_message(self, **kwargs: Any) -> SendMessageResult:
         self.sent.append(kwargs)
@@ -1938,11 +1942,28 @@ class _PinApi:
         self.deleted.append(message_id)
         return SimpleQueryResult(success=True)
 
+    async def get_pinned_message(self, *, chat_id: int) -> GetPinnedMessageResult:
+        if self.current is None:
+            return GetPinnedMessageResult(message=None)
+        return GetPinnedMessageResult(
+            message=Message(
+                recipient=Recipient(chat_type=ChatType.CHAT, chat_id=chat_id),
+                timestamp=datetime.now(UTC),
+                body=MessageBody(mid=self.current, seq=1, text=""),
+            ),
+        )
+
 
 @pytest.fixture
 def pin_api(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> _PinApi:
     api = _PinApi()
-    for name in ("send_message", "edit_message", "pin_message", "delete_message"):
+    for name in (
+        "send_message",
+        "edit_message",
+        "pin_message",
+        "delete_message",
+        "get_pinned_message",
+    ):
         monkeypatch.setattr(fake_bot, name, getattr(api, name))
     return api
 
@@ -2008,13 +2029,14 @@ async def test_the_pin_list_is_sent_with_the_house_button_and_pinned_silently(
     assert await _pins_mid(bot_session, chat_id) == "list-1"
 
 
-async def test_the_pin_list_edits_its_message_keeps_the_button_and_pins_again(
+async def test_the_pin_list_edits_its_message_keeps_the_button_and_the_pin(
     client: BotClient,
     task_broker: InMemoryBroker,
     pin_api: _PinApi,
     bot_session: AsyncSession,
 ) -> None:
     chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
+    pin_api.current = "list-7"
 
     await _run(task_broker, sync_chat_pins, chat_id=chat_id)
 
@@ -2028,9 +2050,7 @@ async def test_the_pin_list_edits_its_message_keeps_the_button_and_pins_again(
     assert [[button.text for button in row] for row in attachment.payload.buttons] == [
         [JOIN_HOUSE],
     ]
-    assert pin_api.pinned == [
-        {"chat_id": chat_id, "message_id": "list-7", "notify": False},
-    ]
+    assert pin_api.pinned == []
 
 
 async def test_a_list_message_that_cannot_be_edited_is_sent_anew(
@@ -2946,3 +2966,23 @@ async def test_cancelling_the_binding_code_opens_the_menu(
     await client.click(message_manager.last_message(), CANCEL)
 
     assert MENU_TEXT in _text(message_manager)
+
+
+@pytest.mark.parametrize("current", [None, "m-other"])
+async def test_an_unpinned_list_is_pointed_at_instead_of_pinned_over(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+    current: str | None,
+) -> None:
+    chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
+    pin_api.current = current
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+
+    assert pin_api.pinned == []
+    [reply] = pin_api.sent
+    assert reply["text"] == PINS_HERE
+    assert reply["link"] == NewMessageLink(mid="list-7", type=MessageLinkType.REPLY)
+    assert reply["notify"] is False

@@ -24,12 +24,15 @@ from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import MaxChatId
 from zheka.core.services.chats import (
     MAX_PINS,
+    PINS_ERASED,
     PINS_FULL,
     PIN_DENIED,
     PIN_HINT,
     PIN_NEEDS_RIGHTS,
     PIN_TEXT_LIMIT,
+    PIN_THE_LIST,
     UNPIN_HINT,
+    UNPIN_THE_LIST,
     ChatsService,
     MessageRef,
 )
@@ -513,14 +516,16 @@ async def test_an_unpin_that_names_no_item_is_a_hint(
     assert len(await _listed(session, chat_id)) == 3
 
 
-async def test_deleting_the_list_message_unpins_everything(
+async def test_a_deleted_pin_leaves_the_list_and_a_deleted_list_is_erased(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
-    service = _service(session)
-    for seq in (1, 2):
+    service = _service(session, publisher)
+    for seq in (1, 2, 3):
         await service.pin(
             data.user_id,
             chat_id,
@@ -528,15 +533,29 @@ async def test_deleting_the_list_message_unpins_everything(
             None,
         )
     await ChatsRepo(session).set_pins_mid(await _chat(session, chat_id), "list-1")
+    await publisher.flush()
+    broker.messages.clear()
 
+    await service.on_message_removed(chat_id, "m-9")
+    assert len(await _listed(session, chat_id)) == 3
     await service.on_message_removed(chat_id, "m-1")
-    assert len(await _listed(session, chat_id)) == 2
+    assert [mid for mid, _ in await _listed(session, chat_id)] == ["m-2", "m-3"]
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [{"chat_id": chat_id}]
     await service.on_message_removed(chat_id, "list-1")
 
     assert await _listed(session, chat_id) == []
     assert (await _chat(session, chat_id)).pins_mid is None
     events = await _pin_events(session, chat_id, EventType.CHAT_UNPINNED)
-    assert [event["method"] for event in events] == ["list_deleted"] * 2
+    assert [event["method"] for event in events] == [
+        "message_deleted",
+        "list_deleted",
+        "list_deleted",
+    ]
+    await publisher.flush()
+    assert broker.enqueued(TaskName.BROADCAST_TO_CHATS) == [
+        {"chat_ids": [chat_id], "text": PINS_ERASED},
+    ]
 
 
 async def test_a_re_add_drops_the_old_list_without_events(
@@ -554,3 +573,22 @@ async def test_a_re_add_drops_the_old_list_without_events(
     assert await _listed(session, chat_id) == []
     assert (await _chat(session, chat_id)).pins_mid is None
     assert await _pin_events(session, chat_id, EventType.CHAT_UNPINNED) == []
+
+
+async def test_the_list_itself_is_neither_pinned_nor_unpinned(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+    await service.pin(data.user_id, chat_id, REPLY, None)
+    await ChatsRepo(session).set_pins_mid(await _chat(session, chat_id), "list-1")
+    the_list = MessageRef(mid="list-1", seq=50)
+
+    with pytest.raises(InvalidRequest, match=re.escape(PIN_THE_LIST)):
+        await service.pin(data.user_id, chat_id, the_list, None)
+    with pytest.raises(InvalidRequest, match=re.escape(UNPIN_THE_LIST)):
+        await service.unpin(data.user_id, chat_id, the_list, None)
+
+    assert await _listed(session, chat_id) == [("m-1", None)]
