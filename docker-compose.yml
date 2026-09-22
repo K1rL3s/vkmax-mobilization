@@ -55,7 +55,7 @@ services:
 
   nginx:
     container_name: zheka-nginx
-    image: nginx:1.27-alpine
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
     restart: unless-stopped
     depends_on:
       api:
@@ -103,7 +103,7 @@ services:
 
   database:
     container_name: zheka-db
-    image: postgres:16.9-alpine3.22
+    image: postgres:16.9-alpine3.22@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
     restart: unless-stopped
     volumes:
       - zheka-postgres:/var/lib/postgresql/data
@@ -121,7 +121,7 @@ services:
 
   redis:
     container_name: zheka-redis
-    image: redis:7.4.3-alpine3.21
+    image: redis:7.4.3-alpine3.21@sha256:f773b35a95e170d92dd4214a3ec4859b1b7960bf56896ae687646d695f311187
     restart: unless-stopped
     volumes:
       - zheka-redis:/data

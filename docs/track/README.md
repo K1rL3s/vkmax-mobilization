@@ -17,4 +17,6 @@
 7. [Дополнительная информация](07-additional-info.md)
 8. [Сводный список требований и критериев](08-requirements-checklist.md)
 
-Источник: `Умный-город.pdf` в корне репозитория.
+Расшифровки и саммари вебинаров: [Вводной](web-01-transcription.md), [Dive, Create, Impact](web-02-transcription.md), [Q&A](web-03-transcription.md), [Саммари](web-summary.md)
+
+Источник: `Умный-город.pdf` в этой папке.
