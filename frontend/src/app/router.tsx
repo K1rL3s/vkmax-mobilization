@@ -336,6 +336,16 @@ const router = createBrowserRouter([
                 ],
               },
               {
+                element: <PushedPage fallback={Routes.ADMIN_VERIFICATIONS} />,
+                children: [
+                  {
+                    path: Routes.ADMIN_VERIFICATION,
+                    lazy: () =>
+                      import("@/features/admin-verifications/admin-verification.page"),
+                  },
+                ],
+              },
+              {
                 element: <PushedPage fallback={Routes.ADMIN_ANALYTICS} />,
                 children: [
                   {

@@ -1,0 +1,13 @@
+.Filter {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  /* чипы доезжают до краёв экрана, а не до отступов страницы */
+  margin: 0 -16px;
+  padding: 0 16px;
+  scrollbar-width: none;
+
+  > * {
+    flex-shrink: 0;
+  }
+}

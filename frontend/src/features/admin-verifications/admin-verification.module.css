@@ -1,0 +1,66 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.Content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 16px 24px;
+}
+
+.Title {
+  margin: 0;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.StatusPill {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.waiting {
+  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+  color: var(--text-themed);
+}
+
+.approved {
+  background-color: color-mix(in srgb, var(--icon-positive) 12%, transparent);
+  color: var(--icon-positive);
+}
+
+.rejected {
+  background-color: color-mix(in srgb, var(--text-negative) 12%, transparent);
+  color: var(--text-negative);
+}
+
+.Error {
+  color: var(--text-negative);
+}
+
+/* кнопка решения не sticky: мобильная клавиатура делает прилипшую кнопку
+   полупрозрачной */
+.Footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 24px;
+  background-color: var(--background-surface);
+}

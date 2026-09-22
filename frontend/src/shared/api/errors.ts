@@ -19,6 +19,11 @@ const isApiError = (error: unknown): error is ApiError => {
 const hasStatus = (error: unknown, status: number): boolean =>
   isApiError(error) && error.status === status;
 
+// пояснение к ошибке, если оно пришло: у ручек с несколькими причинами одного
+// статуса это единственное, чем они различаются
+export const errorDetail = (error: unknown): string | undefined =>
+  isApiError(error) ? error.error.detail : undefined;
+
 export const isConflict = (error: unknown): boolean => hasStatus(error, 409);
 
 export const isForbidden = (error: unknown): boolean => hasStatus(error, 403);

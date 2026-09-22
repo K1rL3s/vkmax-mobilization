@@ -41,6 +41,7 @@ export const Routes = {
   ADMIN_HOUSE: "/admin/houses/:houseId",
   ADMIN_HOUSE_QR: "/admin/houses/:houseId/qr",
   ADMIN_VERIFICATIONS: "/admin/verification-requests",
+  ADMIN_VERIFICATION: "/admin/verification-requests/:verificationId",
   ADMIN_ANALYTICS: "/admin/analytics",
   ADMIN_BENCHMARK: "/admin/analytics/benchmark",
   ADMIN_ORG: "/admin/org",
