@@ -23,7 +23,7 @@ from zheka.core.enums import (
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import MaxChatId
 from zheka.core.services.chats import (
-    MAX_PINS,
+    MESSAGE_TEXT_LIMIT,
     PINS_ERASED,
     PINS_FULL,
     PIN_DENIED,
@@ -35,6 +35,7 @@ from zheka.core.services.chats import (
     UNPIN_THE_LIST,
     ChatsService,
     MessageRef,
+    pins_text,
 )
 from zheka.core.services.events import EventsService
 from zheka.infra.database.models import Chat, ChatPin
@@ -436,28 +437,43 @@ async def test_a_repeat_pin_replaces_the_text_of_its_item(
     assert len(await _pin_events(session, chat_id, EventType.CHAT_PINNED)) == 1
 
 
-async def test_the_list_holds_fifteen_items(
+async def test_the_list_takes_a_pin_while_it_fits_one_max_message(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
     service = _service(session)
-    for seq in range(MAX_PINS):
-        await service.pin(
-            data.user_id,
-            chat_id,
-            MessageRef(mid=f"m-{seq}", seq=seq),
-            None,
-        )
+    repo = ChatsRepo(session)
+    first = ChatPin(chat_id=chat_id, mid="m-1", seq=1, text="в", pinned_by=data.user_id)
+    await repo.add_pin(first)
+    # 😀 is one code point but two UTF-16 units, the way MAX counts
+    second = ChatPin(
+        chat_id=chat_id,
+        mid="m-2",
+        seq=2,
+        text="😀",
+        pinned_by=data.user_id,
+    )
+    room = MESSAGE_TEXT_LIMIT - _utf16_units(pins_text(chat_id, [first, second]))
+    second_ref = MessageRef(mid="m-2", seq=2)
 
+    await repo.set_pin_text(first, "в" * (room + 2))
     with pytest.raises(InvalidRequest, match=re.escape(PINS_FULL)):
-        await service.pin(data.user_id, chat_id, MessageRef(mid="m-new", seq=99), None)
-    await service.pin(data.user_id, chat_id, MessageRef(mid="m-0", seq=0), "Вода")
+        await service.pin(data.user_id, chat_id, second_ref, "😀")
+    await repo.set_pin_text(first, "в" * (room + 1))
+    await service.pin(data.user_id, chat_id, second_ref, "😀")
+    with pytest.raises(InvalidRequest, match=re.escape(PINS_FULL)):
+        await service.pin(data.user_id, chat_id, second_ref, "😀в")
+    assert await _listed(session, chat_id) == [
+        ("m-1", "в" * (room + 1)),
+        ("m-2", "😀"),
+    ]
+    await service.pin(data.user_id, chat_id, second_ref, "вв")
 
-    listed = await _listed(session, chat_id)
-    assert len(listed) == MAX_PINS
-    assert listed[0] == ("m-0", "Вода")
+    pins = await repo.list_pins(chat_id)
+    assert [pin.text for pin in pins] == ["в" * (room + 1), "вв"]
+    assert _utf16_units(pins_text(chat_id, pins)) == MESSAGE_TEXT_LIMIT
 
 
 async def test_unpin_by_number_or_by_reply_and_the_numbers_close_up(
@@ -596,3 +612,7 @@ async def test_the_list_itself_is_neither_pinned_nor_unpinned(
         await service.unpin(data.user_id, chat_id, the_list, None)
 
     assert await _listed(session, chat_id) == [("m-1", None)]
+
+
+def _utf16_units(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2

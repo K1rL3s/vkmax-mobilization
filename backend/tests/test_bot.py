@@ -99,7 +99,6 @@ from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
     PINS_HERE,
-    PINS_TITLE,
     on_bot_added,
     sync_chat_pins,
     welcome_chat,
@@ -148,6 +147,7 @@ from zheka.core.services.access import SLOT_FULL
 from zheka.core.services.chats import (
     CHAT_NOT_BOUND,
     CHAT_TAKEN,
+    PINS_TITLE,
     UNPIN_HINT,
     WRONG_CODE,
 )

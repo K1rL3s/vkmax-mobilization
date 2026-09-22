@@ -1,6 +1,4 @@
 import logging
-from collections.abc import Sequence
-from html import escape
 
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
@@ -8,7 +6,6 @@ from maxo.dialogs import ShowMode
 from maxo.errors import MaxBotApiError, MaxBotNetworkError
 from maxo.types.link_button import LinkButton
 from maxo.utils.deeplink import create_start_link
-from maxo.utils.link import id_to_message_url
 from taskiq import async_shared_broker
 
 from zheka.bot.dialog_data import ChatBindingData
@@ -17,8 +14,7 @@ from zheka.broker.task_names import TaskName
 from zheka.core.deeplinks import house_payload
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId
-from zheka.core.models import ChatPin
-from zheka.core.services.chats import ChatsService
+from zheka.core.services.chats import ChatsService, pins_text
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
@@ -32,7 +28,6 @@ WELCOME_TEXT = (
     "начисления - в личке со мной"
 )
 JOIN_HOUSE = "🏠 Присоединиться к дому"
-PINS_TITLE = "📌 Закреплено в чате:"
 PINS_HERE = "📌 Список закрепленных никуда не делся, он здесь"
 
 
@@ -130,7 +125,7 @@ async def sync_chat_pins(
                 )
         return
 
-    text = _pins_text(chat_id, listed.pins)
+    text = pins_text(chat_id, listed.pins)
     keyboard = [
         [
             LinkButton(
@@ -160,15 +155,6 @@ async def sync_chat_pins(
         await chats_repo.set_pins_mid(chat, mid)
     if not await sender.pin_message(chat_id, mid, notify=notify):
         await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
-
-
-def _pins_text(chat_id: MaxChatId, pins: Sequence[ChatPin]) -> str:
-    lines = [PINS_TITLE]
-    for number, pin in enumerate(pins, start=1):
-        url = id_to_message_url(pin.seq, chat_id)
-        link = url if pin.text is None else f'<a href="{url}">{escape(pin.text)}</a>'
-        lines.append(f"{number}. {link}")
-    return "\n".join(lines)
 
 
 async def recheck_chat_rights(

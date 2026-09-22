@@ -1,5 +1,8 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from html import escape
+
+from maxo.utils.link import id_to_message_url
 
 from zheka.base import ZhekaType
 from zheka.core.enums import (
@@ -23,12 +26,17 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 CHAT_TAKEN = "Этот чат уже привязан или бота из него удалили"
 WRONG_CODE = "Код не подошел. Проверьте его на карточке дома и пришлите еще раз"
 CHAT_NOT_BOUND = "Чат больше не привязан к дому"
-MAX_PINS = 15
-PIN_TEXT_LIMIT = 100
+PIN_TEXT_LIMIT = 50
+# MAX считает поле text до разбора разметки, с тегами и сущностями, в единицах UTF-16
+MESSAGE_TEXT_LIMIT = 4000
+PINS_TITLE = "📌 Закреплено в чате:"
 PIN_DENIED = "🚫 Закреплять в этом чате могут председатель и сотрудники УК"
 PIN_NEEDS_RIGHTS = "🛡 Чтобы закреплять сообщения, сделайте бота администратором чата"
 PIN_HINT = "💡 Ответьте командой /pin на сообщение, которое нужно закрепить"
-PINS_FULL = f"📌 В списке уже {MAX_PINS} закрепов. Открепите лишнее командой /unpin"
+PINS_FULL = (
+    "📌 Список закрепленных не помещается в одно сообщение. Открепите лишнее "
+    "командой /unpin или сократите подпись"
+)
 UNPIN_HINT = (
     "💡 Ответьте командой /unpin на закрепленное сообщение или укажите номер "
     "из списка, например /unpin 2"
@@ -212,20 +220,23 @@ class ChatsService:
         text = (text or "").strip()[:PIN_TEXT_LIMIT] or None
         pins = await self._chats.list_pins(chat_id)
         listed = next((pin for pin in pins if pin.mid == target.mid), None)
+        pin = ChatPin(
+            chat_id=chat_id,
+            mid=target.mid,
+            seq=target.seq,
+            text=text,
+            pinned_by=author,
+        )
+        shown = [pin if old is listed else old for old in pins]
+        if listed is None:
+            shown.append(pin)
+        rendered = pins_text(chat_id, shown)
+        if len(rendered.encode("utf-16-le")) // 2 > MESSAGE_TEXT_LIMIT:
+            raise InvalidRequest(PINS_FULL)
         if listed is not None:
             await self._chats.set_pin_text(listed, text)
-        elif len(pins) >= MAX_PINS:
-            raise InvalidRequest(PINS_FULL)
         else:
-            await self._chats.add_pin(
-                ChatPin(
-                    chat_id=chat_id,
-                    mid=target.mid,
-                    seq=target.seq,
-                    text=text,
-                    pinned_by=author,
-                ),
-            )
+            await self._chats.add_pin(pin)
             await self._events.record(
                 EventType.CHAT_PINNED,
                 user_id=author,
@@ -334,3 +345,12 @@ class ChatsService:
         if not chat.bot_is_admin:
             raise InvalidState(PIN_NEEDS_RIGHTS)
         return user_id, binder
+
+
+def pins_text(chat_id: MaxChatId, pins: Sequence[ChatPin]) -> str:
+    lines = [PINS_TITLE]
+    for number, pin in enumerate(pins, start=1):
+        url = id_to_message_url(pin.seq, chat_id)
+        link = url if pin.text is None else f'<a href="{url}">{escape(pin.text)}</a>'
+        lines.append(f"{number}. {link}")
+    return "\n".join(lines)

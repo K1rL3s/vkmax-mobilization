@@ -249,8 +249,10 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   chat sees the bot reacted. The bot sends with link previews off
   (`BotDefaults` in `zheka/di/max_bot.py`), but MAX takes no such flag on an
   edit. `ChatsService` writes pins under the chat row lock (`ChatsRepo.lock`);
-  only `sync_chat_pins` renders the list, from the database, always with the
-  house link button. `message_removed` of `chats.pins_mid` unpins everything
+  only `sync_chat_pins` sends the list, rendered by `pins_text` from the
+  database, always with the house link button. `ChatsService.pin` refuses a
+  pin once that text would pass MAX's limit (`MESSAGE_TEXT_LIMIT`: raw HTML
+  in UTF-16 units, send and edit alike). `message_removed` of `chats.pins_mid` unpins everything
   and tells the chat (`PINS_ERASED`), of a listed message drops that item. Only
   `/pin` pins the list again, with sound (`sync_chat_pins(notify=True)`), so
   the chat learns of the new item. MAX sends no event for a manual pin or
