@@ -1,0 +1,26 @@
+.OrgSwitcher {
+  h2 {
+    margin: 0;
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .CellIcon {
+    color: var(--icon-primary);
+  }
+
+  .Title,
+  .Content {
+    min-width: 0;
+  }
+
+  .Name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

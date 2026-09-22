@@ -1,0 +1,26 @@
+.MembersSection {
+  h2 {
+    margin: 0;
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .CellIcon {
+    color: var(--icon-primary);
+  }
+
+  .Title,
+  .Content {
+    min-width: 0;
+  }
+
+  /* имя переносится, а не режется: рядом с плашкой роли многоточие на 360 px
+     оставило бы от фамилии пару букв */
+  .Name {
+    overflow-wrap: anywhere;
+  }
+}

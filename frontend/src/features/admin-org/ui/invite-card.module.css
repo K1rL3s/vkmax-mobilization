@@ -1,0 +1,24 @@
+.InviteCard {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ссылку можно выделить целиком, если копирование не сработало */
+  .Link {
+    overflow-wrap: anywhere;
+    user-select: all;
+  }
+
+  .dead {
+    text-decoration: line-through;
+  }
+
+  .Error {
+    color: var(--text-negative);
+  }
+}
