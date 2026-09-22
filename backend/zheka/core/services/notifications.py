@@ -117,5 +117,16 @@ class NotificationsService:
             access_request_id=access_request_id,
         )
 
-    def sync_chat_pins(self, chat_id: MaxChatId, *, notify: bool) -> None:
-        self._publisher.publish(TaskName.SYNC_CHAT_PINS, chat_id=chat_id, notify=notify)
+    def sync_chat_pins(
+        self,
+        chat_id: MaxChatId,
+        *,
+        notify: bool,
+        resend: bool = False,
+    ) -> None:
+        self._publisher.publish(
+            TaskName.SYNC_CHAT_PINS,
+            chat_id=chat_id,
+            notify=notify,
+            resend=resend,
+        )

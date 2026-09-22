@@ -106,6 +106,7 @@ async def sync_chat_pins(
     chats_repo: FromDishka[ChatsRepo],
     users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
+    resend: bool = False,
 ) -> None:
     listed = await chats_service.pin_list(chat_id)
     if listed is None:
@@ -134,7 +135,11 @@ async def sync_chat_pins(
             ),
         ],
     ]
-    if mid is not None and await sender.edit_message(chat_id, mid, text, keyboard):
+    if (
+        mid is not None
+        and not resend
+        and await sender.edit_message(chat_id, mid, text, keyboard)
+    ):
         if not notify:
             # без нового закрепа бот не спорит с тем, кто снял список
             # или закрепил поверх свое, а показывает, где список
@@ -151,8 +156,11 @@ async def sync_chat_pins(
         if sent is None:
             await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
             return
-        mid = sent.message.body.mid
+        old, mid = mid, sent.message.body.mid
         await chats_repo.set_pins_mid(chat, mid)
+        if old is not None:
+            # удаленный "у себя" список живет у остальных и устарел бы вторым
+            await sender.delete_message(chat_id, old)
     if not await sender.pin_message(chat_id, mid, notify=notify):
         await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
 

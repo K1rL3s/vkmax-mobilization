@@ -200,6 +200,12 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   A list step of the search also takes typed text: one match is chosen,
   several narrow the list, none leaves the list and says so; `on_back` clears
   that state.
+- The command menu is `BOT_COMMANDS` (`bot/handlers/commands/start.py`), set
+  by its `after_startup` hook in every api worker (the taskiq worker feeds its
+  dispatcher no signals). A new command joins it, `/seed` never. A failed call
+  is logged, not raised: the api starts without the menu. Tests call the hook
+  directly, since a second `AfterStartup` on the session dispatcher fails in
+  `DialogRegistry.refresh`.
 
 ### Requests and chats
 
@@ -244,8 +250,9 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   `ChatsService.set_admin` records `CHAT_ADMIN_GRANTED` and queues the welcome
   only on `false -> true`. A failed send without rights opens
   `ChatBinding.rights` for `bound_by` with sound.
-- Pins (`/pin`, `/unpin`, bound chats only, any other chat is ignored
-  silently) live in `chat_pins`; an `/unpin` that worked gets a reply, so the
+- Pins (`/pin`, `/unpin`, `/repin`, bound chats only, any other group chat
+  ignores them silently, a private dialog answers `CHAT_COMMANDS_ONLY`) live in
+  `chat_pins`; an `/unpin` that worked gets a reply, so the
   chat sees the bot reacted, and `/pin` gets none, since the list pinned again
   with sound is its answer. The bot sends with link previews off
   (`BotDefaults` in `zheka/di/max_bot.py`), but MAX takes no such flag on an
@@ -260,7 +267,10 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   unpin, so any other sync leaves the pin alone: when the list is not the
   chat's pinned message, the bot replies to it (`PINS_HERE`) instead of
   fighting whoever pinned over it. `/pin` and `/unpin` on the list itself get
-  a friendly hint. An emptied list is deleted, never unpinned.
+  a friendly hint. An emptied list is deleted, never unpinned. A message
+  deleted only for oneself sends no event, so `/repin`
+  (`sync_chat_pins(resend=True)`) sends the list anew and pins it silently;
+  whenever a new list message replaces the old one, the old one is deleted.
 
 ### Readings, reminders, analytics
 

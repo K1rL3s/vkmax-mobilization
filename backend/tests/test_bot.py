@@ -20,12 +20,13 @@ from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.dialogs.test_tools.keyboard import InlineButtonTextLocator
 from maxo.enums import ChatStatus as MaxChatStatus, ChatType, MessageLinkType
-from maxo.errors import MaxBotForbiddenError, MaxBotNotFoundError
+from maxo.errors import MaxBotForbiddenError, MaxBotNetworkError, MaxBotNotFoundError
 from maxo.omit import Omittable, Omitted
 from maxo.routing.filters import Command
 from maxo.routing.signals import MaxoUpdate
 from maxo.types import (
     BotAddedToChat,
+    BotCommand,
     BotRemovedFromChat,
     BotStarted,
     BotStopped,
@@ -68,6 +69,11 @@ from zheka.bot.handlers.commands.deeplinks import (
     DEMO_RESIDENT_NOTICE,
     DEMO_STAFF_NOTICE,
     ORG_JOINED,
+)
+from zheka.bot.handlers.commands.start import (
+    BOT_COMMANDS,
+    CHAT_COMMANDS_ONLY,
+    set_commands_handler,
 )
 from zheka.bot.handlers.consent.windows import GIVEN_TEXT
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
@@ -2180,6 +2186,7 @@ async def test_a_pin_in_the_house_chat_lists_the_replied_message(
     assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
         "chat_id": chat_id,
         "notify": True,
+        "resend": False,
     }
     assert recorder.texts == []
 
@@ -2203,6 +2210,7 @@ async def test_unpin_takes_a_number_and_replies_in_the_chat(
     assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
         "chat_id": chat_id,
         "notify": False,
+        "resend": False,
     }
     assert [link.type for link in recorder.links] == [MessageLinkType.REPLY] * 2
 
@@ -2221,15 +2229,24 @@ async def test_a_pin_in_a_chat_without_a_house_gets_no_answer(
     assert recorder.texts == []
 
 
-@pytest.mark.parametrize("command", ["/pin", "/unpin"])
-async def test_pin_in_a_private_dialog_is_a_loose_message(
-    client: BotClient,
-    message_manager: MockMessageManager,
+@pytest.mark.parametrize("command", ["/pin", "/unpin", "/repin"])
+async def test_a_chat_command_in_a_private_dialog_says_where_it_works(
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
     command: str,
 ) -> None:
+    max_user_id = _max_id()
+    recorder = _RecordingBot()
+    client = BotClient(
+        bot_setup.dp,
+        user_id=max_user_id,
+        chat_id=max_user_id,
+        bot=recorder,
+    )
+
     await client.send(command)
 
-    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
+    assert recorder.texts == [CHAT_COMMANDS_ONLY]
 
 
 async def test_deleting_the_list_message_in_the_chat_unpins_everything(
@@ -3011,3 +3028,64 @@ async def test_a_new_pin_pins_the_list_again_with_sound(
     mid = await _pins_mid(bot_session, chat_id)
     assert pin_api.pinned == [{"chat_id": chat_id, "message_id": mid, "notify": True}]
     assert PINS_HERE not in [sent["text"] for sent in pin_api.sent]
+
+
+async def test_repin_sends_the_list_anew_and_deletes_the_old_one(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
+    pin_api.current = "list-7"
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False, resend=True)
+
+    assert pin_api.edited == []
+    assert len(pin_api.sent) == 1
+    assert pin_api.pinned == [
+        {"chat_id": chat_id, "message_id": "list-1", "notify": False},
+    ]
+    assert pin_api.deleted == ["list-7"]
+    assert await _pins_mid(bot_session, chat_id) == "list-1"
+
+
+async def test_repin_in_the_house_chat_answers_only_with_the_list(
+    client: BotClient,
+    bot_setup: BotSetup,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    await _pinned(bot_session, client, chat_id, "m-1")
+    recorder = _RecordingBot()
+    group = _in_chat(bot_setup, recorder, chat_id, client.user.id)
+
+    await group.send("/repin")
+
+    assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
+        "chat_id": chat_id,
+        "notify": False,
+        "resend": True,
+    }
+    assert recorder.texts == []
+
+
+@pytest.mark.parametrize("fails", [False, True])
+async def test_the_bot_sets_its_commands_and_a_failure_is_not_fatal(
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    fails: bool,
+) -> None:
+    sent: list[list[BotCommand]] = []
+
+    async def edit_my_commands(*, commands: list[BotCommand]) -> None:
+        sent.append(commands)
+        if fails:
+            raise MaxBotNetworkError(message="timeout")
+
+    monkeypatch.setattr(fake_bot, "edit_my_commands", edit_my_commands)
+
+    await set_commands_handler(fake_bot)
+
+    assert sent == [BOT_COMMANDS]

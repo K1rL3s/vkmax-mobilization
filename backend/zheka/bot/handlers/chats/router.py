@@ -94,3 +94,15 @@ def _replied(update: MessageCreated) -> MessageRef | None:
     if not is_defined(link) or link.type is not MessageLinkType.REPLY:
         return None
     return MessageRef(mid=link.message.mid, seq=link.message.seq)
+
+
+@router.message_created(Command("repin"), IN_CHAT)
+async def repin_handler(
+    update: MessageCreated,
+    chats_service: FromDishka[ChatsService],
+    user: User | None = None,
+) -> None:
+    await chats_service.repin(
+        None if user is None else user.id,
+        MaxChatId(update.message.recipient.unsafe_chat_id),
+    )

@@ -345,6 +345,17 @@ class ChatsService:
             raise InvalidState(PIN_NEEDS_RIGHTS)
         return user_id, binder
 
+    async def repin(self, user_id: UserId | None, chat_id: MaxChatId) -> None:
+        bound = await self._bound(chat_id)
+        if bound is None:
+            return
+        chat, house_id = bound
+        await self._pinner(user_id, chat, house_id)
+        if not await self._chats.list_pins(chat_id):
+            raise InvalidRequest(PIN_HINT)
+        # в списке ничего нового, будить чат незачем
+        self._notifications.sync_chat_pins(chat_id, notify=False, resend=True)
+
 
 def pins_text(chat_id: MaxChatId, pins: Sequence[ChatPin]) -> str:
     lines = [PINS_TITLE]

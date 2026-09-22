@@ -360,7 +360,7 @@ async def test_staff_or_the_chairman_pins_a_message(
     ]
     await publisher.flush()
     assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [
-        {"chat_id": chat_id, "notify": True},
+        {"chat_id": chat_id, "notify": True, "resend": False},
     ]
 
 
@@ -382,6 +382,8 @@ async def test_an_executor_or_a_resident_cannot_pin(
 
     with pytest.raises(NotEnoughRights, match=re.escape(PIN_DENIED)):
         await _service(session).pin(data.user_id, chat_id, REPLY, None)
+    with pytest.raises(NotEnoughRights, match=re.escape(PIN_DENIED)):
+        await _service(session).repin(data.user_id, chat_id)
 
     assert await _listed(session, chat_id) == []
 
@@ -560,7 +562,7 @@ async def test_a_deleted_pin_leaves_the_list_and_a_deleted_list_is_erased(
     assert [mid for mid, _ in await _listed(session, chat_id)] == ["m-2", "m-3"]
     await publisher.flush()
     assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [
-        {"chat_id": chat_id, "notify": False},
+        {"chat_id": chat_id, "notify": False, "resend": False},
     ]
     await service.on_message_removed(chat_id, "list-1")
 
@@ -616,3 +618,26 @@ async def test_the_list_itself_is_neither_pinned_nor_unpinned(
 
 def _utf16_units(text: str) -> int:
     return len(text.encode("utf-16-le")) // 2
+
+
+async def test_repin_resends_a_list_that_has_items(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session, publisher)
+
+    with pytest.raises(InvalidRequest, match=re.escape(PIN_HINT)):
+        await service.repin(data.user_id, chat_id)
+    await service.pin(data.user_id, chat_id, REPLY, None)
+    await service.repin(data.user_id, chat_id)
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
+        "chat_id": chat_id,
+        "notify": False,
+        "resend": True,
+    }
