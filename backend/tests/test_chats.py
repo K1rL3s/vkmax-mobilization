@@ -1,8 +1,12 @@
+import re
 import secrets
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, RecordingBroker, make_notifications_service
@@ -18,14 +22,25 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import MaxChatId
-from zheka.core.services.chats import ChatsService
+from zheka.core.services.chats import (
+    MAX_PINS,
+    PINS_FULL,
+    PIN_DENIED,
+    PIN_HINT,
+    PIN_NEEDS_RIGHTS,
+    PIN_TEXT_LIMIT,
+    UNPIN_HINT,
+    ChatsService,
+    MessageRef,
+)
 from zheka.core.services.events import EventsService
-from zheka.infra.database.models import Chat
+from zheka.infra.database.models import Chat, ChatPin
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
+from zheka.infra.database.tables.chats import chat_pins_table
 from zheka.infra.database.tables.events import events_table
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
@@ -237,3 +252,265 @@ async def test_a_re_add_clears_the_previous_binding(
     assert chat.bound_by is None
     assert chat.bound_at is None
     assert chat.bot_is_admin is False
+
+
+async def test_a_message_is_listed_once_until_it_is_unpinned(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    data = await make_org_house_flat_user()
+    chat_id = await _added(session)
+    first = ChatPin(chat_id=chat_id, mid="m-1", seq=1, pinned_by=data.user_id)
+    session.add(first)
+    await session.flush()
+
+    with pytest.raises(IntegrityError):
+        async with session.begin_nested():
+            session.add(
+                ChatPin(chat_id=chat_id, mid="m-1", seq=1, pinned_by=data.user_id)
+            )
+
+    first.unpinned_at = datetime.now(UTC)
+    session.add(ChatPin(chat_id=chat_id, mid="m-1", seq=1, pinned_by=data.user_id))
+    await session.flush()
+
+
+REPLY = MessageRef(mid="m-1", seq=1)
+
+
+async def _pinning_chat(session: AsyncSession, data: OrgHouseFlatUser) -> MaxChatId:
+    # привязка и права ставятся напрямую: закрепу нужен уже готовый чат
+    chat_id = await _added(session)
+    chat = await _chat(session, chat_id)
+    await ChatsRepo(session).bind(chat, data.house_id, data.user_id)
+    await ChatsRepo(session).set_admin(chat, True)
+    return chat_id
+
+
+async def _listed(
+    session: AsyncSession, chat_id: MaxChatId
+) -> list[tuple[str, str | None]]:
+    session.expire_all()
+    return [(pin.mid, pin.text) for pin in await ChatsRepo(session).list_pins(chat_id)]
+
+
+async def _pin_events(
+    session: AsyncSession, chat_id: MaxChatId, event: EventType
+) -> list[dict[str, Any]]:
+    stmt = (
+        select(events_table.c.payload)
+        .where(
+            events_table.c.type == event,
+            events_table.c.payload["chat_id"].astext == str(chat_id),
+        )
+        .order_by(events_table.c.id)
+    )
+    return list((await session.execute(stmt)).scalars())
+
+
+@pytest.mark.parametrize(
+    ("org_role", "by_role"), [(OrgRole.EMPLOYEE, "staff"), (None, "chairman")]
+)
+async def test_staff_or_the_chairman_pins_a_message(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    org_role: OrgRole | None,
+    by_role: str,
+) -> None:
+    data = await make_org_house_flat_user(
+        org_role=org_role, resident_role=None if org_role else ResidentRole.OWNER
+    )
+    if org_role is None:
+        (await ResidentsRepo(session).list_for_user(data.user_id))[0].is_chairman = True
+    chat_id = await _pinning_chat(session, data)
+
+    await _service(session, publisher).pin(
+        data.user_id, chat_id, REPLY, "  Отключение воды  "
+    )
+
+    assert await _listed(session, chat_id) == [("m-1", "Отключение воды")]
+    assert await _pin_events(session, chat_id, EventType.CHAT_PINNED) == [
+        {"chat_id": chat_id, "house_id": data.house_id, "by_role": by_role}
+    ]
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [{"chat_id": chat_id}]
+
+
+@pytest.mark.parametrize(
+    ("org_role", "resident_role"),
+    [(OrgRole.EXECUTOR, None), (None, ResidentRole.OWNER)],
+)
+async def test_an_executor_or_a_resident_cannot_pin(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    org_role: OrgRole | None,
+    resident_role: ResidentRole | None,
+) -> None:
+    data = await make_org_house_flat_user(
+        org_role=org_role, resident_role=resident_role
+    )
+    chat_id = await _pinning_chat(session, data)
+
+    with pytest.raises(NotEnoughRights, match=re.escape(PIN_DENIED)):
+        await _service(session).pin(data.user_id, chat_id, REPLY, None)
+
+    assert await _listed(session, chat_id) == []
+
+
+async def test_a_chat_without_a_house_ignores_pins(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _added(session)
+    service = _service(session, publisher)
+
+    await service.pin(data.user_id, chat_id, REPLY, None)
+    await service.unpin(data.user_id, chat_id, None, None)
+
+    assert await _listed(session, chat_id) == []
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == []
+
+
+async def test_a_pin_needs_a_reply_and_the_bot_rights(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+
+    with pytest.raises(InvalidRequest, match=re.escape(PIN_HINT)):
+        await service.pin(data.user_id, chat_id, None, "Вода")
+    await ChatsRepo(session).set_admin(await _chat(session, chat_id), False)
+    with pytest.raises(InvalidState, match=re.escape(PIN_NEEDS_RIGHTS)):
+        await service.pin(data.user_id, chat_id, REPLY, None)
+
+    assert await _listed(session, chat_id) == []
+
+
+async def test_a_repeat_pin_replaces_the_text_of_its_item(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+
+    await service.pin(data.user_id, chat_id, REPLY, "в" * (PIN_TEXT_LIMIT + 5))
+    assert await _listed(session, chat_id) == [("m-1", "в" * PIN_TEXT_LIMIT)]
+    await service.pin(data.user_id, chat_id, REPLY, None)
+
+    assert await _listed(session, chat_id) == [("m-1", None)]
+    assert len(await _pin_events(session, chat_id, EventType.CHAT_PINNED)) == 1
+
+
+async def test_the_list_holds_fifteen_items(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+    for seq in range(MAX_PINS):
+        await service.pin(
+            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+        )
+
+    with pytest.raises(InvalidRequest, match=re.escape(PINS_FULL)):
+        await service.pin(data.user_id, chat_id, MessageRef(mid="m-new", seq=99), None)
+    # повтор уже закрепленного меняет текст и на полном списке
+    await service.pin(data.user_id, chat_id, MessageRef(mid="m-0", seq=0), "Вода")
+
+    listed = await _listed(session, chat_id)
+    assert len(listed) == MAX_PINS
+    assert listed[0] == ("m-0", "Вода")
+
+
+async def test_unpin_by_number_or_by_reply_and_the_numbers_close_up(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+    for seq in (1, 2, 3):
+        await service.pin(
+            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+        )
+
+    await service.unpin(data.user_id, chat_id, None, 1)
+    await service.unpin(data.user_id, chat_id, None, 2)
+    assert await _listed(session, chat_id) == [("m-2", None)]
+    await service.unpin(data.user_id, chat_id, MessageRef(mid="m-2", seq=2), None)
+
+    assert await _listed(session, chat_id) == []
+    events = await _pin_events(session, chat_id, EventType.CHAT_UNPINNED)
+    assert [event["method"] for event in events] == ["number", "number", "reply"]
+    assert {event["by_role"] for event in events} == {"staff"}
+    stmt = select(func.count()).where(
+        chat_pins_table.c.chat_id == chat_id, chat_pins_table.c.unpinned_at.is_not(None)
+    )
+    assert (await session.execute(stmt)).scalar_one() == 3
+
+
+@pytest.mark.parametrize(
+    ("target", "number"),
+    [(None, None), (None, 0), (None, 4), (MessageRef(mid="m-9", seq=9), None)],
+)
+async def test_an_unpin_that_names_no_item_is_a_hint(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    target: MessageRef | None,
+    number: int | None,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+    for seq in (1, 2, 3):
+        await service.pin(
+            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+        )
+
+    with pytest.raises(InvalidRequest, match=re.escape(UNPIN_HINT)):
+        await service.unpin(data.user_id, chat_id, target, number)
+
+    assert len(await _listed(session, chat_id)) == 3
+
+
+async def test_deleting_the_list_message_unpins_everything(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+    for seq in (1, 2):
+        await service.pin(
+            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+        )
+    await ChatsRepo(session).set_pins_mid(await _chat(session, chat_id), "list-1")
+
+    await service.on_message_removed(chat_id, "m-1")
+    assert len(await _listed(session, chat_id)) == 2
+    await service.on_message_removed(chat_id, "list-1")
+
+    assert await _listed(session, chat_id) == []
+    assert (await _chat(session, chat_id)).pins_mid is None
+    events = await _pin_events(session, chat_id, EventType.CHAT_UNPINNED)
+    assert [event["method"] for event in events] == ["list_deleted"] * 2
+
+
+async def test_a_re_add_drops_the_old_list_without_events(
+    session: AsyncSession, make_org_house_flat_user: Fixture
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+    await service.pin(data.user_id, chat_id, REPLY, None)
+    await ChatsRepo(session).set_pins_mid(await _chat(session, chat_id), "list-1")
+
+    await service.on_bot_added(chat_id, "Дом")
+
+    assert await _listed(session, chat_id) == []
+    assert (await _chat(session, chat_id)).pins_mid is None
+    assert await _pin_events(session, chat_id, EventType.CHAT_UNPINNED) == []

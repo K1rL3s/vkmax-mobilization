@@ -68,11 +68,7 @@ class MaxSender:
         if recipient is None:
             raise ValueError("Нужен либо chat_id, либо user_id")
 
-        attachments: list[AttachmentsRequests | Attachments] | None = None
-        if keyboard is not None:
-            attachments = [
-                InlineKeyboardAttachmentRequest.factory([list(row) for row in keyboard])
-            ]
+        attachments = None if keyboard is None else _keyboard(keyboard)
 
         result: SendMessageResult | None = None
         with _undelivered():
@@ -127,6 +123,43 @@ class MaxSender:
         finally:
             dialog_notify.reset(token)
 
+    async def edit_message(
+        self,
+        chat_id: MaxChatId,
+        mid: str,
+        text: str,
+        keyboard: Sequence[Sequence[InlineButtons]],
+    ) -> bool:
+        done = False
+        with _undelivered():
+            async with BOT_RATE_LIMIT, _chat_rate_limit(chat_id):
+                await self._bot.edit_message(
+                    message_id=mid,
+                    text=text,
+                    attachments=_keyboard(keyboard),
+                    notify=False,
+                )
+                done = True
+        return done
+
+    async def pin_message(self, chat_id: MaxChatId, mid: str) -> bool:
+        done = False
+        with _undelivered():
+            async with BOT_RATE_LIMIT, _chat_rate_limit(chat_id):
+                await self._bot.pin_message(
+                    chat_id=chat_id, message_id=mid, notify=False
+                )
+                done = True
+        return done
+
+    async def delete_message(self, chat_id: MaxChatId, mid: str) -> bool:
+        done = False
+        with _undelivered():
+            async with BOT_RATE_LIMIT, _chat_rate_limit(chat_id):
+                await self._bot.delete_message(message_id=mid)
+                done = True
+        return done
+
 
 async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:
     try:
@@ -135,3 +168,9 @@ async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:
     except (MaxBotForbiddenError, MaxBotNotFoundError):
         return False
     return member.is_admin
+
+
+def _keyboard(
+    keyboard: Sequence[Sequence[InlineButtons]],
+) -> list[AttachmentsRequests | Attachments]:
+    return [InlineKeyboardAttachmentRequest.factory([list(row) for row in keyboard])]

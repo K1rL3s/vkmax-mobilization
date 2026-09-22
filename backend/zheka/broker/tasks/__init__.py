@@ -1,5 +1,5 @@
 from zheka.broker.tasks.bot_requests import create_bot_request
-from zheka.broker.tasks.chats import on_bot_added, welcome_chat
+from zheka.broker.tasks.chats import on_bot_added, sync_chat_pins, welcome_chat
 from zheka.broker.tasks.notifications import (
     broadcast_to_chats,
     broadcast_to_users,
@@ -37,6 +37,7 @@ __all__ = (
     "send_executor_card",
     "send_review_card",
     "send_to_user",
+    "sync_chat_pins",
     "warn_verification",
     "welcome_chat",
 )

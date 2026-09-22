@@ -1,7 +1,17 @@
-from zheka.core.enums import ChatBinder, ChatStatus, EventType, ResidentStatus
+from collections.abc import Sequence
+from datetime import UTC, datetime
+
+from zheka.base import ZhekaType
+from zheka.core.enums import (
+    ChatBinder,
+    ChatStatus,
+    EventType,
+    ResidentStatus,
+    UnpinMethod,
+)
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import HouseId, MaxChatId, UserId
-from zheka.core.models import Chat, House
+from zheka.core.models import Chat, ChatPin, House
 from zheka.core.roles import is_staff
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
@@ -13,6 +23,27 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 CHAT_TAKEN = "Этот чат уже привязан или бота из него удалили"
 WRONG_CODE = "Код не подошел. Проверьте его на карточке дома и пришлите еще раз"
 CHAT_NOT_BOUND = "Чат больше не привязан к дому"
+MAX_PINS = 15
+PIN_TEXT_LIMIT = 100
+PIN_DENIED = "Закреплять в этом чате могут председатель и сотрудники УК"
+PIN_NEEDS_RIGHTS = "Чтобы закреплять сообщения, сделайте бота администратором чата"
+PIN_HINT = "Ответьте командой /pin на сообщение, которое нужно закрепить"
+PINS_FULL = f"В списке уже {MAX_PINS} закрепов. Открепите лишнее командой /unpin"
+UNPIN_HINT = (
+    "Ответьте командой /unpin на закрепленное сообщение или укажите номер "
+    "из списка, например /unpin 2"
+)
+
+
+class MessageRef(ZhekaType):
+    mid: str
+    seq: int
+
+
+class PinList(ZhekaType):
+    chat: Chat
+    house_id: HouseId
+    pins: Sequence[ChatPin]
 
 
 class ChatsService:
@@ -63,6 +94,7 @@ class ChatsService:
 
     async def on_bot_added(self, chat_id: MaxChatId, title: str) -> None:
         await self._chats.upsert_added(chat_id, title)
+        await self._chats.unpin(await self._chats.list_pins(chat_id), datetime.now(UTC))
 
     async def on_bot_removed(self, chat_id: MaxChatId) -> None:
         await self._chats.set_removed(chat_id)
@@ -87,14 +119,10 @@ class ChatsService:
         await self._bind(chat, house.id, user_id, ChatBinder.CODE)
 
     async def set_admin(self, chat_id: MaxChatId, is_admin: bool) -> Chat:
-        chat = await self._chats.get(chat_id)
-        if (
-            chat is None
-            or chat.house_id is None
-            or chat.bound_at is None
-            or chat.status != ChatStatus.ACTIVE
-        ):
+        bound = await self._bound(chat_id)
+        if bound is None:
             raise InvalidState(CHAT_NOT_BOUND)
+        chat, house_id = bound
         granted = is_admin and not chat.bot_is_admin
         await self._chats.set_admin(chat, is_admin)
         if granted:
@@ -102,9 +130,9 @@ class ChatsService:
                 EventType.CHAT_ADMIN_GRANTED,
                 user_id=chat.bound_by,
                 chat_id=chat_id,
-                house_id=chat.house_id,
+                house_id=house_id,
             )
-            self._notifications.welcome_chat(chat_id, chat.house_id)
+            self._notifications.welcome_chat(chat_id, house_id)
         return chat
 
     async def _free_chat(self, chat_id: MaxChatId) -> Chat:
@@ -142,3 +170,127 @@ class ChatsService:
             house_id=house_id,
             by_role=binder.value,
         )
+
+    async def pin(
+        self,
+        user_id: UserId | None,
+        chat_id: MaxChatId,
+        target: MessageRef | None,
+        text: str | None,
+    ) -> None:
+        bound = await self._bound(chat_id)
+        if bound is None:
+            return
+        chat, house_id = bound
+        author, binder = await self._pinner(user_id, chat, house_id)
+        if target is None:
+            raise InvalidRequest(PIN_HINT)
+        text = (text or "").strip()[:PIN_TEXT_LIMIT] or None
+        pins = await self._chats.list_pins(chat_id)
+        listed = next((pin for pin in pins if pin.mid == target.mid), None)
+        if listed is not None:
+            await self._chats.set_pin_text(listed, text)
+        elif len(pins) >= MAX_PINS:
+            raise InvalidRequest(PINS_FULL)
+        else:
+            await self._chats.add_pin(
+                ChatPin(
+                    chat_id=chat_id,
+                    mid=target.mid,
+                    seq=target.seq,
+                    text=text,
+                    pinned_by=author,
+                )
+            )
+            await self._events.record(
+                EventType.CHAT_PINNED,
+                user_id=author,
+                chat_id=chat_id,
+                house_id=house_id,
+                by_role=binder.value,
+            )
+        self._notifications.sync_chat_pins(chat_id)
+
+    async def unpin(
+        self,
+        user_id: UserId | None,
+        chat_id: MaxChatId,
+        target: MessageRef | None,
+        number: int | None,
+    ) -> None:
+        bound = await self._bound(chat_id)
+        if bound is None:
+            return
+        chat, house_id = bound
+        author, binder = await self._pinner(user_id, chat, house_id)
+        pins = await self._chats.list_pins(chat_id)
+        pin: ChatPin | None = None
+        method = UnpinMethod.REPLY
+        if target is not None:
+            pin = next((listed for listed in pins if listed.mid == target.mid), None)
+        elif number is not None and 1 <= number <= len(pins):
+            pin, method = pins[number - 1], UnpinMethod.NUMBER
+        if pin is None:
+            raise InvalidRequest(UNPIN_HINT)
+        await self._chats.unpin([pin], datetime.now(UTC))
+        await self._events.record(
+            EventType.CHAT_UNPINNED,
+            user_id=author,
+            chat_id=chat_id,
+            house_id=house_id,
+            method=method.value,
+            by_role=binder.value,
+        )
+        self._notifications.sync_chat_pins(chat_id)
+
+    async def on_message_removed(self, chat_id: MaxChatId, mid: str) -> None:
+        chat = await self._chats.lock(chat_id)
+        if chat is None or chat.pins_mid != mid:
+            return
+        pins = await self._chats.list_pins(chat_id)
+        await self._chats.unpin(pins, datetime.now(UTC))
+        await self._chats.set_pins_mid(chat, None)
+        for _ in pins:
+            await self._events.record(
+                EventType.CHAT_UNPINNED,
+                chat_id=chat_id,
+                house_id=chat.house_id,
+                method=UnpinMethod.LIST_DELETED.value,
+            )
+
+    async def pin_list(self, chat_id: MaxChatId) -> PinList | None:
+        bound = await self._bound(chat_id)
+        if bound is None:
+            return None
+        chat, house_id = bound
+        return PinList(
+            chat=chat, house_id=house_id, pins=await self._chats.list_pins(chat_id)
+        )
+
+    async def _bound(self, chat_id: MaxChatId) -> tuple[Chat, HouseId] | None:
+        # блокировка строки выстраивает команды и отрисовку списка одного чата,
+        # поэтому лимит и id сообщения со списком не бывают устаревшими
+        chat = await self._chats.lock(chat_id)
+        if (
+            chat is None
+            or chat.house_id is None
+            or chat.bound_at is None
+            or chat.status != ChatStatus.ACTIVE
+        ):
+            return None
+        return chat, chat.house_id
+
+    async def _pinner(
+        self, user_id: UserId | None, chat: Chat, house_id: HouseId
+    ) -> tuple[UserId, ChatBinder]:
+        house = await self._houses.get(house_id)
+        binder = (
+            None
+            if user_id is None or house is None
+            else await self._binder(user_id, house)
+        )
+        if user_id is None or binder is None:
+            raise NotEnoughRights(PIN_DENIED)
+        if not chat.bot_is_admin:
+            raise InvalidState(PIN_NEEDS_RIGHTS)
+        return user_id, binder

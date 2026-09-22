@@ -1,7 +1,7 @@
 from zheka.core.models.access import AccessRequest, AccessSlot, AccessTarget
 from zheka.core.models.announcements import Announcement
 from zheka.core.models.charges import Charge, Tariff
-from zheka.core.models.chats import Chat
+from zheka.core.models.chats import Chat, ChatPin
 from zheka.core.models.events import Event
 from zheka.core.models.houses import Flat, House
 from zheka.core.models.invites import FlatInvite, OrgInvite
@@ -27,6 +27,7 @@ __all__ = (
     "Appointment",
     "Charge",
     "Chat",
+    "ChatPin",
     "DemandSignal",
     "Event",
     "Flat",

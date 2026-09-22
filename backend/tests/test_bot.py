@@ -16,7 +16,7 @@ from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.dialogs.test_tools.keyboard import InlineButtonTextLocator
 from maxo.enums import ChatStatus as MaxChatStatus, ChatType
-from maxo.errors import MaxBotForbiddenError
+from maxo.errors import MaxBotForbiddenError, MaxBotNotFoundError
 from maxo.omit import Omittable, Omitted
 from maxo.routing.filters import Command
 from maxo.routing.signals import MaxoUpdate
@@ -30,6 +30,7 @@ from maxo.types import (
     Message,
     MessageBody,
     MessageCreated,
+    MessageRemoved,
     OpenAppButton,
     PhotoAttachment,
     PhotoAttachmentPayload,
@@ -40,6 +41,7 @@ from maxo.types.chat import Chat as MaxChat
 from maxo.types.link_button import LinkButton
 from maxo.types.simple_query_result import SimpleQueryResult
 from maxo.utils.deeplink import create_start_link
+from maxo.utils.link import id_to_message_url
 from sqlalchemy import Row, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import InMemoryBroker
@@ -65,7 +67,13 @@ from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TE
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.states import Consent, Menu
 from zheka.broker.task_names import TaskName
-from zheka.broker.tasks.chats import JOIN_HOUSE, on_bot_added, welcome_chat
+from zheka.broker.tasks.chats import (
+    JOIN_HOUSE,
+    PINS_TITLE,
+    on_bot_added,
+    sync_chat_pins,
+    welcome_chat,
+)
 from zheka.broker.tasks.notifications import broadcast_to_chats
 from zheka.broker.tasks.reminders import broadcast_access_request
 from zheka.broker.tasks.requests import (
@@ -102,12 +110,18 @@ from zheka.core.ids import (
 )
 from zheka.core.models import User
 from zheka.core.services.access import SLOT_FULL
-from zheka.core.services.chats import CHAT_NOT_BOUND, CHAT_TAKEN, WRONG_CODE
+from zheka.core.services.chats import (
+    CHAT_NOT_BOUND,
+    CHAT_TAKEN,
+    UNPIN_HINT,
+    WRONG_CODE,
+)
 from zheka.core.services.demo import DEMO_INNS, demo_flat_number
 from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
 from zheka.core.texts import REQUEST_STATUS_LABELS
 from zheka.infra.database.models import (
     Chat,
+    ChatPin,
     Flat,
     House,
     OrgMember,
@@ -122,6 +136,7 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
+from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
@@ -1832,3 +1847,320 @@ async def test_a_house_without_a_connected_org_takes_no_request_in_the_bot(
     text = message_manager.last_message().body.text or ""
     assert NOT_CONNECTED_TEXT.format(address=address) in text
     assert FIRST_CATEGORY.find_button(message_manager.last_message()) is None
+
+
+class _PinApi:
+    # то, что MAX видит от списка закрепов: отправки, правки, закрепы, удаления
+    def __init__(self) -> None:
+        self.sent: list[dict[str, Any]] = []
+        self.edited: list[dict[str, Any]] = []
+        self.pinned: list[dict[str, Any]] = []
+        self.deleted: list[str] = []
+        self.edit_fails = False
+
+    async def send_message(self, **kwargs: Any) -> SendMessageResult:
+        self.sent.append(kwargs)
+        return SendMessageResult(
+            message=Message(
+                recipient=Recipient(chat_type=ChatType.CHAT, chat_id=kwargs["chat_id"]),
+                timestamp=datetime.now(UTC),
+                body=MessageBody(
+                    mid=f"list-{len(self.sent)}",
+                    seq=len(self.sent),
+                    text=kwargs["text"],
+                ),
+            )
+        )
+
+    async def edit_message(self, **kwargs: Any) -> SimpleQueryResult:
+        if self.edit_fails:
+            raise MaxBotNotFoundError(code="not.found", error="", message="")
+        self.edited.append(kwargs)
+        return SimpleQueryResult(success=True)
+
+    async def pin_message(self, **kwargs: Any) -> SimpleQueryResult:
+        self.pinned.append(kwargs)
+        return SimpleQueryResult(success=True)
+
+    async def delete_message(self, *, message_id: str, **_: Any) -> SimpleQueryResult:
+        self.deleted.append(message_id)
+        return SimpleQueryResult(success=True)
+
+
+@pytest.fixture
+def pin_api(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> _PinApi:
+    api = _PinApi()
+    for name in ("send_message", "edit_message", "pin_message", "delete_message"):
+        monkeypatch.setattr(fake_bot, name, getattr(api, name))
+    return api
+
+
+async def _listed_chat(
+    session: AsyncSession,
+    client: BotClient,
+    *texts: str | None,
+    pins_mid: str | None = None,
+) -> tuple[MaxChatId, HouseId]:
+    chat_id = await _bound_chat(session, client)
+    user = await _saved(session, MaxUserId(client.user.id))
+    assert user is not None
+    chat = await ChatsRepo(session).get(chat_id)
+    assert chat is not None
+    assert chat.house_id is not None
+    house_id = chat.house_id
+    chat.pins_mid = pins_mid
+    session.add_all(
+        ChatPin(chat_id=chat_id, mid=f"m-{seq}", seq=seq, text=text, pinned_by=user.id)
+        for seq, text in enumerate(texts, start=1)
+    )
+    await session.commit()
+    return chat_id, house_id
+
+
+async def _pins_mid(session: AsyncSession, chat_id: MaxChatId) -> str | None:
+    session.expire_all()
+    chat = await ChatsRepo(session).get(chat_id)
+    assert chat is not None
+    return chat.pins_mid
+
+
+async def test_the_pin_list_is_sent_with_the_house_button_and_pinned_silently(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    fake_bot: FakeBot,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, house_id = await _listed_chat(bot_session, client, "Вода <10:00>", None)
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+
+    [sent] = pin_api.sent
+    first, second = id_to_message_url(1, chat_id), id_to_message_url(2, chat_id)
+    assert sent["text"] == (
+        f'{PINS_TITLE}\n1. <a href="{first}">Вода &lt;10:00&gt;</a>\n2. {second}'
+    )
+    assert sent["notify"] is False
+    [attachment] = sent["attachments"]
+    assert attachment.payload.buttons == [
+        [
+            LinkButton(
+                text=JOIN_HOUSE,
+                url=create_start_link(fake_bot, house_payload(house_id)),
+            )
+        ]
+    ]
+    assert pin_api.pinned == [
+        {"chat_id": chat_id, "message_id": "list-1", "notify": False}
+    ]
+    assert await _pins_mid(bot_session, chat_id) == "list-1"
+
+
+async def test_the_pin_list_edits_its_message_keeps_the_button_and_pins_again(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+
+    assert pin_api.sent == []
+    [edited] = pin_api.edited
+    assert edited["message_id"] == "list-7"
+    url = id_to_message_url(1, chat_id)
+    assert edited["text"] == f'{PINS_TITLE}\n1. <a href="{url}">Вода</a>'
+    assert edited["notify"] is False
+    [attachment] = edited["attachments"]
+    assert [[button.text for button in row] for row in attachment.payload.buttons] == [
+        [JOIN_HOUSE]
+    ]
+    assert pin_api.pinned == [
+        {"chat_id": chat_id, "message_id": "list-7", "notify": False}
+    ]
+
+
+async def test_a_list_message_that_cannot_be_edited_is_sent_anew(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    pin_api.edit_fails = True
+    chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+
+    assert len(pin_api.sent) == 1
+    assert pin_api.pinned[-1]["message_id"] == "list-1"
+    assert await _pins_mid(bot_session, chat_id) == "list-1"
+
+
+async def test_an_emptied_list_is_deleted_and_forgotten(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, _ = await _listed_chat(bot_session, client, pins_mid="list-7")
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+
+    assert pin_api.deleted == ["list-7"]
+    assert pin_api.sent == []
+    assert pin_api.pinned == []
+    assert await _pins_mid(bot_session, chat_id) is None
+
+
+@pytest.mark.parametrize(
+    ("failing", "texts", "pins_mid"),
+    [
+        ("send_message", ("Вода",), None),
+        ("pin_message", ("Вода",), None),
+        ("delete_message", (), "list-7"),
+    ],
+)
+async def test_a_list_the_bot_cannot_post_asks_the_binder_for_the_rights(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,  # noqa: ARG001
+    chat_api: _ChatApi,  # noqa: ARG001
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+    shows: list[Show],
+    failing: str,
+    texts: tuple[str, ...],
+    pins_mid: str | None,
+) -> None:
+    async def forbidden(**_: Any) -> Any:
+        raise MaxBotForbiddenError(code="chat.denied", error="", message="")
+
+    monkeypatch.setattr(fake_bot, failing, forbidden)
+    chat_id, _ = await _listed_chat(bot_session, client, *texts, pins_mid=pins_mid)
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+
+    _, _, recipient, notify = _shown(shows, RIGHTS_TEXT.format(title=CHAT_TITLE))
+    assert recipient == client.chat.chat_id
+    assert notify is True
+
+
+def _chat_message(chat_id: MaxChatId, mid: str, seq: int) -> Message:
+    return Message(
+        recipient=Recipient(chat_type=ChatType.CHAT, chat_id=chat_id),
+        timestamp=datetime.now(UTC),
+        body=MessageBody(mid=mid, seq=seq, text="Во вторник отключат воду"),
+    )
+
+
+def _in_chat(
+    bot_setup: BotSetup, bot: FakeBot, chat_id: MaxChatId, max_user_id: int
+) -> BotClient:
+    return BotClient(
+        bot_setup.dp,
+        user_id=max_user_id,
+        chat_id=chat_id,
+        chat_type=ChatType.CHAT,
+        bot=bot,
+    )
+
+
+async def _pinned(
+    session: AsyncSession, client: BotClient, chat_id: MaxChatId, *mids: str
+) -> None:
+    user = await _saved(session, MaxUserId(client.user.id))
+    assert user is not None
+    session.add_all(
+        ChatPin(chat_id=chat_id, mid=mid, seq=seq, pinned_by=user.id)
+        for seq, mid in enumerate(mids, start=1)
+    )
+    await session.commit()
+
+
+async def _pin_mids(session: AsyncSession, chat_id: MaxChatId) -> list[str]:
+    session.expire_all()
+    return [pin.mid for pin in await ChatsRepo(session).list_pins(chat_id)]
+
+
+async def test_a_pin_in_the_house_chat_lists_the_replied_message(
+    client: BotClient,
+    bot_setup: BotSetup,
+    fake_bot: FakeBot,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    group = _in_chat(bot_setup, fake_bot, chat_id, client.user.id)
+
+    await group.send("/pin Отключение воды", reply_to=_chat_message(chat_id, "m-7", 7))
+
+    bot_session.expire_all()
+    [pin] = await ChatsRepo(bot_session).list_pins(chat_id)
+    assert (pin.mid, pin.seq, pin.text) == ("m-7", 7, "Отключение воды")
+    assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {"chat_id": chat_id}
+
+
+async def test_unpin_takes_a_number_and_answers_a_hint_in_the_chat(
+    client: BotClient, bot_setup: BotSetup, bot_session: AsyncSession
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    await _pinned(bot_session, client, chat_id, "m-1", "m-2")
+    recorder = _RecordingBot()
+    group = _in_chat(bot_setup, recorder, chat_id, client.user.id)
+
+    await group.send("/unpin 2")
+    await group.send("/unpin")
+
+    assert await _pin_mids(bot_session, chat_id) == ["m-1"]
+    assert recorder.texts == [UNPIN_HINT]
+
+
+async def test_a_pin_in_a_chat_without_a_house_gets_no_answer(
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
+) -> None:
+    recorder = _RecordingBot()
+    chat_id = _chat_id()
+    group = _in_chat(bot_setup, recorder, chat_id, _max_id())
+
+    await group.send("/pin", reply_to=_chat_message(chat_id, "m-1", 1))
+    await group.send("/unpin")
+
+    assert recorder.texts == []
+
+
+@pytest.mark.parametrize("command", ["/pin", "/unpin"])
+async def test_pin_in_a_private_dialog_is_a_loose_message(
+    client: BotClient, message_manager: MockMessageManager, command: str
+) -> None:
+    # роутер чатов стоит перед личными: без фильтра он глотал бы /pin из лички
+    await client.send(command)
+
+    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
+
+
+async def test_deleting_the_list_message_in_the_chat_unpins_everything(
+    client: BotClient, bot_session: AsyncSession
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    await _pinned(bot_session, client, chat_id, "m-1", "m-2")
+    await bot_session.execute(
+        update(chats_table)
+        .where(chats_table.c.chat_id == chat_id)
+        .values(pins_mid="list-1")
+    )
+    await bot_session.commit()
+
+    await _feed(
+        client,
+        MessageRemoved(
+            message_id="list-1",
+            chat_id=chat_id,
+            user_id=client.user.id,
+            timestamp=datetime.now(UTC),
+        ),
+    )
+
+    assert await _pin_mids(bot_session, chat_id) == []

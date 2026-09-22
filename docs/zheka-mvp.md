@@ -269,7 +269,17 @@ CJM подключения:
 
 Каждое новое добавление бота в чат - новая привязка с нуля. Дальше в чат
 летят объявления УК и напоминания об опросах, простым текстом. Персональное
-(статусы заявок, счетчики) - только в личку. Интерактива в группе нет.
+(статусы заявок, счетчики) - только в личку.
+
+Закрепы. В чате MAX закреплено одно сообщение, и новый закреп вытесняет
+старый, поэтому бот ведет свой закреп - нумерованный список ссылок на важные
+сообщения. Председатель или сотрудник УК отвечает на сообщение командой
+`/pin` с необязательным текстом, и в списке появляется пункт: текст со
+ссылкой внутри или сама ссылка. `/unpin` в ответ на закрепленное сообщение
+или `/unpin N` убирает пункт. В списке до 15 пунктов, текст до 100 символов,
+под списком кнопка «Присоединиться к дому». Удалили сообщение со списком -
+открепилось все. В чате без привязки бот команды не замечает. Другого
+интерактива в группе нет.
 
 ### Онбординг жителя
 
@@ -607,7 +617,7 @@ MAX-события `dialog_muted`, `dialog_unmuted`, `bot_stopped` пишутс�
 ## Аналитика
 
 Сбор в таблицу `events` (user_id, тип, payload, created_at). Закрытый перечень
-из 45 типов, `EventType` в одном модуле (payload в скобках):
+из 47 типов, `EventType` в одном модуле (payload в скобках):
 
 - бот и мини-апп: `bot_start(source)`, `bot_muted`, `bot_unmuted`,
   `bot_stopped`, `miniapp_open(source, tab, announcement_id)`,
@@ -637,7 +647,9 @@ MAX-события `dialog_muted`, `dialog_unmuted`, `bot_stopped` пишутс�
 - опросы, объявления, чаты: `poll_created(poll_id, by_role)`,
   `poll_voted(poll_id)`, `announcement_sent(announcement_id, channel,
   houses_count)`, `chat_bound(chat_id, house_id, by_role)`,
-  `chat_admin_granted(chat_id, house_id)`;
+  `chat_admin_granted(chat_id, house_id)`,
+  `chat_pinned(chat_id, house_id, by_role)`,
+  `chat_unpinned(chat_id, house_id, method, by_role)`;
 - организация: `org_registered(org_id, inn)`, `staff_invited(org_id, role)`,
   `resident_blocked(resident_id, reason)`,
   `resident_unblocked(resident_id, reason)` (reason всегда пуст),

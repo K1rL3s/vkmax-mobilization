@@ -135,7 +135,9 @@
 - `announcements` - org_id, house_ids, text, channels (чат / лс), created_by,
   recipients_count
 - `chats` - chat_id, house_id, title, bound_by, bot_is_admin, bound_at,
-  status (`active` / `removed`)
+  status (`active` / `removed`), pins_mid
+- `chat_pins` - chat_id, mid, seq, text, pinned_by, unpinned_at (один
+  активный пункт на сообщение)
 - `demand_signals` - house_id, user_id
 - `reception_windows` - org_id, weekday, time_from, time_to, slot_minutes,
   capacity
@@ -257,6 +259,9 @@
   перепроверка при любой неудачной отправке в чат и сообщение со звуком
   тому, кто привязал
 - приветствие в чат с кнопкой-диплинком
+- закрепы в домовом чате: `/pin` в ответ на сообщение и `/unpin` (ответом
+  или номером) от председателя и сотрудников УК, бот ведет один закреп со
+  списком ссылок и кнопкой дома, удаление списка открепляет все
 - диалог исполнителя: карточка назначенной заявки с адресом, категорией и фото
   жителя, кнопки «принял» / «выехал» / «готово», каждое нажатие редактирует ту
   же карточку, «готово» требует фото результата
@@ -390,7 +395,7 @@
 
 ## Перечень событий
 
-45 членов `EventType` в одном модуле, не строки по месту (payload в скобках):
+47 членов `EventType` в одном модуле, не строки по месту (payload в скобках):
 
 `bot_start(source)`, `bot_muted`, `bot_unmuted`, `bot_stopped`,
 `miniapp_open(source, tab, announcement_id)`,
@@ -420,6 +425,8 @@ ocr_accepted, is_below_previous, out_of_window)`,
 `announcement_sent(announcement_id, channel, houses_count)`,
 `chat_bound(chat_id, house_id, by_role)`,
 `chat_admin_granted(chat_id, house_id)`,
+`chat_pinned(chat_id, house_id, by_role)`,
+`chat_unpinned(chat_id, house_id, method, by_role)`,
 `notification_settings_changed(category, level)`,
 `org_registered(org_id, inn)`, `staff_invited(org_id, role)`,
 `resident_blocked(resident_id, reason)`,

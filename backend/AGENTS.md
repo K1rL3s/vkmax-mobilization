@@ -200,7 +200,8 @@ no evidence in a report or review.
   ACTIVE`: `BOUND_CHAT` (`infra/database/repos/chats.py`), shared by the house
   card and the fan-out, which also needs `bot_is_admin`.
 - Every `bot_added` is a fresh binding (`ChatsRepo.upsert_added` clears
-  `house_id`, `bound_by`, `bound_at`, `bot_is_admin`). `ChatsService.bind`
+  `house_id`, `bound_by`, `bound_at`, `bot_is_admin`, `pins_mid`, and
+  `on_bot_added` unpins the old list without events). `ChatsService.bind`
   allows staff of the house's org (`is_staff`, not an executor) or its active
   chairman.
 - The `bot_added` handler only queues `on_bot_added`, which leaves channels and
@@ -214,6 +215,12 @@ no evidence in a report or review.
   `ChatsService.set_admin` records `CHAT_ADMIN_GRANTED` and queues the welcome
   only on `false -> true`. A failed send without rights opens
   `ChatBinding.rights` for `bound_by` with sound.
+- Pins (`/pin`, `/unpin`, bound chats only, any other chat is ignored
+  silently) live in `chat_pins`. `ChatsService` writes them under the chat
+  row lock (`ChatsRepo.lock`); only `sync_chat_pins` renders the list, from
+  the database, always with the house link button. `message_removed` of
+  `chats.pins_mid` unpins everything; an emptied list is deleted, never
+  unpinned.
 
 ### Readings, reminders, analytics
 
@@ -296,7 +303,7 @@ no evidence in a report or review.
 - Plans and block history: `.superpowers/sdd/` at the repo root
   (`progress.md` maps blocks to commits); `refactor-startapp-routing.md` waits
   for its frontend half.
-- `EventType`'s 45 members split 39 + 4 + 2. 39 are recorded inside
+- `EventType`'s 47 members split 41 + 4 + 2. 41 are recorded inside
   `core/services/` (e.g. `HOUSE_SEARCH` / `HOUSE_LINKED` in `HousesService`,
   `CHAT_BOUND`, `LLM_SUGGESTED`), so a handler or route recording them doubles
   the count: pass the service `source`, `method` or `entrance`. 4 in bot

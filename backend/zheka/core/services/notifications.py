@@ -106,3 +106,6 @@ class NotificationsService:
         self._publisher.publish(
             TaskName.BROADCAST_ACCESS_REQUEST, access_request_id=access_request_id
         )
+
+    def sync_chat_pins(self, chat_id: MaxChatId) -> None:
+        self._publisher.publish(TaskName.SYNC_CHAT_PINS, chat_id=chat_id)

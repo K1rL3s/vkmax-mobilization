@@ -416,6 +416,7 @@ def upgrade() -> None:
         ),
         sa.Column("bound_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("status", sa.String(length=16), nullable=False),
+        sa.Column("pins_mid", sa.String(), nullable=True),
         sa.ForeignKeyConstraint(
             ["bound_by"], ["users.id"], name=op.f("fk_chats_bound_by_users")
         ),
@@ -423,6 +424,36 @@ def upgrade() -> None:
             ["house_id"], ["houses.id"], name=op.f("fk_chats_house_id_houses")
         ),
         sa.PrimaryKeyConstraint("chat_id", name=op.f("pk_chats")),
+    )
+    op.create_table(
+        "chat_pins",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("timezone('UTC', now())"),
+            nullable=False,
+        ),
+        sa.Column("chat_id", sa.BigInteger(), nullable=False),
+        sa.Column("mid", sa.String(), nullable=False),
+        sa.Column("seq", sa.BigInteger(), nullable=False),
+        sa.Column("text", sa.String(), nullable=True),
+        sa.Column("pinned_by", sa.BigInteger(), nullable=False),
+        sa.Column("unpinned_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["chat_id"], ["chats.chat_id"], name=op.f("fk_chat_pins_chat_id_chats")
+        ),
+        sa.ForeignKeyConstraint(
+            ["pinned_by"], ["users.id"], name=op.f("fk_chat_pins_pinned_by_users")
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_chat_pins")),
+    )
+    op.create_index(
+        op.f("ix_chat_pins_chat_id"),
+        "chat_pins",
+        ["chat_id", "mid"],
+        unique=True,
+        postgresql_where=sa.text("unpinned_at IS NULL"),
     )
     op.create_table(
         "demand_signals",
@@ -1170,6 +1201,12 @@ def downgrade() -> None:
     op.drop_table("polls")
     op.drop_table("flats")
     op.drop_table("demand_signals")
+    op.drop_index(
+        op.f("ix_chat_pins_chat_id"),
+        table_name="chat_pins",
+        postgresql_where=sa.text("unpinned_at IS NULL"),
+    )
+    op.drop_table("chat_pins")
     op.drop_table("chats")
     op.drop_table("access_requests")
     op.drop_table("reception_windows")

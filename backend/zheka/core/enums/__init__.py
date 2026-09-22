@@ -1,7 +1,7 @@
 from zheka.core.enums.analytics import AnalyticsMetric, MetricUnit
 from zheka.core.enums.announcements import AnnouncementChannel
 from zheka.core.enums.appointments import AppointmentStatus
-from zheka.core.enums.chats import ChatBinder, ChatStatus
+from zheka.core.enums.chats import ChatBinder, ChatStatus, UnpinMethod
 from zheka.core.enums.events import EventSource, EventType
 from zheka.core.enums.meters import (
     SERVICE_LABELS,
@@ -57,5 +57,6 @@ __all__ = (
     "ResponsibilityZone",
     "ServiceType",
     "TariffZone",
+    "UnpinMethod",
     "VerificationStatus",
 )

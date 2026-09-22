@@ -4,12 +4,14 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Table,
     false,
+    text,
 )
 
-from zheka.infra.database.tables._columns import created_at_column
+from zheka.infra.database.tables._columns import created_at_column, id_column
 from zheka.infra.database.tables.base import metadata
 
 chats_table = Table(
@@ -25,4 +27,25 @@ chats_table = Table(
     ),
     Column("bound_at", DateTime(timezone=True), nullable=True),
     Column("status", String(16), nullable=False),
+    Column("pins_mid", String, nullable=True),
+)
+
+chat_pins_table = Table(
+    "chat_pins",
+    metadata,
+    id_column(),
+    created_at_column(),
+    Column("chat_id", BigInteger, ForeignKey("chats.chat_id"), nullable=False),
+    Column("mid", String, nullable=False),
+    Column("seq", BigInteger, nullable=False),
+    Column("text", String, nullable=True),
+    Column("pinned_by", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column("unpinned_at", DateTime(timezone=True), nullable=True),
+    Index(
+        None,
+        "chat_id",
+        "mid",
+        unique=True,
+        postgresql_where=text("unpinned_at IS NULL"),
+    ),
 )

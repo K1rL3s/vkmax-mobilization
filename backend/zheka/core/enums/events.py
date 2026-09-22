@@ -33,6 +33,8 @@ class EventType(StrEnum):
 
     CHAT_BOUND = "chat_bound"
     CHAT_ADMIN_GRANTED = "chat_admin_granted"
+    CHAT_PINNED = "chat_pinned"
+    CHAT_UNPINNED = "chat_unpinned"
 
     NOTIFICATION_SETTINGS_CHANGED = "notification_settings_changed"
 

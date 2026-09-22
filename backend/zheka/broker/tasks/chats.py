@@ -1,18 +1,30 @@
+import logging
+from collections.abc import Sequence
+from html import escape
+
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.dialogs import ShowMode
+from maxo.errors import MaxBotApiError, MaxBotNetworkError
 from maxo.types.link_button import LinkButton
 from maxo.utils.deeplink import create_start_link
+from maxo.utils.link import id_to_message_url
 from taskiq import async_shared_broker
 
 from zheka.bot.dialog_data import ChatBindingData
 from zheka.bot.states import ChatBinding
 from zheka.broker.task_names import TaskName
 from zheka.core.deeplinks import house_payload
+from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId
+from zheka.core.models import ChatPin
 from zheka.core.services.chats import ChatsService
+from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
+from zheka.infra.max.sender import is_chat_admin
+
+logger = logging.getLogger(__name__)
 
 WELCOME_TEXT = (
     "Здравствуйте, соседи! Я бот вашего дома. Сюда буду присылать объявления "
@@ -20,6 +32,7 @@ WELCOME_TEXT = (
     "со мной"
 )
 JOIN_HOUSE = "Присоединиться к дому"
+PINS_TITLE = "Закреплено в чате:"
 
 
 def chat_stack(chat_id: MaxChatId) -> str:
@@ -83,4 +96,92 @@ async def welcome_chat(
                 )
             ]
         ],
+    )
+
+
+@async_shared_broker.task(task_name=TaskName.SYNC_CHAT_PINS.value)
+@inject(patch_module=True)
+async def sync_chat_pins(
+    chat_id: MaxChatId,
+    bot: FromDishka[Bot],
+    chats_service: FromDishka[ChatsService],
+    chats_repo: FromDishka[ChatsRepo],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> None:
+    listed = await chats_service.pin_list(chat_id)
+    if listed is None:
+        return
+    chat = listed.chat
+    mid = chat.pins_mid
+    if not listed.pins:
+        if mid is not None:
+            await chats_repo.set_pins_mid(chat, None)
+            # удаленное сообщение теряет закреп,
+            # а открепление сняло бы то, что закрепили после бота
+            if not await sender.delete_message(chat_id, mid):
+                await recheck_chat_rights(
+                    chat_id, bot, chats_service, users_repo, sender
+                )
+        return
+
+    text = _pins_text(chat_id, listed.pins)
+    # сообщение с клавиатурой MAX дает править бессрочно
+    keyboard = [
+        [
+            LinkButton(
+                text=JOIN_HOUSE,
+                url=create_start_link(bot, house_payload(listed.house_id)),
+            )
+        ]
+    ]
+    if mid is None or not await sender.edit_message(chat_id, mid, text, keyboard):
+        sent = await sender.send_message(
+            text, chat_id=chat_id, notify=False, keyboard=keyboard
+        )
+        if sent is None:
+            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+            return
+        mid = sent.message.body.mid
+        await chats_repo.set_pins_mid(chat, mid)
+    if not await sender.pin_message(chat_id, mid):
+        await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+
+
+def _pins_text(chat_id: MaxChatId, pins: Sequence[ChatPin]) -> str:
+    lines = [PINS_TITLE]
+    for number, pin in enumerate(pins, start=1):
+        url = id_to_message_url(pin.seq, chat_id)
+        link = url if pin.text is None else f'<a href="{url}">{escape(pin.text)}</a>'
+        lines.append(f"{number}. {link}")
+    return "\n".join(lines)
+
+
+async def recheck_chat_rights(
+    chat_id: MaxChatId,
+    bot: Bot,
+    chats_service: ChatsService,
+    users_repo: UsersRepo,
+    sender: MaxSender,
+) -> None:
+    try:
+        is_admin = await is_chat_admin(bot, chat_id)
+        chat = await chats_service.set_admin(chat_id, is_admin)
+    except (MaxBotApiError, MaxBotNetworkError, ZhekaError):
+        logger.exception("Права бота в чате %s не перепроверены", chat_id)
+        return
+    binder = (
+        None
+        if is_admin or chat.bound_by is None
+        else await users_repo.get_by_id(chat.bound_by)
+    )
+    if binder is None:
+        return
+    await sender.start_dialog(
+        ChatBinding.rights,
+        binder,
+        notify=True,
+        data=ChatBindingData(chat_id=int(chat_id), title=chat.title or "").to_data(),
+        stack_id=chat_stack(chat_id),
+        show_mode=ShowMode.SEND,
     )
