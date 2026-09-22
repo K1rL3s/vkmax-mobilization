@@ -1,2 +1,5 @@
 allowBuilds:
   esbuild: true
+overrides:
+  # jsonschema 1.5.0 роняет правила eslint-plugin-project-structure 3.14.4 с "Invalid URL"
+  eslint-plugin-project-structure>jsonschema: 1.4.1

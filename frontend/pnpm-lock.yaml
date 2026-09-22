@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  eslint-plugin-project-structure>jsonschema: 1.4.1
+
 importers:
 
   .:
@@ -1400,8 +1403,8 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  jsonschema@1.5.0:
-    resolution: {integrity: sha512-K+A9hhqbn0f3pJX17Q/7H6yQfD/5OXgdrR5UE12gMXCiN9D5Xq2o5mddV2QEcX/bjla99ASsAAQUyMCCRWAEhw==}
+  jsonschema@1.4.1:
+    resolution: {integrity: sha512-S6cATIPVv1z0IlxdN+zUk5EPjkGCdnhN4wVSBlvoUO1tOLJootbo9CquNJmbIh4yikWHiUedhRYrNPn1arpEmQ==}
 
   keyv@5.6.0:
     resolution: {integrity: sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kA1Ufx9OYWZzg52QFBGALTirzDSw==}
@@ -2914,7 +2917,7 @@ snapshots:
       '@typescript-eslint/utils': 8.70.0(eslint@10.10.0)(typescript@6.0.3)
       comment-json: 5.0.0
       js-yaml: 5.4.2
-      jsonschema: 1.5.0
+      jsonschema: 1.4.1
       micromatch: 4.0.8
     transitivePeerDependencies:
       - eslint
@@ -3228,7 +3231,7 @@ snapshots:
 
   json5@2.2.3: {}
 
-  jsonschema@1.5.0: {}
+  jsonschema@1.4.1: {}
 
   keyv@5.6.0:
     dependencies:
