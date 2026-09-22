@@ -6,7 +6,10 @@ from pydantic import Field
 from zheka.api.schemas.base import BaseSchema
 from zheka.core.enums import AnnouncementChannel
 from zheka.core.ids import AnnouncementId, HouseId
-from zheka.core.services.announcements import AnnouncementData
+from zheka.core.services.announcements import (
+    ANNOUNCEMENT_TEXT_LIMIT,
+    AnnouncementData,
+)
 
 
 class AnnouncementItem(BaseSchema):
@@ -55,7 +58,9 @@ class AnnouncementItem(BaseSchema):
 
 class CreateAnnouncementRequest(BaseSchema):
     house_ids: list[HouseId]
-    text: str
+    text: str = Field(
+        description=f"Текст объявления, до {ANNOUNCEMENT_TEXT_LIMIT} символов",
+    )
     channels: list[AnnouncementChannel] = Field(
         default_factory=lambda: [AnnouncementChannel.CHAT],
     )

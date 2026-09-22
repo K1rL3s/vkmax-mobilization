@@ -1,0 +1,43 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+
+  h1,
+  h2 {
+    margin: 0;
+  }
+}
+
+.Form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.Content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 16px 8px;
+}
+
+.Text {
+  width: 100%;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Error {
+  color: var(--text-negative);
+}
+
+/* кнопка не sticky: мобильная клавиатура делает прилипшую кнопку
+   полупрозрачной */
+.Footer {
+  padding: 12px 16px 24px;
+}

@@ -1,7 +1,93 @@
-import { EmptyState } from "@/shared/ui/state";
+import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
+import { Link } from "react-router-dom";
 
-const AdminAnnouncementsPage = () => (
-  <EmptyState fill title="Объявления" description="Экран делается в блоке У2" />
+import { Routes } from "@/shared/model/routes";
+import { Icon, megaphoneIcon, plusIcon } from "@/shared/ui/icon";
+import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
+
+import { useAnnouncementList, useSentOutcome } from "./model/use-announcements";
+import { AnnouncementRow } from "./ui/announcement-row";
+import { SentNotice } from "./ui/sent-notice";
+
+import styles from "./admin-announcements.module.css";
+
+const NewAnnouncementButton = () => (
+  <Button asChild size="medium" iconBefore={<Icon src={plusIcon} />}>
+    <Link to={Routes.ADMIN_ANNOUNCEMENT_NEW}>Новое объявление</Link>
+  </Button>
 );
+
+const AdminAnnouncementsPage = () => {
+  const list = useAnnouncementList();
+  const outcome = useSentOutcome();
+
+  const content = () => {
+    if (list.isPending) {
+      return <LoadingState fill title="Загружаем объявления" />;
+    }
+
+    if (list.isError) {
+      return <ErrorState fill onRetry={list.retry} />;
+    }
+
+    if (list.items.length === 0) {
+      return (
+        <EmptyState
+          fill
+          icon={megaphoneIcon}
+          title="Объявлений пока нет"
+          description="Объявление разом доходит до жителей выбранных домов: в чат дома и, если нужно, в личные сообщения. Сообщайте так об отключениях, ремонте и уборке"
+          action={<NewAnnouncementButton />}
+        />
+      );
+    }
+
+    return (
+      <>
+        <NewAnnouncementButton />
+
+        {list.items.map((announcement) => (
+          <AnnouncementRow
+            key={announcement.id}
+            announcement={announcement}
+            houses={list.houses}
+          />
+        ))}
+
+        {list.hasMore && (
+          <Button
+            size="medium"
+            variant="secondary"
+            stretched
+            loading={list.isLoadingMore}
+            onClick={list.loadMore}
+          >
+            Показать ещё
+          </Button>
+        )}
+      </>
+    );
+  };
+
+  return (
+    <Panel className={styles.Page} mode="secondary">
+      <Flex align="stretch" direction="column" gapY={4}>
+        <Typography.Text asChild variant="title" color="primary">
+          <h1>Объявления</h1>
+        </Typography.Text>
+
+        <Typography.Text variant="description" color="secondary">
+          Рассылки жителям домов организации
+        </Typography.Text>
+      </Flex>
+
+      {outcome.sent && (
+        <SentNotice sent={outcome.sent} onClose={outcome.dismiss} />
+      )}
+
+      {content()}
+    </Panel>
+  );
+};
 
 export const Component = AdminAnnouncementsPage;

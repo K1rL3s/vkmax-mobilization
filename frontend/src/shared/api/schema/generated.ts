@@ -2515,7 +2515,10 @@ export interface components {
     CreateAnnouncementRequest: {
       /** House Ids */
       house_ids: number[];
-      /** Text */
+      /**
+       * Text
+       * @description Текст объявления, до 2000 символов
+       */
       text: string;
       /** Channels */
       channels?: components["schemas"]["AnnouncementChannel"][];

@@ -1,0 +1,20 @@
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* полный текст читают в ленте жителя, в списке УК хватает начала */
+.Text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.Ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

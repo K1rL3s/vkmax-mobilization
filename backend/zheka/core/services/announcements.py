@@ -14,7 +14,11 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
+# бот шлёт объявление одним сообщением, а MAX принимает до 4000 знаков вместе
+# с заголовком, названием УК и HTML-экранированием
+ANNOUNCEMENT_TEXT_LIMIT = 2000
 EMPTY_TEXT = "Напишите текст объявления"
+TEXT_TOO_LONG = f"Сократите объявление до {ANNOUNCEMENT_TEXT_LIMIT} символов"
 NO_HOUSES = "Выберите хотя бы один дом"
 NO_CHANNELS = "Выберите хотя бы один канал"
 UNKNOWN_ORG = "УК"
@@ -68,6 +72,8 @@ class AnnouncementsService:
         stated = text.strip()
         if not stated:
             raise InvalidRequest(EMPTY_TEXT)
+        if len(stated) > ANNOUNCEMENT_TEXT_LIMIT:
+            raise InvalidRequest(TEXT_TOO_LONG)
         if not house_ids:
             raise InvalidRequest(NO_HOUSES)
         if not channels:

@@ -9995,6 +9995,7 @@ components:
         text:
           type: string
           title: Text
+          description: Текст объявления, до 2000 символов
         channels:
           items:
             $ref: '#/components/schemas/AnnouncementChannel'

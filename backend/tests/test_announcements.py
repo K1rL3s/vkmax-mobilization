@@ -21,7 +21,10 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import EntityNotFound, InvalidRequest
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
-from zheka.core.services.announcements import AnnouncementsService
+from zheka.core.services.announcements import (
+    ANNOUNCEMENT_TEXT_LIMIT,
+    AnnouncementsService,
+)
 from zheka.core.services.events import EventsService
 from zheka.infra.database.models import Chat, Resident, User
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
@@ -346,3 +349,30 @@ async def test_urgent_mark_reaches_the_feed_and_the_message(
     items, _ = await service.list_for_resident(data.house_id, 20, 0)
     assert items[0].announcement.urgent is urgent
     assert broker.enqueued(TaskName.BROADCAST_TO_CHATS)[0]["text"].startswith(heading)
+
+
+async def test_text_over_the_limit_is_rejected(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    service = _service(session, publisher)
+
+    with pytest.raises(InvalidRequest):
+        await service.create(
+            data.org_id,
+            data.user_id,
+            [data.house_id],
+            "я" * (ANNOUNCEMENT_TEXT_LIMIT + 1),
+            [AnnouncementChannel.CHAT],
+        )
+
+    created = await service.create(
+        data.org_id,
+        data.user_id,
+        [data.house_id],
+        "я" * ANNOUNCEMENT_TEXT_LIMIT,
+        [AnnouncementChannel.CHAT],
+    )
+    assert len(created.announcement.text) == ANNOUNCEMENT_TEXT_LIMIT
