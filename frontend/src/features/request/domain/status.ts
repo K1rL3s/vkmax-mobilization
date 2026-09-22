@@ -1,4 +1,4 @@
-import type { IconTileTone } from "@/shared/ui/icon-tile";
+import type { StatusPillTone } from "@/shared/ui/status-pill";
 
 import type { RequestStatus } from "./types";
 
@@ -12,7 +12,7 @@ export const STATUS_LABEL: Record<RequestStatus, string> = {
 
 // приёмка выделена цветом: это единственный статус, на котором заявка ждёт
 // действия жителя, а не УК
-export const STATUS_TONE: Record<RequestStatus, IconTileTone> = {
+export const STATUS_TONE: Record<RequestStatus, StatusPillTone> = {
   new: "themed",
   accepted: "themed",
   in_progress: "themed",

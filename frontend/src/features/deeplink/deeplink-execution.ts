@@ -3,10 +3,13 @@ import { z } from "zod";
 import { activateFlatInvite } from "@/features/flat-invite";
 import { errorDetail } from "@/shared/api/errors";
 import { authParams, fetchClient } from "@/shared/api/instance";
+import { Routes } from "@/shared/model/routes";
 import {
   reloadSession,
+  selectCabinet,
   selectOrg,
   selectResidency,
+  startTarget,
   type Session,
 } from "@/shared/model/session";
 
@@ -207,11 +210,13 @@ export const executeDemoDeeplink = async (
 
   if (command.cabinet === "resident") {
     await selectResidency(access.residency.resident_id);
+    selectCabinet("resident");
 
     return { target: "resident" };
   }
 
   await selectOrg(access.org.org_id);
+  selectCabinet("admin");
 
   return { target: "admin" };
 };
@@ -230,5 +235,13 @@ export const executeDeeplink = (
   }
 };
 
-export const defaultRouteForSession = (session: Session): string =>
-  session.residencies.length > 0 ? "/home" : "/";
+export const defaultRouteForSession = (session: Session): string => {
+  switch (startTarget(session)) {
+    case "admin":
+      return Routes.ADMIN;
+    case "home":
+      return Routes.HOME;
+    case "onboarding":
+      return Routes.WELCOME;
+  }
+};

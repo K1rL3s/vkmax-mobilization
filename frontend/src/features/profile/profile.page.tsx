@@ -16,7 +16,7 @@ import {
 } from "@/features/flat-confirmation";
 import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
-import { useSession } from "@/shared/model/session";
+import { useSession, workingOrgs } from "@/shared/model/session";
 import { Chevron } from "@/shared/ui/chevron";
 import {
   alertIcon,
@@ -28,6 +28,7 @@ import {
   infoIcon,
 } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import {
   ALWAYS_DELIVERED,
@@ -62,12 +63,25 @@ const WARNING: Record<
 
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const { currentResidency: residency } = useSession();
+  const {
+    session,
+    currentResidency: residency,
+    selectCabinet,
+    selectOrg,
+  } = useSession();
   const notifications = useQuery(settingsQueryOptions());
 
   if (!residency) {
     return <Navigate to={Routes.HOME} replace />;
   }
+
+  const orgs = workingOrgs(session);
+
+  const enterAdmin = async (orgId: number) => {
+    await selectOrg(orgId);
+    selectCabinet("admin");
+    await navigate(Routes.ADMIN);
+  };
 
   const view = confirmationView(residency);
   // подтверждать нечего, пока УК не подключена или не завела квартиру
@@ -139,6 +153,39 @@ const ProfilePage = () => {
               {warning.action}
             </Link>
           </Button>
+        </Flex>
+      )}
+
+      {orgs.length > 0 && (
+        <Flex asChild align="stretch" direction="column" gap={8}>
+          <section>
+            <Typography.Text asChild variant="title" color="primary">
+              <h2>Работа</h2>
+            </Typography.Text>
+            <div className={styles.Panel}>
+              {orgs.map((org, index) => (
+                <CellSimple
+                  key={org.org_id}
+                  separator={index > 0}
+                  before={
+                    <Icon src={buildingIcon} className={styles.CellIcon} />
+                  }
+                  innerClassNames={{ title: styles.OrgTitle }}
+                  title={
+                    <Flex align="center" gap={8}>
+                      <span className={styles.OrgName}>{org.name}</span>
+                      {org.is_demo && (
+                        <StatusPill tone="themed">демо</StatusPill>
+                      )}
+                    </Flex>
+                  }
+                  subtitle="Кабинет УК"
+                  showChevron
+                  onClick={() => void enterAdmin(org.org_id)}
+                />
+              ))}
+            </div>
+          </section>
         </Flex>
       )}
 

@@ -1,12 +1,12 @@
 import { Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link } from "react-router-dom";
 
-import { cn } from "@/shared/lib/css";
 import { formatDay, formatTime, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { buildingIcon, Icon, userIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
 import { deadlineLeft } from "./domain/format";
@@ -88,21 +88,13 @@ const RequestPage = () => {
       </Flex>
 
       <Flex align="center" gap={8}>
-        <Typography.Text
-          className={cn(styles.Pill, styles[tone])}
-          variant="label-strong"
-        >
-          {STATUS_LABEL[request.status]}
-        </Typography.Text>
+        <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
         {request.group_size > 1 && (
-          <Typography.Text
-            className={cn(styles.Pill, styles.neutral)}
-            variant="label-strong"
-          >
+          <StatusPill tone="neutral">
             {request.group_size}{" "}
             {plural(request.group_size, ["квартира", "квартиры", "квартир"])} в
             заявке
-          </Typography.Text>
+          </StatusPill>
         )}
       </Flex>
 

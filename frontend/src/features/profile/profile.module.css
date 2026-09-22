@@ -49,6 +49,18 @@
     background-color: var(--background-card);
   }
 
+  .OrgTitle {
+    min-width: 0;
+  }
+
+  /* строки организаций держат одну высоту: длинное имя режется многоточием,
+     иначе список выглядит сломанным */
+  .OrgName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .Level {
     margin-right: 4px;
     white-space: nowrap;

@@ -1,0 +1,34 @@
+.StatusPill {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.themed {
+  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+  color: var(--text-themed);
+}
+
+.promo {
+  background-color: color-mix(
+    in srgb,
+    var(--promo-text-step-1) 12%,
+    transparent
+  );
+  color: var(--promo-text-step-1);
+}
+
+.neutral {
+  background-color: var(--background-secondary);
+  color: var(--text-secondary);
+}
+
+.positive {
+  background-color: color-mix(in srgb, var(--icon-positive) 12%, transparent);
+  color: var(--icon-positive);
+}
+
+.negative {
+  background-color: color-mix(in srgb, var(--text-negative) 12%, transparent);
+  color: var(--text-negative);
+}

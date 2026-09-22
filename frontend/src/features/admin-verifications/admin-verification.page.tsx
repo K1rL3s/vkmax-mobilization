@@ -2,12 +2,12 @@ import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { cn } from "@/shared/lib/css";
 import { duration, formatDayTime } from "@/shared/lib/format";
 import { useRouteParams } from "@/shared/lib/router";
 import { Routes } from "@/shared/model/routes";
 import { usersIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
+import { StatusPill, type StatusPillTone } from "@/shared/ui/status-pill";
 
 import { useVerificationDecision } from "./model/use-verification-decision";
 import {
@@ -18,10 +18,10 @@ import { RejectDialog } from "./ui/reject-dialog";
 
 import styles from "./admin-verification.module.css";
 
-const STATUS: Record<string, { label: string; tone: string }> = {
-  pending: { label: "Ждёт решения", tone: "waiting" },
-  approved: { label: "Подтверждён", tone: "approved" },
-  rejected: { label: "Отклонён", tone: "rejected" },
+const STATUS: Record<string, { label: string; tone: StatusPillTone }> = {
+  pending: { label: "Ждёт решения", tone: "themed" },
+  approved: { label: "Подтверждён", tone: "positive" },
+  rejected: { label: "Отклонён", tone: "negative" },
 };
 
 const sentAt = (request: VerificationRequest) => {
@@ -102,12 +102,7 @@ const AdminVerificationPage = () => {
               <h1 className={styles.Title}>Квартира {request.flat_number}</h1>
             </Typography.Text>
 
-            <Typography.Text
-              className={cn(styles.StatusPill, styles[status.tone])}
-              variant="label-strong"
-            >
-              {status.label}
-            </Typography.Text>
+            <StatusPill tone={status.tone}>{status.label}</StatusPill>
           </Flex>
 
           <Typography.Text variant="body" color="secondary">

@@ -5,6 +5,7 @@ import { cn } from "@/shared/lib/css";
 import { duration, formatDay } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { Chevron } from "@/shared/ui/chevron";
+import { StatusPill, type StatusPillTone } from "@/shared/ui/status-pill";
 
 import type { VerificationRequest } from "../model/use-verification-list";
 
@@ -12,11 +13,11 @@ import styles from "./verification-row.module.css";
 
 const STATUS: Record<
   VerificationRequest["status"],
-  { label: string; tone: "waiting" | "approved" | "rejected" }
+  { label: string; tone: StatusPillTone }
 > = {
-  pending: { label: "Ждёт решения", tone: "waiting" },
-  approved: { label: "Подтверждён", tone: "approved" },
-  rejected: { label: "Отклонён", tone: "rejected" },
+  pending: { label: "Ждёт решения", tone: "themed" },
+  approved: { label: "Подтверждён", tone: "positive" },
+  rejected: { label: "Отклонён", tone: "negative" },
 };
 
 const when = (request: VerificationRequest) =>
@@ -60,12 +61,7 @@ export const VerificationRow = ({
             {request.user_name}
           </Typography.Text>
 
-          <Typography.Text
-            className={cn(styles.StatusPill, styles[status.tone])}
-            variant="label-strong"
-          >
-            {status.label}
-          </Typography.Text>
+          <StatusPill tone={status.tone}>{status.label}</StatusPill>
         </Flex>
 
         <Flex align="center" gap={8}>

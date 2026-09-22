@@ -30,27 +30,6 @@
   background-color: var(--background-card);
 }
 
-.StatusPill {
-  flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-}
-
-.waiting {
-  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
-  color: var(--text-themed);
-}
-
-.approved {
-  background-color: color-mix(in srgb, var(--icon-positive) 12%, transparent);
-  color: var(--icon-positive);
-}
-
-.rejected {
-  background-color: color-mix(in srgb, var(--text-negative) 12%, transparent);
-  color: var(--text-negative);
-}
-
 .Error {
   color: var(--text-negative);
 }
