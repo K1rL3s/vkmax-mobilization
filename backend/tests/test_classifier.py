@@ -1,8 +1,8 @@
-import json
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Self
 
-import httpx
 import pytest
 
 from zheka.config import YandexConfig
@@ -13,10 +13,38 @@ KEY = "b22-secret-api-key"
 FOLDER = "b1gfolder"
 TEXT = "Течет труба в ванной"
 
-Handler = Callable[[httpx.Request], httpx.Response]
+
+@dataclass
+class _Request:
+    url: str
+    headers: dict[str, str]
+    json: dict[str, Any]
 
 
-def _answer(text: str, *, wrapped: bool = True) -> httpx.Response:
+@dataclass
+class _Response:
+    status: int
+    body: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return self.status < 400
+
+    async def json(self, content_type: str | None = None) -> dict[str, Any]:
+        del content_type
+        return self.body
+
+    async def __aenter__(self) -> "Self":
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        return None
+
+
+Handler = Callable[[_Request], _Response]
+
+
+def _answer(text: str, *, wrapped: bool = True) -> _Response:
     body = {
         "alternatives": [
             {
@@ -27,33 +55,46 @@ def _answer(text: str, *, wrapped: bool = True) -> httpx.Response:
         "usage": {"inputTextTokens": "1", "completionTokens": "1"},
         "modelVersion": "07.03.2024",
     }
-    return httpx.Response(200, json={"result": body} if wrapped else body)
+    return _Response(200, {"result": body} if wrapped else body)
+
+
+class _FakeSession:
+    def __init__(self, handler: Handler) -> None:
+        self._handler = handler
+        self.sent: list[_Request] = []
+
+    def post(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, Any],
+    ) -> _Response:
+        request = _Request(url, headers, json)
+        self.sent.append(request)
+        return self._handler(request)
 
 
 def _classifier(
     handler: Handler,
     api_key: str | None = KEY,
     folder_id: str | None = FOLDER,
-) -> tuple[YandexClassifier, list[httpx.Request]]:
-    sent: list[httpx.Request] = []
-
-    def record(request: httpx.Request) -> httpx.Response:
-        sent.append(request)
-        return handler(request)
-
+) -> tuple[YandexClassifier, list[_Request]]:
+    session = _FakeSession(handler)
     classifier = YandexClassifier(
         YandexConfig(api_key=api_key, folder_id=folder_id),
-        httpx.MockTransport(record),
+        session,  # type: ignore[arg-type]
     )
-    return classifier, sent
+    return classifier, session.sent
 
 
 def _status(code: int) -> Handler:
-    return lambda _: httpx.Response(code, json={"error": "nope"})
+    return lambda _: _Response(code, {"error": "nope"})
 
 
-def _timeout(request: httpx.Request) -> httpx.Response:
-    raise httpx.ReadTimeout("timed out", request=request)
+def _timeout(request: _Request) -> _Response:
+    del request
+    raise TimeoutError("timed out")
 
 
 @pytest.mark.parametrize(("api_key", "folder_id"), [(None, FOLDER), (KEY, None)])
@@ -72,12 +113,11 @@ async def test_a_valid_answer_is_the_category_after_trimming() -> None:
 
     assert await classifier.classify(TEXT) is RequestCategory.ELEVATOR
     [request] = sent
-    assert str(request.url) == COMPLETION_URL
+    assert request.url == COMPLETION_URL
     assert request.headers["Authorization"] == f"Api-Key {KEY}"
-    body = json.loads(request.content)
-    assert body["modelUri"] == f"gpt://{FOLDER}/yandexgpt-5-lite"
-    assert body["completionOptions"]["temperature"] == 0
-    assert body["messages"][-1] == {"role": "user", "text": TEXT}
+    assert request.json["modelUri"] == f"gpt://{FOLDER}/yandexgpt-5-lite"
+    assert request.json["completionOptions"]["temperature"] == 0
+    assert request.json["messages"][-1] == {"role": "user", "text": TEXT}
 
 
 @pytest.mark.parametrize("answer", ["Протечка", "LEAK"])
@@ -108,10 +148,8 @@ async def test_a_failed_call_leaves_the_classifier_on(handler: Handler) -> None:
 async def test_an_error_status_is_logged_with_its_code(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    empty, _ = _classifier(lambda _: httpx.Response(500, json={}))
-    lookalike, _ = _classifier(
-        lambda _: httpx.Response(503, content=_answer("leak").content),
-    )
+    empty, _ = _classifier(lambda _: _Response(500, {}))
+    lookalike, _ = _classifier(lambda _: _Response(503, _answer("leak").body))
 
     with caplog.at_level(logging.WARNING, logger="zheka.infra.yandex.classifier"):
         assert await empty.classify(TEXT) is None
@@ -148,7 +186,7 @@ async def test_an_unwrapped_answer_is_read_too() -> None:
 async def test_a_key_that_cannot_be_a_header_turns_the_classifier_off(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    key = f"{KEY}\u00a0"
+    key = f"{KEY} "
     classifier, sent = _classifier(lambda _: _answer("leak"), api_key=key)
 
     with caplog.at_level(logging.DEBUG):

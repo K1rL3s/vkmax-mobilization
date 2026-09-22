@@ -4,7 +4,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-import httpx
+import aiohttp
 
 from zheka.config import YandexConfig
 from zheka.core.enums import TariffZone
@@ -73,15 +73,14 @@ class VisionClient:
             "content": base64.b64encode(content).decode(),
         }
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
-                response = await client.post(
-                    _RECOGNIZE_URL,
-                    headers=headers,
-                    json=payload,
-                )
+            timeout = aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.post(_RECOGNIZE_URL, headers=headers, json=payload) as response,
+            ):
                 response.raise_for_status()
-                data: dict[str, Any] = response.json()
-        except (httpx.HTTPError, ValueError):
+                data: dict[str, Any] = await response.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError):
             logger.warning("Не удалось распознать показание счетчика через OCR")
             return None
         return data
