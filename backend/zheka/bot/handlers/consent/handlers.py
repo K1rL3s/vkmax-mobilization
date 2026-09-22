@@ -44,7 +44,6 @@ async def on_accept(
     with ConsentData.proxy(dialog_manager) as data:
         data.given = True
     await dialog_manager.show()
-    # отметка правит это сообщение, а следующее окно приходит новым
     dialog_manager.show_mode = ShowMode.SEND
 
     if deeplink is not None:

@@ -264,7 +264,6 @@ async def on_house_text(
         await _pick_house(dialog_manager, houses[0].id)
         return
     with OnboardingData.proxy(dialog_manager) as data:
-        # список рядом не перезапрашивается, поэтому сужает его только показ
         if data.by_geo:
             data.query = text if houses else ""
         else:
@@ -341,7 +340,6 @@ async def on_leave_house(
     _button: Button,
     dialog_manager: DialogManager,
 ) -> None:
-    # вход диплинком выбрал дом, а к способу поиска житель ушел искать другой
     with OnboardingData.proxy(dialog_manager) as data:
         data.query, data.missed = "", None
         data.entrance, data.source = None, EventSource.DIRECT

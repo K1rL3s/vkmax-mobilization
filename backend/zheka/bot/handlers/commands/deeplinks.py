@@ -99,7 +99,6 @@ async def open_deeplink(
         return
 
     user_id = user.id
-    # каждая цель отказывает до первой записи, поэтому отказ можно закоммитить
     try:
         if deeplink.kind is DeeplinkKind.ORG_INVITE:
             membership = await orgs_service.activate_invite(user_id, deeplink.value)

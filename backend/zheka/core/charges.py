@@ -6,11 +6,7 @@ from zheka.base import ZhekaType
 from zheka.core.enums import ServiceType
 from zheka.core.errors import InvalidValue
 
-# тысячные объема (1/1000 ед.) * тариф (1/10000 руб/ед.) =
-# = 1/10_000_000 рублей = 1/100_000 копейки
 _VOLUME_DIVISOR = 100_000
-# сотые площади (1/100 кв.м) * тариф (1/10000 руб/ед.) =
-# = 1/1_000_000 рублей = 1/10_000 копейки
 _AREA_DIVISOR = 10_000
 
 LineDeltaKind = Literal["changed", "appeared", "disappeared"]

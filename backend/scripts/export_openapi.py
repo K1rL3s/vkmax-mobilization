@@ -1,11 +1,3 @@
-"""Пишет схему OpenAPI в openapi.yaml в корне репозитория
-
-Приложение только собирается и не запускается, поэтому ни база, ни Redis,
-ни токен бота не нужны: недостающие переменные берутся из .env.example.
-
-    uv run python scripts/export_openapi.py
-"""
-
 import os
 from pathlib import Path
 

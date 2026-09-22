@@ -11,7 +11,6 @@ from zheka.bot.states import Consent
 from zheka.core.consent import CONSENT_TEXT
 
 GIVEN_TEXT = "✅ Согласие дано"
-# фронтенд открывает этот путь мини-аппа по startParam
 POLICY_PAYLOAD = encode_payload(json.dumps({"path": "/privacy"}, separators=(",", ":")))
 
 consent_dialog = Dialog(

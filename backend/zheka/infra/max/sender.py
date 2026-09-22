@@ -170,7 +170,6 @@ class MaxSender:
         return done
 
     async def is_pinned(self, chat_id: MaxChatId, mid: str) -> bool:
-        # без ответа MAX считаем закреп на месте, чтобы не звать список зря
         pinned = True
         with _undelivered():
             async with BOT_RATE_LIMIT:

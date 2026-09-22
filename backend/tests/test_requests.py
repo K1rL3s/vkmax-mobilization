@@ -936,7 +936,6 @@ async def test_export_hides_a_request_of_another_resident_and_records_nothing(
 class _StubClassifier(YandexClassifier):
     __slots__ = ("_category",)
 
-    # без super().__init__: заглушке не нужны ни ключ, ни http-сессия
     def __init__(self, category: RequestCategory | None) -> None:
         self._category = category
 

@@ -64,7 +64,6 @@ class PollCard(PollListItem):
     house_id: HouseId
     created_by_role: str
     can_vote: bool
-    # непроголосовавшие и закрытие опроса - одно право на бэке, одно поле здесь
     can_manage: bool
     options: list[PollOptionItem]
     disclaimer: str = DISCLAIMER

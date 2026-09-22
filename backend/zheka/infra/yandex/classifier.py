@@ -38,8 +38,6 @@ class YandexClassifier:
         key = self._config.api_key
         if self._refused or not key or not self._config.folder_id:
             return None
-        # aiohttp молча шлет не-ASCII ключ в utf-8,
-        # а на управляющем символе падает с ValueError
         if not (key.isascii() and key.isprintable()):
             self._refused = True
             logger.error(

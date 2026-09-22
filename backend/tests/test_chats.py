@@ -449,7 +449,6 @@ async def test_the_list_takes_a_pin_while_it_fits_one_max_message(
     repo = ChatsRepo(session)
     first = ChatPin(chat_id=chat_id, mid="m-1", seq=1, text="в", pinned_by=data.user_id)
     await repo.add_pin(first)
-    # 😀 is one code point but two UTF-16 units, the way MAX counts
     second = ChatPin(
         chat_id=chat_id,
         mid="m-2",

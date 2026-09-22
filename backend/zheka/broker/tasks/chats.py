@@ -141,8 +141,6 @@ async def sync_chat_pins(
         and await sender.edit_message(chat_id, mid, text, keyboard)
     ):
         if not notify:
-            # без нового закрепа бот не спорит с тем, кто снял список
-            # или закрепил поверх свое, а показывает, где список
             if not await sender.is_pinned(chat_id, mid):
                 await sender.send_message(PINS_HERE, chat_id=chat_id, reply_to=mid)
             return
@@ -159,7 +157,6 @@ async def sync_chat_pins(
         old, mid = mid, sent.message.body.mid
         await chats_repo.set_pins_mid(chat, mid)
         if old is not None:
-            # удаленный "у себя" список живет у остальных и устарел бы вторым
             await sender.delete_message(chat_id, old)
     if not await sender.pin_message(chat_id, mid, notify=notify):
         await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)

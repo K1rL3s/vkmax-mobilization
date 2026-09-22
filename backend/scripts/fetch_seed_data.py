@@ -1,14 +1,3 @@
-"""Скачивает открытые данные для сида и пишет компактные CSV в zheka/seed/data
-
-Запускается руками один раз, результат коммитится: сам сид в сеть не ходит.
-Источники: АИС ППК «ФРТ» (Реформа ЖКХ) - набор КР 1.1 по трем регионам,
-реестр управляющих организаций и карточки домов; координаты - Nominatim,
-а чего он не нашел - Overpass API, (c) OpenStreetMap contributors, ODbL 1.0.
-Полные выгрузки лежат в кеше backend/.cache/seed, он в .gitignore.
-
-    uv run python scripts/fetch_seed_data.py
-"""
-
 import csv
 import html
 import io

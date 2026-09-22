@@ -14,8 +14,6 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-# бот шлёт объявление одним сообщением, а MAX принимает до 4000 знаков вместе
-# с заголовком, названием УК и HTML-экранированием
 ANNOUNCEMENT_TEXT_LIMIT = 2000
 EMPTY_TEXT = "Напишите текст объявления"
 TEXT_TOO_LONG = f"Сократите объявление до {ANNOUNCEMENT_TEXT_LIMIT} символов"

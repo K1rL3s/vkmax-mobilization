@@ -27,7 +27,6 @@ CHAT_TAKEN = "Этот чат уже привязан или бота из не�
 WRONG_CODE = "Код не подошел. Проверьте его на карточке дома и пришлите еще раз"
 CHAT_NOT_BOUND = "Чат больше не привязан к дому"
 PIN_TEXT_LIMIT = 50
-# MAX считает поле text до разбора разметки, с тегами и сущностями, в единицах UTF-16
 MESSAGE_TEXT_LIMIT = 4000
 PINS_TITLE = "📌 Закреплено в чате:"
 PIN_DENIED = "🚫 Закреплять в этом чате могут председатель и сотрудники УК"
@@ -353,7 +352,6 @@ class ChatsService:
         await self._pinner(user_id, chat, house_id)
         if not await self._chats.list_pins(chat_id):
             raise InvalidRequest(PIN_HINT)
-        # в списке ничего нового, будить чат незачем
         self._notifications.sync_chat_pins(chat_id, notify=False, resend=True)
 
 

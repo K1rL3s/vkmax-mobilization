@@ -33,7 +33,6 @@ CHAT_COMMANDS_ONLY = (
     "💬 Команды /pin, /unpin и /repin работают только в чате дома, "
     "и пользоваться ими могут председатель и сотрудники УК"
 )
-# /seed в меню нет: демо-данные не для жителей
 BOT_COMMANDS = [
     BotCommand(name="start", description="Открыть меню"),
     BotCommand(name="help", description="Справка по командам"),
@@ -50,7 +49,6 @@ async def bot_start_handler(
     user: User,
     events_service: FromDishka[EventsService],
 ) -> None:
-    # AUTO правит последнее сообщение на всем, что не MessageCreated
     dialog_manager.show_mode = ShowMode.SEND
     await events_service.record(
         EventType.BOT_START,
@@ -95,7 +93,6 @@ async def set_commands_handler(bot: Bot) -> None:
     try:
         await bot.edit_my_commands(commands=BOT_COMMANDS)
     except (MaxBotApiError, MaxBotNetworkError):
-        # без подсказок команд бот работает, а без старта api не работает ничего
         logger.exception("Команды бота не установлены")
 
 
