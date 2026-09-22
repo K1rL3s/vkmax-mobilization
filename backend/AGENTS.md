@@ -165,8 +165,9 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   `bg().start()` with `ShowMode.SEND` (`fg()` in a handler deadlocks on the
   `users` row), replacing whatever the user had there, a request draft
   included. `back_to_menu` sends the result as its own message, then
-  `Menu.main` as a new one. The service rechecks state (`RequestsService.reject`
-  accepts only `ON_REVIEW`).
+  `Menu.main` as a new one; «❌ Отмена» (`CANCEL`) returns to `Menu.main` too,
+  since maxo's `Cancel` would leave the stack empty. The service rechecks state
+  (`RequestsService.reject` accepts only `ON_REVIEW`).
 - The service validates every value the bot hands it: `Select` passes raw
   callback strings and `when=`-hidden buttons still fire from old keyboards.
   The rating range lives in `RequestsService.rate` (`MIN_RATING` /

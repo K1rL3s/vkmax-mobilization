@@ -1,11 +1,12 @@
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import MessageInput
-from maxo.dialogs.widgets.kbd import Button, Cancel
+from maxo.dialogs.widgets.kbd import Button
 from maxo.dialogs.widgets.media import DynamicMedia
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 
+from zheka.bot.cards import CANCEL
 from zheka.bot.handlers.executor.handlers import (
     get_card,
     on_advance,
@@ -52,7 +53,7 @@ executor_dialog = Dialog(
     Window(
         Const(RESULT_PHOTO_TEXT),
         MessageInput(on_result_photo, content_types=[AttachmentType.IMAGE]),
-        Cancel(Const("❌ Отмена")),
+        CANCEL,
         state=ExecutorCard.result_photo,
     ),
 )

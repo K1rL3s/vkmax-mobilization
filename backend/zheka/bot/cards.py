@@ -74,3 +74,13 @@ TO_MENU = Start(
 
 
 BACK = Const("⬅️ Назад")
+
+
+# окна ввода открываются одни в стеке по умолчанию,
+# и Cancel оставил бы жителя без окна
+CANCEL = Start(
+    Const("❌ Отмена"),
+    id="cancel",
+    state=Menu.main,
+    mode=StartMode.RESET_STACK,
+)

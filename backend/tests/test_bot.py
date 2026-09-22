@@ -2884,3 +2884,59 @@ async def test_a_refused_deeplink_of_a_consented_user_ends_on_the_menu(
     assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
     assert MENU_TEXT in _text(message_manager)
     assert await _events_of(bot_session, user_id, EventType.BOT_START) == 2
+
+
+CANCEL = InlineButtonTextLocator("❌ Отмена")
+
+
+async def test_cancelling_the_photo_prompt_opens_the_menu(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _executor_on(bot_session, client, RequestStatus.IN_PROGRESS)
+    await _run(task_broker, send_executor_card, request_id=request_id)
+    await client.click(message_manager.last_message(), READY)
+    await _rendered(message_manager, RESULT_PHOTO_TEXT)
+
+    await client.click(message_manager.last_message(), CANCEL)
+
+    assert MENU_TEXT in _text(message_manager)
+
+
+async def test_cancelling_the_rejection_prompt_opens_the_menu(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+
+    await client.click(message_manager.last_message(), CANCEL)
+
+    assert MENU_TEXT in _text(message_manager)
+    assert (await _status(bot_session, request_id)).status is RequestStatus.ON_REVIEW
+
+
+@pytest.mark.usefixtures("chat_api")
+async def test_cancelling_the_binding_code_opens_the_menu(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    user_id = await _started(bot_session, client)
+    _, house_id = await _org_house(bot_session)
+    bot_session.add(
+        Resident(user_id=user_id, house_id=house_id, role=ResidentRole.OWNER),
+    )
+    await bot_session.commit()
+    await _added_by(task_broker, _chat_id(), initiator_max_user_id=client.user.id)
+    assert CODE_TEXT.format(title=CHAT_TITLE) in _text(message_manager)
+
+    await client.click(message_manager.last_message(), CANCEL)
+
+    assert MENU_TEXT in _text(message_manager)

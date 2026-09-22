@@ -1,10 +1,11 @@
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import TextInput
-from maxo.dialogs.widgets.kbd import Button, Cancel, Group, Select, SwitchTo
+from maxo.dialogs.widgets.kbd import Button, Group, Select, SwitchTo
 from maxo.dialogs.widgets.media import DynamicMedia
 from maxo.dialogs.widgets.text import Const, Format, Multi
 
+from zheka.bot.cards import CANCEL
 from zheka.bot.handlers.review.handlers import (
     get_ratings,
     get_review,
@@ -74,7 +75,7 @@ review_dialog = Dialog(
     Window(
         Const(REJECTION_TEXT),
         TextInput(id="comment", on_success=on_rejection),
-        Cancel(Const("❌ Отмена")),
+        CANCEL,
         state=Review.rejection,
     ),
 )

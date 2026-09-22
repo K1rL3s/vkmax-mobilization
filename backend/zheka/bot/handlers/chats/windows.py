@@ -1,9 +1,10 @@
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import TextInput
-from maxo.dialogs.widgets.kbd import Button, Cancel, Column, Select
+from maxo.dialogs.widgets.kbd import Button, Column, Select
 from maxo.dialogs.widgets.text import Const, Format, Multi
 
+from zheka.bot.cards import CANCEL
 from zheka.bot.handlers.chats.handlers import (
     BOUND_TEXT,
     get_binding,
@@ -42,7 +43,7 @@ chat_binding_dialog = Dialog(
     Window(
         Multi(Format(CODE_TEXT), NOTICE, sep="\n\n"),
         TextInput(id="code", on_success=on_code),
-        Cancel(Const("❌ Отмена")),
+        CANCEL,
         state=ChatBinding.code,
         getter=get_binding,
     ),
