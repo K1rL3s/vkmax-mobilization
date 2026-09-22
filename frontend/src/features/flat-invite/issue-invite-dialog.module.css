@@ -1,0 +1,31 @@
+.Dialog {
+  box-sizing: border-box;
+  margin: auto auto 0;
+  width: 100%;
+  max-width: none;
+  padding: 20px 16px;
+  border: none;
+  border-radius: 20px 20px 0 0;
+  background-color: var(--background-card);
+  color: var(--text-primary);
+
+  &::backdrop {
+    background-color: rgb(0 0 0 / 40%);
+  }
+
+  .Title {
+    margin: 0;
+  }
+
+  .Result {
+    background-color: color-mix(
+      in srgb,
+      var(--button-primary) 10%,
+      transparent
+    );
+  }
+
+  .Error {
+    color: var(--text-negative);
+  }
+}

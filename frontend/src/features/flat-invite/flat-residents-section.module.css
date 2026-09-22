@@ -1,0 +1,11 @@
+.FlatResidentsSection {
+  h2 {
+    margin: 0;
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+}

@@ -1,0 +1,19 @@
+.InviteCard {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Code {
+    overflow-wrap: anywhere;
+    color: var(--text-primary);
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 32px;
+    letter-spacing: 0.06em;
+  }
+}
