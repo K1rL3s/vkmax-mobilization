@@ -1,0 +1,75 @@
+.Page {
+  flex: 1;
+  gap: 20px;
+  padding: 16px 16px 24px;
+
+  h2 {
+    margin: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Summary {
+    position: relative;
+    overflow: hidden;
+    padding: 12px;
+    border-radius: 16px;
+    background-color: color-mix(
+      in srgb,
+      var(--button-primary) 10%,
+      transparent
+    );
+  }
+
+  .Warning {
+    padding: 8px 12px;
+    border-radius: 12px;
+    background-color: var(--controls-inactive);
+  }
+
+  .WarningIcon {
+    flex-shrink: 0;
+    color: var(--icon-secondary);
+  }
+
+  .alert {
+    background-color: color-mix(in srgb, var(--icon-negative) 10%, transparent);
+
+    .WarningIcon {
+      color: var(--icon-negative);
+    }
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Level {
+    margin-right: 4px;
+    white-space: nowrap;
+  }
+
+  .CellIcon {
+    color: var(--icon-primary);
+  }
+
+  .Error {
+    color: var(--text-negative);
+  }
+
+  .Note {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--controls-inactive);
+  }
+
+  .NoteIcon {
+    flex-shrink: 0;
+    color: var(--icon-secondary);
+  }
+}

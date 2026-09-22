@@ -1,0 +1,73 @@
+.Page {
+  flex: 1;
+  gap: 20px;
+  padding: 16px 16px 24px;
+
+  h2 {
+    margin: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .wide {
+    grid-column: 1 / -1;
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Block {
+    padding: 12px 16px;
+  }
+
+  .Block + .Block {
+    border-top: 1px solid var(--divider-primary);
+  }
+
+  .Dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--icon-themed);
+  }
+
+  .done {
+    background-color: var(--icon-positive);
+  }
+
+  .Price {
+    margin-right: 4px;
+    white-space: nowrap;
+  }
+
+  .CellIcon {
+    color: var(--icon-primary);
+  }
+
+  .Note {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--controls-inactive);
+  }
+
+  .NoteIcon {
+    flex-shrink: 0;
+    color: var(--icon-secondary);
+  }
+}
