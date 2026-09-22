@@ -40,5 +40,6 @@ async def create_announcement(
         body.house_ids,
         body.text,
         body.channels,
+        urgent=body.urgent,
     )
     return AnnouncementItem.of(data)

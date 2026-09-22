@@ -55,6 +55,7 @@
 
   .SectionAction {
     color: var(--text-themed);
+    text-decoration: none;
   }
 
   .StatusPill {
@@ -130,5 +131,9 @@
 
   .NewsIconAnnouncement {
     color: var(--icon-themed);
+  }
+
+  .NewsIconMuted {
+    color: var(--icon-mute);
   }
 }

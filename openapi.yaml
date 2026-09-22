@@ -9313,6 +9313,11 @@ components:
           type: array
           title: Houses Without Chat
           description: Дома, у которых не привязан чат, поэтому объявление туда не ушло. Заполняется только при создании объявления
+        urgent:
+          type: boolean
+          title: Urgent
+          description: 'Срочное: авария, отключение. Житель видит его выделенным'
+          default: false
       type: object
       required:
       - id
@@ -9995,6 +10000,11 @@ components:
             $ref: '#/components/schemas/AnnouncementChannel'
           type: array
           title: Channels
+        urgent:
+          type: boolean
+          title: Urgent
+          description: 'Срочное: авария, отключение. Житель видит его выделенным'
+          default: false
       type: object
       required:
       - house_ids

@@ -12,6 +12,7 @@ import { generatePath, Link, useNavigate } from "react-router-dom";
 import { confirmationCaption } from "@/features/flat-confirmation";
 import { useHouseCard } from "@/features/house";
 import { useNextPoll } from "@/features/meetings";
+import { newsWhen, useLatestNews } from "@/features/news";
 import { useReadingsHint } from "@/features/meters";
 import {
   CATEGORY_ICON,
@@ -42,14 +43,13 @@ import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { DemandCard } from "./demand-card";
-import { HOME_MOCK, type NewsKind } from "./home.mock";
 import { useActiveRequest } from "./use-active-request";
 
 import styles from "./home.module.css";
 
-const NEWS_ICON: Record<NewsKind, { src: string; className: string }> = {
-  alert: { src: alertIcon, className: styles.NewsIconAlert },
-  announcement: { src: megaphoneIcon, className: styles.NewsIconAnnouncement },
+const NEWS_ICON = {
+  urgent: { src: alertIcon, className: styles.NewsIconAlert },
+  regular: { src: megaphoneIcon, className: styles.NewsIconAnnouncement },
 };
 
 const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
@@ -134,9 +134,94 @@ const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
   );
 };
 
+const NewsSection = () => {
+  const news = useLatestNews();
+  const items = news.data?.items ?? [];
+
+  const content = () => {
+    if (news.isPending) {
+      return <LoadingState />;
+    }
+
+    if (news.isError) {
+      return (
+        <CellSimple
+          before={<Icon src={alertIcon} className={styles.NewsIconAlert} />}
+          title="Новости не загрузились"
+          after={
+            <Button
+              size="small"
+              variant="secondary"
+              onClick={() => void news.refetch()}
+            >
+              Повторить
+            </Button>
+          }
+        />
+      );
+    }
+
+    if (items.length === 0) {
+      return (
+        <CellSimple
+          before={<Icon src={megaphoneIcon} className={styles.NewsIconMuted} />}
+          title="Объявлений пока нет"
+          subtitle="Здесь появятся новости от управляющей компании"
+        />
+      );
+    }
+
+    return items.map((item) => {
+      const icon = NEWS_ICON[item.urgent ? "urgent" : "regular"];
+      const when = newsWhen(item.created_at);
+
+      return (
+        <CellSimple
+          key={item.id}
+          asChild
+          before={<Icon src={icon.src} className={icon.className} />}
+          title={item.text}
+          subtitle={item.urgent ? `Срочное · ${when}` : when}
+          innerClassNames={{ title: styles.TwoLines }}
+          showChevron
+        >
+          <Link to={Routes.NEWS} />
+        </CellSimple>
+      );
+    });
+  };
+
+  return (
+    <Flex asChild align="stretch" direction="column" gap={8}>
+      <section>
+        <Flex align="center" gap={12}>
+          <Typography.Text
+            asChild
+            variant="title"
+            color="primary"
+            className={styles.Grow}
+          >
+            <h2>Новости дома</h2>
+          </Typography.Text>
+          {items.length > 0 && (
+            <Typography.Text
+              asChild
+              variant="detail-strong"
+              className={styles.SectionAction}
+            >
+              <Link to={Routes.NEWS}>Все</Link>
+            </Typography.Text>
+          )}
+        </Flex>
+
+        <div className={styles.NewsPanel}>{content()}</div>
+      </section>
+    </Flex>
+  );
+};
+
 const HomePage = () => {
   const navigate = useNavigate();
-  const { news } = HOME_MOCK;
   const poll = useNextPoll();
   const { currentResidency: residency } = useSession();
   const request = useActiveRequest();
@@ -306,46 +391,7 @@ const HomePage = () => {
         </Flex>
       )}
 
-      {connected && (
-        <Flex asChild align="stretch" direction="column" gap={8}>
-          <section>
-            <Flex align="center" gap={12}>
-              <Typography.Text
-                asChild
-                variant="title"
-                color="primary"
-                className={styles.Grow}
-              >
-                <h2>Новости дома</h2>
-              </Typography.Text>
-              {/* TODO: экран со всеми новостями дома пока не спроектирован */}
-              <Typography.Text
-                variant="detail-strong"
-                className={styles.SectionAction}
-              >
-                Все
-              </Typography.Text>
-            </Flex>
-
-            <div className={styles.NewsPanel}>
-              {news.map((item) => (
-                <CellSimple
-                  key={item.id}
-                  before={
-                    <Icon
-                      src={NEWS_ICON[item.kind].src}
-                      className={NEWS_ICON[item.kind].className}
-                    />
-                  }
-                  title={item.title}
-                  subtitle={item.subtitle}
-                  showChevron
-                />
-              ))}
-            </div>
-          </section>
-        </Flex>
-      )}
+      {connected && <NewsSection />}
     </Panel>
   );
 };

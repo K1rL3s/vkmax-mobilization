@@ -224,9 +224,17 @@ FIRST_NAMES = (
 INITIALS = "АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЭЮЯ"
 POLL_OPTIONS = ("За", "Против", "Воздержался")
 ANNOUNCEMENTS = (
-    (40, "Плановое отключение горячей воды с 10:00 до 18:00, работы на теплотрассе"),
-    (20, "Во дворе начнется ремонт асфальта, машины просим переставить к торцу дома"),
-    (5, "Итоги опроса о шлагбауме опубликованы в разделе собраний"),
+    (
+        40,
+        "Плановое отключение горячей воды с 10:00 до 18:00, работы на теплотрассе",
+        True,
+    ),
+    (
+        20,
+        "Во дворе начнется ремонт асфальта, машины просим переставить к торцу дома",
+        False,
+    ),
+    (5, "Итоги опроса о шлагбауме опубликованы в разделе собраний", False),
 )
 
 
@@ -633,8 +641,9 @@ class Seeder:
                 created_by=staff.admin,
                 recipients_count=recipients,
                 created_at=self._now - timedelta(days=days_ago),
+                urgent=urgent,
             )
-            for days_ago, text in ANNOUNCEMENTS
+            for days_ago, text, urgent in ANNOUNCEMENTS
         )
         await self._session.flush()
 

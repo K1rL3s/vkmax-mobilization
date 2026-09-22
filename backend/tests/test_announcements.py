@@ -315,3 +315,34 @@ async def test_org_list_filters_by_house_of_the_same_org(
 
     with pytest.raises(EntityNotFound):
         await service.list_for_org(mine.org_id, foreign.house_id, 20, 0)
+
+
+@pytest.mark.parametrize(
+    ("urgent", "heading"),
+    [(True, "🚨 Срочное объявление"), (False, "📢 Объявление")],
+)
+async def test_urgent_mark_reaches_the_feed_and_the_message(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    urgent: bool,
+    heading: str,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    await _bind_chat(session, data.house_id)
+    service = _service(session, publisher)
+
+    await service.create(
+        data.org_id,
+        data.user_id,
+        [data.house_id],
+        TEXT,
+        [AnnouncementChannel.CHAT],
+        urgent=urgent,
+    )
+
+    await publisher.flush()
+    items, _ = await service.list_for_resident(data.house_id, 20, 0)
+    assert items[0].announcement.urgent is urgent
+    assert broker.enqueued(TaskName.BROADCAST_TO_CHATS)[0]["text"].startswith(heading)

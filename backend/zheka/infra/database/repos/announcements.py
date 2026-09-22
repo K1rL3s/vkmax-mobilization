@@ -18,6 +18,8 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         text: str,
         channels: Sequence[AnnouncementChannel],
         recipients_count: int,
+        *,
+        urgent: bool,
     ) -> Announcement:
         announcement = Announcement(
             org_id=org_id,
@@ -26,6 +28,7 @@ class AnnouncementsRepo(BaseAlchemyRepo):
             channels=[channel.value for channel in channels],
             created_by=created_by,
             recipients_count=recipients_count,
+            urgent=urgent,
         )
         self._session.add(announcement)
         await self._session.flush()

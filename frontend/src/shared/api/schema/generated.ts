@@ -2102,6 +2102,12 @@ export interface components {
        * @description Дома, у которых не привязан чат, поэтому объявление туда не ушло. Заполняется только при создании объявления
        */
       houses_without_chat?: number[];
+      /**
+       * Urgent
+       * @description Срочное: авария, отключение. Житель видит его выделенным
+       * @default false
+       */
+      urgent: boolean;
     };
     /** ApiError[BaseError] */
     ApiError_BaseError_: {
@@ -2513,6 +2519,12 @@ export interface components {
       text: string;
       /** Channels */
       channels?: components["schemas"]["AnnouncementChannel"][];
+      /**
+       * Urgent
+       * @description Срочное: авария, отключение. Житель видит его выделенным
+       * @default false
+       */
+      urgent: boolean;
     };
     /** CreateFlatInviteRequest */
     CreateFlatInviteRequest: {

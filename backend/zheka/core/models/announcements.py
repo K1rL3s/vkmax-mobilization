@@ -17,3 +17,4 @@ class Announcement(ZhekaMutableType):
     channels: list[str]
     created_by: UserId
     recipients_count: int = 0
+    urgent: bool = False

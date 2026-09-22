@@ -55,8 +55,9 @@ def resident_unblocked(address: str) -> str:
     return f"✅ УК вернула вам доступ к дому {_plain(address)}"
 
 
-def announcement(org_name: str, text: str) -> str:
-    return f"📢 Объявление от {_plain(org_name)}\n\n{_plain(text)}"
+def announcement(org_name: str, text: str, *, urgent: bool) -> str:
+    heading = "🚨 Срочное объявление" if urgent else "📢 Объявление"
+    return f"{heading} от {_plain(org_name)}\n\n{_plain(text)}"
 
 
 def blocked_detail(reason: str | None) -> str:

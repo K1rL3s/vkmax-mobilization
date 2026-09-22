@@ -62,6 +62,8 @@ class AnnouncementsService:
         house_ids: Sequence[HouseId],
         text: str,
         channels: Sequence[AnnouncementChannel],
+        *,
+        urgent: bool = False,
     ) -> AnnouncementData:
         stated = text.strip()
         if not stated:
@@ -99,6 +101,7 @@ class AnnouncementsService:
             stated,
             picked,
             len(user_ids) + len(chat_ids),
+            urgent=urgent,
         )
 
         for channel in picked:
@@ -110,7 +113,7 @@ class AnnouncementsService:
                 houses_count=len(targets),
             )
 
-        message = texts.announcement(org_name, stated)
+        message = texts.announcement(org_name, stated, urgent=urgent)
         self._notifications.notify_users(
             user_ids,
             message,

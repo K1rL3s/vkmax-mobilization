@@ -30,6 +30,10 @@ class AnnouncementItem(BaseSchema):
             "Заполняется только при создании объявления"
         ),
     )
+    urgent: bool = Field(
+        default=False,
+        description="Срочное: авария, отключение. Житель видит его выделенным",
+    )
 
     @classmethod
     def of(cls, data: AnnouncementData) -> Self:
@@ -45,6 +49,7 @@ class AnnouncementItem(BaseSchema):
             org_name=data.org_name,
             recipients_count=announcement.recipients_count,
             houses_without_chat=list(data.houses_without_chat),
+            urgent=announcement.urgent,
         )
 
 
@@ -53,4 +58,8 @@ class CreateAnnouncementRequest(BaseSchema):
     text: str
     channels: list[AnnouncementChannel] = Field(
         default_factory=lambda: [AnnouncementChannel.CHAT],
+    )
+    urgent: bool = Field(
+        default=False,
+        description="Срочное: авария, отключение. Житель видит его выделенным",
     )

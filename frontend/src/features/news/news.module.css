@@ -1,0 +1,15 @@
+.Page {
+  flex: 1;
+  gap: 12px;
+  padding: 16px;
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,5 +1,6 @@
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     ForeignKey,
     Index,
@@ -7,6 +8,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    false,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 
@@ -24,5 +26,6 @@ announcements_table = Table(
     Column("channels", ARRAY(String), nullable=False),
     Column("created_by", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("recipients_count", Integer, nullable=False, default=0, server_default="0"),
+    Column("urgent", Boolean, nullable=False, default=False, server_default=false()),
     Index(None, "house_ids", postgresql_using="gin"),
 )
