@@ -1,5 +1,8 @@
 x-image: &image
   image: zheka:local
+  pull_policy: never
+
+x-build: &build
   build:
     context: ./backend
     dockerfile: Dockerfile
@@ -88,7 +91,7 @@ services:
     command: [ "python", "-m", "zheka.broker.scheduler" ]
 
   migrations:
-    <<: [ *image, *common ]
+    <<: [ *image, *build, *common ]
     container_name: zheka-migrations
     environment:
       <<: *app-env
