@@ -233,7 +233,7 @@ class ChatsService:
                 house_id=house_id,
                 by_role=binder.value,
             )
-        self._notifications.sync_chat_pins(chat_id)
+        self._notifications.sync_chat_pins(chat_id, notify=True)
         return True
 
     async def unpin(
@@ -268,7 +268,7 @@ class ChatsService:
             method=method.value,
             by_role=binder.value,
         )
-        self._notifications.sync_chat_pins(chat_id)
+        self._notifications.sync_chat_pins(chat_id, notify=False)
         return True
 
     async def on_message_removed(self, chat_id: MaxChatId, mid: str) -> None:
@@ -285,7 +285,7 @@ class ChatsService:
             pins = [pin for pin in pins if pin.mid == mid]
             if not pins:
                 return
-            self._notifications.sync_chat_pins(chat_id)
+            self._notifications.sync_chat_pins(chat_id, notify=False)
         await self._chats.unpin(pins, datetime.now(UTC))
         for _ in pins:
             await self._events.record(

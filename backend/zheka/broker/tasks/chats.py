@@ -105,6 +105,7 @@ async def welcome_chat(
 @inject(patch_module=True)
 async def sync_chat_pins(
     chat_id: MaxChatId,
+    notify: bool,
     bot: FromDishka[Bot],
     chats_service: FromDishka[ChatsService],
     chats_repo: FromDishka[ChatsRepo],
@@ -139,24 +140,25 @@ async def sync_chat_pins(
         ],
     ]
     if mid is not None and await sender.edit_message(chat_id, mid, text, keyboard):
-        # список открепили или закрепили поверх свое: бот не спорит,
-        # а показывает, где список
-        if not await sender.is_pinned(chat_id, mid):
-            await sender.send_message(PINS_HERE, chat_id=chat_id, reply_to=mid)
-        return
-
-    sent = await sender.send_message(
-        text,
-        chat_id=chat_id,
-        notify=False,
-        keyboard=keyboard,
-    )
-    if sent is None:
-        await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
-        return
-    mid = sent.message.body.mid
-    await chats_repo.set_pins_mid(chat, mid)
-    if not await sender.pin_message(chat_id, mid):
+        if not notify:
+            # без нового закрепа бот не спорит с тем, кто снял список
+            # или закрепил поверх свое, а показывает, где список
+            if not await sender.is_pinned(chat_id, mid):
+                await sender.send_message(PINS_HERE, chat_id=chat_id, reply_to=mid)
+            return
+    else:
+        sent = await sender.send_message(
+            text,
+            chat_id=chat_id,
+            notify=False,
+            keyboard=keyboard,
+        )
+        if sent is None:
+            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+            return
+        mid = sent.message.body.mid
+        await chats_repo.set_pins_mid(chat, mid)
+    if not await sender.pin_message(chat_id, mid, notify=notify):
         await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
 
 

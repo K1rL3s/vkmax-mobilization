@@ -149,14 +149,14 @@ class MaxSender:
                 done = True
         return done
 
-    async def pin_message(self, chat_id: MaxChatId, mid: str) -> bool:
+    async def pin_message(self, chat_id: MaxChatId, mid: str, *, notify: bool) -> bool:
         done = False
         with _undelivered():
             async with BOT_RATE_LIMIT, _chat_rate_limit(chat_id):
                 await self._bot.pin_message(
                     chat_id=chat_id,
                     message_id=mid,
-                    notify=False,
+                    notify=notify,
                 )
                 done = True
         return done

@@ -2006,7 +2006,7 @@ async def test_the_pin_list_is_sent_with_the_house_button_and_pinned_silently(
 ) -> None:
     chat_id, house_id = await _listed_chat(bot_session, client, "Вода <10:00>", None)
 
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
 
     [sent] = pin_api.sent
     first, second = id_to_message_url(1, chat_id), id_to_message_url(2, chat_id)
@@ -2038,7 +2038,7 @@ async def test_the_pin_list_edits_its_message_keeps_the_button_and_the_pin(
     chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
     pin_api.current = "list-7"
 
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
 
     assert pin_api.sent == []
     [edited] = pin_api.edited
@@ -2062,7 +2062,7 @@ async def test_a_list_message_that_cannot_be_edited_is_sent_anew(
     pin_api.edit_fails = True
     chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
 
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
 
     assert len(pin_api.sent) == 1
     assert pin_api.pinned[-1]["message_id"] == "list-1"
@@ -2077,7 +2077,7 @@ async def test_an_emptied_list_is_deleted_and_forgotten(
 ) -> None:
     chat_id, _ = await _listed_chat(bot_session, client, pins_mid="list-7")
 
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
 
     assert pin_api.deleted == ["list-7"]
     assert pin_api.sent == []
@@ -2112,7 +2112,7 @@ async def test_a_list_the_bot_cannot_post_asks_the_binder_for_the_rights(
     monkeypatch.setattr(fake_bot, failing, forbidden)
     chat_id, _ = await _listed_chat(bot_session, client, *texts, pins_mid=pins_mid)
 
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
 
     _, _, recipient, notify = _shown(shows, RIGHTS_TEXT.format(title=CHAT_TITLE))
     assert recipient == client.chat.chat_id
@@ -2177,7 +2177,10 @@ async def test_a_pin_in_the_house_chat_lists_the_replied_message(
     bot_session.expire_all()
     [pin] = await ChatsRepo(bot_session).list_pins(chat_id)
     assert (pin.mid, pin.seq, pin.text) == ("m-7", 7, "Отключение воды")
-    assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {"chat_id": chat_id}
+    assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
+        "chat_id": chat_id,
+        "notify": True,
+    }
     assert recorder.texts == [PINNED]
     assert [link.type for link in recorder.links] == [MessageLinkType.REPLY]
 
@@ -2186,6 +2189,7 @@ async def test_unpin_takes_a_number_and_replies_in_the_chat(
     client: BotClient,
     bot_setup: BotSetup,
     bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
 ) -> None:
     chat_id = await _bound_chat(bot_session, client)
     await _pinned(bot_session, client, chat_id, "m-1", "m-2")
@@ -2197,6 +2201,10 @@ async def test_unpin_takes_a_number_and_replies_in_the_chat(
 
     assert await _pin_mids(bot_session, chat_id) == ["m-1"]
     assert recorder.texts == [UNPINNED, UNPIN_HINT]
+    assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
+        "chat_id": chat_id,
+        "notify": False,
+    }
     assert [link.type for link in recorder.links] == [MessageLinkType.REPLY] * 2
 
 
@@ -2979,10 +2987,28 @@ async def test_an_unpinned_list_is_pointed_at_instead_of_pinned_over(
     chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
     pin_api.current = current
 
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id)
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
 
     assert pin_api.pinned == []
     [reply] = pin_api.sent
     assert reply["text"] == PINS_HERE
     assert reply["link"] == NewMessageLink(mid="list-7", type=MessageLinkType.REPLY)
     assert reply["notify"] is False
+
+
+@pytest.mark.parametrize("pins_mid", [None, "list-7"])
+async def test_a_new_pin_pins_the_list_again_with_sound(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+    pins_mid: str | None,
+) -> None:
+    chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid=pins_mid)
+    pin_api.current = "m-other"
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=True)
+
+    mid = await _pins_mid(bot_session, chat_id)
+    assert pin_api.pinned == [{"chat_id": chat_id, "message_id": mid, "notify": True}]
+    assert PINS_HERE not in [sent["text"] for sent in pin_api.sent]

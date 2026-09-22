@@ -251,12 +251,13 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   edit. `ChatsService` writes pins under the chat row lock (`ChatsRepo.lock`);
   only `sync_chat_pins` renders the list, from the database, always with the
   house link button. `message_removed` of `chats.pins_mid` unpins everything
-  and tells the chat (`PINS_ERASED`), of a listed message drops that item. MAX
-  sends no event for a manual pin or unpin, so the task never pins an edited
-  list again: when it is not the chat's pinned message, the bot replies to it
-  (`PINS_HERE`) instead of fighting whoever pinned over it. `/pin` and
-  `/unpin` on the list itself get a friendly hint. An emptied list is deleted,
-  never unpinned.
+  and tells the chat (`PINS_ERASED`), of a listed message drops that item. Only
+  `/pin` pins the list again, with sound (`sync_chat_pins(notify=True)`), so
+  the chat learns of the new item. MAX sends no event for a manual pin or
+  unpin, so any other sync leaves the pin alone: when the list is not the
+  chat's pinned message, the bot replies to it (`PINS_HERE`) instead of
+  fighting whoever pinned over it. `/pin` and `/unpin` on the list itself get
+  a friendly hint. An emptied list is deleted, never unpinned.
 
 ### Readings, reminders, analytics
 

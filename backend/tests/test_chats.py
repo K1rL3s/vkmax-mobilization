@@ -358,7 +358,9 @@ async def test_staff_or_the_chairman_pins_a_message(
         {"chat_id": chat_id, "house_id": data.house_id, "by_role": by_role},
     ]
     await publisher.flush()
-    assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [{"chat_id": chat_id}]
+    assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [
+        {"chat_id": chat_id, "notify": True},
+    ]
 
 
 @pytest.mark.parametrize(
@@ -541,7 +543,9 @@ async def test_a_deleted_pin_leaves_the_list_and_a_deleted_list_is_erased(
     await service.on_message_removed(chat_id, "m-1")
     assert [mid for mid, _ in await _listed(session, chat_id)] == ["m-2", "m-3"]
     await publisher.flush()
-    assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [{"chat_id": chat_id}]
+    assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [
+        {"chat_id": chat_id, "notify": False},
+    ]
     await service.on_message_removed(chat_id, "list-1")
 
     assert await _listed(session, chat_id) == []
