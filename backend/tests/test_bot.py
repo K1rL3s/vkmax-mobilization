@@ -19,7 +19,7 @@ from maxo.dialogs.context.media_storage import MediaIdStorage
 from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.dialogs.test_tools.keyboard import InlineButtonTextLocator
-from maxo.enums import ChatStatus as MaxChatStatus, ChatType
+from maxo.enums import ChatStatus as MaxChatStatus, ChatType, MessageLinkType
 from maxo.errors import MaxBotForbiddenError, MaxBotNotFoundError
 from maxo.omit import Omittable, Omitted
 from maxo.routing.filters import Command
@@ -59,6 +59,7 @@ from zheka.bot import BotSetup
 from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
+from zheka.bot.handlers.chats.router import PINNED, UNPINNED
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.commands.deeplinks import (
     DEMO_ADMIN_NOTICE,
@@ -186,6 +187,7 @@ class _RecordingBot(FakeBot):
         self.texts: list[str | None] = []
         self.chat_ids: list[Any] = []
         self.user_ids: list[Any] = []
+        self.links: list[Any] = []
 
     async def send_message(  # type: ignore[mutable-override]
         self,
@@ -196,6 +198,7 @@ class _RecordingBot(FakeBot):
         self.texts.append(kwargs.get("text"))
         self.chat_ids.append(kwargs.get("chat_id"))
         self.user_ids.append(kwargs.get("user_id"))
+        self.links.append(kwargs.get("link"))
         return SendMessageResult(
             message=Message(
                 recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=1),
@@ -2142,12 +2145,12 @@ async def _pin_mids(session: AsyncSession, chat_id: MaxChatId) -> list[str]:
 async def test_a_pin_in_the_house_chat_lists_the_replied_message(
     client: BotClient,
     bot_setup: BotSetup,
-    fake_bot: FakeBot,
     bot_session: AsyncSession,
     bot_broker: RecordingBroker,
 ) -> None:
     chat_id = await _bound_chat(bot_session, client)
-    group = _in_chat(bot_setup, fake_bot, chat_id, client.user.id)
+    recorder = _RecordingBot()
+    group = _in_chat(bot_setup, recorder, chat_id, client.user.id)
 
     await group.send("/pin Отключение воды", reply_to=_chat_message(chat_id, "m-7", 7))
 
@@ -2155,9 +2158,11 @@ async def test_a_pin_in_the_house_chat_lists_the_replied_message(
     [pin] = await ChatsRepo(bot_session).list_pins(chat_id)
     assert (pin.mid, pin.seq, pin.text) == ("m-7", 7, "Отключение воды")
     assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {"chat_id": chat_id}
+    assert recorder.texts == [PINNED]
+    assert [link.type for link in recorder.links] == [MessageLinkType.REPLY]
 
 
-async def test_unpin_takes_a_number_and_answers_a_hint_in_the_chat(
+async def test_unpin_takes_a_number_and_replies_in_the_chat(
     client: BotClient,
     bot_setup: BotSetup,
     bot_session: AsyncSession,
@@ -2171,7 +2176,8 @@ async def test_unpin_takes_a_number_and_answers_a_hint_in_the_chat(
     await group.send("/unpin")
 
     assert await _pin_mids(bot_session, chat_id) == ["m-1"]
-    assert recorder.texts == [UNPIN_HINT]
+    assert recorder.texts == [UNPINNED, UNPIN_HINT]
+    assert [link.type for link in recorder.links] == [MessageLinkType.REPLY] * 2
 
 
 async def test_a_pin_in_a_chat_without_a_house_gets_no_answer(

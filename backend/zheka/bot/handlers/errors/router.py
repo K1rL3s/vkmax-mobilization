@@ -48,6 +48,6 @@ async def _notify(event: ErrorEvent[Any, Any], text: str) -> None:
     if isinstance(update, MessageCallback):
         await update.callback_answer(notification=text)
     elif isinstance(update, MessageCreated):
-        await update.answer_text(text, notify=False)
+        await update.reply_text(text, notify=False)
     elif isinstance(update, BotStarted):
         await update.send_message(text=text, notify=False)

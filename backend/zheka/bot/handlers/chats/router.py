@@ -21,6 +21,9 @@ from zheka.core.services.chats import ChatsService, MessageRef
 
 router = Router(name=__name__)
 
+PINNED = "📌 Добавил в список закрепленных"
+UNPINNED = "🗑 Убрал из списка закрепленных"
+
 
 @router.bot_added_to_chat()
 async def bot_added_handler(
@@ -53,12 +56,14 @@ async def pin_handler(
     chats_service: FromDishka[ChatsService],
     user: User | None = None,
 ) -> None:
-    await chats_service.pin(
+    pinned = await chats_service.pin(
         None if user is None else user.id,
         MaxChatId(update.message.recipient.unsafe_chat_id),
         _replied(update),
         command.args,
     )
+    if pinned:
+        await update.reply_text(PINNED, notify=False)
 
 
 @router.message_created(Command("unpin"), IN_CHAT)
@@ -69,12 +74,14 @@ async def unpin_handler(
     user: User | None = None,
 ) -> None:
     args = (command.args or "").strip()
-    await chats_service.unpin(
+    unpinned = await chats_service.unpin(
         None if user is None else user.id,
         MaxChatId(update.message.recipient.unsafe_chat_id),
         _replied(update),
         int(args) if args.isdecimal() else None,
     )
+    if unpinned:
+        await update.reply_text(UNPINNED, notify=False)
 
 
 @router.message_removed()

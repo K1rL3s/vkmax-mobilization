@@ -128,8 +128,9 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   (`bot/handlers/chats/router.py`, `bot/handlers/lifecycle.py`) and the error
   router sit outside it.
 - The error router answers every update kind (a `None` return loses the
-  error) and resolves nothing from dishka (the container is closed by then),
-  so the menu window it restarts renders without services.
+  error), a message with a reply to it, and resolves nothing from dishka (the
+  container is closed by then), so the menu window it restarts renders without
+  services.
 - `zheka/bot/middlewares/user.py` puts `user` into middleware data; it upserts
   only on `ChatType.DIALOG` (house chat members gave no consent) and only reads
   for other chats and `DialogUpdateEvent`. `upsert_by_max_id` keeps
@@ -244,11 +245,13 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   only on `false -> true`. A failed send without rights opens
   `ChatBinding.rights` for `bound_by` with sound.
 - Pins (`/pin`, `/unpin`, bound chats only, any other chat is ignored
-  silently) live in `chat_pins`. `ChatsService` writes them under the chat
-  row lock (`ChatsRepo.lock`); only `sync_chat_pins` renders the list, from
-  the database, always with the house link button. `message_removed` of
-  `chats.pins_mid` unpins everything; an emptied list is deleted, never
-  unpinned.
+  silently) live in `chat_pins`; a command that worked gets a reply, so the
+  chat sees the bot reacted. The bot sends with link previews off
+  (`BotDefaults` in `zheka/di/max_bot.py`), but MAX takes no such flag on an
+  edit. `ChatsService` writes pins under the chat row lock (`ChatsRepo.lock`);
+  only `sync_chat_pins` renders the list, from the database, always with the
+  house link button. `message_removed` of `chats.pins_mid` unpins everything;
+  an emptied list is deleted, never unpinned.
 
 ### Readings, reminders, analytics
 

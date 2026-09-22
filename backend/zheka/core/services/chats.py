@@ -187,10 +187,10 @@ class ChatsService:
         chat_id: MaxChatId,
         target: MessageRef | None,
         text: str | None,
-    ) -> None:
+    ) -> bool:
         bound = await self._bound(chat_id)
         if bound is None:
-            return
+            return False
         chat, house_id = bound
         author, binder = await self._pinner(user_id, chat, house_id)
         if target is None:
@@ -220,6 +220,7 @@ class ChatsService:
                 by_role=binder.value,
             )
         self._notifications.sync_chat_pins(chat_id)
+        return True
 
     async def unpin(
         self,
@@ -227,10 +228,10 @@ class ChatsService:
         chat_id: MaxChatId,
         target: MessageRef | None,
         number: int | None,
-    ) -> None:
+    ) -> bool:
         bound = await self._bound(chat_id)
         if bound is None:
-            return
+            return False
         chat, house_id = bound
         author, binder = await self._pinner(user_id, chat, house_id)
         pins = await self._chats.list_pins(chat_id)
@@ -252,6 +253,7 @@ class ChatsService:
             by_role=binder.value,
         )
         self._notifications.sync_chat_pins(chat_id)
+        return True
 
     async def on_message_removed(self, chat_id: MaxChatId, mid: str) -> None:
         chat = await self._chats.lock(chat_id)
