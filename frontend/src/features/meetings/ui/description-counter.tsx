@@ -2,7 +2,7 @@ import { useWatch, type Control } from "react-hook-form";
 import { Typography } from "@maxhub/max-ui";
 
 import { pollFormConstraints } from "../domain/poll-form-constraints";
-import type { PollDraft } from "../model/use-new-poll";
+import type { PollDraft } from "../domain/poll-draft";
 
 // счётчик подписан на поле сам: подписка в хуке формы перерисовывала бы весь
 // экран на каждое нажатие клавиши, хотя меняется одна строка
