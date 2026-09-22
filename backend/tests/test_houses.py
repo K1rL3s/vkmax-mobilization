@@ -428,3 +428,23 @@ async def test_house_flats_are_ordered_as_numbers_before_the_limit(
     flats = await _make_service(session).house_flats(house_id, 2)
 
     assert [flat.number for flat in flats] == ["1", "2"]
+
+
+async def test_a_wildcard_in_a_search_is_a_plain_character(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    region = f"Область {secrets.token_hex(4)}"
+    city = f"Город {secrets.token_hex(4)}"
+    await _add_house(session, fixture.org_id, region=region, city=city)
+    houses = HousesRepo(session)
+
+    assert await houses.list_cities(region, "%") == []
+    assert await houses.list_streets(city, None, "%") == []
+    assert (await houses.search(city, None, "%", None, 50, 0))[1] == 0
+    assert (await houses.search(None, None, None, "%", 50, 0))[1] == 0
+    assert (await houses.list_flats(fixture.house_id, "%", None, 50, 0))[1] == 0
+    assert (await houses.search_for_org(fixture.org_id, "%", 50, 0))[1] == 0
+    residents = ResidentsRepo(session)
+    assert (await residents.search_for_house(fixture.house_id, "%", 50, 0))[1] == 0

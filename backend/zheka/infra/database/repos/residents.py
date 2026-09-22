@@ -137,11 +137,11 @@ class ResidentsRepo(BaseAlchemyRepo):
         stmt = select(Resident).where(residents_table.c.house_id == house_id)
         if query is not None:
             by_name = select(users_table.c.id).where(
-                users_table.c.name.ilike(f"%{query}%"),
+                users_table.c.name.icontains(query, autoescape=True),
             )
             by_flat = select(flats_table.c.id).where(
                 flats_table.c.house_id == house_id,
-                flats_table.c.number.ilike(f"{query}%"),
+                flats_table.c.number.istartswith(query, autoescape=True),
             )
             stmt = stmt.where(
                 or_(

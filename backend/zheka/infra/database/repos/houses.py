@@ -55,7 +55,9 @@ class HousesRepo(BaseAlchemyRepo):
         if street is not None:
             stmt = stmt.where(houses_table.c.street == street)
         if building is not None:
-            stmt = stmt.where(houses_table.c.building.ilike(f"{building}%"))
+            stmt = stmt.where(
+                houses_table.c.building.istartswith(building, autoescape=True),
+            )
         if query is not None:
             address = func.concat_ws(
                 " ",
@@ -64,7 +66,7 @@ class HousesRepo(BaseAlchemyRepo):
                 houses_table.c.building,
             )
             for word in query.split():
-                stmt = stmt.where(address.ilike(f"%{word}%"))
+                stmt = stmt.where(address.icontains(word, autoescape=True))
 
         total = await self._count(stmt)
         page_stmt = (
@@ -108,7 +110,7 @@ class HousesRepo(BaseAlchemyRepo):
         if region is not None:
             stmt = stmt.where(houses_table.c.region == region)
         if query is not None:
-            stmt = stmt.where(houses_table.c.city.ilike(f"{query}%"))
+            stmt = stmt.where(houses_table.c.city.istartswith(query, autoescape=True))
         stmt = stmt.order_by(houses_table.c.region, houses_table.c.city)
         result = await self._session.execute(stmt)
         return result.tuples().all()
@@ -125,7 +127,7 @@ class HousesRepo(BaseAlchemyRepo):
         if region is not None:
             stmt = stmt.where(houses_table.c.region == region)
         if query is not None:
-            stmt = stmt.where(houses_table.c.street.ilike(f"{query}%"))
+            stmt = stmt.where(houses_table.c.street.istartswith(query, autoescape=True))
         stmt = stmt.order_by(houses_table.c.street)
         result = await self._session.execute(stmt)
         return result.scalars().all()
@@ -160,7 +162,7 @@ class HousesRepo(BaseAlchemyRepo):
     ) -> tuple[Sequence[Flat], int]:
         stmt = select(Flat).where(flats_table.c.house_id == house_id)
         if query is not None:
-            stmt = stmt.where(flats_table.c.number.ilike(f"{query}%"))
+            stmt = stmt.where(flats_table.c.number.istartswith(query, autoescape=True))
         if entrance is not None:
             stmt = stmt.where(flats_table.c.entrance == entrance)
 
@@ -230,8 +232,8 @@ class HousesRepo(BaseAlchemyRepo):
         if query is not None:
             stmt = stmt.where(
                 or_(
-                    houses_table.c.street.ilike(f"%{query}%"),
-                    houses_table.c.building.ilike(f"{query}%"),
+                    houses_table.c.street.icontains(query, autoescape=True),
+                    houses_table.c.building.istartswith(query, autoescape=True),
                 ),
             )
 
