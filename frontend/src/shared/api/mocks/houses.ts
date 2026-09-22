@@ -99,8 +99,10 @@ export const housesConfigs = [
           return badRequest("Укажите либо квартиру из списка, либо номер");
         }
 
-        if (residencyForHouse(house.id)) {
-          return conflict("Вы уже привязаны к этому дому");
+        const existing = residencyForHouse(house.id);
+
+        if (existing) {
+          return ok(residencySummary(existing));
         }
 
         const flat = flatId == null ? null : (findFlat(Number(flatId)) ?? null);

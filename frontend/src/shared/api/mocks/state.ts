@@ -862,10 +862,10 @@ const seedPolls = (): MockPoll[] =>
 
 const SEED_ORGS: Schemas["OrgMembership"][] = [
   {
-    org_id: ZHILSERVIS.id,
-    name: ZHILSERVIS.name,
-    role: "creator",
-    is_demo: true,
+    org_id: 99,
+    name: "ООО «Старая управляющая компания»",
+    role: "employee",
+    is_demo: false,
   },
 ];
 
@@ -991,6 +991,42 @@ export const addResidency = (
   state.residencies.push(residency);
 
   return residency;
+};
+
+export const activateFlatResidency = (flat: MockFlat): MockResidency => {
+  const residency = addResidency(flat.house_id, flat, null, "tenant");
+  residency.flat_id = flat.id;
+  residency.flat_number = flat.number;
+  residency.verified = true;
+
+  return residency;
+};
+
+export const activateDemoAccess = (): {
+  org: Schemas["OrgMembership"];
+  residency: MockResidency;
+} => {
+  let org = state.orgs.find(
+    (membership) => membership.org_id === ZHILSERVIS.id,
+  );
+
+  if (!org) {
+    org = {
+      org_id: ZHILSERVIS.id,
+      name: ZHILSERVIS.name,
+      role: "employee",
+      is_demo: true,
+    };
+    state.orgs.push(org);
+  }
+
+  const flat = findFlat(101);
+
+  if (!flat) {
+    throw new Error("В demo mock отсутствует квартира");
+  }
+
+  return { org, residency: activateFlatResidency(flat) };
 };
 
 export const latestVerification = (

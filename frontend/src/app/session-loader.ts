@@ -1,6 +1,8 @@
 import { redirect } from "react-router-dom";
 
 import { loadHouseCard } from "@/features/house";
+import { parseStartParam, shouldHandleDeeplink } from "@/features/deeplink";
+import { getMaxLaunch } from "@/shared/lib/max";
 import {
   currentResidency,
   isOnboarded,
@@ -25,6 +27,15 @@ export const onboardedLoader = async () => {
 };
 
 export const welcomeLoader = async () => {
+  const raw = getMaxLaunch().startParam;
+
+  // После отказа от bot-only команды тот же startParam остаётся в MAX launch
+  // data до перезагрузки. Без runtime-флага переход на / зациклится через
+  // /launch вместо обычного старта приложения.
+  if (raw && parseStartParam(raw) && shouldHandleDeeplink(raw)) {
+    throw redirect(Routes.DEEPLINK);
+  }
+
   if (isOnboarded(await loadSession())) {
     throw redirect(Routes.HOME);
   }

@@ -1,14 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-
 import { authParams, rqClient } from "@/shared/api/instance";
-import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 
 export const CONSENT_VERSION = "1.0";
 
-export const useConsent = () => {
-  const navigate = useNavigate();
+export const useConsent = (onContinue: () => void | Promise<void>) => {
   const { isConsentGiven, save } = useSession();
   const [checked, setChecked] = useState(false);
 
@@ -17,13 +13,13 @@ export const useConsent = () => {
   const consent = rqClient.useMutation("post", "/api/me/consent", {
     onSuccess: async (data) => {
       save(data);
-      await navigate(Routes.ONBOARDING_HOUSE);
+      await onContinue();
     },
   });
 
   const start = () => {
     if (accepted) {
-      void navigate(Routes.ONBOARDING_HOUSE);
+      void onContinue();
 
       return;
     }

@@ -9,6 +9,7 @@ import { App } from "./app";
 import { Component as ErrorPage } from "@/features/error/error.page";
 
 import { protectedLoader } from "./protected-loader";
+import { deeplinkLoader } from "./deeplink-loader";
 import { Providers } from "./providers";
 import {
   adminLoader,
@@ -45,6 +46,11 @@ const router = createBrowserRouter([
             path: Routes.WELCOME,
             loader: welcomeLoader,
             lazy: () => import("@/features/onboarding/onboarding.page"),
+          },
+          {
+            path: Routes.DEEPLINK,
+            loader: deeplinkLoader,
+            lazy: () => import("@/features/deeplink/deeplink.page"),
           },
           {
             element: <PushedPage fallback={Routes.WELCOME} />,

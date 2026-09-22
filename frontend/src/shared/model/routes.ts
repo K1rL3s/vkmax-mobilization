@@ -1,5 +1,6 @@
 export const Routes = {
   WELCOME: "/",
+  DEEPLINK: "/launch",
   PRIVACY: "/privacy",
   ONBOARDING_HOUSE: "/onboarding/house",
   FLAT_CONFIRMATION: "/residencies/:residentId/confirm",

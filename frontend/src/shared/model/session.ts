@@ -43,7 +43,13 @@ export const isOnboarded = (session: Session) =>
   session.consent_at !== null && session.residencies.length > 0;
 
 export const loadSession = () =>
-  queryClient.query({ ...sessionQueryOptions(), staleTime: "static" });
+  queryClient.query({ ...sessionQueryOptions(), staleTime: Infinity });
+
+export const reloadSession = async () => {
+  await queryClient.invalidateQueries(sessionQueryOptions());
+
+  return loadSession();
+};
 
 export const selectResidency = async (residentId: number) => {
   localStorage.setItem(SELECTED_KEY, String(residentId));
@@ -110,6 +116,6 @@ export const useSession = () => {
     select: selectResidency,
     save: (next: Session) =>
       queryClient.setQueryData(sessionQueryOptions().queryKey, next),
-    reload: () => queryClient.invalidateQueries(sessionQueryOptions()),
+    reload: reloadSession,
   };
 };

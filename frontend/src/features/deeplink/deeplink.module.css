@@ -1,0 +1,9 @@
+.Page {
+  flex: 1;
+  min-height: 100%;
+  padding: 16px;
+}
+
+.Actions {
+  width: min(100%, 328px);
+}
