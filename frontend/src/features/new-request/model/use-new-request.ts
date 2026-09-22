@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useDebounceValue } from "@siberiacancode/reactuse";
-import { generatePath, useNavigate } from "react-router-dom";
+import { generatePath, useLocation, useNavigate } from "react-router-dom";
+import { z } from "zod";
 
 import { useRequestCategories, type RequestCategory } from "@/features/request";
-import { rqClient } from "@/shared/api/instance";
+import { authParams, rqClient } from "@/shared/api/instance";
 import { queryClient } from "@/shared/api/query-client";
 import { Routes } from "@/shared/model/routes";
 import { houseParams, useSession } from "@/shared/model/session";
@@ -14,11 +15,22 @@ import { usePhotos } from "./use-photos";
 // диспетчер перестаёт читать
 export const DESCRIPTION_LIMIT = 1000;
 
+// спор начисления приходит с экрана квитанции: категория уже выбрана, а
+// заявку заводит ручка спора, которая сама прикладывает расчёт
+const handoverSchema = z.object({
+  category: z.literal("charge_dispute"),
+  chargeId: z.number().int().positive(),
+});
+
 export const useNewRequest = () => {
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const dispute = handoverSchema.safeParse(state).data ?? null;
   const { currentResidency: residency } = useSession();
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<RequestCategory | null>(null);
+  const [category, setCategory] = useState<RequestCategory | null>(
+    dispute?.category ?? null,
+  );
   const photos = usePhotos();
 
   const categories = useRequestCategories();
@@ -36,24 +48,41 @@ export const useNewRequest = () => {
         query: { category: debouncedCategory ?? "other" },
       },
     },
-    { enabled: debouncedCategory !== null },
+    { enabled: debouncedCategory !== null && !dispute },
   );
 
+  const openCreated = async (requestId: number) => {
+    await queryClient.invalidateQueries({
+      queryKey: ["get", "/api/requests"],
+    });
+    // мастер уходит из истории: назад из карточки житель вернётся в ленту
+    await navigate(
+      generatePath(Routes.REQUEST, { requestId: String(requestId) }),
+      { replace: true },
+    );
+  };
+
   const create = rqClient.useMutation("post", "/api/requests", {
-    onSuccess: async (request) => {
-      await queryClient.invalidateQueries({
-        queryKey: ["get", "/api/requests"],
-      });
-      // мастер уходит из истории: назад из карточки житель вернётся в ленту
-      await navigate(
-        generatePath(Routes.REQUEST, { requestId: String(request.id) }),
-        { replace: true },
-      );
-    },
+    onSuccess: (request) => openCreated(request.id),
   });
+
+  const disputeCharge = rqClient.useMutation(
+    "post",
+    "/api/charges/{charge_id}/dispute",
+    { onSuccess: (response) => openCreated(response.request_id) },
+  );
 
   const submit = (joinGroupId?: number) => {
     if (!category) {
+      return;
+    }
+
+    if (dispute) {
+      disputeCharge.mutate({
+        params: { ...authParams(), path: { charge_id: dispute.chargeId } },
+        body: { comment: description.trim() },
+      });
+
       return;
     }
 
@@ -85,8 +114,13 @@ export const useNewRequest = () => {
     isCategoriesFailed: categories.isError,
     photos,
     neighbours,
-    isSubmitting: create.isPending || create.isSuccess,
-    isFailed: create.isError,
+    isDispute: dispute !== null,
+    isSubmitting:
+      create.isPending ||
+      create.isSuccess ||
+      disputeCharge.isPending ||
+      disputeCharge.isSuccess,
+    isFailed: create.isError || disputeCharge.isError,
     canSubmit: description.trim().length > 0 && category !== null,
     submit,
   };

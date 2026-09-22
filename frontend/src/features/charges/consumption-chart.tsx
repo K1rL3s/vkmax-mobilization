@@ -1,0 +1,135 @@
+import { useState } from "react";
+import { Button, Flex, Typography } from "@maxhub/max-ui";
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+import {
+  formatMonth,
+  formatVolume,
+  SERVICE_LABEL,
+  SERVICE_UNIT,
+  type ServiceConsumption,
+} from "./charge";
+
+import styles from "./consumption-chart.module.css";
+
+export const ConsumptionChart = ({
+  series,
+}: {
+  series: ServiceConsumption[];
+}) => {
+  const [selected, setSelected] = useState(0);
+  const current = series[selected] ?? series[0];
+
+  if (!current) {
+    return null;
+  }
+
+  const unit = SERVICE_UNIT[current.service] ?? "";
+  const average = current.house_average ?? null;
+  // среднее по дому приходит одним числом за период: на графике это ровная
+  // линия, с которой сравнивается каждый свой месяц
+  const data = current.points.map((point) => ({
+    month: formatMonth(point.period),
+    own: point.consumption / 1000,
+    house: average === null ? null : average / 1000,
+  }));
+
+  return (
+    <Flex direction="column" align="stretch" gap={12}>
+      {series.length > 1 && (
+        <div className={styles.Chips}>
+          {series.map((item, index) => (
+            <Button
+              key={item.service}
+              size="small"
+              variant={index === selected ? "primary" : "secondary"}
+              aria-pressed={index === selected}
+              onClick={() => setSelected(index)}
+            >
+              {SERVICE_LABEL[item.service]}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      <div className={styles.Card}>
+        {data.length < 2 ? (
+          <Typography.Text variant="description" color="secondary">
+            Для графика нужно хотя бы два месяца показаний
+          </Typography.Text>
+        ) : (
+          <div className={styles.Chart}>
+            <ResponsiveContainer width="100%" height={140}>
+              <LineChart
+                data={data}
+                margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
+              >
+                <XAxis
+                  dataKey="month"
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  padding={{ left: 12, right: 12 }}
+                  className={styles.Axis}
+                />
+                <YAxis hide domain={["auto", "auto"]} />
+                <Tooltip
+                  formatter={(value) =>
+                    `${formatVolume(Number(value) * 1000)} ${unit}`
+                  }
+                />
+                <Line
+                  type="monotone"
+                  dataKey="house"
+                  name="Среднее по дому"
+                  stroke="var(--icon-tertiary)"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="own"
+                  name="Ваш расход"
+                  stroke="var(--button-primary)"
+                  strokeWidth={2}
+                  dot={{
+                    r: 3,
+                    fill: "var(--button-primary)",
+                    stroke: "var(--button-primary)",
+                  }}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        <Flex gap={16} wrap="wrap" className={styles.Legend}>
+          <Flex align="center" gap={6}>
+            <span className={styles.OwnMark} />
+            <Typography.Text variant="description" color="secondary">
+              Ваш расход
+            </Typography.Text>
+          </Flex>
+          <Flex align="center" gap={6}>
+            <span className={styles.HouseMark} />
+            <Typography.Text variant="description" color="secondary">
+              {average === null
+                ? "Среднего по дому пока нет"
+                : `Среднее по дому: ${formatVolume(average)} ${unit}`}
+            </Typography.Text>
+          </Flex>
+        </Flex>
+      </div>
+    </Flex>
+  );
+};

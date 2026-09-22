@@ -1,0 +1,53 @@
+.Page {
+  flex: 1;
+  gap: 20px;
+  padding: 16px 16px 24px;
+
+  h1,
+  h2 {
+    margin: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Summary {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: color-mix(
+      in srgb,
+      var(--button-primary) 10%,
+      transparent
+    );
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Line {
+    padding: 12px 16px;
+
+    & + & {
+      border-top: 1px solid var(--divider-primary);
+    }
+  }
+
+  .Paid {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Center {
+    text-align: center;
+  }
+
+  .Failed {
+    color: var(--text-negative);
+  }
+}

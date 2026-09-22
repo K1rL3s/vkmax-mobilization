@@ -1,0 +1,40 @@
+.Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.Card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Chart {
+  /* ResponsiveContainer меряет родителя: без min-width flex не даст ему сжаться */
+  min-width: 0;
+}
+
+.Axis {
+  font-size: 12px;
+  fill: var(--text-secondary);
+}
+
+.OwnMark,
+.HouseMark {
+  flex-shrink: 0;
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--button-primary);
+}
+
+.HouseMark {
+  border-top: 2px dashed var(--icon-tertiary);
+}
+
+.Legend {
+  row-gap: 4px;
+}

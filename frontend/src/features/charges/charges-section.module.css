@@ -1,0 +1,22 @@
+.Panel {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Note {
+  margin-top: 8px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.NoteIcon {
+  flex-shrink: 0;
+  color: var(--icon-tertiary);
+}
+
+/* кит ставит шеврон вплотную к правому блоку, в макете между ними зазор */
+.Amount {
+  margin-right: 8px;
+}

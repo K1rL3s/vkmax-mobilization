@@ -58,19 +58,21 @@ const NewRequestPage = () => {
           </section>
         </Flex>
 
-        <Flex asChild align="stretch" direction="column" gap={8}>
-          <section>
-            <Typography.Text asChild variant="title" color="primary">
-              <h2>Категория</h2>
-            </Typography.Text>
+        {!form.isDispute && (
+          <Flex asChild align="stretch" direction="column" gap={8}>
+            <section>
+              <Typography.Text asChild variant="title" color="primary">
+                <h2>Категория</h2>
+              </Typography.Text>
 
-            <CategoryChips
-              categories={form.categories}
-              value={form.category}
-              onChange={form.setCategory}
-            />
-          </section>
-        </Flex>
+              <CategoryChips
+                categories={form.categories}
+                value={form.category}
+                onChange={form.setCategory}
+              />
+            </section>
+          </Flex>
+        )}
 
         {selected && (
           <CategoryInfo
@@ -79,46 +81,54 @@ const NewRequestPage = () => {
           />
         )}
 
-        {form.neighbours && form.neighbours.neighbours_count > 0 && (
-          <SimilarPanel
-            count={form.neighbours.neighbours_count}
-            canJoin={form.neighbours.can_join && form.canSubmit}
-            isJoining={form.isSubmitting}
-            onJoin={() => form.submit(form.neighbours?.group_id ?? undefined)}
-          />
-        )}
-
-        <Flex asChild align="stretch" direction="column" gap={8}>
-          <section>
-            <Flex align="center" gap={8}>
-              <Typography.Text
-                asChild
-                className={styles.Grow}
-                variant="title"
-                color="primary"
-              >
-                <h2>Фото</h2>
-              </Typography.Text>
-              <Typography.Text variant="description" color="secondary">
-                необязательно
-              </Typography.Text>
-            </Flex>
-
-            <PhotoPicker
-              photos={form.photos.photos}
-              isFull={form.photos.isFull}
-              isUploading={form.photos.isUploading}
-              onAdd={form.photos.add}
-              onRemove={form.photos.remove}
+        {!form.isDispute &&
+          form.neighbours &&
+          form.neighbours.neighbours_count > 0 && (
+            <SimilarPanel
+              count={form.neighbours.neighbours_count}
+              canJoin={form.neighbours.can_join && form.canSubmit}
+              isJoining={form.isSubmitting}
+              onJoin={() => form.submit(form.neighbours?.group_id ?? undefined)}
             />
+          )}
 
-            <Typography.Text variant="description" color="secondary">
-              {form.photos.isFailed
-                ? "Фото не загрузилось, попробуйте ещё раз"
-                : `До ${PHOTO_LIMIT} фото - так УК быстрее разберётся`}
-            </Typography.Text>
-          </section>
-        </Flex>
+        {form.isDispute ? (
+          <Typography.Text variant="description" color="secondary">
+            К заявке приложим расчёт и фото показаний за период
+          </Typography.Text>
+        ) : (
+          <Flex asChild align="stretch" direction="column" gap={8}>
+            <section>
+              <Flex align="center" gap={8}>
+                <Typography.Text
+                  asChild
+                  className={styles.Grow}
+                  variant="title"
+                  color="primary"
+                >
+                  <h2>Фото</h2>
+                </Typography.Text>
+                <Typography.Text variant="description" color="secondary">
+                  необязательно
+                </Typography.Text>
+              </Flex>
+
+              <PhotoPicker
+                photos={form.photos.photos}
+                isFull={form.photos.isFull}
+                isUploading={form.photos.isUploading}
+                onAdd={form.photos.add}
+                onRemove={form.photos.remove}
+              />
+
+              <Typography.Text variant="description" color="secondary">
+                {form.photos.isFailed
+                  ? "Фото не загрузилось, попробуйте ещё раз"
+                  : `До ${PHOTO_LIMIT} фото - так УК быстрее разберётся`}
+              </Typography.Text>
+            </section>
+          </Flex>
+        )}
 
         {form.isFailed && (
           <Typography.Text variant="description" className={styles.Failed}>
