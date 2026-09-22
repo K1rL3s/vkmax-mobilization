@@ -1,0 +1,69 @@
+.Page {
+  flex: 1;
+  gap: 20px;
+  padding: 16px 16px 24px;
+
+  h2 {
+    margin: 0;
+  }
+
+  .Panel {
+    overflow: hidden;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Item + .Item {
+    position: relative;
+
+    &::before {
+      position: absolute;
+      top: 0;
+      right: 0;
+      left: 16px;
+      height: 1px;
+      background-color: var(--controls-inactive);
+      content: "";
+    }
+  }
+
+  .Question {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    list-style: none;
+    cursor: pointer;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:focus-visible {
+      border-radius: 16px;
+      outline: 2px solid var(--button-primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Chevron {
+    display: flex;
+    transform: rotate(90deg);
+    transition: transform 0.2s;
+  }
+
+  .Item[open] .Chevron {
+    transform: rotate(-90deg);
+  }
+
+  /* 14px отступа вопроса снизу превращаются в 6px до ответа */
+  .Answer {
+    margin: -8px 0 0;
+    padding: 0 16px 14px;
+  }
+}
