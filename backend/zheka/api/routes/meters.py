@@ -98,7 +98,9 @@ async def submit_reading(
     body: SubmitReadingRequest,
 ) -> SubmitReadingResponse:
     result = await readings_service.submit(
-        current_account.user_id, meter_id, SubmitDraft(**body.model_dump())
+        current_account.user_id,
+        meter_id,
+        SubmitDraft(**body.model_dump()),
     )
     return SubmitReadingResponse(
         reading=_reading_item(result.row, files_service),
@@ -126,7 +128,9 @@ async def add_meter(
     body: AddMeterRequest,
 ) -> MeterItem:
     card = await meters_service.add(
-        current_account.user_id, flat_id, MeterDraft(**body.model_dump())
+        current_account.user_id,
+        flat_id,
+        MeterDraft(**body.model_dump()),
     )
     return MeterItem.of(card)
 
@@ -139,6 +143,8 @@ async def update_meter(
     body: UpdateMeterRequest,
 ) -> MeterItem:
     card = await meters_service.update(
-        current_account.user_id, meter_id, MeterUpdateDraft(**body.model_dump())
+        current_account.user_id,
+        meter_id,
+        MeterUpdateDraft(**body.model_dump()),
     )
     return MeterItem.of(card)

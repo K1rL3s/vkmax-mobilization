@@ -22,10 +22,11 @@ router = Router(name=__name__)
 
 
 @router.exception(
-    ExceptionTypeFilter(UnknownIntent, OutdatedIntent, InvalidStackIdError)
+    ExceptionTypeFilter(UnknownIntent, OutdatedIntent, InvalidStackIdError),
 )
 async def stale_window_handler(
-    event: ErrorEvent[Any, Any], dialog_manager: DialogManager
+    event: ErrorEvent[Any, Any],
+    dialog_manager: DialogManager,
 ) -> None:
     await _notify(event, STALE_WINDOW)
     await dialog_manager.start(Menu.main, mode=StartMode.RESET_STACK)

@@ -26,12 +26,14 @@ class BrokerProvider(Provider):
     @provide
     def schedule_source(self, config: RedisConfig) -> ZhekaScheduleSource:
         return ZhekaScheduleSource(
-            ListRedisScheduleSource(url=config.url, prefix="zheka-schedule")
+            ListRedisScheduleSource(url=config.url, prefix="zheka-schedule"),
         )
 
     @provide
     def scheduler(
-        self, broker: ZhekaBroker, schedule_source: ZhekaScheduleSource
+        self,
+        broker: ZhekaBroker,
+        schedule_source: ZhekaScheduleSource,
     ) -> TaskiqScheduler:
         return TaskiqScheduler(
             broker=broker,

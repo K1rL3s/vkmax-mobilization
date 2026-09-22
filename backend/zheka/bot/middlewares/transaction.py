@@ -14,7 +14,10 @@ class TransactionMiddleware(BaseMiddleware[MaxoUpdate[Any]]):
     __slots__ = ()
 
     async def __call__(
-        self, update: MaxoUpdate[Any], ctx: Ctx, next: NextMiddleware[MaxoUpdate[Any]]
+        self,
+        update: MaxoUpdate[Any],
+        ctx: Ctx,
+        next: NextMiddleware[MaxoUpdate[Any]],
     ) -> Any:
         container: AsyncContainer = ctx[CONTAINER_NAME]
         session = await container.get(AsyncSession)

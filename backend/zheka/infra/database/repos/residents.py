@@ -36,10 +36,13 @@ class ResidentsRepo(BaseAlchemyRepo):
         return resident
 
     async def get_for_house(
-        self, user_id: UserId, house_id: HouseId
+        self,
+        user_id: UserId,
+        house_id: HouseId,
     ) -> Resident | None:
         stmt = select(Resident).where(
-            residents_table.c.user_id == user_id, residents_table.c.house_id == house_id
+            residents_table.c.user_id == user_id,
+            residents_table.c.house_id == house_id,
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -51,7 +54,8 @@ class ResidentsRepo(BaseAlchemyRepo):
 
     async def list_verified_for_house(self, house_id: HouseId) -> Sequence[Resident]:
         stmt = select(Resident).where(
-            residents_table.c.house_id == house_id, VERIFIED_RESIDENT
+            residents_table.c.house_id == house_id,
+            VERIFIED_RESIDENT,
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
@@ -82,7 +86,7 @@ class ResidentsRepo(BaseAlchemyRepo):
                 can_vote=is_owner,
             )
             .on_conflict_do_nothing(
-                index_elements=[residents_table.c.user_id, residents_table.c.house_id]
+                index_elements=[residents_table.c.user_id, residents_table.c.house_id],
             )
             .returning(Resident)
         )
@@ -111,7 +115,9 @@ class ResidentsRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def get_for_org(
-        self, resident_id: ResidentId, org_id: OrgId
+        self,
+        resident_id: ResidentId,
+        org_id: OrgId,
     ) -> Resident | None:
         stmt = scoped_to_org(
             select(Resident).where(residents_table.c.id == resident_id),
@@ -122,12 +128,16 @@ class ResidentsRepo(BaseAlchemyRepo):
         return resident
 
     async def search_for_house(
-        self, house_id: HouseId, query: str | None, limit: int, offset: int
+        self,
+        house_id: HouseId,
+        query: str | None,
+        limit: int,
+        offset: int,
     ) -> tuple[Sequence[Resident], int]:
         stmt = select(Resident).where(residents_table.c.house_id == house_id)
         if query is not None:
             by_name = select(users_table.c.id).where(
-                users_table.c.name.ilike(f"%{query}%")
+                users_table.c.name.ilike(f"%{query}%"),
             )
             by_flat = select(flats_table.c.id).where(
                 flats_table.c.house_id == house_id,
@@ -137,7 +147,7 @@ class ResidentsRepo(BaseAlchemyRepo):
                 or_(
                     residents_table.c.user_id.in_(by_name),
                     residents_table.c.flat_id.in_(by_flat),
-                )
+                ),
             )
 
         total = await self._count(stmt)
@@ -148,7 +158,8 @@ class ResidentsRepo(BaseAlchemyRepo):
         return result.scalars().all(), total
 
     async def count_by_house(
-        self, house_ids: Collection[HouseId]
+        self,
+        house_ids: Collection[HouseId],
     ) -> dict[HouseId, int]:
         if not house_ids:
             return {}
@@ -196,7 +207,10 @@ class ResidentsRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def set_status(
-        self, resident: Resident, status: ResidentStatus, reason: str | None
+        self,
+        resident: Resident,
+        status: ResidentStatus,
+        reason: str | None,
     ) -> None:
         resident.status = status
         resident.block_reason = reason
@@ -209,7 +223,11 @@ class ResidentsRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def set_verified(
-        self, resident: Resident, flat_id: FlatId, at: datetime, by: UserId | None
+        self,
+        resident: Resident,
+        flat_id: FlatId,
+        at: datetime,
+        by: UserId | None,
     ) -> None:
         resident.flat_id = flat_id
         resident.flat_number = None
@@ -232,7 +250,9 @@ class ResidentsRepo(BaseAlchemyRepo):
         return [UserId(user_id) for user_id in result.scalars().all()]
 
     async def list_for_houses_and_users(
-        self, house_ids: Collection[HouseId], user_ids: Collection[UserId]
+        self,
+        house_ids: Collection[HouseId],
+        user_ids: Collection[UserId],
     ) -> Sequence[Resident]:
         if not house_ids or not user_ids:
             return []
@@ -244,12 +264,14 @@ class ResidentsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def list_verified_for_flats(
-        self, flat_ids: Collection[FlatId]
+        self,
+        flat_ids: Collection[FlatId],
     ) -> Sequence[Resident]:
         if not flat_ids:
             return []
         stmt = select(Resident).where(
-            residents_table.c.flat_id.in_(flat_ids), VERIFIED_RESIDENT
+            residents_table.c.flat_id.in_(flat_ids),
+            VERIFIED_RESIDENT,
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()

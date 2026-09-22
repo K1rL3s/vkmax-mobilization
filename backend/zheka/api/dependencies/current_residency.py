@@ -54,7 +54,8 @@ def residency_of(resident: Resident | None, not_found: str) -> CurrentResidency:
 
 
 def resolve_residency(
-    residencies: Sequence[Resident], house_id_header: HouseId | None
+    residencies: Sequence[Resident],
+    house_id_header: HouseId | None,
 ) -> CurrentResidency:
     if not residencies:
         raise NotEnoughRights("Вы не житель ни одного дома")
@@ -105,7 +106,8 @@ async def residency_for_flat(
 ) -> CurrentResidency:
     residents = await residents_repo.list_for_flat(flat_id)
     resident = next(
-        (r for r in residents if r.user_id == current_account.user_id), None
+        (r for r in residents if r.user_id == current_account.user_id),
+        None,
     )
     return residency_of(resident, FLAT_NOT_FOUND)
 
@@ -122,7 +124,8 @@ async def residency_for_flat_house(
     if flat is None:
         raise EntityNotFound(FLAT_NOT_FOUND)
     resident = await residents_repo.get_for_house(
-        current_account.user_id, flat.house_id
+        current_account.user_id,
+        flat.house_id,
     )
     return residency_of(resident, FLAT_NOT_FOUND)
 
@@ -130,5 +133,6 @@ async def residency_for_flat_house(
 ResidencyForHouseDep = Annotated[CurrentResidency, Depends(residency_for)]
 ResidencyForFlatDep = Annotated[CurrentResidency, Depends(residency_for_flat)]
 ResidencyForFlatHouseDep = Annotated[
-    CurrentResidency, Depends(residency_for_flat_house)
+    CurrentResidency,
+    Depends(residency_for_flat_house),
 ]

@@ -40,7 +40,10 @@ review_dialog = Dialog(
             when=F["can_review"],
         ),
         SwitchTo(
-            Const("Оценить"), id="to_rating", state=Review.rating, when=F["can_rate"]
+            Const("Оценить"),
+            id="to_rating",
+            state=Review.rating,
+            when=F["can_rate"],
         ),
         state=Review.card,
         getter=get_review,

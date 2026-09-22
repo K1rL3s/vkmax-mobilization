@@ -29,7 +29,6 @@ class House(ZhekaMutableType, Zoned):
     chat_binding_code: str
     overhaul: Any = field(default_factory=dict)
     documents: Any = field(default_factory=list)
-    # имя зоны IANA: по ней окно показаний, напоминания, окна доступа и опросы дома
     timezone: str
 
     @property

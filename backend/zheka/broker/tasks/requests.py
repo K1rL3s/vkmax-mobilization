@@ -104,7 +104,10 @@ async def attach_result_photo(
     names = await save_photos(bot, files_service, photo_urls)
     try:
         await admin_requests_service.executor_advance(
-            user_id, request_id, RequestStatus.ON_REVIEW, names
+            user_id,
+            request_id,
+            RequestStatus.ON_REVIEW,
+            names,
         )
     except ZhekaError as error:
         logger.warning("Результат по заявке %s не принят: %s", request_id, error)
@@ -127,5 +130,10 @@ async def open_card(
     levels = await notifications_service.levels(user_id)
     notify = bool(resolve_notify(levels[NotificationCategory.REQUESTS], mandatory=True))
     await sender.start_dialog(
-        state, user, notify=notify, data=data, stack_id=stack_id, show_mode=show_mode
+        state,
+        user,
+        notify=notify,
+        data=data,
+        stack_id=stack_id,
+        show_mode=show_mode,
     )

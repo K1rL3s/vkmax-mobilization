@@ -67,25 +67,30 @@ def _median(value: Any) -> ColumnElement[int]:
 
 _METRICS: dict[AnalyticsMetric, Callable[[datetime], ColumnElement[int]]] = {
     AnalyticsMetric.ACCEPT_TIME: lambda _: cast(
-        func.round(func.avg(_seconds(_R.created_at, _R.accepted_at)) / 60), Integer
+        func.round(func.avg(_seconds(_R.created_at, _R.accepted_at)) / 60),
+        Integer,
     ),
     AnalyticsMetric.OVERDUE_SHARE: lambda now: share(
-        func.count().filter(overdue_at(now)), func.count()
+        func.count().filter(overdue_at(now)),
+        func.count(),
     ),
     AnalyticsMetric.REPEAT_SHARE: lambda _: share(
-        func.count().filter(_R.parent_request_id.is_not(None)), func.count()
+        func.count().filter(_R.parent_request_id.is_not(None)),
+        func.count(),
     ),
     AnalyticsMetric.AUTO_CLOSED_SHARE: lambda _: share(
         func.count().filter(
-            _R.completion_reason == RequestCompletionReason.AUTO_CLOSED
+            _R.completion_reason == RequestCompletionReason.AUTO_CLOSED,
         ),
         func.count().filter(_R.status == RequestStatus.DONE),
     ),
     AnalyticsMetric.DIGITAL_SHARE: lambda _: share(
-        func.count().filter(_R.channel != RequestChannel.PHONE), func.count()
+        func.count().filter(_R.channel != RequestChannel.PHONE),
+        func.count(),
     ),
     AnalyticsMetric.RATING: lambda _: cast(
-        func.round(func.avg(_R.rating) * 100), Integer
+        func.round(func.avg(_R.rating) * 100),
+        Integer,
     ),
 }
 
@@ -95,7 +100,9 @@ def _created_in(since: datetime, until: datetime) -> ColumnElement[bool]:
 
 
 def _org_requests[SelectT: Select[Any]](
-    stmt: SelectT, org_id: OrgId, house_id: HouseId | None
+    stmt: SelectT,
+    org_id: OrgId,
+    house_id: HouseId | None,
 ) -> SelectT:
     stmt = scoped_to_org(stmt, _R.house_id, org_id)
     if house_id is not None:
@@ -182,7 +189,11 @@ class AnalyticsRepo(BaseAlchemyRepo):
         )
 
     async def by_category(
-        self, org_id: OrgId, house_id: HouseId | None, since: datetime, until: datetime
+        self,
+        org_id: OrgId,
+        house_id: HouseId | None,
+        since: datetime,
+        until: datetime,
     ) -> list[tuple[RequestCategory, int]]:
         count = func.count()
         stmt = _org_requests(
@@ -197,10 +208,15 @@ class AnalyticsRepo(BaseAlchemyRepo):
         return list(result.tuples().all())
 
     async def by_week(
-        self, org_id: OrgId, house_id: HouseId | None, since: datetime, timezone: str
+        self,
+        org_id: OrgId,
+        house_id: HouseId | None,
+        since: datetime,
+        timezone: str,
     ) -> dict[date, int]:
         week = cast(
-            func.date_trunc("week", func.timezone(timezone, _R.created_at)), Date
+            func.date_trunc("week", func.timezone(timezone, _R.created_at)),
+            Date,
         )
         stmt = _org_requests(
             select(week, func.count()).where(_R.created_at >= since).group_by(week),
@@ -229,13 +245,18 @@ class AnalyticsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return {
             HouseId(house_id): SeasonCount(
-                flats_total=total, submitted=submitted_count, percent=percent
+                flats_total=total,
+                submitted=submitted_count,
+                percent=percent,
             )
             for house_id, total, submitted_count, percent in result.tuples().all()
         }
 
     async def by_executor(
-        self, org_id: OrgId, since: datetime, until: datetime
+        self,
+        org_id: OrgId,
+        since: datetime,
+        until: datetime,
     ) -> list[ExecutorRow]:
         e = events_table.c
         assigned_at = (
@@ -247,7 +268,9 @@ class AnalyticsRepo(BaseAlchemyRepo):
             .scalar_subquery()
         )
         closed = and_(
-            _R.status == RequestStatus.DONE, _R.done_at >= since, _R.done_at < until
+            _R.status == RequestStatus.DONE,
+            _R.done_at >= since,
+            _R.done_at < until,
         )
         child = aliased(requests_table)
         repeated = exists().where(child.c.parent_request_id == _R.id)
@@ -260,18 +283,19 @@ class AnalyticsRepo(BaseAlchemyRepo):
                     assigned_at <= _R.reviewed_at,
                 ),
                 _seconds(assigned_at, _R.reviewed_at),
-            )
+            ),
         )
         per_executor = scoped_to_org(
             select(
                 _R.executor_user_id.label("user_id"),
                 closed_count.label("closed"),
                 share(func.count().filter(and_(closed, repeated)), closed_count).label(
-                    "repeat_share"
+                    "repeat_share",
                 ),
                 _median_minutes(reviewed).label("median_time"),
                 cast(
-                    func.round(func.avg(case((closed, _R.rating))) * 100), Integer
+                    func.round(func.avg(case((closed, _R.rating))) * 100),
+                    Integer,
                 ).label("rating"),
             )
             .where(_R.executor_user_id.is_not(None))
@@ -290,10 +314,12 @@ class AnalyticsRepo(BaseAlchemyRepo):
             )
             .select_from(
                 org_members_table.join(
-                    users_table, users_table.c.id == org_members_table.c.user_id
+                    users_table,
+                    users_table.c.id == org_members_table.c.user_id,
                 ).outerjoin(
-                    per_executor, per_executor.c.user_id == org_members_table.c.user_id
-                )
+                    per_executor,
+                    per_executor.c.user_id == org_members_table.c.user_id,
+                ),
             )
             .where(
                 org_members_table.c.org_id == org_id,
@@ -322,7 +348,10 @@ class AnalyticsRepo(BaseAlchemyRepo):
         ]
 
     async def by_channel(
-        self, org_id: OrgId, since: datetime, until: datetime
+        self,
+        org_id: OrgId,
+        since: datetime,
+        until: datetime,
     ) -> list[ChannelRow]:
         count = func.count()
         stmt = _org_requests(
@@ -358,7 +387,7 @@ class AnalyticsRepo(BaseAlchemyRepo):
         ).subquery()
         median = select(_median(peers.c.value)).scalar_subquery()
         stmt = select(ranked.c.value, median, ranked.c.rank, ranked.c.total).where(
-            ranked.c.org_id == org_id
+            ranked.c.org_id == org_id,
         )
         result = await self._session.execute(stmt)
         row = result.tuples().one_or_none()
@@ -394,7 +423,7 @@ class AnalyticsRepo(BaseAlchemyRepo):
                         *[
                             parent.c[column.name] == peers.c[column.name]
                             for column in cut[:depth]
-                        ]
+                        ],
                     )
                     .scalar_subquery()
                 )
@@ -415,7 +444,7 @@ class AnalyticsRepo(BaseAlchemyRepo):
                         city=city[0] if city else None,
                         orgs_count=count,
                         value=value,
-                    )
+                    ),
                 )
         return rows
 
@@ -430,13 +459,13 @@ class AnalyticsRepo(BaseAlchemyRepo):
                 ).outerjoin(
                     organizations_table,
                     organizations_table.c.id == houses_table.c.org_id,
-                )
+                ),
             )
             .where(
                 or_(
                     houses_table.c.org_id.is_(None),
                     organizations_table.c.registered_at.is_(None),
-                )
+                ),
             )
             .group_by(houses_table.c.id)
             .order_by(waiting.desc(), houses_table.c.id)
@@ -447,15 +476,20 @@ class AnalyticsRepo(BaseAlchemyRepo):
 
 
 def _peers(
-    metric: AnalyticsMetric, is_demo: bool, since: datetime, now: datetime, *cut: Any
+    metric: AnalyticsMetric,
+    is_demo: bool,
+    since: datetime,
+    now: datetime,
+    *cut: Any,
 ) -> Any:
     value = _METRICS[metric](now)
     stmt = (
         select(houses_table.c.org_id, *cut, value.label("value"))
         .select_from(
             requests_table.join(houses_table, houses_table.c.id == _R.house_id).join(
-                organizations_table, organizations_table.c.id == houses_table.c.org_id
-            )
+                organizations_table,
+                organizations_table.c.id == houses_table.c.org_id,
+            ),
         )
         .where(
             organizations_table.c.is_demo == is_demo,

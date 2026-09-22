@@ -37,7 +37,10 @@ async def create_poll(
     polls_service: FromDishka[PollsService],
 ) -> PollCard:
     card = await polls_service.create(
-        residency.user_id, house_id, body.draft(), org_id=None
+        residency.user_id,
+        house_id,
+        body.draft(),
+        org_id=None,
     )
     return PollCard.of_card(card)
 
@@ -60,7 +63,9 @@ async def vote_in_poll(
     polls_service: FromDishka[PollsService],
 ) -> PollResults:
     results = await polls_service.vote(
-        poll_id, current_account.user_id, body.option_ids
+        poll_id,
+        current_account.user_id,
+        body.option_ids,
     )
     return PollResults.of(results)
 

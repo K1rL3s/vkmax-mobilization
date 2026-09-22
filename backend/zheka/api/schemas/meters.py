@@ -26,7 +26,8 @@ class MeterItem(BaseSchema):
     next_verification_date: date | None = None
     last_period: date | None = None
     last_values: dict[TariffZone, int] | None = Field(
-        default=None, description=_READING
+        default=None,
+        description=_READING,
     )
 
     @classmethod

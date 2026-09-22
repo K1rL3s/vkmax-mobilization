@@ -18,7 +18,11 @@ class EventsService:
         self._events_repo = events_repo
 
     async def record(
-        self, type: EventType, *, user_id: UserId | None = None, **payload: Any
+        self,
+        type: EventType,
+        *,
+        user_id: UserId | None = None,
+        **payload: Any,
     ) -> None:
         try:
             payload = json.loads(json.dumps(payload, default=str))

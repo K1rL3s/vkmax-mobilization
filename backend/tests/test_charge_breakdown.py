@@ -25,12 +25,12 @@ def test_to_kopecks_rounds_half_up(product: int, is_area: bool, kopecks: int) ->
 @pytest.mark.parametrize(
     ("previous", "current", "effects"),
     [
-        # тариф вырос с 0 до 33_334 (1/10000 руб/ед), объем - с 5 до 7 (1/1000 ед).
-        # amount задан как есть, breakdown() его не пересчитывает.
-        # Наивный (v_now - v_prev) * t_prev = 0 дал бы tariff_effect(2) + 0 != delta(3)
         pytest.param((2, 0, 5), (5, 33_334, 7), (3, 2, 1), id="naive-rounding"),
         pytest.param(
-            (500, 100_000, 500), (800, 100_000, 800), (300, 0, 300), id="volume-only"
+            (500, 100_000, 500),
+            (800, 100_000, 800),
+            (300, 0, 300),
+            id="volume-only",
         ),
     ],
 )
@@ -41,7 +41,10 @@ def test_effects_always_sum_to_the_line_delta_even_where_naive_rounding_breaks_i
 ) -> None:
     def line_of(amount: int, tariff: int, volume: int) -> ChargeLine:
         return ChargeLine(
-            service=ServiceType.COLD_WATER, amount=amount, tariff=tariff, volume=volume
+            service=ServiceType.COLD_WATER,
+            amount=amount,
+            tariff=tariff,
+            volume=volume,
         )
 
     line = breakdown([line_of(*current)], [line_of(*previous)]).lines[0]
@@ -64,14 +67,12 @@ def test_effects_always_sum_to_the_line_delta_even_where_naive_rounding_breaks_i
             "disappeared",
             -987,
         ),
-        # разовая сумма без тарифа и объема
         (
             ChargeLine(service=ServiceType.MAINTENANCE, amount=1_500),
             ChargeLine(service=ServiceType.MAINTENANCE, amount=1_400),
             "changed",
             100,
         ),
-        # тариф есть, объема нет - тоже разовая сумма
         (
             ChargeLine(service=ServiceType.MAINTENANCE, amount=1_500, tariff=100_000),
             ChargeLine(service=ServiceType.MAINTENANCE, amount=1_400, tariff=100_000),
@@ -81,10 +82,14 @@ def test_effects_always_sum_to_the_line_delta_even_where_naive_rounding_breaks_i
     ],
 )
 def test_a_line_without_a_tariff_effect_puts_the_delta_into_volume(
-    current: ChargeLine | None, previous: ChargeLine | None, kind: str, delta: int
+    current: ChargeLine | None,
+    previous: ChargeLine | None,
+    kind: str,
+    delta: int,
 ) -> None:
     result = breakdown(
-        [] if current is None else [current], [] if previous is None else [previous]
+        [] if current is None else [current],
+        [] if previous is None else [previous],
     )
 
     line = result.lines[0]
@@ -143,7 +148,8 @@ def test_lines_are_sorted_by_absolute_delta_and_summed() -> None:
     ],
 )
 def test_parse_line_reads_the_stored_shape(
-    raw: dict[str, Any], line: ChargeLine
+    raw: dict[str, Any],
+    line: ChargeLine,
 ) -> None:
     assert parse_line(raw) == line
 

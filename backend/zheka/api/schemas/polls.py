@@ -175,7 +175,9 @@ class PollNonVoterItem(BaseSchema):
     @classmethod
     def of(cls, flat: Flat) -> Self:
         return cls(
-            flat_id=FlatId(flat.id), flat_number=flat.number, entrance=flat.entrance
+            flat_id=FlatId(flat.id),
+            flat_number=flat.number,
+            entrance=flat.entrance,
         )
 
 

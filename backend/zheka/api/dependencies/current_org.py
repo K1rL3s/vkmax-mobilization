@@ -22,7 +22,9 @@ class CurrentOrg(ZhekaType):
 
 
 def resolve_org(
-    memberships: Sequence[OrgMember], user_id: UserId, org_id_header: OrgId | None
+    memberships: Sequence[OrgMember],
+    user_id: UserId,
+    org_id_header: OrgId | None,
 ) -> CurrentOrg:
     if not memberships:
         raise NotEnoughRights("Вы не сотрудник ни одной организации")
@@ -30,7 +32,7 @@ def resolve_org(
     if org_id_header is None:
         if len(memberships) > 1:
             raise NotEnoughRights(
-                "Укажите X-Org-Id: вы сотрудник нескольких организаций"
+                "Укажите X-Org-Id: вы сотрудник нескольких организаций",
             )
         member = memberships[0]
     else:

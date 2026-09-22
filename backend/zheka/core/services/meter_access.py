@@ -52,11 +52,14 @@ class MeterAccess:
         return meter
 
     async def resident_of_flat(
-        self, user_id: UserId, flat_id: FlatId
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
     ) -> Resident | None:
         residents = await self._residents.list_for_flat(flat_id)
         return next(
-            (resident for resident in residents if resident.user_id == user_id), None
+            (resident for resident in residents if resident.user_id == user_id),
+            None,
         )
 
     async def verified_resident(self, user_id: UserId, flat_id: FlatId) -> Resident:

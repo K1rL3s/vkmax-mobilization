@@ -14,7 +14,8 @@ from zheka.core.services.files import FilesService
 
 
 def photo_media(
-    files_service: FilesService, photos: Sequence[RequestPhoto]
+    files_service: FilesService,
+    photos: Sequence[RequestPhoto],
 ) -> list[MediaAttachment]:
     return [
         MediaAttachment(AttachmentType.IMAGE, path=files_service.path_of(photo.path))
@@ -23,16 +24,23 @@ def photo_media(
 
 
 async def ask_in_default_stack(
-    dialog_manager: DialogManager, state: State, data: Data
+    dialog_manager: DialogManager,
+    state: State,
+    data: Data,
 ) -> None:
     await dialog_manager.bg(stack_id=DEFAULT_STACK_ID).start(
-        state, data=data, mode=StartMode.RESET_STACK, show_mode=ShowMode.SEND
+        state,
+        data=data,
+        mode=StartMode.RESET_STACK,
+        show_mode=ShowMode.SEND,
     )
 
 
 async def back_to_menu(dialog_manager: DialogManager, notice: str) -> None:
     await dialog_manager.start(
-        Menu.main, data=MenuData(notice=notice).to_data(), mode=StartMode.RESET_STACK
+        Menu.main,
+        data=MenuData(notice=notice).to_data(),
+        mode=StartMode.RESET_STACK,
     )
 
 

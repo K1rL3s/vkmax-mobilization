@@ -37,7 +37,8 @@ async def test_day_old_init_data_is_401() -> None:
     stale = signed_init_data(datetime.now(UTC) - INIT_DATA_TTL - timedelta(minutes=1))
 
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
+        transport=ASGITransport(app=app),
+        base_url="http://test",
     ) as client:
         response = await client.get("/api/me", headers={"WebAppData": stale})
 

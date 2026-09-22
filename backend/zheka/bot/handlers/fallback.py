@@ -10,6 +10,8 @@ router = Router(name=__name__)
 
 @router.message_created()
 async def no_state_handler(
-    _update: MessageCreated, dialog_manager: DialogManager, user: User
+    _update: MessageCreated,
+    dialog_manager: DialogManager,
+    user: User,
 ) -> None:
     await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)

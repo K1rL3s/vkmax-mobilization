@@ -28,7 +28,7 @@ class OrgsRepo(BaseAlchemyRepo):
 
     async def get_by_license(self, license_no: str) -> Organization | None:
         stmt = select(Organization).where(
-            organizations_table.c.license_no == license_no
+            organizations_table.c.license_no == license_no,
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -40,7 +40,8 @@ class OrgsRepo(BaseAlchemyRepo):
 
     async def get_member(self, org_id: OrgId, user_id: UserId) -> OrgMember | None:
         stmt = select(OrgMember).where(
-            org_members_table.c.org_id == org_id, org_members_table.c.user_id == user_id
+            org_members_table.c.org_id == org_id,
+            org_members_table.c.user_id == user_id,
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
@@ -72,7 +73,10 @@ class OrgsRepo(BaseAlchemyRepo):
         return result.scalar_one()
 
     async def add_member(
-        self, org_id: OrgId, user_id: UserId, role: OrgRole
+        self,
+        org_id: OrgId,
+        user_id: UserId,
+        role: OrgRole,
     ) -> OrgMember:
         member = OrgMember(org_id=org_id, user_id=user_id, role=role)
         self._session.add(member)
@@ -94,13 +98,19 @@ class OrgsRepo(BaseAlchemyRepo):
         return settings
 
     async def add_member_or_get(
-        self, org_id: OrgId, user_id: UserId, role: OrgRole
+        self,
+        org_id: OrgId,
+        user_id: UserId,
+        role: OrgRole,
     ) -> OrgMember:
         stmt = (
             pg_insert(OrgMember)
             .values(org_id=org_id, user_id=user_id, role=role)
             .on_conflict_do_nothing(
-                index_elements=[org_members_table.c.org_id, org_members_table.c.user_id]
+                index_elements=[
+                    org_members_table.c.org_id,
+                    org_members_table.c.user_id,
+                ],
             )
             .returning(OrgMember)
         )

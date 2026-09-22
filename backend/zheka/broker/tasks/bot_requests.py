@@ -66,15 +66,18 @@ async def create_bot_request(
 
 
 async def save_photos(
-    bot: Bot, files_service: FilesService, photo_urls: Sequence[str]
+    bot: Bot,
+    files_service: FilesService,
+    photo_urls: Sequence[str],
 ) -> list[str]:
     photos = []
     for url in photo_urls:
         try:
             photos.append(
                 await files_service.save_download(
-                    PHOTO_MIME, partial(bot.download, url, seek=False)
-                )
+                    PHOTO_MIME,
+                    partial(bot.download, url, seek=False),
+                ),
             )
         except InvalidRequest as error:
             logger.warning("Фото из бота не сохранено: %s", error)

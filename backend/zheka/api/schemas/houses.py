@@ -132,7 +132,8 @@ class HouseCard(BaseSchema):
     built_year: int | None = None
     floors: int | None = None
     area: int | None = Field(
-        default=None, description="Площадь в сотых долях квадратного метра"
+        default=None,
+        description="Площадь в сотых долях квадратного метра",
     )
     lat: float | None = None
     lon: float | None = None
@@ -183,7 +184,8 @@ class FlatListItem(BaseSchema):
     number: str
     entrance: int | None = None
     area: int | None = Field(
-        default=None, description="Площадь в сотых долях квадратного метра"
+        default=None,
+        description="Площадь в сотых долях квадратного метра",
     )
     is_taken: bool = False
 
@@ -260,7 +262,8 @@ class AdminHouseCard(BaseSchema):
     built_year: int | None = None
     floors: int | None = None
     area: int | None = Field(
-        default=None, description="Площадь в сотых долях квадратного метра"
+        default=None,
+        description="Площадь в сотых долях квадратного метра",
     )
     chairman_name: str | None = None
     chat_title: str | None = None

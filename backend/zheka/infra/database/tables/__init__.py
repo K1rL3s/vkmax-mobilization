@@ -72,10 +72,12 @@ mapper_registry.map_imperatively(models.RequestStatusLog, request_status_log_tab
 mapper_registry.map_imperatively(models.RequestMessage, request_messages_table)
 mapper_registry.map_imperatively(models.Resident, residents_table)
 mapper_registry.map_imperatively(
-    models.VerificationRequest, flat_verification_requests_table
+    models.VerificationRequest,
+    flat_verification_requests_table,
 )
 mapper_registry.map_imperatively(models.DemandSignal, demand_signals_table)
 mapper_registry.map_imperatively(models.User, users_table)
 mapper_registry.map_imperatively(
-    models.NotificationSetting, notification_settings_table
+    models.NotificationSetting,
+    notification_settings_table,
 )

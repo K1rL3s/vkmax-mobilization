@@ -34,7 +34,10 @@ class MetersService:
         self._access = access
 
     async def add(
-        self, user_id: UserId, flat_id: FlatId, draft: MeterDraft
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
+        draft: MeterDraft,
     ) -> MeterCard:
         await self._access.can_manage_meter(user_id, flat_id)
         serial = draft.checked_serial()
@@ -51,13 +54,19 @@ class MetersService:
         return await self._access.meter_card(meter, datetime.now(UTC))
 
     async def update(
-        self, user_id: UserId, meter_id: MeterId, draft: MeterUpdateDraft
+        self,
+        user_id: UserId,
+        meter_id: MeterId,
+        draft: MeterUpdateDraft,
     ) -> MeterCard:
         meter = await self._access.get_meter(meter_id)
         await self._access.can_manage_meter(user_id, meter.flat_id)
         serial = draft.checked_serial()
 
         await self._meters.update(
-            meter, draft.tariff_zones, serial, draft.next_verification_date
+            meter,
+            draft.tariff_zones,
+            serial,
+            draft.next_verification_date,
         )
         return await self._access.meter_card(meter, datetime.now(UTC))

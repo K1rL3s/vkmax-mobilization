@@ -100,7 +100,10 @@ class ChatsService:
         await self._chats.set_removed(chat_id)
 
     async def bind(
-        self, user_id: UserId, chat_id: MaxChatId, house_id: HouseId
+        self,
+        user_id: UserId,
+        chat_id: MaxChatId,
+        house_id: HouseId,
     ) -> None:
         chat = await self._free_chat(chat_id)
         house = await self._houses.get(house_id)
@@ -110,7 +113,10 @@ class ChatsService:
         await self._bind(chat, house_id, user_id, binder)
 
     async def bind_by_code(
-        self, user_id: UserId, chat_id: MaxChatId, code: str
+        self,
+        user_id: UserId,
+        chat_id: MaxChatId,
+        code: str,
     ) -> None:
         chat = await self._free_chat(chat_id)
         house = await self._houses.get_by_binding_code(code.strip().lower())
@@ -160,7 +166,11 @@ class ChatsService:
         return None
 
     async def _bind(
-        self, chat: Chat, house_id: HouseId, user_id: UserId, binder: ChatBinder
+        self,
+        chat: Chat,
+        house_id: HouseId,
+        user_id: UserId,
+        binder: ChatBinder,
     ) -> None:
         await self._chats.bind(chat, house_id, user_id)
         await self._events.record(
@@ -200,7 +210,7 @@ class ChatsService:
                     seq=target.seq,
                     text=text,
                     pinned_by=author,
-                )
+                ),
             )
             await self._events.record(
                 EventType.CHAT_PINNED,
@@ -264,12 +274,12 @@ class ChatsService:
             return None
         chat, house_id = bound
         return PinList(
-            chat=chat, house_id=house_id, pins=await self._chats.list_pins(chat_id)
+            chat=chat,
+            house_id=house_id,
+            pins=await self._chats.list_pins(chat_id),
         )
 
     async def _bound(self, chat_id: MaxChatId) -> tuple[Chat, HouseId] | None:
-        # блокировка строки выстраивает команды и отрисовку списка одного чата,
-        # поэтому лимит и id сообщения со списком не бывают устаревшими
         chat = await self._chats.lock(chat_id)
         if (
             chat is None
@@ -281,7 +291,10 @@ class ChatsService:
         return chat, chat.house_id
 
     async def _pinner(
-        self, user_id: UserId | None, chat: Chat, house_id: HouseId
+        self,
+        user_id: UserId | None,
+        chat: Chat,
+        house_id: HouseId,
     ) -> tuple[UserId, ChatBinder]:
         house = await self._houses.get(house_id)
         binder = (

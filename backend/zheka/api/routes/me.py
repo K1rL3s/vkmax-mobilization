@@ -20,7 +20,8 @@ router = APIRouter(tags=["Профиль"], route_class=DishkaRoute)
 
 @router.get("/me", summary="Профиль: дома, квартиры и организации")
 async def get_me(
-    current_account: CurrentAccountDep, profile_service: FromDishka[ProfileService]
+    current_account: CurrentAccountDep,
+    profile_service: FromDishka[ProfileService],
 ) -> MeResponse:
     return MeResponse.of(await profile_service.me(current_account.user_id))
 
@@ -51,7 +52,8 @@ async def update_notification_settings(
     notifications_service: FromDishka[NotificationsService],
 ) -> NotificationSettingsResponse:
     levels = await notifications_service.update(
-        current_account.user_id, {item.category: item.level for item in body.settings}
+        current_account.user_id,
+        {item.category: item.level for item in body.settings},
     )
     return NotificationSettingsResponse.of(levels)
 

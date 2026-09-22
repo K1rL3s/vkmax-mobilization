@@ -29,7 +29,11 @@ polls_table = Table(
     Column("title", String, nullable=False),
     Column("description", Text, nullable=True),
     Column(
-        "is_multiple", Boolean, default=False, server_default=false(), nullable=False
+        "is_multiple",
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
     ),
     Column("starts_at", DateTime(timezone=True), nullable=False),
     Column("ends_at", DateTime(timezone=True), nullable=False),

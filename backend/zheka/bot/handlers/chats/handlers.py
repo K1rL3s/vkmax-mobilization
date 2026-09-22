@@ -55,7 +55,9 @@ async def on_house(
     data = ChatBindingData.load(dialog_manager)
     try:
         await chats_service.bind(
-            dialog_user_id(dialog_manager), MaxChatId(data.chat_id), HouseId(house_id)
+            dialog_user_id(dialog_manager),
+            MaxChatId(data.chat_id),
+            HouseId(house_id),
         )
     except ZhekaError as error:
         await refused(callback, error)
@@ -74,7 +76,9 @@ async def on_code(
     data = ChatBindingData.load(dialog_manager)
     try:
         await chats_service.bind_by_code(
-            dialog_user_id(dialog_manager), MaxChatId(data.chat_id), code
+            dialog_user_id(dialog_manager),
+            MaxChatId(data.chat_id),
+            code,
         )
     except InvalidRequest as error:
         with ChatBindingData.proxy(dialog_manager) as binding:

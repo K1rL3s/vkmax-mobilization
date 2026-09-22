@@ -31,7 +31,8 @@ class UsersRepo(BaseAlchemyRepo):
                 "name": name,
                 "username": username,
                 "max_chat_id": func.coalesce(
-                    insert.excluded.max_chat_id, users_table.c.max_chat_id
+                    insert.excluded.max_chat_id,
+                    users_table.c.max_chat_id,
                 ),
                 "bot_stopped_at": case(
                     (
@@ -44,7 +45,8 @@ class UsersRepo(BaseAlchemyRepo):
             },
         ).returning(User)
         result = await self._session.execute(
-            stmt, execution_options={"populate_existing": True}
+            stmt,
+            execution_options={"populate_existing": True},
         )
         return result.scalar_one()
 

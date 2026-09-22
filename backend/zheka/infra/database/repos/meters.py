@@ -52,7 +52,7 @@ class MetersRepo(BaseAlchemyRepo):
                 next_verification_date=next_verification_date,
             )
             .on_conflict_do_nothing(
-                index_elements=[meters_table.c.flat_id, meters_table.c.type]
+                index_elements=[meters_table.c.flat_id, meters_table.c.type],
             )
             .returning(Meter)
         )
@@ -75,7 +75,8 @@ class MetersRepo(BaseAlchemyRepo):
         stmt = (
             select(Reading)
             .where(
-                readings_table.c.meter_id == meter_id, readings_table.c.period == period
+                readings_table.c.meter_id == meter_id,
+                readings_table.c.period == period,
             )
             .order_by(readings_table.c.submitted_at.desc())
             .limit(1)
@@ -87,10 +88,12 @@ class MetersRepo(BaseAlchemyRepo):
         stmt = (
             select(Reading)
             .where(
-                readings_table.c.meter_id == meter_id, readings_table.c.period < period
+                readings_table.c.meter_id == meter_id,
+                readings_table.c.period < period,
             )
             .order_by(
-                readings_table.c.period.desc(), readings_table.c.submitted_at.desc()
+                readings_table.c.period.desc(),
+                readings_table.c.submitted_at.desc(),
             )
             .limit(1)
         )
@@ -168,7 +171,9 @@ class MetersRepo(BaseAlchemyRepo):
         return result.scalars().all(), total
 
     async def flats_without_reading(
-        self, house_id: HouseId, period: date
+        self,
+        house_id: HouseId,
+        period: date,
     ) -> Sequence[FlatId]:
         has_meter = select(meters_table.c.flat_id).distinct()
         submitted = (

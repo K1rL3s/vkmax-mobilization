@@ -17,7 +17,9 @@ class ZhekaMessageManager(MessageManager):
             disable_link_preview = Omitted()
 
         attachments = await self._build_attachments(
-            bot, new_message.keyboard, new_message.media
+            bot,
+            new_message.keyboard,
+            new_message.media,
         )
         recipient = new_message.recipient
         chat_id = Omitted() if recipient.chat_id is None else recipient.chat_id

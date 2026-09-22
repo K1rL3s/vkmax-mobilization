@@ -109,12 +109,17 @@ class HousesService:
         self._events = events_service
 
     async def cities(
-        self, region: str | None, query: str | None
+        self,
+        region: str | None,
+        query: str | None,
     ) -> Sequence[tuple[str, str]]:
         return await self._houses.list_cities(region, query)
 
     async def streets(
-        self, city: str, region: str | None, query: str | None
+        self,
+        city: str,
+        region: str | None,
+        query: str | None,
     ) -> Sequence[str]:
         return await self._houses.list_streets(city, region, query)
 
@@ -138,7 +143,12 @@ class HousesService:
             raise InvalidRequest("Укажите адрес или город")
 
         houses, total = await self._houses.search(
-            city, street, building, query, limit, offset
+            city,
+            street,
+            building,
+            query,
+            limit,
+            offset,
         )
         await self._events.record(
             EventType.HOUSE_SEARCH,
@@ -151,7 +161,12 @@ class HousesService:
         return await self._with_orgs(houses), total
 
     async def nearest(
-        self, user_id: UserId, lat: float, lon: float, radius_m: int, limit: int
+        self,
+        user_id: UserId,
+        lat: float,
+        lon: float,
+        radius_m: int,
+        limit: int,
     ) -> list[HouseFound]:
         rows = await self._houses.nearest(
             Decimal(str(lat)),
@@ -162,7 +177,10 @@ class HousesService:
         )
         found = await self._with_orgs([house for house, _ in rows])
         await self._events.record(
-            EventType.HOUSE_SEARCH, user_id=user_id, method="geo", found=len(found)
+            EventType.HOUSE_SEARCH,
+            user_id=user_id,
+            method="geo",
+            found=len(found),
         )
         return [
             replace(
@@ -237,7 +255,11 @@ class HousesService:
             raise InvalidState("Квартира уже подтверждена, переезд оформляет УК")
 
         resident, created = await self._residents.add_or_get(
-            user_id, house_id, flat_id, number, role
+            user_id,
+            house_id,
+            flat_id,
+            number,
+            role,
         )
         if created:
             await self._events.record(
@@ -250,7 +272,9 @@ class HousesService:
                 entrance=entrance,
             )
         return await self._view(
-            resident, house, is_connected(house, await self._org_of(house))
+            resident,
+            house,
+            is_connected(house, await self._org_of(house)),
         )
 
     async def unlink(self, user_id: UserId, resident_id: ResidentId) -> None:
@@ -261,7 +285,9 @@ class HousesService:
         house_id = resident.house_id
         await self._residents.delete(resident)
         await self._events.record(
-            EventType.HOUSE_LEFT, user_id=user_id, house_id=house_id
+            EventType.HOUSE_LEFT,
+            user_id=user_id,
+            house_id=house_id,
         )
 
     async def demand_signal(self, user_id: UserId, house_id: HouseId) -> int:
@@ -272,7 +298,10 @@ class HousesService:
         await self._houses.add_demand_signal(house_id, user_id)
         total = await self._houses.count_demand(house_id)
         await self._events.record(
-            EventType.DEMAND_SIGNAL, user_id=user_id, house_id=house_id, total=total
+            EventType.DEMAND_SIGNAL,
+            user_id=user_id,
+            house_id=house_id,
+            total=total,
         )
         return total
 
@@ -290,7 +319,11 @@ class HousesService:
             raise EntityNotFound("Дом не найден")
 
         flats, total = await self._houses.list_flats(
-            house_id, query, entrance, limit, offset
+            house_id,
+            query,
+            entrance,
+            limit,
+            offset,
         )
         residents = await self._residents.list_for_house(house_id)
         taken = {
@@ -310,7 +343,10 @@ class HousesService:
         return await self._orgs.get(OrgId(house.org_id))
 
     async def _view(
-        self, resident: Resident, house: House, connected: bool
+        self,
+        resident: Resident,
+        house: House,
+        connected: bool,
     ) -> ResidencyView:
         flat = (
             None
@@ -318,7 +354,10 @@ class HousesService:
             else await self._houses.get_flat(resident.flat_id)
         )
         return ResidencyView(
-            resident=resident, house=house, flat=flat, is_connected=connected
+            resident=resident,
+            house=house,
+            flat=flat,
+            is_connected=connected,
         )
 
     async def _with_orgs(self, houses: Sequence[House]) -> list[HouseFound]:
@@ -328,12 +367,16 @@ class HousesService:
         for house in houses:
             org = None if house.org_id is None else orgs.get(house.org_id)
             found.append(
-                HouseFound(house=house, org=org, is_connected=is_connected(house, org))
+                HouseFound(house=house, org=org, is_connected=is_connected(house, org)),
             )
         return found
 
     async def org_houses(
-        self, org_id: OrgId, query: str | None, limit: int, offset: int
+        self,
+        org_id: OrgId,
+        query: str | None,
+        limit: int,
+        offset: int,
     ) -> tuple[list[AdminHouseRow], int]:
         houses, total = await self._houses.search_for_org(org_id, query, limit, offset)
         house_ids = [house.id for house in houses]
@@ -369,7 +412,7 @@ class HousesService:
             residents_count=residents.get(house_id, 0),
             verified_residents_count=await self._residents.count_verified(house_id),
             pending_verifications=await self._flats.count_pending_verifications(
-                house_id
+                house_id,
             ),
             open_requests=open_requests.get(house_id, 0),
             chat_bound=house_id in chats,
@@ -392,12 +435,15 @@ class HousesService:
     ) -> tuple[list[HouseResidentView], int]:
         await self._org_house(org_id, house_id)
         residents, total = await self._residents.search_for_house(
-            house_id, query, limit, offset
+            house_id,
+            query,
+            limit,
+            offset,
         )
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [resident.user_id for resident in residents]
+                [resident.user_id for resident in residents],
             )
         }
         flats = {
@@ -407,7 +453,7 @@ class HousesService:
                     resident.flat_id
                     for resident in residents
                     if resident.flat_id is not None
-                ]
+                ],
             )
         }
         views = [

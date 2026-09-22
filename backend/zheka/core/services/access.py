@@ -90,7 +90,10 @@ class AccessService:
         self._notifications = notifications_service
 
     async def create(
-        self, org_id: OrgId, user_id: UserId, draft: AccessRequestDraft
+        self,
+        org_id: OrgId,
+        user_id: UserId,
+        draft: AccessRequestDraft,
     ) -> AccessGridData:
         reason = draft.reason.strip()
         if not reason:
@@ -126,7 +129,11 @@ class AccessService:
         skipped = [flat_id for flat_id in flat_ids if flat_id not in with_residents]
 
         request = await self._access.create_request(
-            org_id, draft.house_id, reason, draft.date, user_id
+            org_id,
+            draft.house_id,
+            reason,
+            draft.date,
+            user_id,
         )
         access_request_id = request.id
         await self._access.add_slots(
@@ -150,7 +157,9 @@ class AccessService:
         return replace(grid, flats_without_residents=skipped)
 
     async def grid(
-        self, org_id: OrgId, access_request_id: AccessRequestId
+        self,
+        org_id: OrgId,
+        access_request_id: AccessRequestId,
     ) -> AccessGridData:
         request = await self._access.get_for_org(access_request_id, org_id)
         if request is None:
@@ -160,21 +169,25 @@ class AccessService:
         numbers = {
             flat.id: flat.number
             for flat in await self._houses.list_flats_by_ids(
-                {target.flat_id for target in targets}
+                {target.flat_id for target in targets},
             )
         }
         return AccessGridData(
             request=row,
             targets=[
                 AccessTargetData(
-                    target=target, flat_number=numbers[FlatId(target.flat_id)]
+                    target=target,
+                    flat_number=numbers[FlatId(target.flat_id)],
                 )
                 for target in targets
             ],
         )
 
     async def pick(
-        self, user_id: UserId, access_request_id: AccessRequestId, slot_id: AccessSlotId
+        self,
+        user_id: UserId,
+        access_request_id: AccessRequestId,
+        slot_id: AccessSlotId,
     ) -> AccessRequestData:
         target = await self._target(user_id, access_request_id)
         slot = await self._access.lock_slot(access_request_id, slot_id)
@@ -195,7 +208,9 @@ class AccessService:
         return await self._view(access_request_id, target)
 
     async def list_for_org(
-        self, org_id: OrgId, house_id: HouseId | None
+        self,
+        org_id: OrgId,
+        house_id: HouseId | None,
     ) -> list[AccessRequestData]:
         if (
             house_id is not None
@@ -206,7 +221,8 @@ class AccessService:
         return await self._decorate(requests, {})
 
     async def list_for_resident(
-        self, flat_id: FlatId | None
+        self,
+        flat_id: FlatId | None,
     ) -> list[AccessRequestData]:
         if flat_id is None:
             return []
@@ -225,7 +241,7 @@ class AccessService:
         houses = {
             house.id: house
             for house in await self._houses.list_by_ids(
-                {request.house_id for request in requests}
+                {request.house_id for request in requests},
             )
         }
         slots = await self._access.list_slots(request_ids)
@@ -250,18 +266,22 @@ class AccessService:
                     targets_count=total,
                     my_flat_id=None if target is None else target.flat_id,
                     my_slot_id=(None if target is None else target.slot_id),
-                )
+                ),
             )
         return rows
 
     async def resident_view(
-        self, user_id: UserId, access_request_id: AccessRequestId
+        self,
+        user_id: UserId,
+        access_request_id: AccessRequestId,
     ) -> AccessRequestData:
         target = await self._target(user_id, access_request_id)
         return await self._view(access_request_id, target)
 
     async def _target(
-        self, user_id: UserId, access_request_id: AccessRequestId
+        self,
+        user_id: UserId,
+        access_request_id: AccessRequestId,
     ) -> AccessTarget:
         residencies = {
             resident.flat_id: resident
@@ -269,7 +289,8 @@ class AccessService:
             if resident.flat_id is not None and resident.verified_at is not None
         }
         target = await self._access.target_for_flats(
-            access_request_id, residencies.keys()
+            access_request_id,
+            residencies.keys(),
         )
         if target is None:
             raise EntityNotFound(REQUEST_NOT_FOUND)
@@ -279,7 +300,9 @@ class AccessService:
         return target
 
     async def _view(
-        self, access_request_id: AccessRequestId, target: AccessTarget
+        self,
+        access_request_id: AccessRequestId,
+        target: AccessTarget,
     ) -> AccessRequestData:
         request = await self._access.get(access_request_id)
         [row] = await self._decorate([request], {access_request_id: target})

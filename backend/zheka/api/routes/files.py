@@ -30,7 +30,10 @@ async def upload_file(
     responses={HTTPStatus.OK: {"content": {"application/octet-stream": {}}}},
 )
 async def download_file(
-    name: str, exp: int, sig: str, files_service: FromDishka[FilesService]
+    name: str,
+    exp: int,
+    sig: str,
+    files_service: FromDishka[FilesService],
 ) -> FileResponse:
     files_service.verify(name, exp, sig)
     path = files_service.path_of(name)

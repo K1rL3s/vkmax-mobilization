@@ -75,7 +75,6 @@ from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.meters import meters_table
 from zheka.infra.database.tables.polls import polls_table
 
-# 19:00 в Москве: местный час всех напоминаний настал, а дата та же, что в UTC
 NOW = datetime.combine(datetime.now(UTC).date(), time(16), UTC)
 
 
@@ -85,7 +84,10 @@ def _frozen_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _settings(
-    day_from: int = 15, day_to: int = 25, *, always_open: bool = False
+    day_from: int = 15,
+    day_to: int = 25,
+    *,
+    always_open: bool = False,
 ) -> OrgSettings:
     return OrgSettings(
         org_id=OrgId(1),
@@ -101,22 +103,20 @@ def _settings(
         (date(2026, 9, 15), _settings(), ReadingReminder.OPEN),
         (date(2026, 9, 23), _settings(), ReadingReminder.CLOSING),
         (date(2026, 9, 20), _settings(), None),
-        # у всегда открытого окна закрытие - конец месяца, а в феврале он 28-го
         (date(2026, 2, 26), _settings(always_open=True), ReadingReminder.CLOSING),
         (date(2026, 9, 28), _settings(always_open=True), ReadingReminder.CLOSING),
         (date(2026, 9, 1), None, ReadingReminder.OPEN),
-        # окно 25-1 закрывается 1 октября, за два дня до этого - 29 сентября
         (date(2026, 9, 29), _settings(25, 1), ReadingReminder.CLOSING),
-        # окно 1-2 внутри месяца: конец сентября - не канун его закрытия
         (date(2026, 9, 30), _settings(1, 2), None),
-        # канун закрытия короткого окна - день до его открытия
         (date(2026, 9, 14), _settings(15, 16), None),
         (date(2026, 9, 13), _settings(15, 15), None),
         (date(2026, 2, 27), _settings(28, 1), None),
     ],
 )
 def test_the_reading_reminder_day(
-    today: date, settings: OrgSettings | None, expected: ReadingReminder | None
+    today: date,
+    settings: OrgSettings | None,
+    expected: ReadingReminder | None,
 ) -> None:
     assert reading_reminder(today, settings) is expected
 
@@ -207,7 +207,7 @@ async def _resident(
             can_vote=role is ResidentRole.OWNER,
             verified_at=datetime.now(UTC) if verified else None,
             status=status,
-        )
+        ),
     )
     await session.commit()
     return flat_id, user_id
@@ -235,10 +235,10 @@ async def _meter(
 
 
 async def _reading_house(session: AsyncSession) -> HouseId:
-    # окно открывается сегодня, каким бы ни был день запуска
     day = _today().day
     return await _house(
-        session, {"meter_window_day_from": day, "meter_window_day_to": day}
+        session,
+        {"meter_window_day_from": day, "meter_window_day_to": day},
     )
 
 
@@ -258,13 +258,15 @@ async def _submitted(
             is_below_previous=False,
             submitted_at=datetime.now(UTC),
             submitted_by=user_id,
-        )
+        ),
     )
     await session.commit()
 
 
 async def test_the_reading_reminder_goes_once_to_a_flat_that_did_not_submit(
-    bot_session: AsyncSession, task_broker: InMemoryBroker, bot_broker: RecordingBroker
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
 ) -> None:
     house_id = await _reading_house(bot_session)
     lagging_flat, lagging = await _resident(bot_session, house_id)
@@ -278,8 +280,6 @@ async def test_the_reading_reminder_goes_once_to_a_flat_that_did_not_submit(
     await _run(task_broker, remind_readings)
 
     [queued] = _to_users(bot_broker, lagging)
-    # уровень разрешает рассылка, и OFF глушит ее только у необязательного
-    # сообщения своей категории
     assert queued["category"] == NotificationCategory.METERS.value
     assert queued["mandatory"] is False
     assert _to_users(bot_broker, done) == []
@@ -330,7 +330,7 @@ async def _vote(
             user_id=user_id,
             flat_id=flat_id,
             counted_by_area=counted,
-        )
+        ),
     )
     await session.commit()
 
@@ -362,7 +362,9 @@ async def test_a_poll_is_reminded_in_its_last_two_days(
 
 
 async def test_the_poll_reminder_goes_once_only_to_flats_without_a_vote(
-    bot_session: AsyncSession, task_broker: InMemoryBroker, bot_broker: RecordingBroker
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
 ) -> None:
     house_id = await _house(bot_session)
     _, waiting = await _resident(bot_session, house_id)
@@ -393,14 +395,16 @@ async def _chat(session: AsyncSession, house_id: HouseId, *, bound: bool) -> Max
             bot_is_admin=True,
             bound_at=datetime.now(UTC) if bound else None,
             status=ChatStatus.ACTIVE,
-        )
+        ),
     )
     await session.commit()
     return chat_id
 
 
 async def test_the_poll_reminder_goes_into_the_bound_chat_only(
-    bot_session: AsyncSession, task_broker: InMemoryBroker, bot_broker: RecordingBroker
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
 ) -> None:
     house_id = await _house(bot_session)
     bound = await _chat(bot_session, house_id, bound=True)
@@ -425,7 +429,8 @@ async def _poll_status(session: AsyncSession, poll_id: PollId) -> PollStatus:
 
 
 async def test_an_expired_poll_is_closed_and_a_running_one_is_not(
-    bot_session: AsyncSession, task_broker: InMemoryBroker
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
 ) -> None:
     house_id = await _house(bot_session)
     expired = await _poll(bot_session, house_id, timedelta(minutes=-1))
@@ -439,7 +444,7 @@ async def test_an_expired_poll_is_closed_and_a_running_one_is_not(
 
 async def _warned_at(session: AsyncSession, meter_id: MeterId) -> date | None:
     stmt = select(meters_table.c.verification_warned_at).where(
-        meters_table.c.id == meter_id
+        meters_table.c.id == meter_id,
     )
     warned: date | None = (await session.execute(stmt)).scalar_one()
     return warned
@@ -454,7 +459,6 @@ def _texts(bot_broker: RecordingBroker, user_id: UserId) -> list[str]:
     [
         (10, None, "{due:%d.%m.%Y} истекает поверка"),
         (0, 30, "Истекла поверка"),
-        # обе стадии старой даты пройдены, и новая дата начинает их заново
         (10, 365, "{due:%d.%m.%Y} истекает поверка"),
     ],
 )
@@ -498,7 +502,7 @@ async def _appointment(
             user_id=user_id,
             starts_at=datetime.combine(day, at, tzinfo=UTC),
             status=status,
-        )
+        ),
     )
     await session.commit()
 
@@ -530,7 +534,11 @@ async def test_only_tomorrows_appointment_is_reminded_once(
     house_id = await _house(bot_session)
     _, user_id = await _resident(bot_session, house_id)
     await _appointment(
-        bot_session, house_id, user_id, _today() + timedelta(days=days_ahead), status
+        bot_session,
+        house_id,
+        user_id,
+        _today() + timedelta(days=days_ahead),
+        status,
     )
 
     await _run(task_broker, remind_appointments)
@@ -541,13 +549,13 @@ async def test_only_tomorrows_appointment_is_reminded_once(
 
 
 async def test_each_moment_of_each_window_is_reminded_once(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
-    # отметка различает период и момент: открытие не глушит напоминание о
-    # закрытии, а сентябрь - октябрь. Дни фиксированы, поэтому сервис
-    # вызывается напрямую, мимо задачи с ее datetime.now
     house_id = await _house(
-        session, {"meter_window_day_from": 15, "meter_window_day_to": 25}
+        session,
+        {"meter_window_day_from": 15, "meter_window_day_to": 25},
     )
     flat_id, user_id = await _resident(session, house_id)
     await _meter(session, flat_id)
@@ -577,10 +585,14 @@ def _service(session: AsyncSession, publisher: TaskPublisher) -> RemindersServic
 
 
 async def _wrapping(
-    session: AsyncSession, day_from: int, day_to: int, submitted_for: date
+    session: AsyncSession,
+    day_from: int,
+    day_to: int,
+    submitted_for: date,
 ) -> UserId:
     house_id = await _house(
-        session, {"meter_window_day_from": day_from, "meter_window_day_to": day_to}
+        session,
+        {"meter_window_day_from": day_from, "meter_window_day_to": day_to},
     )
     flat_id, user_id = await _resident(session, house_id)
     await _submitted(session, await _meter(session, flat_id), user_id, submitted_for)
@@ -588,9 +600,10 @@ async def _wrapping(
 
 
 async def test_a_reading_from_the_head_of_a_wrapping_window_closes_it(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
-    # окно 25-5, сдано 27 сентября: 3 октября закрывается то же окно
     user_id = await _wrapping(session, 25, 5, date(2026, 9, 1))
 
     await _service(session, publisher).remind_readings(_noon(date(2026, 10, 3)))
@@ -600,9 +613,10 @@ async def test_a_reading_from_the_head_of_a_wrapping_window_closes_it(
 
 
 async def test_a_reading_from_the_tail_of_a_wrapping_window_leaves_the_next_open(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
-    # окно 25-1, сдано 1 октября за сентябрь: октябрьское окно ждет своих
     user_id = await _wrapping(session, 25, 1, date(2026, 9, 1))
     service = _service(session, publisher)
 
@@ -614,13 +628,17 @@ async def test_a_reading_from_the_tail_of_a_wrapping_window_leaves_the_next_open
 
 
 async def test_a_resident_of_two_houses_gets_each_window_of_each(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
     first = await _house(
-        session, {"meter_window_day_from": 15, "meter_window_day_to": 25}
+        session,
+        {"meter_window_day_from": 15, "meter_window_day_to": 25},
     )
     second = await _house(
-        session, {"meter_window_day_from": 20, "meter_window_day_to": 28}
+        session,
+        {"meter_window_day_from": 20, "meter_window_day_to": 28},
     )
     first_flat, user_id = await _resident(session, first)
     second_flat, _ = await _resident(session, second, user_id=user_id)
@@ -645,7 +663,9 @@ async def _stamps(session: AsyncSession, user_id: UserId) -> int:
 
 
 async def test_windows_opening_the_same_day_send_one_text_and_stamp_both(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
     window = {"meter_window_day_from": 15, "meter_window_day_to": 25}
     first = await _house(session, window)
@@ -663,9 +683,10 @@ async def test_windows_opening_the_same_day_send_one_text_and_stamp_both(
 
 
 async def test_a_house_without_an_org_gets_no_reading_reminder(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
-    # без УК показания некому принять, хотя окно такого дома открыто всегда
     house_id = await _house(session)
     stmt = update(houses_table).where(houses_table.c.id == house_id).values(org_id=None)
     await session.execute(stmt)
@@ -679,14 +700,17 @@ async def test_a_house_without_an_org_gets_no_reading_reminder(
 
 
 async def test_an_uncounted_vote_leaves_the_flat_reminded_but_not_the_voter(
-    bot_session: AsyncSession, task_broker: InMemoryBroker, bot_broker: RecordingBroker
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
 ) -> None:
-    # голос неподтвержденного совладельца в кворум не идет: подтвержденный
-    # владелец той же квартиры получает напоминание, сам совладелец - нет
     house_id = await _house(bot_session)
     flat_id, owner = await _resident(bot_session, house_id)
     _, co_owner = await _resident(
-        bot_session, house_id, flat_id=flat_id, verified=False
+        bot_session,
+        house_id,
+        flat_id=flat_id,
+        verified=False,
     )
     poll_id = await _poll(bot_session, house_id, timedelta(hours=24))
     await _vote(bot_session, poll_id, flat_id, co_owner, counted=False)
@@ -718,18 +742,20 @@ def test_schedules_are_hourly_in_utc() -> None:
 
 
 async def test_a_house_gets_the_reading_reminder_at_ten_of_its_own_day(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
     window = {"meter_window_day_from": 15, "meter_window_day_to": 25}
     users = {}
     for zone in ("Asia/Kamchatka", "Asia/Vladivostok", "Europe/Moscow"):
         flat_id, users[zone] = await _resident(
-            session, await _house(session, window, zone)
+            session,
+            await _house(session, window, zone),
         )
         await _meter(session, flat_id)
     service = _service(session, publisher)
 
-    # 22:00 UTC 14-го на Камчатке уже 10:00 15-го, во Владивостоке 08:00
     for now, reminded in (
         (datetime(2026, 9, 14, 22, tzinfo=UTC), {"Asia/Kamchatka"}),
         (datetime(2026, 9, 15, 1, tzinfo=UTC), {"Asia/Vladivostok"}),
@@ -744,7 +770,9 @@ async def test_a_house_gets_the_reading_reminder_at_ten_of_its_own_day(
 
 
 async def test_the_poll_reminder_waits_for_ten_and_prints_the_local_end_date(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
     house_id = await _house(session)
     _, user_id = await _resident(session, house_id)
@@ -760,7 +788,7 @@ async def test_the_poll_reminder_waits_for_ten_and_prints_the_local_end_date(
             starts_at=datetime(2026, 9, 10, tzinfo=UTC),
             ends_at=datetime(2026, 9, 16, 22, tzinfo=UTC),
             status=PollStatus.ACTIVE,
-        )
+        ),
     )
     await session.commit()
     service = _service(session, publisher)
@@ -776,11 +804,13 @@ async def test_the_poll_reminder_waits_for_ten_and_prints_the_local_end_date(
 
 
 async def test_the_verification_warning_waits_for_nine_of_the_local_day(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
-    # 23:00 UTC 14-го во Владивостоке 09:00 15-го: срок через 30 дней - 15.10
     flat_id, user_id = await _resident(
-        session, await _house(session, timezone="Asia/Vladivostok")
+        session,
+        await _house(session, timezone="Asia/Vladivostok"),
     )
     await _meter(session, flat_id, due=date(2026, 10, 15))
     service = _service(session, publisher)
@@ -796,12 +826,14 @@ async def test_the_verification_warning_waits_for_nine_of_the_local_day(
 
 
 async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
-    # прием 16-го в 09:00 по Владивостоку - это 23:00 UTC 15-го. Дом в Москве:
-    # прием идет по часам УК, а не дома
     house_id = await _house(
-        session, timezone="Asia/Vladivostok", house_timezone="Europe/Moscow"
+        session,
+        timezone="Asia/Vladivostok",
+        house_timezone="Europe/Moscow",
     )
     _, user_id = await _resident(session, house_id)
     await _appointment(session, house_id, user_id, date(2026, 9, 15), at=time(23))
@@ -818,10 +850,10 @@ async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(
 
 
 async def test_the_manual_reading_reminder_counts_the_day_in_local_time(
-    session: AsyncSession, publisher: TaskPublisher, broker: RecordingBroker
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
 ) -> None:
-    # напоминание в 23:00 15-го по Владивостоку не глушит ручное в 01:00 16-го,
-    # хотя по UTC оба 15-го
     house_id = await _house(session, timezone="Asia/Vladivostok")
     flat_id, user_id = await _resident(session, house_id)
     await _meter(session, flat_id)
@@ -831,12 +863,14 @@ async def test_the_manual_reading_reminder_counts_the_day_in_local_time(
             user_id=user_id,
             payload={"house_id": house_id},
             created_at=datetime(2026, 9, 15, 13, tzinfo=UTC),
-        )
+        ),
     )
     await session.commit()
 
     await _service(session, publisher).remind_reading_laggards(
-        [house_id], date(2026, 9, 1), datetime(2026, 9, 15, 15, tzinfo=UTC)
+        [house_id],
+        date(2026, 9, 1),
+        datetime(2026, 9, 15, 15, tzinfo=UTC),
     )
     await publisher.flush()
 
@@ -844,7 +878,9 @@ async def test_the_manual_reading_reminder_counts_the_day_in_local_time(
 
 
 async def test_a_verification_due_in_thirty_one_days_waits(
-    bot_session: AsyncSession, task_broker: InMemoryBroker, bot_broker: RecordingBroker
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
 ) -> None:
     flat_id, user_id = await _resident(bot_session, await _house(bot_session))
     meter_id = await _meter(bot_session, flat_id, due=_today() + timedelta(days=31))

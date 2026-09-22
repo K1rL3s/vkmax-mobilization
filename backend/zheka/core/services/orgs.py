@@ -105,7 +105,8 @@ class OrgsService:
         address: str,
     ) -> OrgCardView:
         if not deeplink_code.isascii() or not secrets.compare_digest(
-            deeplink_code, self._deeplinks.org_register
+            deeplink_code,
+            self._deeplinks.org_register,
         ):
             raise NotEnoughRights("Неверный код регистрации организации")
 
@@ -129,7 +130,10 @@ class OrgsService:
         except IntegrityError as error:
             raise InvalidState("Организация уже зарегистрирована") from error
         await self._events.record(
-            EventType.ORG_REGISTERED, user_id=user_id, org_id=org_id, inn=org.inn
+            EventType.ORG_REGISTERED,
+            user_id=user_id,
+            org_id=org_id,
+            inn=org.inn,
         )
         return await self.card(org_id)
 
@@ -162,16 +166,16 @@ class OrgsService:
             if not MIN_METER_WINDOW_DAY <= day <= MAX_METER_WINDOW_DAY:
                 raise InvalidRequest(
                     f"День окна показаний - число от {MIN_METER_WINDOW_DAY} "
-                    f"до {MAX_METER_WINDOW_DAY}"
+                    f"до {MAX_METER_WINDOW_DAY}",
                 )
         if group_threshold < MIN_GROUP_THRESHOLD:
             raise InvalidRequest(
-                f"Порог склейки заявок - не меньше {MIN_GROUP_THRESHOLD}"
+                f"Порог склейки заявок - не меньше {MIN_GROUP_THRESHOLD}",
             )
         if not MIN_GROUP_WINDOW_HOURS <= group_window_hours <= MAX_GROUP_WINDOW_HOURS:
             raise InvalidRequest(
                 f"Окно склейки заявок - от {MIN_GROUP_WINDOW_HOURS} "
-                f"до {MAX_GROUP_WINDOW_HOURS} часов"
+                f"до {MAX_GROUP_WINDOW_HOURS} часов",
             )
 
         org = await self._get_org(org_id)
@@ -193,7 +197,7 @@ class OrgsService:
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [member.user_id for member in members]
+                [member.user_id for member in members],
             )
         }
         return [
@@ -202,7 +206,10 @@ class OrgsService:
         ]
 
     async def remove_member(
-        self, org_id: OrgId, actor_role: OrgRole, user_id: UserId
+        self,
+        org_id: OrgId,
+        actor_role: OrgRole,
+        user_id: UserId,
     ) -> None:
         member = await self._orgs.get_member(org_id, user_id)
         if member is None:
@@ -239,10 +246,13 @@ class OrgsService:
                 expires_at=expires_at,
                 max_activations=max_activations,
                 created_by=user_id,
-            )
+            ),
         )
         await self._events.record(
-            EventType.STAFF_INVITED, user_id=user_id, org_id=org_id, role=role.value
+            EventType.STAFF_INVITED,
+            user_id=user_id,
+            org_id=org_id,
+            role=role.value,
         )
         return invite
 
@@ -265,7 +275,8 @@ class OrgsService:
             if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):
                 raise InvalidState("Код приглашения истек или отозван")
             await self._orgs.set_member_role(
-                member, higher_role(member.role, invite.role)
+                member,
+                higher_role(member.role, invite.role),
             )
             return OrgMembershipView(member=member, org=org)
 
@@ -273,7 +284,8 @@ class OrgsService:
         if consumed is None:
             raise InvalidState("Код приглашения истек, отозван или исчерпан")
         return OrgMembershipView(
-            member=await self._orgs.add_member(org_id, user_id, consumed.role), org=org
+            member=await self._orgs.add_member(org_id, user_id, consumed.role),
+            org=org,
         )
 
     async def _get_org(self, org_id: OrgId) -> Organization:

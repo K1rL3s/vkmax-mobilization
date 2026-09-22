@@ -25,13 +25,17 @@ async def bot_stopped_handler(
 
 @router.dialog_muted()
 async def dialog_muted_handler(
-    _update: DialogMuted, user: User, events_service: FromDishka[EventsService]
+    _update: DialogMuted,
+    user: User,
+    events_service: FromDishka[EventsService],
 ) -> None:
     await events_service.record(EventType.BOT_MUTED, user_id=user.id)
 
 
 @router.dialog_unmuted()
 async def dialog_unmuted_handler(
-    _update: DialogUnmuted, user: User, events_service: FromDishka[EventsService]
+    _update: DialogUnmuted,
+    user: User,
+    events_service: FromDishka[EventsService],
 ) -> None:
     await events_service.record(EventType.BOT_UNMUTED, user_id=user.id)

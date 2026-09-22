@@ -48,8 +48,6 @@ from zheka.di import make_container
 from zheka.infra.database.models import User
 from zheka.infra.database.tables.users import users_table
 
-# каждый маршрут пишет строку со своей меткой: она остается в базе ровно
-# тогда, когда транзакция закоммичена
 FAIL_TITLE = "Уроним обработчик"
 
 probe_router = APIRouter(route_class=DishkaRoute)
@@ -67,9 +65,9 @@ async def probe_no_database() -> dict[str, bool]:
 
 @probe_router.post("/probe/stream")
 async def probe_stream(
-    marker: int, session: FromDishka[AsyncSession]
+    marker: int,
+    session: FromDishka[AsyncSession],
 ) -> StreamingResponse:
-    # как отдача файла: call_next возвращается раньше, чем уедет тело
     await _write(session, MaxUserId(marker))
 
     async def body() -> AsyncGenerator[bytes]:
@@ -126,8 +124,6 @@ async def probe_client(probe_container: AsyncContainer) -> AsyncGenerator[AsyncC
     app.include_router(probe_router, responses=ERROR_RESPONSES)
     app.include_router(healthcheck_router, responses=ERROR_RESPONSES)
     setup_middlewares(app, probe_container, ())
-    # raise_app_exceptions=False: необработанное исключение должно дойти до
-    # ServerErrorMiddleware и вернуться пятисоткой, а не выпрыгнуть в тест
     async with AsyncClient(
         transport=ASGITransport(app=app, raise_app_exceptions=False),
         base_url="http://probe",
@@ -140,8 +136,6 @@ def _marker() -> MaxUserId:
 
 
 async def _committed(engine: AsyncEngine, marker: MaxUserId) -> int:
-    # вторым соединением: сессия запроса к этому моменту уже закрыта, и
-    # незакоммиченную строку здесь не видно
     async with engine.connect() as connection:
         stmt = select(users_table.c.id).where(users_table.c.max_user_id == marker)
         result = await connection.execute(stmt)
@@ -149,7 +143,8 @@ async def _committed(engine: AsyncEngine, marker: MaxUserId) -> int:
 
 
 @pytest.mark.parametrize(
-    ("path", "status"), [("/probe/not-found", 404), ("/probe/value-error", 409)]
+    ("path", "status"),
+    [("/probe/not-found", 404), ("/probe/value-error", 409)],
 )
 async def test_handled_error_rolls_back_and_delivers_nothing(
     probe_client: AsyncClient,
@@ -163,7 +158,6 @@ async def test_handled_error_rolls_back_and_delivers_nothing(
     response = await probe_client.post(path, params={"marker": marker})
 
     assert response.status_code == status
-    # trace id в теле: обработчик ошибок отработал внутри его прослойки
     assert response.json()["trace_id"]
     assert response.headers[TRACE_HEADER]
     assert await _committed(engine, marker) == 0
@@ -171,7 +165,8 @@ async def test_handled_error_rolls_back_and_delivers_nothing(
 
 
 async def test_unhandled_error_rolls_the_request_back(
-    probe_client: AsyncClient, engine: AsyncEngine
+    probe_client: AsyncClient,
+    engine: AsyncEngine,
 ) -> None:
     marker = _marker()
 
@@ -182,10 +177,10 @@ async def test_unhandled_error_rolls_the_request_back(
 
 
 async def test_failing_commit_persists_nothing(
-    probe_client: AsyncClient, engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+    probe_client: AsyncClient,
+    engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # коммит упал после обработчика: запись не доезжает ни через прослойку,
-    # ни через провайдер
     async def _broken_commit(self: AsyncSession) -> None:  # noqa: ARG001
         raise RuntimeError("коммит не прошел")
 
@@ -199,7 +194,8 @@ async def test_failing_commit_persists_nothing(
 
 
 async def test_streaming_response_commits_and_still_streams(
-    probe_client: AsyncClient, engine: AsyncEngine
+    probe_client: AsyncClient,
+    engine: AsyncEngine,
 ) -> None:
     marker = _marker()
 
@@ -211,9 +207,9 @@ async def test_streaming_response_commits_and_still_streams(
 
 
 async def test_request_without_database_work_passes_through(
-    probe_client: AsyncClient, probe_container: AsyncContainer
+    probe_client: AsyncClient,
+    probe_container: AsyncContainer,
 ) -> None:
-    # прослойка берет сессию на каждом запросе, коммит нетронутой не ходит в базу
     response = await probe_client.get("/probe/no-database")
 
     assert response.status_code == 200
@@ -232,7 +228,9 @@ async def test_healthcheck_still_answers(probe_client: AsyncClient) -> None:
 
 
 async def test_successful_request_delivers_exactly_once(
-    probe_client: AsyncClient, engine: AsyncEngine, broker: RecordingBroker
+    probe_client: AsyncClient,
+    engine: AsyncEngine,
+    broker: RecordingBroker,
 ) -> None:
     marker = _marker()
 
@@ -246,15 +244,18 @@ async def test_successful_request_delivers_exactly_once(
 
 
 async def test_worker_flushes_after_its_own_commit(
-    probe_container: AsyncContainer, broker: RecordingBroker
+    probe_container: AsyncContainer,
+    broker: RecordingBroker,
 ) -> None:
-    # порядок воркера: CommitMiddleware последний, taskiq зовет post_execute в
-    # обратном порядке, и коммит с отправкой идут до закрытия контейнера
     container_middleware = ContainerMiddleware(probe_container)
     commit_middleware = CommitMiddleware()
     host = RecordingBroker().with_middlewares(container_middleware, commit_middleware)
     message = TaskiqMessage(
-        task_id="probe", task_name="probe", labels={}, args=[], kwargs={}
+        task_id="probe",
+        task_name="probe",
+        labels={},
+        args=[],
+        kwargs={},
     )
     message = await container_middleware.pre_execute(message)
     request_container = host.state[CONTAINER_REGISTRY][message.labels[CONTAINER_ID]]
@@ -262,7 +263,8 @@ async def test_worker_flushes_after_its_own_commit(
     publisher.publish(TaskName.SEND_TO_USER, user_id=1)
 
     await commit_middleware.post_execute(
-        message, TaskiqResult(is_err=False, return_value=None, execution_time=0.0)
+        message,
+        TaskiqResult(is_err=False, return_value=None, execution_time=0.0),
     )
 
     assert len(broker.enqueued(TaskName.SEND_TO_USER)) == 1
@@ -296,15 +298,13 @@ def _delivered(broker: RecordingBroker, marker: MaxUserId) -> int:
 
 
 def _bot_update(marker: MaxUserId, title: str) -> MaxoUpdate[ChatTitleChanged]:
-    # как поллинг и вебхук: без MaxoUpdate мидлвари dp.update не участвуют
     return MaxoUpdate(
         update=ChatTitleChanged(
             timestamp=datetime.now(UTC),
             chat_id=marker,
             title=title,
-            # не метка: UserMiddleware заводит по отправителю свою строку users
             user=MaxUser(first_name="Житель", is_bot=False, user_id=_marker()),
-        )
+        ),
     )
 
 
@@ -330,7 +330,6 @@ async def test_failed_bot_handler_leaves_nothing(
 ) -> None:
     marker = _marker()
 
-    # feed_max_update глотает исключение обработчика, как поллинг
     await bot_setup.dp.feed_max_update(_bot_update(marker, FAIL_TITLE))
 
     assert await _committed(bot_engine, marker) == 0

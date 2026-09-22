@@ -27,10 +27,12 @@ class SimilarRequests(ZhekaType):
 def rules_of(settings: OrgSettings | None) -> GroupingRules:
     if settings is None:
         return GroupingRules(
-            threshold=DEFAULT_GROUP_THRESHOLD, window_hours=DEFAULT_GROUP_WINDOW_HOURS
+            threshold=DEFAULT_GROUP_THRESHOLD,
+            window_hours=DEFAULT_GROUP_WINDOW_HOURS,
         )
     return GroupingRules(
-        threshold=settings.group_threshold, window_hours=settings.group_window_hours
+        threshold=settings.group_threshold,
+        window_hours=settings.group_window_hours,
     )
 
 
@@ -48,13 +50,18 @@ class GroupingService:
     __slots__ = ("_events", "_requests")
 
     def __init__(
-        self, requests_repo: RequestsRepo, events_service: EventsService
+        self,
+        requests_repo: RequestsRepo,
+        events_service: EventsService,
     ) -> None:
         self._requests = requests_repo
         self._events = events_service
 
     async def attach(
-        self, request: Request, rules: GroupingRules, now: datetime
+        self,
+        request: Request,
+        rules: GroupingRules,
+        now: datetime,
     ) -> None:
         since = now - timedelta(hours=rules.window_hours)
         house_id = request.house_id
@@ -65,7 +72,9 @@ class GroupingService:
             return
 
         open_requests = await self._requests.list_open_in_window(
-            house_id, request.category, since
+            house_id,
+            request.category,
+            since,
         )
         if len(complaint_sources(open_requests)) < rules.threshold:
             return
@@ -93,7 +102,9 @@ class GroupingService:
         since = now - timedelta(hours=rules.window_hours)
         group = await self._requests.find_open_group(house_id, category, since)
         open_requests = await self._requests.list_open_in_window(
-            house_id, category, since
+            house_id,
+            category,
+            since,
         )
         sources = complaint_sources(open_requests) - {
             ("flat", exclude_flat_id),

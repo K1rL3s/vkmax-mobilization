@@ -21,7 +21,9 @@ SENT_TEXT = "Принял, оформляю"
 
 @inject
 async def get_category(
-    dialog_manager: DialogManager, profile_service: FromDishka[ProfileService], **_: Any
+    dialog_manager: DialogManager,
+    profile_service: FromDishka[ProfileService],
+    **_: Any,
 ) -> dict[str, Any]:
     me = await profile_service.me(dialog_user_id(dialog_manager))
     if not me.residencies:
@@ -82,7 +84,9 @@ async def on_description(
 
 
 async def on_photo(
-    update: MessageCreated, _widget: MessageInput, dialog_manager: DialogManager
+    update: MessageCreated,
+    _widget: MessageInput,
+    dialog_manager: DialogManager,
 ) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
         for attach in update.message.body.attachments or []:

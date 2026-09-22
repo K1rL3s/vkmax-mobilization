@@ -23,7 +23,8 @@ class NotificationsService:
         self._events = events_service
 
     async def levels(
-        self, user_id: UserId
+        self,
+        user_id: UserId,
     ) -> dict[NotificationCategory, NotificationLevel]:
         stored = await self._notifications.get_levels(user_id)
         return {
@@ -84,14 +85,20 @@ class NotificationsService:
         if not chat_ids:
             return
         self._publisher.publish(
-            TaskName.BROADCAST_TO_CHATS, chat_ids=list(chat_ids), text=text
+            TaskName.BROADCAST_TO_CHATS,
+            chat_ids=list(chat_ids),
+            text=text,
         )
 
     def open_executor_card(
-        self, request_id: RequestId, user_id: UserId | None = None
+        self,
+        request_id: RequestId,
+        user_id: UserId | None = None,
     ) -> None:
         self._publisher.publish(
-            TaskName.SEND_EXECUTOR_CARD, request_id=request_id, user_id=user_id
+            TaskName.SEND_EXECUTOR_CARD,
+            request_id=request_id,
+            user_id=user_id,
         )
 
     def open_review_card(self, request_id: RequestId) -> None:
@@ -99,12 +106,15 @@ class NotificationsService:
 
     def welcome_chat(self, chat_id: MaxChatId, house_id: HouseId) -> None:
         self._publisher.publish(
-            TaskName.WELCOME_CHAT, chat_id=chat_id, house_id=house_id
+            TaskName.WELCOME_CHAT,
+            chat_id=chat_id,
+            house_id=house_id,
         )
 
     def open_access_slots(self, access_request_id: AccessRequestId) -> None:
         self._publisher.publish(
-            TaskName.BROADCAST_ACCESS_REQUEST, access_request_id=access_request_id
+            TaskName.BROADCAST_ACCESS_REQUEST,
+            access_request_id=access_request_id,
         )
 
     def sync_chat_pins(self, chat_id: MaxChatId) -> None:

@@ -93,7 +93,12 @@ class AnnouncementsService:
         org = await self._orgs.get(org_id)
         org_name = UNKNOWN_ORG if org is None else org.name
         announcement = await self._announcements.create(
-            org_id, user_id, targets, stated, picked, len(user_ids) + len(chat_ids)
+            org_id,
+            user_id,
+            targets,
+            stated,
+            picked,
+            len(user_ids) + len(chat_ids),
         )
 
         for channel in picked:
@@ -121,15 +126,24 @@ class AnnouncementsService:
         )
 
     async def list_for_resident(
-        self, house_id: HouseId, limit: int, offset: int
+        self,
+        house_id: HouseId,
+        limit: int,
+        offset: int,
     ) -> tuple[list[AnnouncementData], int]:
         announcements, total = await self._announcements.list_for_house(
-            house_id, limit, offset
+            house_id,
+            limit,
+            offset,
         )
         return await self._with_org_names(announcements), total
 
     async def list_for_org(
-        self, org_id: OrgId, house_id: HouseId | None, limit: int, offset: int
+        self,
+        org_id: OrgId,
+        house_id: HouseId | None,
+        limit: int,
+        offset: int,
     ) -> tuple[list[AnnouncementData], int]:
         if (
             house_id is not None
@@ -137,22 +151,27 @@ class AnnouncementsService:
         ):
             raise EntityNotFound(HOUSE_NOT_FOUND)
         announcements, total = await self._announcements.list_for_org(
-            org_id, house_id, limit, offset
+            org_id,
+            house_id,
+            limit,
+            offset,
         )
         return await self._with_org_names(announcements), total
 
     async def _with_org_names(
-        self, announcements: Sequence[Announcement]
+        self,
+        announcements: Sequence[Announcement],
     ) -> list[AnnouncementData]:
         orgs = {
             org.id: org.name
             for org in await self._orgs.list_by_ids(
-                {announcement.org_id for announcement in announcements}
+                {announcement.org_id for announcement in announcements},
             )
         }
         return [
             AnnouncementData(
-                announcement=announcement, org_name=orgs.get(announcement.org_id)
+                announcement=announcement,
+                org_name=orgs.get(announcement.org_id),
             )
             for announcement in announcements
         ]

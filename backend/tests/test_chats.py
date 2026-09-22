@@ -47,7 +47,8 @@ Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 
 def _service(
-    session: AsyncSession, publisher: TaskPublisher | None = None
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
 ) -> ChatsService:
     return ChatsService(
         ChatsRepo(session),
@@ -73,7 +74,8 @@ async def _chat(session: AsyncSession, chat_id: MaxChatId) -> Chat:
 
 
 @pytest.mark.parametrize(
-    ("org_role", "by_role"), [(OrgRole.EMPLOYEE, "staff"), (None, "chairman")]
+    ("org_role", "by_role"),
+    [(OrgRole.EMPLOYEE, "staff"), (None, "chairman")],
 )
 async def test_staff_or_the_chairman_binds_the_house(
     session: AsyncSession,
@@ -82,7 +84,8 @@ async def test_staff_or_the_chairman_binds_the_house(
     by_role: str,
 ) -> None:
     data = await make_org_house_flat_user(
-        org_role=org_role, resident_role=None if org_role else ResidentRole.OWNER
+        org_role=org_role,
+        resident_role=None if org_role else ResidentRole.OWNER,
     )
     if org_role is None:
         (await ResidentsRepo(session).list_for_user(data.user_id))[0].is_chairman = True
@@ -101,7 +104,8 @@ async def test_staff_or_the_chairman_binds_the_house(
 
 
 async def test_staff_of_another_org_cannot_bind(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     stranger = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     other = await make_org_house_flat_user()
@@ -125,7 +129,8 @@ async def test_only_staff_or_an_active_chairman_binds(
     chairman_status: ResidentStatus | None,
 ) -> None:
     data = await make_org_house_flat_user(
-        org_role=org_role, resident_role=None if org_role else ResidentRole.OWNER
+        org_role=org_role,
+        resident_role=None if org_role else ResidentRole.OWNER,
     )
     if chairman_status is not None:
         resident = (await ResidentsRepo(session).list_for_user(data.user_id))[0]
@@ -140,7 +145,8 @@ async def test_only_staff_or_an_active_chairman_binds(
 
 
 async def test_a_bound_chat_is_not_bound_again(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     first = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     second = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
@@ -154,7 +160,8 @@ async def test_a_bound_chat_is_not_bound_again(
 
 
 async def test_a_chat_the_bot_left_is_not_bound(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _added(session)
@@ -165,7 +172,8 @@ async def test_a_chat_the_bot_left_is_not_bound(
 
 
 async def test_a_wrong_code_binds_nothing(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     chat_id = await _added(session)
@@ -177,7 +185,8 @@ async def test_a_wrong_code_binds_nothing(
 
 
 async def test_the_code_binds_its_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     house = await HousesRepo(session).get(data.house_id)
@@ -185,7 +194,9 @@ async def test_the_code_binds_its_house(
     chat_id = await _added(session)
 
     await _service(session).bind_by_code(
-        data.user_id, chat_id, f" {house.chat_binding_code.upper()} "
+        data.user_id,
+        chat_id,
+        f" {house.chat_binding_code.upper()} ",
     )
 
     assert (await _chat(session, chat_id)).house_id == data.house_id
@@ -213,12 +224,13 @@ async def test_the_rights_are_granted_once_over_two_grants(
     assert (await _chat(session, chat_id)).bot_is_admin is True
     await publisher.flush()
     assert broker.enqueued(TaskName.WELCOME_CHAT) == [
-        {"chat_id": chat_id, "house_id": data.house_id}
+        {"chat_id": chat_id, "house_id": data.house_id},
     ]
 
 
 async def test_the_rights_of_a_chat_the_bot_left_are_not_recorded(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _added(session)
@@ -230,10 +242,11 @@ async def test_the_rights_of_a_chat_the_bot_left_are_not_recorded(
         await service.set_admin(chat_id, True)
 
 
-# событие удаления бота могло не дойти, поэтому сброс не полагается на него
 @pytest.mark.parametrize("removed", [True, False])
 async def test_a_re_add_clears_the_previous_binding(
-    session: AsyncSession, make_org_house_flat_user: Fixture, removed: bool
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    removed: bool,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _added(session)
@@ -255,7 +268,8 @@ async def test_a_re_add_clears_the_previous_binding(
 
 
 async def test_a_message_is_listed_once_until_it_is_unpinned(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user()
     chat_id = await _added(session)
@@ -266,7 +280,7 @@ async def test_a_message_is_listed_once_until_it_is_unpinned(
     with pytest.raises(IntegrityError):
         async with session.begin_nested():
             session.add(
-                ChatPin(chat_id=chat_id, mid="m-1", seq=1, pinned_by=data.user_id)
+                ChatPin(chat_id=chat_id, mid="m-1", seq=1, pinned_by=data.user_id),
             )
 
     first.unpinned_at = datetime.now(UTC)
@@ -278,7 +292,6 @@ REPLY = MessageRef(mid="m-1", seq=1)
 
 
 async def _pinning_chat(session: AsyncSession, data: OrgHouseFlatUser) -> MaxChatId:
-    # привязка и права ставятся напрямую: закрепу нужен уже готовый чат
     chat_id = await _added(session)
     chat = await _chat(session, chat_id)
     await ChatsRepo(session).bind(chat, data.house_id, data.user_id)
@@ -287,14 +300,17 @@ async def _pinning_chat(session: AsyncSession, data: OrgHouseFlatUser) -> MaxCha
 
 
 async def _listed(
-    session: AsyncSession, chat_id: MaxChatId
+    session: AsyncSession,
+    chat_id: MaxChatId,
 ) -> list[tuple[str, str | None]]:
     session.expire_all()
     return [(pin.mid, pin.text) for pin in await ChatsRepo(session).list_pins(chat_id)]
 
 
 async def _pin_events(
-    session: AsyncSession, chat_id: MaxChatId, event: EventType
+    session: AsyncSession,
+    chat_id: MaxChatId,
+    event: EventType,
 ) -> list[dict[str, Any]]:
     stmt = (
         select(events_table.c.payload)
@@ -308,7 +324,8 @@ async def _pin_events(
 
 
 @pytest.mark.parametrize(
-    ("org_role", "by_role"), [(OrgRole.EMPLOYEE, "staff"), (None, "chairman")]
+    ("org_role", "by_role"),
+    [(OrgRole.EMPLOYEE, "staff"), (None, "chairman")],
 )
 async def test_staff_or_the_chairman_pins_a_message(
     session: AsyncSession,
@@ -319,19 +336,23 @@ async def test_staff_or_the_chairman_pins_a_message(
     by_role: str,
 ) -> None:
     data = await make_org_house_flat_user(
-        org_role=org_role, resident_role=None if org_role else ResidentRole.OWNER
+        org_role=org_role,
+        resident_role=None if org_role else ResidentRole.OWNER,
     )
     if org_role is None:
         (await ResidentsRepo(session).list_for_user(data.user_id))[0].is_chairman = True
     chat_id = await _pinning_chat(session, data)
 
     await _service(session, publisher).pin(
-        data.user_id, chat_id, REPLY, "  Отключение воды  "
+        data.user_id,
+        chat_id,
+        REPLY,
+        "  Отключение воды  ",
     )
 
     assert await _listed(session, chat_id) == [("m-1", "Отключение воды")]
     assert await _pin_events(session, chat_id, EventType.CHAT_PINNED) == [
-        {"chat_id": chat_id, "house_id": data.house_id, "by_role": by_role}
+        {"chat_id": chat_id, "house_id": data.house_id, "by_role": by_role},
     ]
     await publisher.flush()
     assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == [{"chat_id": chat_id}]
@@ -348,7 +369,8 @@ async def test_an_executor_or_a_resident_cannot_pin(
     resident_role: ResidentRole | None,
 ) -> None:
     data = await make_org_house_flat_user(
-        org_role=org_role, resident_role=resident_role
+        org_role=org_role,
+        resident_role=resident_role,
     )
     chat_id = await _pinning_chat(session, data)
 
@@ -377,7 +399,8 @@ async def test_a_chat_without_a_house_ignores_pins(
 
 
 async def test_a_pin_needs_a_reply_and_the_bot_rights(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
@@ -393,7 +416,8 @@ async def test_a_pin_needs_a_reply_and_the_bot_rights(
 
 
 async def test_a_repeat_pin_replaces_the_text_of_its_item(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
@@ -408,19 +432,22 @@ async def test_a_repeat_pin_replaces_the_text_of_its_item(
 
 
 async def test_the_list_holds_fifteen_items(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
     service = _service(session)
     for seq in range(MAX_PINS):
         await service.pin(
-            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+            data.user_id,
+            chat_id,
+            MessageRef(mid=f"m-{seq}", seq=seq),
+            None,
         )
 
     with pytest.raises(InvalidRequest, match=re.escape(PINS_FULL)):
         await service.pin(data.user_id, chat_id, MessageRef(mid="m-new", seq=99), None)
-    # повтор уже закрепленного меняет текст и на полном списке
     await service.pin(data.user_id, chat_id, MessageRef(mid="m-0", seq=0), "Вода")
 
     listed = await _listed(session, chat_id)
@@ -429,14 +456,18 @@ async def test_the_list_holds_fifteen_items(
 
 
 async def test_unpin_by_number_or_by_reply_and_the_numbers_close_up(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
     service = _service(session)
     for seq in (1, 2, 3):
         await service.pin(
-            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+            data.user_id,
+            chat_id,
+            MessageRef(mid=f"m-{seq}", seq=seq),
+            None,
         )
 
     await service.unpin(data.user_id, chat_id, None, 1)
@@ -449,7 +480,8 @@ async def test_unpin_by_number_or_by_reply_and_the_numbers_close_up(
     assert [event["method"] for event in events] == ["number", "number", "reply"]
     assert {event["by_role"] for event in events} == {"staff"}
     stmt = select(func.count()).where(
-        chat_pins_table.c.chat_id == chat_id, chat_pins_table.c.unpinned_at.is_not(None)
+        chat_pins_table.c.chat_id == chat_id,
+        chat_pins_table.c.unpinned_at.is_not(None),
     )
     assert (await session.execute(stmt)).scalar_one() == 3
 
@@ -469,7 +501,10 @@ async def test_an_unpin_that_names_no_item_is_a_hint(
     service = _service(session)
     for seq in (1, 2, 3):
         await service.pin(
-            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+            data.user_id,
+            chat_id,
+            MessageRef(mid=f"m-{seq}", seq=seq),
+            None,
         )
 
     with pytest.raises(InvalidRequest, match=re.escape(UNPIN_HINT)):
@@ -479,14 +514,18 @@ async def test_an_unpin_that_names_no_item_is_a_hint(
 
 
 async def test_deleting_the_list_message_unpins_everything(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
     service = _service(session)
     for seq in (1, 2):
         await service.pin(
-            data.user_id, chat_id, MessageRef(mid=f"m-{seq}", seq=seq), None
+            data.user_id,
+            chat_id,
+            MessageRef(mid=f"m-{seq}", seq=seq),
+            None,
         )
     await ChatsRepo(session).set_pins_mid(await _chat(session, chat_id), "list-1")
 
@@ -501,7 +540,8 @@ async def test_deleting_the_list_message_unpins_everything(
 
 
 async def test_a_re_add_drops_the_old_list_without_events(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)

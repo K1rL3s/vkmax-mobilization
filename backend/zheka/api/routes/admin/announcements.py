@@ -20,7 +20,10 @@ async def list_org_announcements(
     offset: Offset = 0,
 ) -> Page[AnnouncementItem]:
     items, total = await announcements_service.list_for_org(
-        current_org.org_id, house_id, limit, offset
+        current_org.org_id,
+        house_id,
+        limit,
+        offset,
     )
     return Page(items=[AnnouncementItem.of(item) for item in items], total=total)
 

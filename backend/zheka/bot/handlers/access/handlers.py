@@ -31,12 +31,15 @@ async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
 
 @inject
 async def get_slots(
-    dialog_manager: DialogManager, access_service: FromDishka[AccessService], **_: Any
+    dialog_manager: DialogManager,
+    access_service: FromDishka[AccessService],
+    **_: Any,
 ) -> dict[str, Any]:
     notice = AccessSlotsData.load(dialog_manager).notice
     try:
         view = await access_service.resident_view(
-            dialog_user_id(dialog_manager), _access_request_id(dialog_manager)
+            dialog_user_id(dialog_manager),
+            _access_request_id(dialog_manager),
         )
     except ZhekaError as error:
         return {"available": False, "notice": escape(str(error)), "slots": []}

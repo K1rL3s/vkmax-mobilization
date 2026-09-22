@@ -133,10 +133,18 @@ class AdminRequestsService:
         self._events = events_service
 
     async def inbox(
-        self, org_id: OrgId, filters: RequestFilters, limit: int, offset: int
+        self,
+        org_id: OrgId,
+        filters: RequestFilters,
+        limit: int,
+        offset: int,
     ) -> tuple[list[AdminRequestRow], int]:
         requests, total = await self._requests.list_for_org(
-            org_id, filters, datetime.now(UTC), limit, offset
+            org_id,
+            filters,
+            datetime.now(UTC),
+            limit,
+            offset,
         )
         return await self._rows(requests), total
 
@@ -157,7 +165,11 @@ class AdminRequestsService:
         return await self._card(request)
 
     async def reply(
-        self, org_id: OrgId, request_id: RequestId, text: str, actor: UserId
+        self,
+        org_id: OrgId,
+        request_id: RequestId,
+        text: str,
+        actor: UserId,
     ) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
         stated = text.strip()
@@ -165,7 +177,10 @@ class AdminRequestsService:
             raise InvalidRequest(EMPTY_REPLY)
 
         await self._requests.add_message(
-            request.id, actor, RequestActorRole.STAFF.value, stated
+            request.id,
+            actor,
+            RequestActorRole.STAFF.value,
+            stated,
         )
         self._notify_author(request, texts.request_reply(request.id, stated))
         return await self._card(request)
@@ -195,7 +210,9 @@ class AdminRequestsService:
         return await self._card(request)
 
     async def group_card(
-        self, org_id: OrgId, group_id: RequestGroupId
+        self,
+        org_id: OrgId,
+        group_id: RequestGroupId,
     ) -> RequestGroupCardData:
         group = await self._org_group(org_id, group_id)
         return await self._group_card(group)
@@ -230,7 +247,10 @@ class AdminRequestsService:
         return await self._group_card(group)
 
     async def create_phone(
-        self, org_id: OrgId, draft: PhoneRequestDraft, actor: UserId
+        self,
+        org_id: OrgId,
+        draft: PhoneRequestDraft,
+        actor: UserId,
     ) -> AdminRequestCardData:
         house = await self._houses.get_for_org(draft.house_id, org_id)
         if house is None:
@@ -276,7 +296,9 @@ class AdminRequestsService:
             datetime.now(UTC),
         )
         await self._grouping.attach(
-            request, rules_of(await self._orgs.get_settings(org_id)), datetime.now(UTC)
+            request,
+            rules_of(await self._orgs.get_settings(org_id)),
+            datetime.now(UTC),
         )
         await self._events.record(
             EventType.REQUEST_CREATED,
@@ -312,12 +334,20 @@ class AdminRequestsService:
     ) -> None:
         current = request.status
         check_transition(
-            current, target, by_role, has_author=request.author_user_id is not None
+            current,
+            target,
+            by_role,
+            has_author=request.author_user_id is not None,
         )
         at = datetime.now(UTC)
         await self._requests.set_status(request, target, at)
         await self._requests.add_log(
-            request.id, current, target, actor, by_role.value, at
+            request.id,
+            current,
+            target,
+            actor,
+            by_role.value,
+            at,
         )
         stated = None if comment is None else comment.strip()
         if stated:
@@ -335,7 +365,8 @@ class AdminRequestsService:
             self._notifications.open_review_card(request.id)
         else:
             self._notify_author(
-                request, texts.request_status_changed(request.id, target, stated)
+                request,
+                texts.request_status_changed(request.id, target, stated),
             )
 
     def _notify_author(self, request: Request, text: str) -> None:
@@ -377,12 +408,15 @@ class AdminRequestsService:
 
     async def _rows(self, requests: Sequence[Request]) -> list[AdminRequestRow]:
         base_rows = await build_rows(
-            self._requests, self._houses, self._users, requests
+            self._requests,
+            self._houses,
+            self._users,
+            requests,
         )
         houses = {
             house.id: house
             for house in await self._houses.list_by_ids(
-                [request.house_id for request in requests]
+                [request.house_id for request in requests],
             )
         }
         authors: dict[UserId | None, User] = {
@@ -392,7 +426,7 @@ class AdminRequestsService:
                     request.author_user_id
                     for request in requests
                     if request.author_user_id is not None
-                ]
+                ],
             )
         }
         return [
@@ -451,7 +485,10 @@ class AdminRequestsService:
 
         for name in photo_names:
             await self._requests.add_photo(
-                request_id, name, RequestPhotoKind.RESULT, user_id
+                request_id,
+                name,
+                RequestPhotoKind.RESULT,
+                user_id,
             )
         await self._move(request, target, None, user_id, RequestActorRole.EXECUTOR)
         await self._events.record(
@@ -462,7 +499,9 @@ class AdminRequestsService:
         )
 
     async def executor_card(
-        self, user_id: UserId, request_id: RequestId
+        self,
+        user_id: UserId,
+        request_id: RequestId,
     ) -> RequestCardData | None:
         request = await self._requests.get(request_id)
         if request is None:

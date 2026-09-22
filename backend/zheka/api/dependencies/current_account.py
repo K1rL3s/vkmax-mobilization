@@ -21,7 +21,9 @@ class CurrentAccount(ZhekaType):
 
 @inject
 async def get_current_account(
-    *, current_user: CurrentUserDep, users_repo: FromDishka[UsersRepo]
+    *,
+    current_user: CurrentUserDep,
+    users_repo: FromDishka[UsersRepo],
 ) -> CurrentAccount:
     webapp_user = current_user.init_data.user
     user = await users_repo.upsert_by_max_id(

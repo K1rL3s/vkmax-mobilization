@@ -42,9 +42,9 @@ SERVICE_LABELS: Mapping[ServiceType, str] = MappingProxyType(
         ServiceType.WASTE: "Обращение с ТКО",
         ServiceType.PENALTY: "Пени",
         ServiceType.RECALCULATION: "Перерасчет",
-    }
+    },
 )
 
 SERVICE_OF_METER: Mapping[MeterType, ServiceType] = MappingProxyType(
-    {meter_type: ServiceType(meter_type) for meter_type in MeterType}
+    {meter_type: ServiceType(meter_type) for meter_type in MeterType},
 )

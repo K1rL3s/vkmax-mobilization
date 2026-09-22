@@ -92,9 +92,10 @@ async def welcome_chat(
         keyboard=[
             [
                 LinkButton(
-                    text=JOIN_HOUSE, url=create_start_link(bot, house_payload(house_id))
-                )
-            ]
+                    text=JOIN_HOUSE,
+                    url=create_start_link(bot, house_payload(house_id)),
+                ),
+            ],
         ],
     )
 
@@ -117,27 +118,31 @@ async def sync_chat_pins(
     if not listed.pins:
         if mid is not None:
             await chats_repo.set_pins_mid(chat, None)
-            # удаленное сообщение теряет закреп,
-            # а открепление сняло бы то, что закрепили после бота
             if not await sender.delete_message(chat_id, mid):
                 await recheck_chat_rights(
-                    chat_id, bot, chats_service, users_repo, sender
+                    chat_id,
+                    bot,
+                    chats_service,
+                    users_repo,
+                    sender,
                 )
         return
 
     text = _pins_text(chat_id, listed.pins)
-    # сообщение с клавиатурой MAX дает править бессрочно
     keyboard = [
         [
             LinkButton(
                 text=JOIN_HOUSE,
                 url=create_start_link(bot, house_payload(listed.house_id)),
-            )
-        ]
+            ),
+        ],
     ]
     if mid is None or not await sender.edit_message(chat_id, mid, text, keyboard):
         sent = await sender.send_message(
-            text, chat_id=chat_id, notify=False, keyboard=keyboard
+            text,
+            chat_id=chat_id,
+            notify=False,
+            keyboard=keyboard,
         )
         if sent is None:
             await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)

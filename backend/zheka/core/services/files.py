@@ -64,11 +64,15 @@ class FilesService:
 
     def _sign(self, name: str, exp: int) -> str:
         return hmac.new(
-            self._token.encode(), f"{name}:{exp}".encode(), hashlib.sha256
+            self._token.encode(),
+            f"{name}:{exp}".encode(),
+            hashlib.sha256,
         ).hexdigest()
 
     async def save_download(
-        self, content_type: str, download: Callable[[BinaryIO], Awaitable[object]]
+        self,
+        content_type: str,
+        download: Callable[[BinaryIO], Awaitable[object]],
     ) -> str:
         suffix = _SUFFIX_BY_MIME.get(content_type)
         if suffix is None:

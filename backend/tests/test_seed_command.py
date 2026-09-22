@@ -28,8 +28,6 @@ from zheka.core.ids import MaxUserId, UserId
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.seed.demo import SEED_LOCK, seed
 
-# держатель блокировки не отпускает ее, пока второй сид не встанет в очередь;
-# без блокировки второй сид проходит целиком, и ждать дальше незачем
 WAITER_TIMEOUT = 30.0
 
 
@@ -56,7 +54,10 @@ async def test_seed_command_queues_the_task_and_answers_at_once(
     sent = _recording(fake_bot, monkeypatch)
     max_user_id = MaxUserId(secrets.randbits(40))
     client = BotClient(
-        bot_setup.dp, user_id=max_user_id, chat_id=max_user_id, bot=fake_bot
+        bot_setup.dp,
+        user_id=max_user_id,
+        chat_id=max_user_id,
+        bot=fake_bot,
     )
 
     await client.send("/seed")
@@ -79,7 +80,6 @@ async def test_the_task_seeds_today_and_tells_the_caller(
     seeded: bool,
     reply: str,
 ) -> None:
-    # настоящий сид здесь закоммитился бы и лег под все следующие тесты
     calls: list[tuple[Path, date]] = []
 
     async def stub(_session: Any, _demo: Any, files_dir: Path, today: date) -> bool:
@@ -93,7 +93,6 @@ async def test_the_task_seeds_today_and_tells_the_caller(
     await _run(task_broker, seed_demo, user_id=user_id)
 
     assert calls == [(Path(make_config().files.dir), datetime.now(UTC).date())]
-    # ответ - задача, которую CommitMiddleware ставит только после коммита
     [message] = bot_broker.messages[queued:]
     assert message.task_name == TaskName.SEND_TO_USER.value
     assert message.kwargs == {
@@ -105,11 +104,13 @@ async def test_the_task_seeds_today_and_tells_the_caller(
 
 
 async def _waits_on_the_lock(
-    engine: AsyncEngine, pid: int, pending: asyncio.Task[bool]
+    engine: AsyncEngine,
+    pid: int,
+    pending: asyncio.Task[bool],
 ) -> bool:
     stmt = text(
         "SELECT count(*) FROM pg_locks"
-        " WHERE locktype = 'advisory' AND NOT granted AND pid = :pid"
+        " WHERE locktype = 'advisory' AND NOT granted AND pid = :pid",
     ).bindparams(pid=pid)
     async with engine.connect() as observer, asyncio.timeout(WAITER_TIMEOUT):
         while not pending.done():
@@ -120,8 +121,6 @@ async def _waits_on_the_lock(
 
 
 async def test_a_second_seed_waits_for_the_first(engine: AsyncEngine) -> None:
-    # коммит первого сида лег бы под весь прогон, поэтому первый только держит
-    # блокировку, а второй должен встать за ней, а не пройти мимо
     async with engine.connect() as holder, engine.connect() as second:
         holder_transaction = await holder.begin()
         lock_stmt = select(func.pg_advisory_xact_lock(SEED_LOCK))
@@ -130,7 +129,8 @@ async def test_a_second_seed_waits_for_the_first(engine: AsyncEngine) -> None:
         pid_stmt = select(func.pg_backend_pid())
         pid = (await second.execute(pid_stmt)).scalar_one()
         async with AsyncSession(
-            bind=second, join_transaction_mode="create_savepoint"
+            bind=second,
+            join_transaction_mode="create_savepoint",
         ) as session:
             pending = asyncio.create_task(seed(session, _demo(session), FILES, TODAY))
             try:
@@ -144,8 +144,6 @@ async def test_a_second_seed_waits_for_the_first(engine: AsyncEngine) -> None:
 
 
 def test_the_worker_import_registers_every_task() -> None:
-    # воркер знает задачи только по импорту пакета, а здесь seed_demo
-    # импортирован напрямую, поэтому проверка идет в чистом процессе
     script = (
         "import zheka.broker.tasks\n"
         "from taskiq import async_shared_broker\n"
@@ -154,7 +152,10 @@ def test_the_worker_import_registers_every_task() -> None:
         "print(sorted(name for name in TaskName if name.value not in registered))\n"
     )
     result = subprocess.run(  # noqa: S603
-        [sys.executable, "-c", script], capture_output=True, text=True, check=True
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=True,
     )
 
     assert result.stdout.strip() == "[]"

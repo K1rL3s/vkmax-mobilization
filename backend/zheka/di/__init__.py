@@ -16,7 +16,9 @@ from zheka.di.yandex import YandexProvider
 
 
 def make_container(
-    *extra_providers: Provider, config: Config, context: dict[Any, Any] | None = None
+    *extra_providers: Provider,
+    config: Config,
+    context: dict[Any, Any] | None = None,
 ) -> AsyncContainer:
     return make_async_container(
         FastapiProvider(),

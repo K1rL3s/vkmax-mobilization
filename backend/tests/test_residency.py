@@ -62,7 +62,6 @@ async def _resolve(
     house_id: HouseId,
     flat_id: FlatId,
 ) -> CurrentResidency:
-    # @inject вырезает параметры FromDishka из сигнатуры обертки
     original = dependency.__dishka_orig_func__
     arguments = {
         "house_id": house_id,
@@ -73,7 +72,7 @@ async def _resolve(
     }
     wanted = inspect.signature(original).parameters
     result: CurrentResidency = await original(
-        **{name: value for name, value in arguments.items() if name in wanted}
+        **{name: value for name, value in arguments.items() if name in wanted},
     )
     return result
 
@@ -96,7 +95,8 @@ async def _block(
     ids=["reason", "no-reason"],
 )
 def test_resolve_residency_refuses_a_blocked_resident(
-    reason: str | None, detail: str
+    reason: str | None,
+    detail: str,
 ) -> None:
     resident = Resident(
         user_id=UserId(1),
@@ -117,7 +117,9 @@ DEPENDENCIES = [residency_for, residency_for_flat, residency_for_flat_house]
 
 @pytest.mark.parametrize("dependency", DEPENDENCIES)
 async def test_a_residency_dependency_refuses_a_blocked_resident(
-    session: AsyncSession, make_org_house_flat_user: Fixture, dependency: Any
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    dependency: Any,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _block(session, own.user_id, own.house_id)
@@ -130,20 +132,26 @@ async def test_a_residency_dependency_refuses_a_blocked_resident(
 
 @pytest.mark.parametrize("dependency", DEPENDENCIES)
 async def test_a_residency_dependency_answers_not_found_for_a_foreign_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture, dependency: Any
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    dependency: Any,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     foreign = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
 
-    # 403 подтвердил бы, что дом с таким id есть
     with pytest.raises(EntityNotFound):
         await _resolve(
-            session, dependency, own.user_id, foreign.house_id, foreign.flat_id
+            session,
+            dependency,
+            own.user_id,
+            foreign.house_id,
+            foreign.flat_id,
         )
 
 
 async def test_blocked_in_one_house_keeps_the_other_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     blocked_house = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     other = await make_org_house_flat_user()
@@ -153,28 +161,30 @@ async def test_blocked_in_one_house_keeps_the_other_house(
             house_id=other.house_id,
             flat_id=other.flat_id,
             role=ResidentRole.OWNER,
-        )
+        ),
     )
     await session.flush()
     await _block(session, blocked_house.user_id, blocked_house.house_id)
 
-    # блокировка живет на жительстве, а не на аккаунте
     residency = await _resolve(
-        session, residency_for, blocked_house.user_id, other.house_id, other.flat_id
+        session,
+        residency_for,
+        blocked_house.user_id,
+        other.house_id,
+        other.flat_id,
     )
 
     assert residency.house_id == other.house_id
 
 
 async def test_get_me_still_lists_a_blocked_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _block(session, own.user_id, own.house_id)
     profile_service = _profile_service(session)
 
-    # свитчер - единственный экран, который заблокированный обязан видеть:
-    # иначе приложение пустое и без объяснения
     view = await profile_service.me(own.user_id)
 
     assert [residency.house.id for residency in view.residencies] == [own.house_id]
@@ -194,11 +204,14 @@ async def _request_verification(
     assert request is not None
     if status is not VerificationStatus.PENDING:
         await flats_repo.decide_verification_request(
-            request, status, user_id, datetime.now(UTC), reason
+            request,
+            status,
+            user_id,
+            datetime.now(UTC),
+            reason,
         )
 
 
-# у одобренного запроса в поле причины лежит заметка УК, жителю ее не видно
 @pytest.mark.parametrize(
     ("status", "reason", "shown_reason"),
     [
@@ -227,7 +240,8 @@ async def test_get_me_carries_the_verification_status(
 
 
 async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
     session.add(
@@ -236,10 +250,9 @@ async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(
             house_id=own.house_id,
             role=ResidentRole.OWNER,
             flat_number="12",
-        )
+        ),
     )
     await session.flush()
-    # запрос по свободному номеру квартиры завести не за что: карточки нет
     await _request_verification(session, own.user_id, own.flat_id)
 
     view = await _profile_service(session).me(own.user_id)
@@ -251,7 +264,8 @@ async def test_get_me_leaves_the_status_empty_for_a_residency_without_a_flat(
 
 
 async def test_get_me_keeps_each_residency_on_its_own_request(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     pending = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     rejected = await make_org_house_flat_user()
@@ -261,7 +275,7 @@ async def test_get_me_keeps_each_residency_on_its_own_request(
             house_id=rejected.house_id,
             flat_id=rejected.flat_id,
             role=ResidentRole.OWNER,
-        )
+        ),
     )
     await session.flush()
     await _request_verification(session, pending.user_id, pending.flat_id)
@@ -273,7 +287,6 @@ async def test_get_me_keeps_each_residency_on_its_own_request(
         REJECT_REASON,
     )
 
-    # мультидом - обычный случай, и один запрос в базу разводит квартиры сам
     view = await _profile_service(session).me(pending.user_id)
 
     statuses = {

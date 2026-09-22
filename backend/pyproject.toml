@@ -126,7 +126,6 @@ ignore = [
     "TC006", # https://docs.astral.sh/ruff/rules/runtime-cast-value/
     "TC007", # https://docs.astral.sh/ruff/rules/unquoted-type-alias/
     "C901", # https://docs.astral.sh/ruff/rules/complex-structure/
-    "COM812", # конфликтует с ruff format, запятые расставляет форматтер
     "PERF203", # https://docs.astral.sh/ruff/rules/try-except-in-loop/
     "DOC", # https://docs.astral.sh/ruff/rules/#pydoclint-doc
     "D", # https://docs.astral.sh/ruff/rules/#pydocstyle-d

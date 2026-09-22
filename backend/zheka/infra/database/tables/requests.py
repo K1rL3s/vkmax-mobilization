@@ -71,7 +71,9 @@ request_groups_table = Table(
     Column("category", pg_enum(RequestCategory, "request_category"), nullable=False),
     Column("window_started_at", DateTime(timezone=True), nullable=False),
     Column(
-        "status", pg_enum(RequestGroupStatus, "request_group_status"), nullable=False
+        "status",
+        pg_enum(RequestGroupStatus, "request_group_status"),
+        nullable=False,
     ),
 )
 

@@ -61,7 +61,7 @@ def overdue_at(now: datetime) -> ColumnElement[bool]:
                     < now - timedelta(hours=rule.normative_hours),
                 )
                 for category, rule in CATEGORY_RULES.items()
-            ]
+            ],
         ),
         requests_table.c.status != RequestStatus.DONE,
     )
@@ -129,7 +129,10 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all(), total
 
     async def set_rating(
-        self, request: Request, rating: int, feedback: str | None
+        self,
+        request: Request,
+        rating: int,
+        feedback: str | None,
     ) -> None:
         request.rating = rating
         request.feedback = feedback
@@ -144,8 +147,11 @@ class RequestsRepo(BaseAlchemyRepo):
     ) -> None:
         self._session.add(
             RequestPhoto(
-                request_id=request_id, path=path, kind=kind, uploaded_by=uploaded_by
-            )
+                request_id=request_id,
+                path=path,
+                kind=kind,
+                uploaded_by=uploaded_by,
+            ),
         )
         await self._session.flush()
 
@@ -159,7 +165,8 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def count_photos(
-        self, request_ids: Collection[RequestId]
+        self,
+        request_ids: Collection[RequestId],
     ) -> dict[RequestId, int]:
         if not request_ids:
             return {}
@@ -188,7 +195,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 by_user_id=by_user_id,
                 by_role=by_role,
                 at=at,
-            )
+            ),
         )
         await self._session.flush()
 
@@ -202,7 +209,11 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def add_message(
-        self, request_id: RequestId, author_user_id: UserId, author_role: str, text: str
+        self,
+        request_id: RequestId,
+        author_user_id: UserId,
+        author_role: str,
+        text: str,
     ) -> None:
         self._session.add(
             RequestMessage(
@@ -210,7 +221,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 author_user_id=author_user_id,
                 author_role=author_role,
                 text=text,
-            )
+            ),
         )
         await self._session.flush()
 
@@ -229,7 +240,8 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def count_by_group(
-        self, group_ids: Collection[RequestGroupId]
+        self,
+        group_ids: Collection[RequestGroupId],
     ) -> dict[RequestGroupId, int]:
         if not group_ids:
             return {}
@@ -276,7 +288,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 or_(
                     requests_table.c.group_id.is_(None),
                     requests_table.c.id.in_(leaders),
-                )
+                ),
             )
 
         total = await self._count(stmt)
@@ -337,7 +349,10 @@ class RequestsRepo(BaseAlchemyRepo):
         return {UserId(user_id): count for user_id, count in result.tuples()}
 
     async def find_open_group(
-        self, house_id: HouseId, category: RequestCategory, since: datetime
+        self,
+        house_id: HouseId,
+        category: RequestCategory,
+        since: datetime,
     ) -> RequestGroup | None:
         stmt = (
             select(RequestGroup)
@@ -354,7 +369,9 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def get_group_for_org(
-        self, group_id: RequestGroupId, org_id: OrgId
+        self,
+        group_id: RequestGroupId,
+        org_id: OrgId,
     ) -> RequestGroup | None:
         stmt = scoped_to_org(
             select(RequestGroup).where(request_groups_table.c.id == group_id),
@@ -365,7 +382,10 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def create_group(
-        self, house_id: HouseId, category: RequestCategory, window_started_at: datetime
+        self,
+        house_id: HouseId,
+        category: RequestCategory,
+        window_started_at: datetime,
     ) -> RequestGroup:
         group = RequestGroup(
             house_id=house_id,
@@ -378,13 +398,18 @@ class RequestsRepo(BaseAlchemyRepo):
         return group
 
     async def set_group_status(
-        self, group: RequestGroup, status: RequestGroupStatus
+        self,
+        group: RequestGroup,
+        status: RequestGroupStatus,
     ) -> None:
         group.status = status
         await self._session.flush()
 
     async def list_open_in_window(
-        self, house_id: HouseId, category: RequestCategory, since: datetime
+        self,
+        house_id: HouseId,
+        category: RequestCategory,
+        since: datetime,
     ) -> Sequence[Request]:
         stmt = (
             select(Request)
@@ -409,7 +434,9 @@ class RequestsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def attach_to_group(
-        self, requests: Sequence[Request], group_id: RequestGroupId
+        self,
+        requests: Sequence[Request],
+        group_id: RequestGroupId,
     ) -> None:
         for request in requests:
             request.group_id = group_id

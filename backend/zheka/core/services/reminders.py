@@ -34,8 +34,6 @@ logger = logging.getLogger(__name__)
 
 READING_SECOND_REMINDER_DAYS = 2
 POLL_REMINDER_BEFORE = timedelta(hours=48)
-# местный час: ежечасный запуск действует с него до конца дня,
-# отметка не дает отправить дважды
 READING_HOUR = 10
 POLL_HOUR = 10
 VERIFICATION_HOUR = 9
@@ -49,7 +47,8 @@ class ReadingReminder(StrEnum):
 
 
 def reading_reminder(
-    today: date, settings: OrgSettings | None
+    today: date,
+    settings: OrgSettings | None,
 ) -> ReadingReminder | None:
     last_day = monthrange(today.year, today.month)[1]
     if settings is None or settings.meter_window_always_open:
@@ -63,7 +62,10 @@ def reading_reminder(
     if today.day == day_from:
         return ReadingReminder.OPEN
     if today.day == closing and window_is_open(
-        today.day, day_from, day_to, always_open=False
+        today.day,
+        day_from,
+        day_to,
+        always_open=False,
     ):
         return ReadingReminder.CLOSING
     return None
@@ -72,7 +74,7 @@ def reading_reminder(
 _READING_TEXTS: dict[ReadingReminder, Callable[[], str]] = {
     ReadingReminder.OPEN: texts.reading_window_opened,
     ReadingReminder.CLOSING: lambda: texts.reading_window_closing(
-        READING_SECOND_REMINDER_DAYS
+        READING_SECOND_REMINDER_DAYS,
     ),
     ReadingReminder.MANUAL: texts.reading_reminder_manual,
 }
@@ -131,7 +133,10 @@ class RemindersService:
                 continue
             period = window_period(today, settings)
             sent += await self._remind_house_readings(
-                house.id, period, kind, queued[kind]
+                house.id,
+                period,
+                kind,
+                queued[kind],
             )
         logger.info("Напоминание о показаниях: адресатов %s", sent)
         return sent
@@ -177,9 +182,8 @@ class RemindersService:
         return closed
 
     async def warn_verification(self, now: datetime) -> int:
-        # местная дата опережает дату UTC не больше чем на день
         meters = await self._meters.list_to_warn(
-            now.date() + timedelta(days=1) + VERIFICATION_WARNING
+            now.date() + timedelta(days=1) + VERIFICATION_WARNING,
         )
         warned = 0
         for meter in meters:
@@ -214,9 +218,9 @@ class RemindersService:
         return warned
 
     async def remind_appointments(self, now: datetime) -> int:
-        # местное завтра кончается не позже чем через двое суток
         appointments = await self._reception.list_to_remind(
-            now, now + timedelta(days=2)
+            now,
+            now + timedelta(days=2),
         )
         reminded = 0
         for appointment in appointments:
@@ -240,7 +244,8 @@ class RemindersService:
             self._notifications.notify_user(
                 appointment.user_id,
                 texts.appointment_reminder(
-                    starts_at, "" if house is None else house.address
+                    starts_at,
+                    "" if house is None else house.address,
                 ),
                 category=NotificationCategory.REQUESTS,
                 mandatory=True,
@@ -273,7 +278,9 @@ class RemindersService:
         ]
         for user_id in user_ids:
             await self._events.record(
-                EventType.READING_REMINDER_SENT, user_id=user_id, **stamp
+                EventType.READING_REMINDER_SENT,
+                user_id=user_id,
+                **stamp,
             )
         fresh = [user_id for user_id in user_ids if user_id not in queued]
         queued.update(fresh)
@@ -286,14 +293,21 @@ class RemindersService:
         return len(fresh)
 
     async def remind_reading_laggards(
-        self, house_ids: Collection[HouseId], period: date, now: datetime
+        self,
+        house_ids: Collection[HouseId],
+        period: date,
+        now: datetime,
     ) -> int:
         queued: set[UserId] = set()
         sent = 0
         for house in await self._houses.list_by_ids(house_ids):
             since = house.day_start(house.local(now).date())
             sent += await self._remind_house_readings(
-                house.id, period, ReadingReminder.MANUAL, queued, since
+                house.id,
+                period,
+                ReadingReminder.MANUAL,
+                queued,
+                since,
             )
         logger.info("Ручное напоминание о показаниях: адресатов %s", sent)
         return sent

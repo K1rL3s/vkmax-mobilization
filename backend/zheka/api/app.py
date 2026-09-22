@@ -78,7 +78,8 @@ _TAGS = {
 
 
 def app_factory(
-    config: Config | None = None, bot_setup: BotSetup | None = None
+    config: Config | None = None,
+    bot_setup: BotSetup | None = None,
 ) -> FastAPI:
     config = config or load_config()
     setup_logger(config.log)
@@ -139,7 +140,9 @@ def app_factory(
 
 
 def setup_middlewares(
-    app: FastAPI, container: AsyncContainer, cors: Sequence[str]
+    app: FastAPI,
+    container: AsyncContainer,
+    cors: Sequence[str],
 ) -> None:
     app.middleware("http")(transaction_middleware)
     app.middleware("http")(request_logging_middleware)
@@ -158,7 +161,9 @@ def setup_middlewares(
 
 
 def _lifespan(
-    config: Config, dp: Dispatcher, container: AsyncContainer
+    config: Config,
+    dp: Dispatcher,
+    container: AsyncContainer,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -174,7 +179,7 @@ def _lifespan(
             await engine.on_shutdown(app)
         else:
             polling = asyncio.create_task(
-                dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True)
+                dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True),
             )
             logger.info("Бот работает лонг-поллингом")
             yield

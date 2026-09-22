@@ -56,7 +56,7 @@ class ProfileService:
         houses = {
             house.id: house
             for house in await self._houses.list_by_ids(
-                [resident.house_id for resident in residents]
+                [resident.house_id for resident in residents],
             )
         }
         flats = {
@@ -66,7 +66,7 @@ class ProfileService:
                     resident.flat_id
                     for resident in residents
                     if resident.flat_id is not None
-                ]
+                ],
             )
         }
 
@@ -97,7 +97,7 @@ class ProfileService:
                     is_connected=is_connected(house, org),
                     verification_status=None if latest is None else latest.status,
                     verification_reject_reason=reject_reason(latest),
-                )
+                ),
             )
         memberships = [
             OrgMembershipView(member=member, org=orgs[member.org_id])

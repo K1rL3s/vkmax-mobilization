@@ -135,12 +135,16 @@ class RequestCard(RequestListItem):
     parent_request_id: RequestId | None = None
     flat_id: FlatId | None = None
     auto_close_at: datetime | None = Field(
-        default=None, description="Автозакрытие заявки, оставленной на приемке"
+        default=None,
+        description="Автозакрытие заявки, оставленной на приемке",
     )
 
     @classmethod
     def of(
-        cls, card: RequestCardData, photos: list[FileRef], result_photos: list[FileRef]
+        cls,
+        card: RequestCardData,
+        photos: list[FileRef],
+        result_photos: list[FileRef],
     ) -> Self:
         request = card.request
         base = RequestListItem.of_row(
@@ -150,7 +154,7 @@ class RequestCard(RequestListItem):
                 has_photos=bool(photos),
                 group_size=card.group_size,
                 executor=card.executor,
-            )
+            ),
         )
         return cls(
             **base.model_dump(),

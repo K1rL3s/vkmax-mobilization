@@ -67,14 +67,11 @@ from zheka.infra.database.repos.notifications import NotificationsRepo
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-# load_config() из migrations/env.py требует эти переменные
 os.environ.setdefault("MAX_TOKEN", "test-token")
 os.environ.setdefault("REDIS_HOST", "127.0.0.1")
 os.environ.setdefault("DEEPLINK_ORG_REGISTER", "test-register-code")
 
 
-# testcontainers отпускает контейнер по строке в логе, которую печатает и
-# временный сервер initdb, когда порт снаружи еще закрыт
 def wait_for_postgres(url: str) -> None:
     deadline = time.monotonic() + 30
     dsn = url.replace("postgresql+psycopg://", "postgresql://")
@@ -122,7 +119,8 @@ async def session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
     async with engine.connect() as conn:
         transaction = await conn.begin()
         async with AsyncSession(
-            bind=conn, join_transaction_mode="create_savepoint"
+            bind=conn,
+            join_transaction_mode="create_savepoint",
         ) as db_session:
             yield db_session
         await transaction.rollback()
@@ -185,7 +183,7 @@ async def make_org_house_flat_user(
                     house_id=house.id,
                     flat_id=flat.id,
                     role=resident_role,
-                )
+                ),
             )
         await session.flush()
 
@@ -218,7 +216,8 @@ def make_config() -> Config:
             secret_token=None,
         ),
         files=FilesConfig(
-            dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"), max_size_mb=10
+            dir=str(Path(tempfile.gettempdir()) / "zheka-test-files"),
+            max_size_mb=10,
         ),
         deeplinks=DeeplinksConfig(org_register="test-register-code"),
         yandex=YandexConfig(api_key=None, folder_id=None),
@@ -226,8 +225,6 @@ def make_config() -> Config:
 
 
 class RecordingBroker(AsyncBroker):
-    # публикация проходит весь путь AsyncKicker.kiq и оседает здесь
-
     def __init__(self) -> None:
         super().__init__()
         self.messages: list[TaskiqMessage] = []
@@ -257,7 +254,8 @@ def publisher(broker: RecordingBroker) -> TaskPublisher:
 
 
 def make_notifications_service(
-    session: AsyncSession, publisher: TaskPublisher | None = None
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
 ) -> NotificationsService:
     return NotificationsService(
         NotificationsRepo(session),
@@ -266,8 +264,6 @@ def make_notifications_service(
     )
 
 
-# окна бота коммитят по-настоящему, поэтому у него своя база: иначе его строки
-# попадали бы в проверки остальных тестов, живущих в откатываемой транзакции
 BOT_DB_NAME = "zheka_bot"
 
 
@@ -319,7 +315,6 @@ def bot_context(setup: BotSetup) -> dict[Any, Any]:
 
 
 def empty_bot_setup() -> BotSetup:
-    # настоящий диспетчер в прогоне один и принадлежит фикстуре bot_setup
     dp = Dispatcher()
     return BotSetup(dp=dp, bg_manager_factory=BgManagerFactoryImpl(dp))
 
@@ -336,8 +331,6 @@ class RecordingBrokerProvider(Provider):
         return cast(ZhekaBroker, self._broker)
 
 
-# maxo запрещает include после старта, поэтому пробные роутеры тестов
-# складываются сюда на импорте модуля
 PROBE_ROUTERS: list[BaseRouter] = []
 
 
@@ -358,7 +351,6 @@ def bot_broker() -> RecordingBroker:
 
 @pytest.fixture(scope="session")
 def bot_setup(message_manager: MockMessageManager) -> BotSetup:
-    # настоящий make_dispatcher: забытая в нем мидлварь или роутер краснеет
     setup = make_dispatcher(
         make_config().redis,
         storage=JsonMemoryStorage(),
@@ -381,14 +373,12 @@ async def bot_container(
         context=bot_context(bot_setup),
     )
     setup_maxo_dishka(container, bot_setup.dp, auto_inject=True)
-    # before_startup раскладывает inner-мидлвари по роутерам и инжектит dishka
     await bot_setup.dp.feed_signal(BeforeStartup(), fake_bot)
     yield container
     await container.close()
 
 
 class FakeBotProvider(Provider):
-    # настоящий Bot спрашивает MAX о себе, а тестовый токен тот отвергает
     scope: BaseScope | None = Scope.APP
 
     def __init__(self, bot: Bot) -> None:
@@ -407,8 +397,6 @@ async def task_broker(
     bot_broker: RecordingBroker,
     fake_bot: FakeBot,
 ) -> AsyncGenerator[InMemoryBroker]:
-    # коммит и flush публикатора как у воркера; поставленное задачей оседает
-    # в bot_broker, следующую задачу тест запускает сам
     container = make_container(
         RecordingBrokerProvider(bot_broker),
         FakeBotProvider(fake_bot),
@@ -416,15 +404,14 @@ async def task_broker(
         context=bot_context(bot_setup),
     )
     broker = InMemoryBroker(await_inplace=True).with_middlewares(
-        ContainerMiddleware(container), CommitMiddleware()
+        ContainerMiddleware(container),
+        CommitMiddleware(),
     )
     yield broker
     await container.close()
 
 
 def freeze_now(monkeypatch: pytest.MonkeyPatch, module: str, now: datetime) -> None:
-    # задача или сервис сами читают часы, а от местного часа зависит результат,
-    # то есть и от времени запуска тестов
     class Frozen(datetime):
         @classmethod
         def now(cls, tz: Any = None) -> Any:

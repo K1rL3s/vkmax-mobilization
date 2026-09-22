@@ -22,7 +22,8 @@ RESULT_PHOTO_TEXT = "Пришлите фото результата"
 executor_dialog = Dialog(
     Window(
         Multi(
-            Format(CARD_TEXT, when=F["mine"]), Format(HANDED_OVER_TEXT, when=~F["mine"])
+            Format(CARD_TEXT, when=F["mine"]),
+            Format(HANDED_OVER_TEXT, when=~F["mine"]),
         ),
         DynamicMedia("photos"),
         Button(

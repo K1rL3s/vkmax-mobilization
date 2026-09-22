@@ -39,7 +39,11 @@ class ModerationService:
         self._orgs = orgs_repo
 
     async def block(
-        self, org_id: OrgId, resident_id: ResidentId, reason: str, by: UserId
+        self,
+        org_id: OrgId,
+        resident_id: ResidentId,
+        reason: str,
+        by: UserId,
     ) -> HouseResidentView:
         stated = _require_reason(reason)
         resident = await self._get_resident(org_id, resident_id)
@@ -61,7 +65,10 @@ class ModerationService:
         return await self._view(resident)
 
     async def unblock(
-        self, org_id: OrgId, resident_id: ResidentId, by: UserId
+        self,
+        org_id: OrgId,
+        resident_id: ResidentId,
+        by: UserId,
     ) -> HouseResidentView:
         resident = await self._get_resident(org_id, resident_id)
         await self._residents.set_status(resident, ResidentStatus.ACTIVE, None)
@@ -75,7 +82,11 @@ class ModerationService:
         return await self._view(resident)
 
     async def revoke_verification(
-        self, org_id: OrgId, resident_id: ResidentId, reason: str, by: UserId
+        self,
+        org_id: OrgId,
+        resident_id: ResidentId,
+        reason: str,
+        by: UserId,
     ) -> HouseResidentView:
         stated = _require_reason(reason)
         resident = await self._get_resident(org_id, resident_id)
@@ -93,19 +104,24 @@ class ModerationService:
         self._notify(
             resident,
             texts.flat_verification_revoked(
-                await self._address(resident), stated, contact
+                await self._address(resident),
+                stated,
+                contact,
             ),
         )
         return await self._view(resident)
 
     async def set_chairman(
-        self, org_id: OrgId, resident_id: ResidentId, value: bool
+        self,
+        org_id: OrgId,
+        resident_id: ResidentId,
+        value: bool,
     ) -> HouseResidentView:
         resident = await self._get_resident(org_id, resident_id)
         if value:
             if resident.verified_at is None:
                 raise InvalidState(
-                    "Председателем становится житель с подтвержденной квартирой"
+                    "Председателем становится житель с подтвержденной квартирой",
                 )
             await self._residents.clear_chairman(resident.house_id)
         await self._residents.set_chairman(resident, value)

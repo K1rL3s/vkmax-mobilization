@@ -22,7 +22,12 @@ async def list_org_polls(
     offset: Offset = 0,
 ) -> Page[AdminPollListItem]:
     items, total = await polls_service.list_org_polls(
-        current_org.org_id, current_org.user_id, house_id, status, limit, offset
+        current_org.org_id,
+        current_org.user_id,
+        house_id,
+        status,
+        limit,
+        offset,
     )
     return Page(items=[AdminPollListItem.of_admin(item) for item in items], total=total)
 
@@ -34,6 +39,9 @@ async def create_org_poll(
     polls_service: FromDishka[PollsService],
 ) -> PollCard:
     card = await polls_service.create(
-        current_org.user_id, body.house_id, body.draft(), org_id=current_org.org_id
+        current_org.user_id,
+        body.house_id,
+        body.draft(),
+        org_id=current_org.org_id,
     )
     return PollCard.of_card(card)

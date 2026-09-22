@@ -1,6 +1,5 @@
 import os
 
-# BotMode.POLLING from zheka/config.py
 POLLING_VALUE = "polling"
 
 

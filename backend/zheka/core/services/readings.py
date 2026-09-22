@@ -94,7 +94,8 @@ def _candidate_periods(today: date) -> list[date]:
 
 
 def available_periods(
-    today: date, closed_periods: Collection[date]
+    today: date,
+    closed_periods: Collection[date],
 ) -> list[PeriodOption]:
     return [
         PeriodOption(
@@ -107,7 +108,8 @@ def available_periods(
 
 
 def consumption(
-    values: Mapping[TariffZone, int], previous_values: Mapping[TariffZone, int] | None
+    values: Mapping[TariffZone, int],
+    previous_values: Mapping[TariffZone, int] | None,
 ) -> dict[TariffZone, int]:
     if previous_values is None:
         return dict.fromkeys(values, 0)
@@ -117,7 +119,8 @@ def consumption(
 
 
 def is_below_previous(
-    values: Mapping[TariffZone, int], previous_values: Mapping[TariffZone, int] | None
+    values: Mapping[TariffZone, int],
+    previous_values: Mapping[TariffZone, int] | None,
 ) -> bool:
     if previous_values is None:
         return False
@@ -183,7 +186,7 @@ class ReadingsService:
         settings = await self._window_settings(house)
         if window_accepts(today, settings):
             options = [
-                PeriodOption(period=window_period(today, settings), is_open=True)
+                PeriodOption(period=window_period(today, settings), is_open=True),
             ]
         else:
             closed = {
@@ -194,7 +197,8 @@ class ReadingsService:
             options = available_periods(today, closed)
 
         submitted = await self._submitted_periods(
-            flat_id, {option.period for option in options}
+            flat_id,
+            {option.period for option in options},
         )
         return PeriodsData(options=options, submitted=submitted)
 
@@ -210,7 +214,8 @@ class ReadingsService:
         for reading in readings:
             if reading.period not in previous_cache:
                 previous_cache[reading.period] = await self._meters.previous_reading(
-                    meter_id, reading.period
+                    meter_id,
+                    reading.period,
                 )
             previous = previous_cache[reading.period]
             previous_values = None if previous is None else zones_of(previous.values)
@@ -221,7 +226,9 @@ class ReadingsService:
             if resident.can_see_charges:
                 if reading.period not in tariff_cache:
                     tariff = await self._charges.tariff_at(
-                        house_id, SERVICE_OF_METER[meter.type], reading.period
+                        house_id,
+                        SERVICE_OF_METER[meter.type],
+                        reading.period,
                     )
                     tariff_cache[reading.period] = (
                         None if tariff is None else tariff.value
@@ -237,12 +244,15 @@ class ReadingsService:
                     values=values_map,
                     consumption=consumption_map,
                     amount=amount,
-                )
+                ),
             )
         return rows
 
     async def submit(
-        self, user_id: UserId, meter_id: MeterId, draft: SubmitDraft
+        self,
+        user_id: UserId,
+        meter_id: MeterId,
+        draft: SubmitDraft,
     ) -> SubmitResult:
         meter = await self._access.get_meter(meter_id)
         resident = await self._access.verified_resident(user_id, meter.flat_id)
@@ -294,7 +304,9 @@ class ReadingsService:
         )
 
         tariff = await self._charges.tariff_at(
-            house_id, SERVICE_OF_METER[meter.type], draft.period
+            house_id,
+            SERVICE_OF_METER[meter.type],
+            draft.period,
         )
         amount = None
         if tariff is not None and resident.can_see_charges:
@@ -330,7 +342,9 @@ class ReadingsService:
         )
 
     async def _submitted_periods(
-        self, flat_id: FlatId, periods: Collection[date]
+        self,
+        flat_id: FlatId,
+        periods: Collection[date],
     ) -> set[date]:
         meters = await self._meters.list_for_flat(flat_id)
         submitted: set[date] = set()
@@ -348,10 +362,16 @@ class ReadingsService:
         return await self._orgs.get_settings(OrgId(house.org_id))
 
     async def house_average(
-        self, house_id: HouseId, meter_type: MeterType, period: date
+        self,
+        house_id: HouseId,
+        meter_type: MeterType,
+        period: date,
     ) -> int | None:
         readings, _total = await self._meters.list_house_readings(
-            house_id, period=period, meter_type=meter_type, limit=_HOUSE_AVERAGE_LIMIT
+            house_id,
+            period=period,
+            meter_type=meter_type,
+            limit=_HOUSE_AVERAGE_LIMIT,
         )
         latest_by_meter: dict[MeterId, Reading] = {}
         for reading in readings:

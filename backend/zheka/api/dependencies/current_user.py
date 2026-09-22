@@ -34,7 +34,9 @@ def parse_init_data(token: str, raw: str) -> WebAppInitData:
 
 @inject
 async def get_current_user(
-    *, config: FromDishka[MaxConfig], raw_init_data: str = Header(alias="WebAppData")
+    *,
+    config: FromDishka[MaxConfig],
+    raw_init_data: str = Header(alias="WebAppData"),
 ) -> CurrentUser:
     try:
         init_data = parse_init_data(config.token, raw_init_data)

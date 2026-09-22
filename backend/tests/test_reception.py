@@ -61,16 +61,18 @@ def _draft(weekday: int, *, capacity: int = 1) -> ReceptionWindowDraft:
 
 
 async def _open_every_day(
-    service: ReceptionService, org_id: OrgId, *, capacity: int = 1
+    service: ReceptionService,
+    org_id: OrgId,
+    *,
+    capacity: int = 1,
 ) -> None:
     await service.set_windows(
-        org_id, [_draft(weekday, capacity=capacity) for weekday in range(7)]
+        org_id,
+        [_draft(weekday, capacity=capacity) for weekday in range(7)],
     )
 
 
 def _some_day() -> date:
-    # послезавтра: сетка отдает только будущие слоты, а «сегодня в 10:00»
-    # к моменту прогона уже может быть в прошлом
     return datetime.now(UTC).date() + timedelta(days=2)
 
 
@@ -79,7 +81,9 @@ def _moment(day: date, at: time = time(10, 0)) -> datetime:
 
 
 async def _add_request(
-    session: AsyncSession, house_id: HouseId, author_user_id: UserId
+    session: AsyncSession,
+    house_id: HouseId,
+    author_user_id: UserId,
 ) -> RequestId:
     request = Request(
         house_id=house_id,
@@ -98,14 +102,15 @@ async def _add_request(
     ("time_from", "time_to", "count"),
     [
         (time(10, 0), time(18, 0), 16),
-        # 11:00 не помещается целиком до 11:10 и не предлагается
         (time(10, 0), time(11, 10), 2),
         (time(18, 0), time(10, 0), 0),
         (time(10, 0), time(10, 0), 0),
     ],
 )
 def test_a_window_expands_into_whole_slots(
-    time_from: time, time_to: time, count: int
+    time_from: time,
+    time_to: time,
+    count: int,
 ) -> None:
     day = date(2026, 9, 21)
     window = ReceptionWindow(
@@ -141,7 +146,6 @@ async def test_slots_without_a_date_run_two_weeks_ahead(
     make_org_house_flat_user: Fixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # 22:00 UTC 14-го в Москве уже 15-е, две недели от него - 29-е
     freeze_now(
         monkeypatch,
         "zheka.core.services.reception",
@@ -157,7 +161,8 @@ async def test_slots_without_a_date_run_two_weeks_ahead(
 
 
 async def test_several_windows_on_one_weekday_are_expanded_together(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -183,7 +188,6 @@ async def test_several_windows_on_one_weekday_are_expanded_together(
 
     slots = await service.slots(fixture.house_id, day)
 
-    # 11:00 попадает в оба окна, но остается одним слотом
     assert [slot.starts_at for slot in slots] == [
         _moment(day, time(10, 0)),
         _moment(day, time(11, 0)),
@@ -191,8 +195,6 @@ async def test_several_windows_on_one_weekday_are_expanded_together(
         _moment(day, time(13, 0)),
     ]
 
-    # в 11:00 принимают двое: мест в общем слоте столько, сколько дает
-    # самое просторное из накрывших его окон
     shared = _moment(day, time(11, 0))
 
     async def is_free() -> bool:
@@ -214,7 +216,8 @@ async def test_several_windows_on_one_weekday_are_expanded_together(
 
 
 async def test_a_taken_slot_stays_in_the_grid_and_cannot_be_booked_twice(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -234,12 +237,12 @@ async def test_a_taken_slot_stays_in_the_grid_and_cannot_be_booked_twice(
     with pytest.raises(InvalidState, match="занят"):
         await service.book(neighbour, fixture.house_id, starts_at, None)
 
-    # занят именно этот слот, а не весь день организации
     await service.book(neighbour, fixture.house_id, _moment(day, time(10, 30)), None)
 
 
 async def test_a_slot_off_the_grid_or_in_the_past_is_neither_offered_nor_booked(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -258,7 +261,8 @@ async def test_a_slot_off_the_grid_or_in_the_past_is_neither_offered_nor_booked(
 
 
 async def test_a_request_of_another_user_or_house_is_not_found(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     other = await make_org_house_flat_user()
@@ -279,7 +283,8 @@ async def test_a_request_of_another_user_or_house_is_not_found(
 
 
 async def test_a_linked_request_travels_to_the_record(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -287,12 +292,14 @@ async def test_a_linked_request_travels_to_the_record(
     request_id = await _add_request(session, fixture.house_id, fixture.user_id)
 
     booked = await service.book(
-        fixture.user_id, fixture.house_id, _moment(_some_day()), request_id
+        fixture.user_id,
+        fixture.house_id,
+        _moment(_some_day()),
+        request_id,
     )
 
     assert booked.appointment.request_id == request_id
     assert booked.org_phone == "+70000000000"
-    # имя и квартиру заполняет только кабинет УК
     assert booked.user_name is None
 
     events = await _events(session, EventType.APPOINTMENT_BOOKED)
@@ -303,7 +310,8 @@ async def test_a_linked_request_travels_to_the_record(
 
 
 async def test_cancelling_frees_the_slot_for_the_next_resident(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -325,21 +333,18 @@ async def test_cancelling_frees_the_slot_for_the_next_resident(
 
     assert again.appointment.user_id == neighbour
 
-    # «мои записи» - это записи жителя, а не всего дома
     mine = await service.mine(neighbour)
 
     assert [row.appointment.id for row in mine] == [again.appointment.id]
-    # у первого жителя осталась только его отмененная запись
     assert [row.appointment.id for row in await service.mine(fixture.user_id)] == [
-        booked.appointment.id
+        booked.appointment.id,
     ]
 
 
 async def test_a_resident_cancels_only_their_own_record_and_can_book_it_again(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
-    # вместимость в одно место - случай по умолчанию, и «слот занят» про
-    # собственную запись жителю ничего не объясняет
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     await _open_every_day(service, fixture.org_id)
@@ -367,7 +372,8 @@ async def test_a_resident_cancels_only_their_own_record_and_can_book_it_again(
 
 
 async def test_the_office_list_carries_the_resident_and_the_flat(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     other = await make_org_house_flat_user()
@@ -421,13 +427,14 @@ async def test_a_broken_window_is_rejected(
                     time_to=time_to,
                     slot_minutes=slot_minutes,
                     capacity=capacity,
-                )
+                ),
             ],
         )
 
 
 async def test_setting_windows_replaces_the_whole_grid(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     other = await make_org_house_flat_user()
@@ -439,21 +446,19 @@ async def test_setting_windows_replaces_the_whole_grid(
 
     assert [window.weekday for window in await service.windows(fixture.org_id)] == [3]
 
-    # пустой список - это законный «прием не ведем»
     await service.set_windows(fixture.org_id, [])
 
     assert await service.windows(fixture.org_id) == []
 
 
 async def test_another_org_does_not_take_our_slot(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     other = await make_org_house_flat_user()
     service = _make_service(session)
     await _open_every_day(service, fixture.org_id)
-    # у соседней организации в тот же день недели просторнее: ее окна не
-    # должны добавлять мест в наш слот
     await _open_every_day(service, other.org_id, capacity=3)
     day = _some_day()
     starts_at = _moment(day)
@@ -470,19 +475,18 @@ async def test_another_org_does_not_take_our_slot(
 
     assert booked.appointment.org_id == fixture.org_id
 
-    # место в нашем слоте одно, и чужая запись его не занимает и не добавляет
     neighbour = await _add_user(session)
     with pytest.raises(InvalidState, match="занят"):
         await service.book(neighbour, fixture.house_id, starts_at, None)
 
-    # день УК - это записи ее домов, а не всех организаций сразу
     rows = await service.today(fixture.org_id, day, None)
 
     assert [row.appointment.id for row in rows] == [booked.appointment.id]
 
 
 async def test_a_naive_time_books_the_slot_of_the_office_clock(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -490,16 +494,19 @@ async def test_a_naive_time_books_the_slot_of_the_office_clock(
     day = _some_day()
 
     booked = await service.book(
-        fixture.user_id, fixture.house_id, datetime.combine(day, time(10)), None
+        fixture.user_id,
+        fixture.house_id,
+        datetime.combine(day, time(10)),
+        None,
     )
 
     assert booked.appointment.starts_at == datetime.combine(day, time(7), UTC)
 
 
 async def test_the_office_day_is_counted_on_the_office_clock(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
-    # 00:30 по Москве - еще вчерашний день по UTC
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     day = _some_day()
@@ -511,7 +518,7 @@ async def test_the_office_day_is_counted_on_the_office_clock(
                 time_from=time(0, 30),
                 time_to=time(1, 30),
                 slot_minutes=60,
-            )
+            ),
         ],
     )
     [slot] = await service.slots(fixture.house_id, day)

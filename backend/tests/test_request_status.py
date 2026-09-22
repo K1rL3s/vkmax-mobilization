@@ -11,11 +11,9 @@ ALLOWED = (
     (Status.IN_PROGRESS, Status.ON_REVIEW, Role.EXECUTOR, True),
     (Status.ON_REVIEW, Status.DONE, Role.RESIDENT, True),
     (Status.ON_REVIEW, Status.DONE, Role.SYSTEM, True),
-    # у заявки по звонку нет жителя, который нажмет «принято»
     (Status.ON_REVIEW, Status.DONE, Role.STAFF, False),
 )
 
-# назад, на месте и через статус
 OFF_CHAIN = (
     (Status.ACCEPTED, Status.NEW),
     (Status.DONE, Status.DONE),
@@ -31,7 +29,10 @@ WRONG_ROLE = (
 
 @pytest.mark.parametrize(("current", "target", "by_role", "has_author"), ALLOWED)
 def test_an_allowed_step_passes(
-    current: Status, target: Status, by_role: Role, has_author: bool
+    current: Status,
+    target: Status,
+    by_role: Role,
+    has_author: bool,
 ) -> None:
     check_transition(current, target, by_role, has_author=has_author)
 
@@ -44,7 +45,10 @@ def test_a_step_off_the_chain_raises(current: Status, target: Status) -> None:
 
 @pytest.mark.parametrize(("current", "target", "by_role", "has_author"), WRONG_ROLE)
 def test_a_role_that_does_not_set_the_status_raises(
-    current: Status, target: Status, by_role: Role, has_author: bool
+    current: Status,
+    target: Status,
+    by_role: Role,
+    has_author: bool,
 ) -> None:
     with pytest.raises(InvalidState):
         check_transition(current, target, by_role, has_author=has_author)

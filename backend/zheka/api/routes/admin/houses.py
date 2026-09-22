@@ -59,7 +59,8 @@ async def get_admin_house_card(
 
 
 @router.post(
-    "/admin/houses/{house_id}/binding-code", summary="Перевыпустить код привязки чата"
+    "/admin/houses/{house_id}/binding-code",
+    summary="Перевыпустить код привязки чата",
 )
 async def rotate_house_binding_code(
     house_id: HouseId,
@@ -85,7 +86,11 @@ async def list_house_residents(
     offset: Offset = 0,
 ) -> Page[HouseResidentItem]:
     residents, total = await houses_service.house_residents(
-        current_org.org_id, house_id, q, limit, offset
+        current_org.org_id,
+        house_id,
+        q,
+        limit,
+        offset,
     )
     return Page(items=[HouseResidentItem.of(view) for view in residents], total=total)
 
@@ -98,7 +103,10 @@ async def block_resident(
     body: BlockResidentRequest,
 ) -> HouseResidentItem:
     view = await moderation_service.block(
-        current_org.org_id, resident_id, body.reason, current_org.user_id
+        current_org.org_id,
+        resident_id,
+        body.reason,
+        current_org.user_id,
     )
     return HouseResidentItem.of(view)
 
@@ -110,7 +118,9 @@ async def unblock_resident(
     moderation_service: FromDishka[ModerationService],
 ) -> HouseResidentItem:
     view = await moderation_service.unblock(
-        current_org.org_id, resident_id, current_org.user_id
+        current_org.org_id,
+        resident_id,
+        current_org.user_id,
     )
     return HouseResidentItem.of(view)
 
@@ -126,13 +136,17 @@ async def revoke_flat_verification(
     body: RevokeVerificationRequest,
 ) -> HouseResidentItem:
     view = await moderation_service.revoke_verification(
-        current_org.org_id, resident_id, body.reason, current_org.user_id
+        current_org.org_id,
+        resident_id,
+        body.reason,
+        current_org.user_id,
     )
     return HouseResidentItem.of(view)
 
 
 @router.post(
-    "/admin/residents/{resident_id}/chairman", summary="Назначить председателя"
+    "/admin/residents/{resident_id}/chairman",
+    summary="Назначить председателя",
 )
 async def set_chairman(
     resident_id: ResidentId,
@@ -141,7 +155,9 @@ async def set_chairman(
     body: SetChairmanRequest,
 ) -> HouseResidentItem:
     view = await moderation_service.set_chairman(
-        current_org.org_id, resident_id, body.is_chairman
+        current_org.org_id,
+        resident_id,
+        body.is_chairman,
     )
     return HouseResidentItem.of(view)
 
@@ -156,7 +172,11 @@ async def list_verification_requests(
     offset: Offset = 0,
 ) -> Page[VerificationRequestItem]:
     views, total = await flats_service.verification_requests(
-        current_org.org_id, status, house_id, limit, offset
+        current_org.org_id,
+        status,
+        house_id,
+        limit,
+        offset,
     )
     return Page(items=[VerificationRequestItem.of(view) for view in views], total=total)
 
@@ -171,7 +191,9 @@ async def approve_verification_request(
     flats_service: FromDishka[FlatsService],
 ) -> VerificationRequestItem:
     view = await flats_service.approve_verification(
-        current_org.org_id, verification_id, current_org.user_id
+        current_org.org_id,
+        verification_id,
+        current_org.user_id,
     )
     return VerificationRequestItem.of(view)
 
@@ -187,6 +209,9 @@ async def reject_verification_request(
     body: RejectVerificationRequest,
 ) -> VerificationRequestItem:
     view = await flats_service.reject_verification(
-        current_org.org_id, verification_id, current_org.user_id, body.reason
+        current_org.org_id,
+        verification_id,
+        current_org.user_id,
+        body.reason,
     )
     return VerificationRequestItem.of(view)

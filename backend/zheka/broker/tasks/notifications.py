@@ -27,7 +27,8 @@ async def _fan_out(
     mandatory: bool,
 ) -> int:
     recipients = await notifications_repo.recipients(
-        user_ids, NotificationCategory(category)
+        user_ids,
+        NotificationCategory(category),
     )
     logger.info("Рассылка %s: получателей %s", category, len(recipients))
 
@@ -54,7 +55,12 @@ async def send_to_user(
     notifications_repo: FromDishka[NotificationsRepo],
 ) -> int:
     return await _fan_out(
-        sender, notifications_repo, [user_id], text, category, mandatory
+        sender,
+        notifications_repo,
+        [user_id],
+        text,
+        category,
+        mandatory,
     )
 
 
@@ -69,7 +75,12 @@ async def broadcast_to_users(
     notifications_repo: FromDishka[NotificationsRepo],
 ) -> int:
     return await _fan_out(
-        sender, notifications_repo, user_ids, text, category, mandatory
+        sender,
+        notifications_repo,
+        user_ids,
+        text,
+        category,
+        mandatory,
     )
 
 

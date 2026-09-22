@@ -69,7 +69,8 @@ async def list_flat_charges(
     _require_can_see_charges(residency)
     charges, total = await charges_service.list_for_flat(flat_id, limit, offset)
     return Page(
-        items=[ChargeListItem.model_validate(charge) for charge in charges], total=total
+        items=[ChargeListItem.model_validate(charge) for charge in charges],
+        total=total,
     )
 
 
@@ -101,7 +102,10 @@ async def dispute_charge(
     body: DisputeChargeRequest,
 ) -> DisputeChargeResponse:
     request_id = await charges_service.dispute(
-        charge_id, current_account.user_id, body.comment, body.service
+        charge_id,
+        current_account.user_id,
+        body.comment,
+        body.service,
     )
     return DisputeChargeResponse(request_id=request_id)
 

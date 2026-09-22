@@ -172,7 +172,9 @@ def _start_of(day: date) -> datetime:
 
 
 def _range(
-    date_from: date | None, date_to: date | None, now: datetime
+    date_from: date | None,
+    date_to: date | None,
+    now: datetime,
 ) -> tuple[date, date]:
     period_to = now.date() if date_to is None else date_to
     period_from = period_to - DEFAULT_PERIOD if date_from is None else date_from
@@ -228,7 +230,10 @@ class AnalyticsService:
         this_week = local.date() - timedelta(days=local.weekday())
         weeks = [this_week - timedelta(weeks=back) for back in range(WEEKS - 1, -1, -1)]
         by_week = await self._analytics.by_week(
-            org_id, house_id, org.day_start(weeks[0]), org.timezone
+            org_id,
+            house_id,
+            org.day_start(weeks[0]),
+            org.timezone,
         )
         dashboard_tiles = [
             Tile(
@@ -304,7 +309,7 @@ class AnalyticsService:
                     submitted=count.submitted,
                     not_submitted=count.flats_total - count.submitted,
                     percent=count.percent,
-                )
+                ),
             )
         window_from, window_to = _window(period, settings)
         return Season(
@@ -351,7 +356,11 @@ class AnalyticsService:
         return sent
 
     async def executors(
-        self, org_id: OrgId, date_from: date | None, date_to: date | None, now: datetime
+        self,
+        org_id: OrgId,
+        date_from: date | None,
+        date_to: date | None,
+        now: datetime,
     ) -> list[ExecutorRow]:
         org = await self._org(org_id)
         period_from, period_to = _range(date_from, date_to, org.local(now))
@@ -362,7 +371,11 @@ class AnalyticsService:
         )
 
     async def channels(
-        self, org_id: OrgId, date_from: date | None, date_to: date | None, now: datetime
+        self,
+        org_id: OrgId,
+        date_from: date | None,
+        date_to: date | None,
+        now: datetime,
     ) -> Channels:
         org = await self._org(org_id)
         period_from, period_to = _range(date_from, date_to, org.local(now))
@@ -406,7 +419,7 @@ class AnalyticsService:
                     platform_median=rank.median if comparable else None,
                     rank=rank.rank if comparable else None,
                     total=rank.total if comparable else None,
-                )
+                ),
             )
         cuts = await self._analytics.cuts(
             CUT_METRIC.metric,
@@ -430,7 +443,9 @@ class AnalyticsService:
             ],
             unconnected_houses=[
                 UnconnectedHouse(
-                    house_id=house.id, address=house.address, waiting=waiting
+                    house_id=house.id,
+                    address=house.address,
+                    waiting=waiting,
                 )
                 for house, waiting in unconnected
             ],
@@ -449,9 +464,10 @@ class AnalyticsService:
 
 
 def _open_periods(
-    houses: Sequence[House], settings: OrgSettings | None, now: datetime
+    houses: Sequence[House],
+    settings: OrgSettings | None,
+    now: datetime,
 ) -> dict[HouseId, date]:
-    # окно показаний каждый дом открывает по своим часам
     periods = {}
     for house in houses:
         today = house.local(now).date()

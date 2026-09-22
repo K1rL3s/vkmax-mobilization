@@ -46,7 +46,8 @@ class ChatsRepo(BaseAlchemyRepo):
         }
         insert = pg_insert(chats_table).values(chat_id=chat_id, **fresh)
         stmt = insert.on_conflict_do_update(
-            index_elements=[chats_table.c.chat_id], set_=fresh
+            index_elements=[chats_table.c.chat_id],
+            set_=fresh,
         )
         await self._session.execute(stmt)
 

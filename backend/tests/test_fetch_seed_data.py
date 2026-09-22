@@ -7,7 +7,6 @@ from tests.conftest import BACKEND_ROOT
 
 
 def _script() -> ModuleType:
-    # скрипт лежит вне пакета и запускается руками, поэтому грузится по пути
     path = BACKEND_ROOT / "scripts" / "fetch_seed_data.py"
     spec = importlib.util.spec_from_file_location("fetch_seed_data", path)
     assert spec is not None
@@ -49,7 +48,9 @@ def test_a_card_names_its_manager_in_both_layouts() -> None:
     ],
 )
 def test_a_registry_phone_is_dialable_or_empty(
-    raw: str, area_code: str | None, expected: str
+    raw: str,
+    area_code: str | None,
+    expected: str,
 ) -> None:
     assert SCRIPT.phone(raw, area_code) == expected
 

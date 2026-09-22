@@ -72,7 +72,10 @@ def expand_slots(window: ReceptionWindow, day: date, zone: tzinfo) -> list[datet
 
 
 def slot_capacities(
-    windows: Sequence[ReceptionWindow], date_from: date, date_to: date, zone: tzinfo
+    windows: Sequence[ReceptionWindow],
+    date_from: date,
+    date_to: date,
+    zone: tzinfo,
 ) -> dict[datetime, int]:
     capacities: dict[datetime, int] = {}
     day = date_from
@@ -116,7 +119,9 @@ class ReceptionService:
         self._events = events_service
 
     async def slots(
-        self, house_id: HouseId, on_date: date | None
+        self,
+        house_id: HouseId,
+        on_date: date | None,
     ) -> list[ReceptionSlot]:
         house = await self._houses.get(house_id)
         if house is None:
@@ -130,7 +135,9 @@ class ReceptionService:
             date_to += timedelta(days=RECEPTION_HORIZON_DAYS)
         windows = await self._reception.list_windows(org.id)
         taken = await self._reception.taken_counts(
-            org.id, org.day_start(date_from), org.day_start(date_to + timedelta(days=1))
+            org.id,
+            org.day_start(date_from),
+            org.day_start(date_to + timedelta(days=1)),
         )
         capacities = slot_capacities(windows, date_from, date_to, org.zone)
 
@@ -176,7 +183,11 @@ class ReceptionService:
                 raise EntityNotFound(REQUEST_NOT_FOUND)
 
         appointment = await self._reception.create_appointment(
-            org_id, house_id, user_id, moment, request_id
+            org_id,
+            house_id,
+            user_id,
+            moment,
+            request_id,
         )
         await self._events.record(
             EventType.APPOINTMENT_BOOKED,
@@ -202,7 +213,10 @@ class ReceptionService:
         return await self._decorate(appointments, with_people=False)
 
     async def today(
-        self, org_id: OrgId, on_date: date | None, house_id: HouseId | None
+        self,
+        org_id: OrgId,
+        on_date: date | None,
+        house_id: HouseId | None,
     ) -> list[AppointmentData]:
         if (
             house_id is not None
@@ -212,7 +226,10 @@ class ReceptionService:
         org = await self._org(org_id)
         day = on_date or org.local(datetime.now(UTC)).date()
         appointments = await self._reception.list_appointments(
-            org_id, org.day_start(day), org.day_start(day + timedelta(days=1)), house_id
+            org_id,
+            org.day_start(day),
+            org.day_start(day + timedelta(days=1)),
+            house_id,
         )
         return await self._decorate(appointments, with_people=True)
 
@@ -220,7 +237,9 @@ class ReceptionService:
         return await self._reception.list_windows(org_id)
 
     async def set_windows(
-        self, org_id: OrgId, drafts: Sequence[ReceptionWindowDraft]
+        self,
+        org_id: OrgId,
+        drafts: Sequence[ReceptionWindowDraft],
     ) -> Sequence[ReceptionWindow]:
         for draft in drafts:
             if not 0 <= draft.weekday <= LAST_WEEKDAY:
@@ -247,7 +266,10 @@ class ReceptionService:
         )
 
     async def _decorate(
-        self, appointments: Sequence[Appointment], *, with_people: bool
+        self,
+        appointments: Sequence[Appointment],
+        *,
+        with_people: bool,
     ) -> list[AppointmentData]:
         if not appointments:
             return []
@@ -258,7 +280,7 @@ class ReceptionService:
         orgs = {
             org.id: org
             for org in await self._orgs.list_by_ids(
-                {row.org_id for row in appointments}
+                {row.org_id for row in appointments},
             )
         }
         names, flat_numbers = (
@@ -278,12 +300,13 @@ class ReceptionService:
                     org_phone=org.phone,
                     user_name=names.get(user_id),
                     flat_number=flat_numbers.get((user_id, appointment.house_id)),
-                )
+                ),
             )
         return rows
 
     async def _people(
-        self, appointments: Sequence[Appointment]
+        self,
+        appointments: Sequence[Appointment],
     ) -> tuple[dict[UserId, str], dict[tuple[UserId, HouseId], str | None]]:
         user_ids = {row.user_id for row in appointments}
         house_ids = {row.house_id for row in appointments}
@@ -296,7 +319,7 @@ class ReceptionService:
                     resident.flat_id
                     for resident in residents
                     if resident.flat_id is not None
-                }
+                },
             )
         }
         flat_numbers = {

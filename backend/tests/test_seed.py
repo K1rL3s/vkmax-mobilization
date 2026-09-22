@@ -71,12 +71,11 @@ def _inn_is_valid(inn: str) -> bool:
 
 @pytest_asyncio.fixture(scope="module")
 async def seeded(engine: AsyncEngine) -> AsyncGenerator[AsyncConnection]:
-    # сид один на модуль: он долгий, а тесты читают его каждый в своей
-    # точке сохранения, которую потом откатывают
     async with engine.connect() as conn:
         transaction = await conn.begin()
         async with AsyncSession(
-            bind=conn, join_transaction_mode="create_savepoint"
+            bind=conn,
+            join_transaction_mode="create_savepoint",
         ) as session:
             assert await seed(session, _demo(session), FILES, TODAY)
             await session.commit()
@@ -87,7 +86,8 @@ async def seeded(engine: AsyncEngine) -> AsyncGenerator[AsyncConnection]:
 @pytest_asyncio.fixture
 async def db(seeded: AsyncConnection) -> AsyncGenerator[AsyncSession]:
     async with AsyncSession(
-        bind=seeded, join_transaction_mode="create_savepoint"
+        bind=seeded,
+        join_transaction_mode="create_savepoint",
     ) as session:
         yield session
 
@@ -166,7 +166,6 @@ async def test_charge_lines_add_up_and_the_latest_breaks_down(db: AsyncSession) 
     for charge in charges:
         lines = parse_lines(charge.lines)
         assert sum(line.amount for line in lines) == charge.total
-        # показание ниже прошлого не выставляется в минус
         assert all(line.amount >= 0 for line in lines)
 
     latest = max(charges, key=lambda charge: charge.period)
@@ -180,7 +179,6 @@ async def test_charge_lines_add_up_and_the_latest_breaks_down(db: AsyncSession) 
     breakdown = await charges_service(db).breakdown(latest.id, UserId(owner))
 
     assert breakdown.previous_charge is not None
-    # повышение тарифа приходится на последнюю квитанцию, ее открывают первой
     assert any(line.delta.tariff_effect for line in breakdown.lines)
 
 
@@ -233,7 +231,7 @@ async def test_activation_twice_is_one_flat_and_the_month_is_open(
     assert len((await db.execute(charged)).scalars().all()) == 6
     periods = await _readings(db).periods(flat_id)
     assert [(option.period, option.is_open) for option in periods.options] == [
-        (this_month, True)
+        (this_month, True),
     ]
     assert this_month not in periods.submitted
 
@@ -260,8 +258,6 @@ async def test_activation_without_a_seed_is_not_found(session: AsyncSession) -> 
 async def test_a_demo_organization_without_a_house_is_not_found(
     db: AsyncSession,
 ) -> None:
-    # запись второй демо-организации ждала бы блокировки ИНН в транзакции
-    # сида, поэтому дом отбирается у засеянной
     stmt = (
         update(houses_table)
         .where(houses_table.c.org_id == await _demo_org(db))
@@ -274,9 +270,8 @@ async def test_a_demo_organization_without_a_house_is_not_found(
 
 
 async def test_no_seeded_request_waits_on_review(db: AsyncSession) -> None:
-    # заявку на проверке закрыл бы планировщик и написал бы автору
     stmt = select(func.count()).where(
-        requests_table.c.status == RequestStatus.ON_REVIEW
+        requests_table.c.status == RequestStatus.ON_REVIEW,
     )
 
     assert (await db.execute(stmt)).scalar_one() == 0
@@ -303,12 +298,11 @@ async def test_a_reviewer_account_never_equals_a_seeded_one(db: AsyncSession) ->
     flat = access.residency.flat
     assert flat is not None
     stmt = select(flats_table.c.number, flats_table.c.account_no).where(
-        flats_table.c.house_id == flat.house_id, flats_table.c.id != flat.id
+        flats_table.c.house_id == flat.house_id,
+        flats_table.c.id != flat.id,
     )
     seeded = (await db.execute(stmt)).all()
 
-    # засеянный счет кончается номером квартиры из цифр, а счет проверяющего
-    # не кончается цифрами никогда, какой бы ни был его id
     assert all(number.isdigit() for number, _account in seeded)
     assert flat.account_no is not None
     assert not flat.account_no.rsplit("-", 1)[1].isdigit()
@@ -317,7 +311,8 @@ async def test_a_reviewer_account_never_equals_a_seeded_one(db: AsyncSession) ->
 
 async def test_a_result_photo_shows_the_work_of_its_request(db: AsyncSession) -> None:
     stmt = select(request_photos_table.c.path, requests_table.c.category).join(
-        requests_table, requests_table.c.id == request_photos_table.c.request_id
+        requests_table,
+        requests_table.c.id == request_photos_table.c.request_id,
     )
     rows = (await db.execute(stmt)).all()
 
@@ -326,8 +321,6 @@ async def test_a_result_photo_shows_the_work_of_its_request(db: AsyncSession) ->
 
 
 async def test_a_real_manager_is_replaced_only_in_moscow(db: AsyncSession) -> None:
-    # по карточке у дома есть настоящая УК: придуманная встает на ее место
-    # только там, где домов без УК на улице не хватило
     with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
         managed = {
             (row["city"], row["building"])
@@ -348,8 +341,6 @@ async def test_a_real_manager_is_replaced_only_in_moscow(db: AsyncSession) -> No
 async def test_a_flat_in_the_last_demo_organization_is_charged(
     db: AsyncSession,
 ) -> None:
-    # тарифы есть у каждой демо-организации, не только у первой: иначе
-    # квитанции квартиры проверяющего пусты
     org, residency = await _demo(db).settle(await _positive_user(db), len(PROFILES))
 
     assert org.inn == PROFILES[-1].inn

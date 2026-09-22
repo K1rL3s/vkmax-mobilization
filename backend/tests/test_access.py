@@ -40,7 +40,8 @@ MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 def _make_service(
-    session: AsyncSession, publisher: TaskPublisher | None = None
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
 ) -> AccessService:
     return AccessService(
         AccessRepo(session),
@@ -102,13 +103,17 @@ async def _add_resident(
             verified_at=datetime.now(UTC) if verified else None,
             status=status,
             block_reason=block_reason,
-        )
+        ),
     )
     await session.flush()
 
 
 async def _with_resident(
-    session: AsyncSession, house_id: HouseId, number: str, *, verified: bool = True
+    session: AsyncSession,
+    house_id: HouseId,
+    number: str,
+    *,
+    verified: bool = True,
 ) -> tuple[FlatId, UserId]:
     flat_id = await _add_flat(session, house_id, number)
     user_id = await _add_user(session, f"Житель {number}")
@@ -117,7 +122,8 @@ async def _with_resident(
 
 
 async def test_a_house_of_another_org_is_not_found(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     other = await make_org_house_flat_user()
@@ -125,7 +131,9 @@ async def test_a_house_of_another_org_is_not_found(
 
     with pytest.raises(EntityNotFound, match="Дом"):
         await service.create(
-            fixture.org_id, fixture.user_id, _draft(other.house_id, [other.flat_id])
+            fixture.org_id,
+            fixture.user_id,
+            _draft(other.house_id, [other.flat_id]),
         )
 
     with pytest.raises(EntityNotFound, match="Дом"):
@@ -133,23 +141,27 @@ async def test_a_house_of_another_org_is_not_found(
 
     with pytest.raises(EntityNotFound, match="Квартира"):
         await service.create(
-            fixture.org_id, fixture.user_id, _draft(fixture.house_id, [other.flat_id])
+            fixture.org_id,
+            fixture.user_id,
+            _draft(fixture.house_id, [other.flat_id]),
         )
 
-    # чужой дом не оставляет после себя ни запроса, ни ячеек
     assert await service.list_for_org(fixture.org_id, None) == []
     assert await service.list_for_org(other.org_id, None) == []
 
 
 async def test_a_request_of_another_org_is_not_found(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     other = await make_org_house_flat_user()
     service = _make_service(session)
     flat_id, _ = await _with_resident(session, fixture.house_id, "12")
     grid = await service.create(
-        fixture.org_id, fixture.user_id, _draft(fixture.house_id, [flat_id])
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id]),
     )
 
     with pytest.raises(EntityNotFound, match="Запрос доступа"):
@@ -160,16 +172,19 @@ async def test_a_request_of_another_org_is_not_found(
 
 
 async def test_a_flat_without_a_verified_resident_gets_no_target(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     with_resident, _ = await _with_resident(session, fixture.house_id, "12")
     unverified, _ = await _with_resident(
-        session, fixture.house_id, "13", verified=False
+        session,
+        fixture.house_id,
+        "13",
+        verified=False,
     )
     empty = await _add_flat(session, fixture.house_id, "14")
-    # заблокированному жителю некому написать, и ответить он уже не сможет
     blocked = await _add_flat(session, fixture.house_id, "15")
     await _add_resident(
         session,
@@ -193,7 +208,6 @@ async def test_a_flat_without_a_verified_resident_gets_no_target(
     events = await _events(session, EventType.ACCESS_REQUEST_SENT)
 
     assert len(events) == 1
-    # в событии те квартиры, до которых дошли, а не те, что назвала УК
     assert events[0].payload["flats_count"] == 1
 
 
@@ -236,7 +250,8 @@ async def test_a_broken_draft_is_rejected(
 
 
 async def test_two_windows_at_the_same_moment_are_rejected(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -261,7 +276,8 @@ async def test_two_windows_at_the_same_moment_are_rejected(
 
 
 async def test_a_full_slot_rejects_the_next_pick(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -280,7 +296,6 @@ async def test_a_full_slot_rejects_the_next_pick(
     with pytest.raises(InvalidState, match="больше нет мест"):
         await service.pick(second_user, request_id, slot_id)
 
-    # второе окно свободно, и туда житель проходит
     free = grid.request.slots[1].slot.id
     picked = await service.pick(second_user, request_id, free)
 
@@ -288,15 +303,16 @@ async def test_a_full_slot_rejects_the_next_pick(
 
 
 async def test_a_repeated_pick_is_a_no_op_and_a_move_keeps_the_first_answer(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
-    # окно на одну квартиру: если повторный выбор пойдет мимо проверки
-    # «то же самое окно», житель упрется в собственную занятую ячейку
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     flat_id, user_id = await _with_resident(session, fixture.house_id, "12")
     grid = await service.create(
-        fixture.org_id, fixture.user_id, _draft(fixture.house_id, [flat_id], capacity=1)
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id], capacity=1),
     )
     request_id = grid.request.request.id
     first_slot = grid.request.slots[0].slot.id
@@ -318,13 +334,13 @@ async def test_a_repeated_pick_is_a_no_op_and_a_move_keeps_the_first_answer(
     assert moved.my_slot_id == second_slot
     assert after.request.responded_count == 1
     assert [data.taken for data in after.request.slots] == [0, 1]
-    # ответ остается первым: смена решения не новый ответ
     assert first_answer is not None
     assert after.targets[0].target.responded_at == first_answer
 
 
 async def test_a_pick_of_a_stranger_or_of_another_request_is_not_found(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -333,7 +349,9 @@ async def test_a_pick_of_a_stranger_or_of_another_request_is_not_found(
     guest = await _add_user(session, "Гость")
     await _add_resident(session, guest, fixture.house_id, flat_id, verified=False)
     grid = await service.create(
-        fixture.org_id, fixture.user_id, _draft(fixture.house_id, [flat_id])
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id]),
     )
     request_id = grid.request.request.id
     slot_id = grid.request.slots[0].slot.id
@@ -343,21 +361,23 @@ async def test_a_pick_of_a_stranger_or_of_another_request_is_not_found(
             await service.pick(stranger, request_id, slot_id)
 
     other_grid = await service.create(
-        fixture.org_id, fixture.user_id, _draft(fixture.house_id, [outsider_flat])
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [outsider_flat]),
     )
     foreign_slot = other_grid.request.slots[0].slot.id
 
     with pytest.raises(EntityNotFound, match="Слот"):
         await service.pick(user_id, request_id, foreign_slot)
 
-    # в сетке первого запроса стоит только его собственная ячейка
     grid_again = await service.grid(fixture.org_id, request_id)
 
     assert [cell.target.flat_id for cell in grid_again.targets] == [flat_id]
 
 
 async def test_the_resident_list_carries_the_flat_and_the_choice(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
@@ -381,22 +401,22 @@ async def test_the_resident_list_carries_the_flat_and_the_choice(
     assert rows[0].targets_count == 2
     assert rows[0].house.address.endswith("Тестовая, 1")
 
-    # соседу тот же запрос показывается без чужого выбора
     neighbour_rows = await service.list_for_resident(neighbour_flat)
 
     assert neighbour_rows[0].my_slot_id is None
 
 
 async def test_a_resident_blocked_after_the_request_is_refused_with_the_reason(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
-    # УК закрыла жителю дом уже после рассылки: чужой получает 404 и ничего
-    # не узнает, а этот - 403 с причиной, которую ему уже назвали
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     flat_id, user_id = await _with_resident(session, fixture.house_id, "12")
     grid = await service.create(
-        fixture.org_id, fixture.user_id, _draft(fixture.house_id, [flat_id])
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id]),
     )
     request_id = grid.request.request.id
 
@@ -415,10 +435,9 @@ async def test_a_resident_blocked_after_the_request_is_refused_with_the_reason(
 
 
 async def test_a_block_in_another_house_does_not_reach_this_request(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
-    # блокировка читается у той квартиры, по которой пришел запрос: житель,
-    # закрытый в другом доме, отвечает здесь как ни в чем не бывало
     fixture = await make_org_house_flat_user()
     elsewhere = await make_org_house_flat_user()
     service = _make_service(session)
@@ -433,7 +452,9 @@ async def test_a_block_in_another_house_does_not_reach_this_request(
         block_reason="долг",
     )
     grid = await service.create(
-        fixture.org_id, fixture.user_id, _draft(fixture.house_id, [flat_id])
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id]),
     )
     request_id = grid.request.request.id
 
@@ -443,9 +464,9 @@ async def test_a_block_in_another_house_does_not_reach_this_request(
 
 
 async def test_a_request_for_today_is_accepted(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
-    # «приедем сегодня в 16:00» - обычный случай, а не прошедший день
     fixture = await make_org_house_flat_user()
     service = _make_service(session)
     flat_id, _ = await _with_resident(session, fixture.house_id, "12")
@@ -468,18 +489,23 @@ async def test_create_queues_the_slots_window_for_the_residents(
     fixture = await make_org_house_flat_user()
     flat_id, _ = await _with_resident(session, fixture.house_id, "12")
     grid = await _make_service(session, publisher).create(
-        fixture.org_id, fixture.user_id, _draft(fixture.house_id, [flat_id])
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id]),
     )
 
     await publisher.flush()
 
     assert broker.enqueued(TaskName.BROADCAST_ACCESS_REQUEST) == [
-        {"access_request_id": grid.request.request.id}
+        {"access_request_id": grid.request.request.id},
     ]
 
 
 def _draft_at(
-    house_id: HouseId, flat_id: FlatId, day: date, at: datetime
+    house_id: HouseId,
+    flat_id: FlatId,
+    day: date,
+    at: datetime,
 ) -> AccessRequestDraft:
     return AccessRequestDraft(
         house_id=house_id,
@@ -491,9 +517,9 @@ def _draft_at(
 
 
 async def test_a_naive_slot_is_house_time_and_dated_by_it(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
-    # 00:30 по Москве - еще вчерашний день по UTC, но окно в день доступа
     fixture = await make_org_house_flat_user()
     flat_id, _ = await _with_resident(session, fixture.house_id, "12")
     day = datetime.now(MOSCOW).date() + timedelta(days=2)
@@ -513,9 +539,10 @@ async def test_the_access_day_is_past_by_the_house_clock(
     make_org_house_flat_user: Fixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # 22:00 UTC 15-го в Москве уже 16-е
     freeze_now(
-        monkeypatch, "zheka.core.services.access", datetime(2026, 9, 15, 22, tzinfo=UTC)
+        monkeypatch,
+        "zheka.core.services.access",
+        datetime(2026, 9, 15, 22, tzinfo=UTC),
     )
     fixture = await make_org_house_flat_user()
     day = date(2026, 9, 15)

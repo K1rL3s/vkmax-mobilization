@@ -34,15 +34,10 @@ REFORMA = "https://www.reformagkh.ru"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 OVERPASS = "https://overpass-api.de/api/interpreter"
 USER_AGENT = "zheka-seed-fetch/1.0 (MAX hackathon demo seed, one-off run)"
-# Nominatim просит не чаще одного запроса в секунду, карточкам Реформы
-# хватает той же вежливости
 REQUEST_INTERVAL = 1.1
 REGISTRY_EXPORT = 1
-# около километра вокруг найденных домов улицы, в градусах
 BBOX_PAD = 0.01
 HOUSES_PER_STREET = 55
-# типографские тире из источников (U+2010-U+2015, U+2212): в репозитории
-# только ASCII-дефис
 DASHES = re.compile("[" + chr(0x2010) + "-" + chr(0x2015) + chr(0x2212) + "]")
 
 log = logging.getLogger("fetch_seed_data")
@@ -111,8 +106,6 @@ HOUSE_FIELDS = (
     "timezone",
 )
 ORG_FIELDS = ("inn", "name", "phone", "address", "timezone")
-# городской номер из семи цифр без кода не дозвонится с мобильного, а код у
-# региона один. В Москве их два, но московские номера в реестре все с кодом
 FULL_DIGITS = 11
 LOCAL_DIGITS = 7
 AREA_CODES = {"город Санкт-Петербург": "812", "Республика Татарстан": "843"}
@@ -125,7 +118,6 @@ def _get(url: str) -> bytes:
     wait = _last_request + REQUEST_INTERVAL - time.monotonic()
     if wait > 0:
         time.sleep(wait)
-    # без Accept openresty перед Реформой отвечает нестандартным 477
     headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
     request = urllib.request.Request(url, headers=headers)  # noqa: S310
     try:
@@ -156,7 +148,6 @@ def _clean(value: str) -> str:
 
 
 def _scaled(value: str, scale: int) -> int:
-    # "32,63" -> 326300 при scale=10000: целое без float, как в AGENTS.md
     return int(Decimal(value.replace(",", ".")) * scale)
 
 
@@ -167,7 +158,8 @@ def _building_key(building: str) -> tuple[int, str]:
 
 def _card(source_id: str) -> tuple[int | None, str | None]:
     page = _cached(
-        f"card-{source_id}.html", f"{REFORMA}/myhouse/profile/view/{source_id}"
+        f"card-{source_id}.html",
+        f"{REFORMA}/myhouse/profile/view/{source_id}",
     ).decode("utf-8")
     entrances, manager = parse_card(page)
     if manager is None and "Домом управляет" in page:
@@ -178,7 +170,6 @@ def _card(source_id: str) -> tuple[int | None, str | None]:
 def parse_card(page: str) -> tuple[int | None, str | None]:
     text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
     entrances = re.search(r"Количество подъездов, ед\. (\d+)", text)
-    # у карточки без договора управления за именем сразу идут услуги
     manager = re.search(
         r"Домом управляет (.+?) (?:Дата начала управления|Вид коммунальной услуги)",
         text,
@@ -206,12 +197,10 @@ def _geocode(street: Street, building: str) -> tuple[str, str]:
             "limit": 1,
             "countrycodes": "ru",
             "addressdetails": 1,
-        }
+        },
     )
     safe = re.sub(r"\W+", "_", query)
     found = json.loads(_cached(f"geo-{safe}.json", f"{NOMINATIM}?{params}"))
-    # только точное попадание в дом: соседний номер или улица целиком дали бы
-    # координаты другого здания
     if not found or (
         house_number(found[0].get("address", {}).get("house_number", "")) != number
     ):
@@ -220,7 +209,6 @@ def _geocode(street: Street, building: str) -> tuple[str, str]:
 
 
 def _pick(street: Street) -> list[dict[str, str]]:
-    # части дома «(пар. 1-2)» дублируют адрес, а без house_id нет карточки
     picked = [
         row
         for row in _export_rows(street.export_id)
@@ -272,7 +260,6 @@ def main() -> None:
             floors = int(row["number_floors_max"])
             living_flats = int(row["living_rooms_amount"])
             if not entrances:
-                # карточка без подъездов: оценка по квартирам, по четыре на этаж
                 entrances = max(1, ceil(living_flats / (floors * 4)))
                 log.info("нет подъездов в карточке %s, оценка %s", building, entrances)
             org_inn = ""
@@ -280,16 +267,19 @@ def main() -> None:
                 matches = {
                     candidate["inn"]: candidate
                     for candidate in registry.get(
-                        (street.subject_rf, manager.lower()), []
+                        (street.subject_rf, manager.lower()),
+                        [],
                     )
                 }
-                # одноименные УК в регионе - не повод выбирать наугад
                 if len(matches) == 1:
                     ((org_inn, org),) = matches.items()
                     orgs[org_inn] = _org(org, street.timezone)
                 else:
                     log.info(
-                        "УК %r у %s: совпадений %s", manager, building, len(matches)
+                        "УК %r у %s: совпадений %s",
+                        manager,
+                        building,
+                        len(matches),
                     )
             lat, lon = _geocode(street, building)
             street_houses.append(
@@ -310,7 +300,7 @@ def main() -> None:
                     "org_inn": org_inn,
                     "source_id": row["house_id"],
                     "timezone": street.timezone,
-                }
+                },
             )
         _fill_from_osm(street, street_houses)
         houses.extend(street_houses)
@@ -320,7 +310,9 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(houses)
     with (DATA_DIR / "organizations.csv").open(
-        "w", encoding="utf-8", newline=""
+        "w",
+        encoding="utf-8",
+        newline="",
     ) as file:
         writer = csv.DictWriter(file, ORG_FIELDS, lineterminator="\n")
         writer.writeheader()
@@ -335,8 +327,6 @@ def main() -> None:
 
 
 def phone(value: str, area_code: str | None) -> str:
-    # кнопка «Позвонить» открывает tel: с этим значением, поэтому здесь
-    # только номер, который можно набрать, или пусто
     first = re.split(r"[,;]", value)[0]
     digits = re.sub(r"\D", "", first)
     if len(digits) == FULL_DIGITS and digits[0] in "78":
@@ -349,9 +339,6 @@ def phone(value: str, area_code: str | None) -> str:
 
 
 def _fill_from_osm(street: Street, houses: list[dict[str, str | int]]) -> None:
-    # Nominatim по свободному запросу ранжирует выше дома с тем же номером
-    # корпуса на другом конце улицы и не находит часть домов, которые в OSM
-    # есть. Overpass отдает все адреса улицы разом, их сверяем сами
     missing = [house for house in houses if not house["lat"]]
     found = [
         (float(house["lat"]), float(house["lon"])) for house in houses if house["lat"]
@@ -362,7 +349,6 @@ def _fill_from_osm(street: Street, houses: list[dict[str, str | int]]) -> None:
     west = min(lon for _, lon in found) - BBOX_PAD
     north = max(lat for lat, _ in found) + BBOX_PAD
     east = max(lon for _, lon in found) + BBOX_PAD
-    # запрос по границе города Overpass не успевает выполнить за таймаут
     query = (
         "[out:json][timeout:60];"
         f'nwr["addr:street"="{street.street}"]["addr:housenumber"]'
@@ -374,9 +360,9 @@ def _fill_from_osm(street: Street, houses: list[dict[str, str | int]]) -> None:
         f"{OVERPASS}?{urllib.parse.urlencode({'data': query})}",
     )
     addresses = {}
-    # здание перекрывает точку-адрес с тем же номером
     for element in sorted(
-        json.loads(raw)["elements"], key=lambda element: "building" in element["tags"]
+        json.loads(raw)["elements"],
+        key=lambda element: "building" in element["tags"],
     ):
         center = element.get("center", element)
         addresses[house_number(element["tags"]["addr:housenumber"])] = (
@@ -385,16 +371,14 @@ def _fill_from_osm(street: Street, houses: list[dict[str, str | int]]) -> None:
         )
     for house in missing:
         house["lat"], house["lon"] = osm_match(
-            house_number(str(house["building"])), addresses
+            house_number(str(house["building"])),
+            addresses,
         )
         if not house["lat"]:
             log.info("нет координат у %s, %s", street.street, house["building"])
 
 
 def osm_match(number: str, addresses: dict[str, tuple[str, str]]) -> tuple[str, str]:
-    # Реформа пишет корпус казанских домов через дробь (15/1), OSM - «15 к1».
-    # Корпуса или строения, которого в OSM нет, ближайшая известная точка -
-    # голый номер того же комплекса: от десятков метров до сотни
     for candidate in (number, number.replace("/", "к"), re.sub(r"\D.*", "", number)):
         if candidate in addresses:
             return addresses[candidate]

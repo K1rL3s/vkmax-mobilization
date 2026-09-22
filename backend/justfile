@@ -26,8 +26,16 @@ lock:
 upgrade:
     uv lock --upgrade
 
+# COM812 ставит запятую в перенесенную конструкцию,
+# и форматтер раскладывает ее по элементу на строку.
+# Вложенная раскладывается только на втором проходе.
+# -q глушит предупреждение форматтера о конфликте с COM812
 format:
-    uv run ruff format .
+    uv run ruff format -q .
+    uv run ruff check --select COM812 --fix -q .
+    uv run ruff format -q .
+    uv run ruff check --select COM812 --fix -q .
+    uv run ruff format -q .
 
 ruff:
     uv run ruff check --fix .
@@ -57,7 +65,7 @@ lint:
 
 check:
     uv run ruff check --no-fix .
-    uv run ruff format --check .
+    uv run ruff format --check -q .
     just codespell
     just slots
     just bandit

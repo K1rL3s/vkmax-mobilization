@@ -72,7 +72,8 @@ class ChargeCard(ChargeListItem):
     flat_number: str
     lines: list[ChargeLine]
     flat_area: int | None = Field(
-        default=None, description="Площадь в сотых долях квадратного метра"
+        default=None,
+        description="Площадь в сотых долях квадратного метра",
     )
 
     @classmethod
@@ -166,5 +167,6 @@ class PayChargeResponse(BaseSchema):
     charge_id: ChargeId
     paid_at: datetime
     is_demo: bool = Field(
-        default=True, description="Демонстрация, платеж не проводится"
+        default=True,
+        description="Демонстрация, платеж не проводится",
     )

@@ -28,17 +28,22 @@ class DbProvider(Provider):
 
     @provide(scope=Scope.APP)
     async def sessionmaker(
-        self, engine: AsyncEngine
+        self,
+        engine: AsyncEngine,
     ) -> AsyncIterable[async_sessionmaker[AsyncSession]]:
         maker = async_sessionmaker(
-            bind=engine, autoflush=False, future=True, expire_on_commit=False
+            bind=engine,
+            autoflush=False,
+            future=True,
+            expire_on_commit=False,
         )
         yield maker
         await close_all_sessions()
 
     @provide(scope=Scope.REQUEST)
     async def session(
-        self, maker: async_sessionmaker[AsyncSession]
+        self,
+        maker: async_sessionmaker[AsyncSession],
     ) -> AsyncGenerator[AsyncSession, BaseException | None]:
         async with maker() as session:
             exception = yield session

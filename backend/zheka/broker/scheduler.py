@@ -36,7 +36,7 @@ async def main() -> None:
                 modules=["zheka.broker.tasks"],
                 update_interval=10,
                 configure_logging=False,
-            )
+            ),
         )
     except Exception:
         logger.exception("Ошибка при работе планировщика, конец работы")

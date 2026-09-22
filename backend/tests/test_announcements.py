@@ -39,7 +39,8 @@ TEXT = "Завтра отключат воду с 9 до 15"
 
 
 def _service(
-    session: AsyncSession, publisher: TaskPublisher | None = None
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
 ) -> AnnouncementsService:
     return AnnouncementsService(
         AnnouncementsRepo(session),
@@ -67,7 +68,7 @@ async def _bind_chat(
             status=status,
             bound_at=datetime.now(UTC),
             bot_is_admin=bot_is_admin,
-        )
+        ),
     )
     await session.flush()
     return chat_id
@@ -83,8 +84,11 @@ async def _add_resident(
     await session.flush()
     session.add(
         Resident(
-            user_id=user.id, house_id=house_id, role=ResidentRole.OWNER, status=status
-        )
+            user_id=user.id,
+            house_id=house_id,
+            role=ResidentRole.OWNER,
+            status=status,
+        ),
     )
     await session.flush()
     return user.id
@@ -124,7 +128,8 @@ async def test_house_of_another_org_is_not_found(
 
 
 @pytest.mark.parametrize(
-    ("text", "channels"), [("   ", [AnnouncementChannel.CHAT]), (TEXT, [])]
+    ("text", "channels"),
+    [("   ", [AnnouncementChannel.CHAT]), (TEXT, [])],
 )
 async def test_empty_text_or_channels_are_rejected(
     session: AsyncSession,
@@ -137,7 +142,11 @@ async def test_empty_text_or_channels_are_rejected(
 
     with pytest.raises(InvalidRequest):
         await _service(session, publisher).create(
-            data.org_id, data.user_id, [data.house_id], text, channels
+            data.org_id,
+            data.user_id,
+            [data.house_id],
+            text,
+            channels,
         )
 
 
@@ -146,7 +155,6 @@ async def test_empty_text_or_channels_are_rejected(
     [
         None,
         {"status": ChatStatus.REMOVED},
-        # бот без прав администратора в чат MAX не пишет
         {"bot_is_admin": False},
     ],
     ids=["no-chat", "removed", "not-admin"],
@@ -163,7 +171,11 @@ async def test_house_without_a_reachable_chat_is_reported_back(
         await _bind_chat(session, data.house_id, **chat)
 
     created = await _service(session, publisher).create(
-        data.org_id, data.user_id, [data.house_id], TEXT, [AnnouncementChannel.CHAT]
+        data.org_id,
+        data.user_id,
+        [data.house_id],
+        TEXT,
+        [AnnouncementChannel.CHAT],
     )
 
     await publisher.flush()
@@ -182,7 +194,11 @@ async def test_bound_chat_gets_the_announcement(
     chat_id = await _bind_chat(session, data.house_id)
 
     created = await _service(session, publisher).create(
-        data.org_id, data.user_id, [data.house_id], TEXT, [AnnouncementChannel.CHAT]
+        data.org_id,
+        data.user_id,
+        [data.house_id],
+        TEXT,
+        [AnnouncementChannel.CHAT],
     )
 
     await publisher.flush()
@@ -205,7 +221,11 @@ async def test_direct_channel_reaches_active_residents_only(
     await _add_resident(session, data.house_id, ResidentStatus.BLOCKED)
 
     created = await _service(session, publisher).create(
-        data.org_id, data.user_id, [data.house_id], TEXT, [AnnouncementChannel.DIRECT]
+        data.org_id,
+        data.user_id,
+        [data.house_id],
+        TEXT,
+        [AnnouncementChannel.DIRECT],
     )
 
     await publisher.flush()
@@ -218,7 +238,9 @@ async def test_direct_channel_reaches_active_residents_only(
 
 
 async def test_both_channels_record_an_event_each(
-    session: AsyncSession, make_org_house_flat_user: Fixture, publisher: TaskPublisher
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    publisher: TaskPublisher,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     await _bind_chat(session, data.house_id)
@@ -244,13 +266,18 @@ async def test_both_channels_record_an_event_each(
 
 
 async def test_resident_sees_only_announcements_of_own_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     mine = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     other = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     service = _service(session)
     await service.create(
-        mine.org_id, mine.user_id, [mine.house_id], TEXT, [AnnouncementChannel.CHAT]
+        mine.org_id,
+        mine.user_id,
+        [mine.house_id],
+        TEXT,
+        [AnnouncementChannel.CHAT],
     )
     await service.create(
         other.org_id,
@@ -268,13 +295,18 @@ async def test_resident_sees_only_announcements_of_own_house(
 
 
 async def test_org_list_filters_by_house_of_the_same_org(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     mine = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     foreign = await make_org_house_flat_user()
     service = _service(session)
     await service.create(
-        mine.org_id, mine.user_id, [mine.house_id], TEXT, [AnnouncementChannel.CHAT]
+        mine.org_id,
+        mine.user_id,
+        [mine.house_id],
+        TEXT,
+        [AnnouncementChannel.CHAT],
     )
 
     items, total = await service.list_for_org(mine.org_id, mine.house_id, 20, 0)

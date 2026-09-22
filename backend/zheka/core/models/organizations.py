@@ -21,7 +21,6 @@ class Organization(ZhekaMutableType, Zoned):
     reception_note: str | None = None
     registered_at: datetime | None = None
     is_demo: bool = False
-    # имя зоны IANA офиса: окна приема, записи и недели дашборда
     timezone: str
 
 

@@ -79,7 +79,8 @@ class DemoService:
         org, residency = await self.settle(user_id, 1)
         member = await self._orgs.add_member_or_get(org.id, user_id, OrgRole.EMPLOYEE)
         return DemoAccess(
-            membership=OrgMembershipView(member=member, org=org), residency=residency
+            membership=OrgMembershipView(member=member, org=org),
+            residency=residency,
         )
 
     async def furnish(
@@ -171,7 +172,10 @@ class DemoService:
             )
 
     async def _lines(
-        self, flat: Flat, period: date, used: dict[MeterType, dict[TariffZone, int]]
+        self,
+        flat: Flat,
+        period: date,
+        used: dict[MeterType, dict[TariffZone, int]],
     ) -> list[ChargeLine]:
         house_id = flat.house_id
         lines = []
@@ -186,13 +190,13 @@ class DemoService:
                 ChargeLine(
                     service=service,
                     amount=to_kopecks(
-                        sum(volume * tariff.value for volume in volumes.values())
+                        sum(volume * tariff.value for volume in volumes.values()),
                     ),
                     volume=sum(volumes.values()),
                     tariff=tariff.value,
                     unit=tariff.unit,
                     note=BELOW_NOTE if below else None,
-                )
+                ),
             )
         if flat.area is None:
             return lines
@@ -207,12 +211,15 @@ class DemoService:
                     tariff=tariff.value,
                     unit=tariff.unit,
                     note=f"Площадь {flat.area // 100},{flat.area % 100:02d} м²",
-                )
+                ),
             )
         return lines
 
     async def join(
-        self, user_id: UserId, number: int, role: OrgRole
+        self,
+        user_id: UserId,
+        number: int,
+        role: OrgRole,
     ) -> OrgMembershipView:
         org = await self._org(user_id, number)
         member = await self._orgs.add_member_or_get(org.id, user_id, role)
@@ -220,7 +227,9 @@ class DemoService:
         return OrgMembershipView(member=member, org=org)
 
     async def settle(
-        self, user_id: UserId, number: int
+        self,
+        user_id: UserId,
+        number: int,
     ) -> tuple[Organization, ResidencyView]:
         org = await self._org(user_id, number)
         houses = await self._houses.list_for_org(org.id)
@@ -239,16 +248,26 @@ class DemoService:
         )
         if created:
             await self.furnish(
-                flat, user_id, house.local(now).date(), verification_soon=True
+                flat,
+                user_id,
+                house.local(now).date(),
+                verification_soon=True,
             )
 
         resident, _created = await self._residents.add_or_get(
-            user_id, house_id, flat.id, None, ResidentRole.OWNER
+            user_id,
+            house_id,
+            flat.id,
+            None,
+            ResidentRole.OWNER,
         )
         if resident.verified_at is None:
             await self._residents.set_verified(resident, flat.id, now, None)
         return org, ResidencyView(
-            resident=resident, house=house, flat=flat, is_connected=True
+            resident=resident,
+            house=house,
+            flat=flat,
+            is_connected=True,
         )
 
     async def _org(self, user_id: UserId, number: int) -> Organization:

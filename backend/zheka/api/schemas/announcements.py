@@ -52,5 +52,5 @@ class CreateAnnouncementRequest(BaseSchema):
     house_ids: list[HouseId]
     text: str
     channels: list[AnnouncementChannel] = Field(
-        default_factory=lambda: [AnnouncementChannel.CHAT]
+        default_factory=lambda: [AnnouncementChannel.CHAT],
     )

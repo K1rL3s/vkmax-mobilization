@@ -99,22 +99,27 @@ async def _chairman_setup(
     base = await make_org_house_flat_user(org_role=org_role)
     chairman_id = await _add_user(session, "Председатель")
     await _add_resident(
-        session, chairman_id, base.house_id, base.flat_id, is_chairman=True
+        session,
+        chairman_id,
+        base.house_id,
+        base.flat_id,
+        is_chairman=True,
     )
     return base, chairman_id
 
 
-# ---- создание опроса ----
-
-
 async def test_create_org_poll_allows_org_staff(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     service = _make_service(session)
 
     card = await service.create(
-        base.user_id, base.house_id, _draft(), org_id=base.org_id
+        base.user_id,
+        base.house_id,
+        _draft(),
+        org_id=base.org_id,
     )
 
     assert card.poll.created_by_role == "staff"
@@ -123,7 +128,8 @@ async def test_create_org_poll_allows_org_staff(
 
 
 async def test_create_poll_allows_the_house_chairman(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -135,7 +141,8 @@ async def test_create_poll_allows_the_house_chairman(
 
 
 async def test_create_poll_refuses_a_plain_resident(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base = await make_org_house_flat_user()
     resident_id = await _add_user(session, "Просто житель")
@@ -164,12 +171,16 @@ async def test_create_poll_refuses_a_bad_draft(
 
     with pytest.raises(error):
         await _make_service(session).create(
-            chairman_id, base.house_id, draft, org_id=None
+            chairman_id,
+            base.house_id,
+            draft,
+            org_id=None,
         )
 
 
 async def test_create_org_poll_refuses_a_foreign_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     other = await make_org_house_flat_user()
@@ -177,9 +188,6 @@ async def test_create_org_poll_refuses_a_foreign_house(
 
     with pytest.raises(EntityNotFound):
         await service.create(base.user_id, other.house_id, _draft(), org_id=base.org_id)
-
-
-# ---- голосование ----
 
 
 @pytest.mark.parametrize(
@@ -191,7 +199,9 @@ async def test_create_org_poll_refuses_a_foreign_house(
     ids=["tenant", "blocked"],
 )
 async def test_vote_refuses_a_tenant_and_a_blocked_resident(
-    session: AsyncSession, make_org_house_flat_user: Fixture, resident: dict[str, Any]
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    resident: dict[str, Any],
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -204,12 +214,12 @@ async def test_vote_refuses_a_tenant_and_a_blocked_resident(
 
 
 async def test_vote_refuses_after_the_poll_has_ended(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
     card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
-    # статус еще ACTIVE: срок истек, а close_expired_polls не успел
     card.poll.ends_at = datetime.now(UTC) - timedelta(hours=1)
 
     with pytest.raises(InvalidState):
@@ -217,7 +227,8 @@ async def test_vote_refuses_after_the_poll_has_ended(
 
 
 async def test_vote_twice_raises_invalid_state(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -230,7 +241,8 @@ async def test_vote_twice_raises_invalid_state(
 
 
 async def test_multiple_choice_vote_stores_one_row_per_option(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -247,12 +259,12 @@ async def test_multiple_choice_vote_stores_one_row_per_option(
     rows = await PollsRepo(session).get_vote(card.poll.id, chairman_id)
     assert {row.option_id for row in rows} == set(chosen)
     assert len(rows) == 2
-    # две строки голоса - одна квартира в кворуме
     assert results.forecast.voted_flats == 1
 
 
 async def test_vote_refuses_a_bad_option_choice(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -266,7 +278,8 @@ async def test_vote_refuses_a_bad_option_choice(
 
 
 async def test_vote_of_a_house_the_user_does_not_live_in_is_not_found(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -278,11 +291,9 @@ async def test_vote_of_a_house_the_user_does_not_live_in_is_not_found(
         await service.vote(card.poll.id, stranger_id, [card.options[0].id])
 
 
-# ---- вес голоса по площади ----
-
-
 async def test_counted_by_area_is_false_for_the_second_resident_of_one_flat(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -301,12 +312,12 @@ async def test_counted_by_area_is_false_for_the_second_resident_of_one_flat(
     assert second_vote.counted_by_area is False
 
     results = await service.results(card.poll.id, chairman_id)
-    # одна квартира - один голос в площади, несмотря на двух проголосовавших
     assert results.forecast.voted_flats == 1
 
 
 async def test_unverified_resident_votes_but_lands_in_unverified_flats(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -314,7 +325,11 @@ async def test_unverified_resident_votes_but_lands_in_unverified_flats(
 
     unverified_id = await _add_user(session, "Не подтвержден")
     await _add_resident(
-        session, unverified_id, base.house_id, base.flat_id, verified=False
+        session,
+        unverified_id,
+        base.house_id,
+        base.flat_id,
+        verified=False,
     )
 
     await service.vote(card.poll.id, unverified_id, [card.options[0].id])
@@ -323,11 +338,9 @@ async def test_unverified_resident_votes_but_lands_in_unverified_flats(
     assert results.forecast.unweighted_votes == 1
 
 
-# ---- результаты и приватность ----
-
-
 async def test_results_payload_carries_no_per_user_data(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -349,10 +362,10 @@ async def test_results_payload_carries_no_per_user_data(
 
 
 async def test_flats_without_area_are_reported_and_excluded_from_sums(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
-    # base.flat_id заведена без area
     session.add(Flat(house_id=base.house_id, number="2", area=5000))
     await session.flush()
     service = _make_service(session)
@@ -364,11 +377,9 @@ async def test_flats_without_area_are_reported_and_excluded_from_sums(
     assert results.forecast.total_area == 5000
 
 
-# ---- непроголосовавшие ----
-
-
 async def test_non_voters_available_only_to_the_initiator(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -385,17 +396,21 @@ async def test_non_voters_available_only_to_the_initiator(
 
 
 async def test_non_voters_available_to_org_staff_for_org_polls(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     service = _make_service(session)
     card = await service.create(
-        base.user_id, base.house_id, _draft(), org_id=base.org_id
+        base.user_id,
+        base.house_id,
+        _draft(),
+        org_id=base.org_id,
     )
 
     other_staff_id = await _add_user(session, "Другой сотрудник")
     session.add(
-        OrgMember(org_id=base.org_id, user_id=other_staff_id, role=OrgRole.EMPLOYEE)
+        OrgMember(org_id=base.org_id, user_id=other_staff_id, role=OrgRole.EMPLOYEE),
     )
     await session.flush()
 
@@ -404,7 +419,8 @@ async def test_non_voters_available_to_org_staff_for_org_polls(
 
 
 async def test_non_voters_excludes_a_flat_after_a_weighted_vote(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -416,11 +432,9 @@ async def test_non_voters_excludes_a_flat_after_a_weighted_vote(
     assert all(flat.id != base.flat_id for flat in non_voters)
 
 
-# ---- закрытие опроса ----
-
-
 async def test_close_poll_is_only_for_the_initiator_or_org_staff(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -437,7 +451,8 @@ async def test_close_poll_is_only_for_the_initiator_or_org_staff(
 
 
 async def test_voting_is_refused_once_the_poll_is_closed(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -448,23 +463,30 @@ async def test_voting_is_refused_once_the_poll_is_closed(
         await service.vote(card.poll.id, chairman_id, [card.options[0].id])
 
 
-# ---- списки опросов ----
-
-
 async def test_list_polls_puts_active_before_closed_and_newest_first(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
     older_active = await service.create(
-        chairman_id, base.house_id, _draft(title="Старый активный"), org_id=None
+        chairman_id,
+        base.house_id,
+        _draft(title="Старый активный"),
+        org_id=None,
     )
     closed = await service.create(
-        chairman_id, base.house_id, _draft(title="Закрытый"), org_id=None
+        chairman_id,
+        base.house_id,
+        _draft(title="Закрытый"),
+        org_id=None,
     )
     await service.close(closed.poll.id, chairman_id)
     newer_active = await service.create(
-        chairman_id, base.house_id, _draft(title="Новый активный"), org_id=None
+        chairman_id,
+        base.house_id,
+        _draft(title="Новый активный"),
+        org_id=None,
     )
 
     items = await service.list_polls(base.house_id, chairman_id, None)
@@ -475,7 +497,8 @@ async def test_list_polls_puts_active_before_closed_and_newest_first(
 
 
 async def test_list_polls_filters_by_effective_status(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
     service = _make_service(session)
@@ -484,10 +507,14 @@ async def test_list_polls_filters_by_effective_status(
     await service.close(closed.poll.id, chairman_id)
 
     active_items = await service.list_polls(
-        base.house_id, chairman_id, PollStatus.ACTIVE
+        base.house_id,
+        chairman_id,
+        PollStatus.ACTIVE,
     )
     closed_items = await service.list_polls(
-        base.house_id, chairman_id, PollStatus.CLOSED
+        base.house_id,
+        chairman_id,
+        PollStatus.CLOSED,
     )
 
     assert {item.poll.id for item in active_items} == {active.poll.id}
@@ -495,7 +522,8 @@ async def test_list_polls_filters_by_effective_status(
 
 
 async def test_list_org_polls_scoped_by_org_with_a_foreign_house_404(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     foreign = await make_org_house_flat_user()
@@ -503,27 +531,44 @@ async def test_list_org_polls_scoped_by_org_with_a_foreign_house_404(
 
     with pytest.raises(EntityNotFound):
         await service.list_org_polls(
-            own.org_id, own.user_id, foreign.house_id, None, 20, 0
+            own.org_id,
+            own.user_id,
+            foreign.house_id,
+            None,
+            20,
+            0,
         )
 
 
 async def test_org_staff_list_and_close_a_chairmans_poll(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(
-        session, make_org_house_flat_user, OrgRole.EMPLOYEE
+        session,
+        make_org_house_flat_user,
+        OrgRole.EMPLOYEE,
     )
     service = _make_service(session)
     card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
     foreign, foreign_chairman_id = await _chairman_setup(
-        session, make_org_house_flat_user
+        session,
+        make_org_house_flat_user,
     )
     foreign_card = await service.create(
-        foreign_chairman_id, foreign.house_id, _draft(), org_id=None
+        foreign_chairman_id,
+        foreign.house_id,
+        _draft(),
+        org_id=None,
     )
 
     items, total = await service.list_org_polls(
-        base.org_id, base.user_id, None, None, 20, 0
+        base.org_id,
+        base.user_id,
+        None,
+        None,
+        20,
+        0,
     )
     assert [item.item.poll.id for item in items] == [card.poll.id]
     assert total == 1
@@ -535,15 +580,20 @@ async def test_org_staff_list_and_close_a_chairmans_poll(
 
 
 async def test_a_naive_end_is_the_house_time(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     base = await make_org_house_flat_user(
-        org_role=OrgRole.ADMIN, timezone="Asia/Vladivostok"
+        org_role=OrgRole.ADMIN,
+        timezone="Asia/Vladivostok",
     )
     ends_at = datetime.combine(_future().date(), time(18))
 
     card = await _make_service(session).create(
-        base.user_id, base.house_id, _draft(ends_at=ends_at), org_id=base.org_id
+        base.user_id,
+        base.house_id,
+        _draft(ends_at=ends_at),
+        org_id=base.org_id,
     )
 
     assert card.poll.ends_at == ends_at.replace(tzinfo=ZoneInfo("Asia/Vladivostok"))

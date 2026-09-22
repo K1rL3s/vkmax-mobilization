@@ -128,7 +128,10 @@ class FlatsService:
         )
 
     async def verify(
-        self, user_id: UserId, flat_id: FlatId, account_no: str
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
+        account_no: str,
     ) -> VerifyResult:
         flat, _ = await self._flat_and_house(flat_id)
         resident = await self._resident_of_house(user_id, flat.house_id)
@@ -138,15 +141,20 @@ class FlatsService:
 
         if resident.verified_at is not None:
             return VerifyResult(
-                verified=True, detail=ALREADY_VERIFIED_DETAIL, verification_status=None
+                verified=True,
+                detail=ALREADY_VERIFIED_DETAIL,
+                verification_status=None,
             )
 
         matched = flat.account_no is not None and normalize_account(
-            flat.account_no
+            flat.account_no,
         ) == normalize_account(account_no)
         if matched:
             await self._residents.set_verified(
-                resident, flat_id, datetime.now(UTC), None
+                resident,
+                flat_id,
+                datetime.now(UTC),
+                None,
             )
         await self._events.record(
             EventType.FLAT_VERIFICATION_REQUESTED,
@@ -166,14 +174,23 @@ class FlatsService:
             )
 
         await self._events.record(
-            EventType.FLAT_VERIFIED, user_id=user_id, flat_id=flat_id, by="account"
+            EventType.FLAT_VERIFIED,
+            user_id=user_id,
+            flat_id=flat_id,
+            by="account",
         )
         return VerifyResult(
-            verified=True, detail="Квартира подтверждена", verification_status=None
+            verified=True,
+            detail="Квартира подтверждена",
+            verification_status=None,
         )
 
     async def request_verification(
-        self, user_id: UserId, flat_id: FlatId, account_no: str, comment: str | None
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
+        account_no: str,
+        comment: str | None,
     ) -> VerificationRequestView:
         stated = account_no.strip()
         if not stated:
@@ -213,12 +230,19 @@ class FlatsService:
         offset: int,
     ) -> tuple[list[VerificationRequestView], int]:
         requests, total = await self._flats.list_verification_requests(
-            org_id, status, house_id, limit, offset
+            org_id,
+            status,
+            house_id,
+            limit,
+            offset,
         )
         return await self._request_views(requests), total
 
     async def approve_verification(
-        self, org_id: OrgId, verification_id: VerificationRequestId, by: UserId
+        self,
+        org_id: OrgId,
+        verification_id: VerificationRequestId,
+        by: UserId,
     ) -> VerificationRequestView:
         request, flat, house = await self._pending_request(org_id, verification_id)
         resident = await self._residents.get_for_house(request.user_id, flat.house_id)
@@ -230,7 +254,11 @@ class FlatsService:
         now = datetime.now(UTC)
         await self._residents.set_verified(resident, flat_id, now, by)
         await self._flats.decide_verification_request(
-            request, VerificationStatus.APPROVED, by, now, None
+            request,
+            VerificationStatus.APPROVED,
+            by,
+            now,
+            None,
         )
         await self._events.record(
             EventType.FLAT_VERIFIED,
@@ -255,7 +283,11 @@ class FlatsService:
 
         request, flat, house = await self._pending_request(org_id, verification_id)
         await self._flats.decide_verification_request(
-            request, VerificationStatus.REJECTED, by, datetime.now(UTC), stated
+            request,
+            VerificationStatus.REJECTED,
+            by,
+            datetime.now(UTC),
+            stated,
         )
         self._notify(
             request.user_id,
@@ -264,7 +296,9 @@ class FlatsService:
         return await self._view(request, flat, house)
 
     async def list_residents(
-        self, user_id: UserId, flat_id: FlatId
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
     ) -> list[FlatResidentView]:
         flat, _ = await self._flat_and_house(flat_id)
         await self._resident_of_flat(user_id, flat)
@@ -272,7 +306,7 @@ class FlatsService:
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [resident.user_id for resident in residents]
+                [resident.user_id for resident in residents],
             )
         }
         return [
@@ -306,7 +340,7 @@ class FlatsService:
                 expires_at=expires_at,
                 max_activations=max_activations,
                 created_by=user_id,
-            )
+            ),
         )
         await self._events.record(
             EventType.FLAT_INVITE_CREATED,
@@ -347,10 +381,17 @@ class FlatsService:
             raise InvalidState("Код приглашения истек, отозван или исчерпан")
 
         resident, _ = await self._residents.add_or_get(
-            user_id, house_id, flat_id, None, ResidentRole.TENANT
+            user_id,
+            house_id,
+            flat_id,
+            None,
+            ResidentRole.TENANT,
         )
         await self._residents.set_verified(
-            resident, flat_id, datetime.now(UTC), invite.created_by
+            resident,
+            flat_id,
+            datetime.now(UTC),
+            invite.created_by,
         )
         await self._events.record(
             EventType.FLAT_INVITE_ACTIVATED,
@@ -399,7 +440,9 @@ class FlatsService:
         return resident
 
     async def _pending_request(
-        self, org_id: OrgId, verification_id: VerificationRequestId
+        self,
+        org_id: OrgId,
+        verification_id: VerificationRequestId,
     ) -> tuple[VerificationRequest, Flat, House]:
         request = await self._flats.get_verification_request(verification_id, org_id)
         if request is None:
@@ -410,17 +453,26 @@ class FlatsService:
         return request, flat, house
 
     async def _view(
-        self, request: VerificationRequest, flat: Flat, house: House
+        self,
+        request: VerificationRequest,
+        flat: Flat,
+        house: House,
     ) -> VerificationRequestView:
         user = await self._users.get_by_id(request.user_id)
         if user is None:
             raise EntityNotFound("Пользователь не найден")
         return VerificationRequestView(
-            request=request, flat=flat, house=house, user=user
+            request=request,
+            flat=flat,
+            house=house,
+            user=user,
         )
 
     async def _residency_view(
-        self, resident: Resident, house: House, flat: Flat
+        self,
+        resident: Resident,
+        house: House,
+        flat: Flat,
     ) -> ResidencyView:
         org = None if house.org_id is None else await self._orgs.get(house.org_id)
         return ResidencyView(
@@ -431,24 +483,25 @@ class FlatsService:
         )
 
     async def _request_views(
-        self, requests: Sequence[VerificationRequest]
+        self,
+        requests: Sequence[VerificationRequest],
     ) -> list[VerificationRequestView]:
         flats = {
             flat.id: flat
             for flat in await self._houses.list_flats_by_ids(
-                [request.flat_id for request in requests]
+                [request.flat_id for request in requests],
             )
         }
         houses = {
             house.id: house
             for house in await self._houses.list_by_ids(
-                [flat.house_id for flat in flats.values()]
+                [flat.house_id for flat in flats.values()],
             )
         }
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                [request.user_id for request in requests]
+                [request.user_id for request in requests],
             )
         }
         return [
@@ -463,5 +516,8 @@ class FlatsService:
 
     def _notify(self, user_id: UserId, text: str) -> None:
         self._notifications.notify_user(
-            user_id, text, category=NotificationCategory.REQUESTS, mandatory=True
+            user_id,
+            text,
+            category=NotificationCategory.REQUESTS,
+            mandatory=True,
         )

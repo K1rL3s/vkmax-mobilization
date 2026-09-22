@@ -13,7 +13,10 @@ from zheka.infra.database.tables.events import events_table
 
 class EventsRepo(BaseAlchemyRepo):
     async def add(
-        self, type: EventType, user_id: UserId | None, payload: dict[str, Any]
+        self,
+        type: EventType,
+        user_id: UserId | None,
+        payload: dict[str, Any],
     ) -> None:
         async with self._session.begin_nested():
             self._session.add(Event(user_id=user_id, type=type.value, payload=payload))

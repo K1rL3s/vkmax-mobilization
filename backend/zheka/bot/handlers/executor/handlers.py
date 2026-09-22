@@ -38,7 +38,8 @@ async def get_card(
 ) -> dict[str, Any]:
     request_id = _request_id(dialog_manager)
     card = await admin_requests_service.executor_card(
-        dialog_user_id(dialog_manager), request_id
+        dialog_user_id(dialog_manager),
+        request_id,
     )
     if card is None:
         return {"request_id": request_id, "mine": False, "status": None, "photos": []}
@@ -78,7 +79,9 @@ async def on_advance(
 
 
 async def on_ready(
-    _callback: MessageCallback, _button: Button, dialog_manager: DialogManager
+    _callback: MessageCallback,
+    _button: Button,
+    dialog_manager: DialogManager,
 ) -> None:
     await ask_in_default_stack(
         dialog_manager,

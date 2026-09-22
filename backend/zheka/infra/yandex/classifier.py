@@ -28,7 +28,9 @@ class YandexClassifier:
     __slots__ = ("_config", "_refused", "_transport")
 
     def __init__(
-        self, config: YandexConfig, transport: httpx.AsyncBaseTransport | None = None
+        self,
+        config: YandexConfig,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._config = config
         self._transport = transport
@@ -49,16 +51,19 @@ class YandexClassifier:
         headers = {"Authorization": f"Api-Key {self._config.api_key}"}
         try:
             async with httpx.AsyncClient(
-                timeout=LLM_TIMEOUT, transport=self._transport
+                timeout=LLM_TIMEOUT,
+                transport=self._transport,
             ) as client:
                 response = await client.post(
-                    COMPLETION_URL, headers=headers, json=payload
+                    COMPLETION_URL,
+                    headers=headers,
+                    json=payload,
                 )
         except UnicodeEncodeError:
             self._refused = True
             logger.error(  # noqa: TRY400
                 "Ключ Yandex AI Studio содержит символы не из ASCII, подсказки "
-                "категорий выключены до перезапуска процесса"
+                "категорий выключены до перезапуска процесса",
             )
             return None
         except httpx.HTTPError:

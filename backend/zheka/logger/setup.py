@@ -10,7 +10,7 @@ def setup_logger(config: LogConfig) -> None:
         formatter: logging.Formatter = JsonFormatter()
     else:
         formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)8s] %(message)s (%(name)s:%(lineno)s)"
+            "%(asctime)s [%(levelname)8s] %(message)s (%(name)s:%(lineno)s)",
         )
 
     handler = logging.StreamHandler()

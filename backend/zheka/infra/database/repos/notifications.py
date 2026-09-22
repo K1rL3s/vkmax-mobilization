@@ -19,16 +19,21 @@ class Recipient(ZhekaType):
 
 class NotificationsRepo(BaseAlchemyRepo):
     async def get_levels(
-        self, user_id: UserId
+        self,
+        user_id: UserId,
     ) -> dict[NotificationCategory, NotificationLevel]:
         stmt = select(
-            notification_settings_table.c.category, notification_settings_table.c.level
+            notification_settings_table.c.category,
+            notification_settings_table.c.level,
         ).where(notification_settings_table.c.user_id == user_id)
         result = await self._session.execute(stmt)
         return dict(result.tuples().all())
 
     async def set_level(
-        self, user_id: UserId, category: NotificationCategory, level: NotificationLevel
+        self,
+        user_id: UserId,
+        category: NotificationCategory,
+        level: NotificationLevel,
     ) -> bool:
         stmt = (
             pg_insert(notification_settings_table)
@@ -47,7 +52,9 @@ class NotificationsRepo(BaseAlchemyRepo):
         return result.scalar_one_or_none() is not None
 
     async def recipients(
-        self, user_ids: Collection[UserId], category: NotificationCategory
+        self,
+        user_ids: Collection[UserId],
+        category: NotificationCategory,
     ) -> Sequence[Recipient]:
         joined = users_table.outerjoin(
             notification_settings_table,

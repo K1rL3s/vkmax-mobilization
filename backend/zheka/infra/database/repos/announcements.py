@@ -32,15 +32,22 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         return announcement
 
     async def list_for_house(
-        self, house_id: HouseId, limit: int, offset: int
+        self,
+        house_id: HouseId,
+        limit: int,
+        offset: int,
     ) -> tuple[Sequence[Announcement], int]:
         stmt = select(Announcement).where(
-            announcements_table.c.house_ids.contains([house_id])
+            announcements_table.c.house_ids.contains([house_id]),
         )
         return await self._page(stmt, limit, offset)
 
     async def list_for_org(
-        self, org_id: OrgId, house_id: HouseId | None, limit: int, offset: int
+        self,
+        org_id: OrgId,
+        house_id: HouseId | None,
+        limit: int,
+        offset: int,
     ) -> tuple[Sequence[Announcement], int]:
         stmt = select(Announcement).where(announcements_table.c.org_id == org_id)
         if house_id is not None:
@@ -48,12 +55,16 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         return await self._page(stmt, limit, offset)
 
     async def _page(
-        self, stmt: Select[tuple[Announcement]], limit: int, offset: int
+        self,
+        stmt: Select[tuple[Announcement]],
+        limit: int,
+        offset: int,
     ) -> tuple[Sequence[Announcement], int]:
         total = await self._count(stmt)
         page_stmt = (
             stmt.order_by(
-                announcements_table.c.created_at.desc(), announcements_table.c.id.desc()
+                announcements_table.c.created_at.desc(),
+                announcements_table.c.id.desc(),
             )
             .limit(limit)
             .offset(offset)

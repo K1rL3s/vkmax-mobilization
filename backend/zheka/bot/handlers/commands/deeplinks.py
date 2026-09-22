@@ -62,7 +62,9 @@ async def deeplink_handler(
 
     source = _HOUSE_SOURCES.get(deeplink.kind, EventSource.DEEPLINK)
     await events_service.record(
-        EventType.BOT_START, user_id=user.id, source=source.value
+        EventType.BOT_START,
+        user_id=user.id,
+        source=source.value,
     )
     await open_deeplink(
         deeplink,
@@ -137,5 +139,7 @@ async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> Non
 
 async def _menu(dialog_manager: DialogManager, notice: str) -> None:
     await dialog_manager.start(
-        Menu.main, data=MenuData(notice=notice).to_data(), mode=StartMode.RESET_STACK
+        Menu.main,
+        data=MenuData(notice=notice).to_data(),
+        mode=StartMode.RESET_STACK,
     )

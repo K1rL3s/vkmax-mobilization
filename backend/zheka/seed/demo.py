@@ -66,10 +66,10 @@ DOCUMENTS = (
 )
 RESULT_PHOTOS = {
     "fa678cbaf3614e0a95540b46f24227db.png": frozenset(
-        {RequestCategory.LEAK, RequestCategory.WATER_SUPPLY}
+        {RequestCategory.LEAK, RequestCategory.WATER_SUPPLY},
     ),
     "3c5c76b61ff14eb1a6cc5c56931d9dda.png": frozenset(
-        {RequestCategory.ELECTRICITY, RequestCategory.ENTRANCE}
+        {RequestCategory.ELECTRICITY, RequestCategory.ENTRANCE},
     ),
 }
 
@@ -255,7 +255,10 @@ class Plan(ZhekaType):
 
 
 async def seed(
-    session: AsyncSession, demo: DemoService, files_dir: Path, today: date
+    session: AsyncSession,
+    demo: DemoService,
+    files_dir: Path,
+    today: date,
 ) -> bool:
     stmt = select(func.pg_advisory_xact_lock(SEED_LOCK))
     await session.execute(stmt)
@@ -388,7 +391,12 @@ class Seeder:
         return flats
 
     async def _resident(
-        self, user: User, house: House, flat: Flat, role: ResidentRole, staff: Staff
+        self,
+        user: User,
+        house: House,
+        flat: Flat,
+        role: ResidentRole,
+        staff: Staff,
     ) -> Resident:
         is_owner = role is ResidentRole.OWNER
         resident = Resident(
@@ -406,7 +414,10 @@ class Seeder:
         return resident
 
     async def _owners(
-        self, house: House, flats: Sequence[Flat], staff: Staff
+        self,
+        house: House,
+        flats: Sequence[Flat],
+        staff: Staff,
     ) -> list[Author]:
         rng = Random(f"owners:{house.city}:{house.street}:{house.building}")
         authors = []
@@ -451,11 +462,17 @@ class Seeder:
         main, others = shuffled[:3], shuffled[3:]
         owners: list[tuple[User, Resident]] = []
         for flat, scenario in zip(
-            main, ("spike", "below", "verification"), strict=True
+            main,
+            ("spike", "below", "verification"),
+            strict=True,
         ):
             user = await self._user()
             resident = await self._resident(
-                user, house, flat, ResidentRole.OWNER, staff
+                user,
+                house,
+                flat,
+                ResidentRole.OWNER,
+                staff,
             )
             owners.append((user, resident))
             await self._demo.furnish(
@@ -467,7 +484,11 @@ class Seeder:
                 verification_soon=scenario == "verification",
             )
         await self._resident(
-            await self._user(), house, main[0], ResidentRole.TENANT, staff
+            await self._user(),
+            house,
+            main[0],
+            ResidentRole.TENANT,
+            staff,
         )
 
         total = sum(flat.area or 0 for flat in flats)
@@ -482,7 +503,7 @@ class Seeder:
                 (
                     user,
                     await self._resident(user, house, flat, ResidentRole.OWNER, staff),
-                )
+                ),
             )
         await self._poll(house, org, staff, owners)
         await self._reception(house, org, owners)
@@ -563,7 +584,10 @@ class Seeder:
         await self._session.flush()
 
     async def _reception(
-        self, house: House, org: Organization, owners: Sequence[tuple[User, Resident]]
+        self,
+        house: House,
+        org: Organization,
+        owners: Sequence[tuple[User, Resident]],
     ) -> None:
         self._session.add_all(
             ReceptionWindow(
@@ -594,7 +618,11 @@ class Seeder:
         await self._session.flush()
 
     async def _announcements(
-        self, house: House, org: Organization, staff: Staff, recipients: int
+        self,
+        house: House,
+        org: Organization,
+        staff: Staff,
+        recipients: int,
     ) -> None:
         self._session.add_all(
             Announcement(
@@ -626,7 +654,11 @@ class Seeder:
         await self._session.flush()
 
     async def _requests(
-        self, house: House, profile: OrgProfile, staff: Staff, authors: Sequence[Author]
+        self,
+        house: House,
+        profile: OrgProfile,
+        staff: Staff,
+        authors: Sequence[Author],
     ) -> None:
         rng = Random(f"requests:{house.city}:{house.street}:{house.building}")
         moments = []
@@ -638,11 +670,15 @@ class Seeder:
                 break
             moments.append(moment)
         phone = set(
-            rng.sample(range(len(moments)), len(moments) * profile.phone_percent // 100)
+            rng.sample(
+                range(len(moments)),
+                len(moments) * profile.phone_percent // 100,
+            ),
         )
         categories = [
             rng.choices(
-                list(CATEGORY_WEIGHTS), weights=list(CATEGORY_WEIGHTS.values())
+                list(CATEGORY_WEIGHTS),
+                weights=list(CATEGORY_WEIGHTS.values()),
             )[0]
             for _ in moments
         ]
@@ -656,8 +692,9 @@ class Seeder:
         ]
         overdue = set(
             rng.sample(
-                overdue_candidates, min(profile.overdue, len(overdue_candidates))
-            )
+                overdue_candidates,
+                min(profile.overdue, len(overdue_candidates)),
+            ),
         )
 
         plans = []
@@ -673,7 +710,7 @@ class Seeder:
                     categories[index],
                     author,
                     keep_open=index in overdue,
-                )
+                ),
             )
         if profile.inn == DEMO_INN:
             plans.extend(await self._group(rng, house, profile, staff, authors))
@@ -692,7 +729,8 @@ class Seeder:
             elif done_at < recent_since - timedelta(days=6):
                 old.append((plan.request, done_at, author))
         chosen = rng.sample(
-            old, min(len(old), len(old) * profile.repeat_percent // 100)
+            old,
+            min(len(old), len(old) * profile.repeat_percent // 100),
         )
         chosen += rng.sample(recent, min(len(recent), profile.recent_repeats))
         repeats = []
@@ -737,7 +775,7 @@ class Seeder:
                             "executor_user_id": request.executor_user_id,
                         },
                         created_at=plan.assigned_at,
-                    )
+                    ),
                 )
         if profile.inn == DEMO_INN:
             accepted = sorted(
@@ -766,7 +804,7 @@ class Seeder:
                         kind=RequestPhotoKind.RESULT,
                         uploaded_by=executor,
                         created_at=reviewed_at,
-                    )
+                    ),
                 )
         await self._session.flush()
 
@@ -820,7 +858,7 @@ class Seeder:
     ) -> Plan:
         executor = rng.choice(staff.executors)
         accepted = created + timedelta(
-            minutes=profile.accept_minutes * rng.randint(40, 180) // 100
+            minutes=profile.accept_minutes * rng.randint(40, 180) // 100,
         )
         assigned = accepted + timedelta(minutes=rng.randint(2, 15))
         started = assigned + timedelta(minutes=rng.randint(10, 180))
@@ -908,7 +946,11 @@ class Seeder:
                 RequestChannel.PHONE
                 if author is None
                 else rng.choice(
-                    (RequestChannel.MINIAPP, RequestChannel.MINIAPP, RequestChannel.BOT)
+                    (
+                        RequestChannel.MINIAPP,
+                        RequestChannel.MINIAPP,
+                        RequestChannel.BOT,
+                    ),
                 )
             ),
             caller_name=(

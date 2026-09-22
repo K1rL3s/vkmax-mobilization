@@ -30,7 +30,8 @@ router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
 
 
 def signed(
-    photos: Sequence[RequestPhoto], files_service: FilesService
+    photos: Sequence[RequestPhoto],
+    files_service: FilesService,
 ) -> list[FileRef]:
     return [
         FileRef(name=photo.path, url=files_service.sign(photo.path)) for photo in photos
@@ -64,7 +65,11 @@ async def list_my_requests(
     offset: Offset = 0,
 ) -> Page[RequestListItem]:
     rows, total = await requests_service.list_mine(
-        residency.user_id, residency.house_id, status, limit, offset
+        residency.user_id,
+        residency.house_id,
+        status,
+        limit,
+        offset,
     )
     return Page(items=[RequestListItem.of_row(row) for row in rows], total=total)
 
@@ -76,7 +81,9 @@ async def find_similar_requests(
     category: RequestCategory,
 ) -> SimilarRequestsResponse:
     similar = await requests_service.similar(
-        residency.user_id, residency.house_id, category
+        residency.user_id,
+        residency.house_id,
+        category,
     )
     return SimilarRequestsResponse.of(similar)
 
@@ -124,7 +131,10 @@ async def rate_request(
     body: RateRequestRequest,
 ) -> RequestCard:
     card = await requests_service.rate(
-        current_account.user_id, request_id, body.rating, body.feedback
+        current_account.user_id,
+        request_id,
+        body.rating,
+        body.feedback,
     )
     return _card(card, files_service)
 
@@ -138,7 +148,10 @@ async def create_repeat_request(
     body: RepeatRequestRequest,
 ) -> RequestCard:
     card = await requests_service.repeat(
-        current_account.user_id, request_id, body.description, body.photos
+        current_account.user_id,
+        request_id,
+        body.description,
+        body.photos,
     )
     return _card(card, files_service)
 
@@ -163,7 +176,8 @@ async def export_request(
 ) -> RequestExport:
     card = await requests_service.export(current_account.user_id, request_id)
     return RequestExport(
-        request=_card(card, files_service), disclaimer=REQUEST_EXPORT_DISCLAIMER
+        request=_card(card, files_service),
+        disclaimer=REQUEST_EXPORT_DISCLAIMER,
     )
 
 

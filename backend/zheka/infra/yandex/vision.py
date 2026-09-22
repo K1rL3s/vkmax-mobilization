@@ -75,7 +75,9 @@ class VisionClient:
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
                 response = await client.post(
-                    _RECOGNIZE_URL, headers=headers, json=payload
+                    _RECOGNIZE_URL,
+                    headers=headers,
+                    json=payload,
                 )
                 response.raise_for_status()
                 data: dict[str, Any] = response.json()

@@ -96,7 +96,9 @@ def _clean_options(options: Sequence[str]) -> list[str]:
 
 
 def _validated_option_ids(
-    poll: Poll, options: Sequence[PollOption], option_ids: Sequence[PollOptionId]
+    poll: Poll,
+    options: Sequence[PollOption],
+    option_ids: Sequence[PollOptionId],
 ) -> list[PollOptionId]:
     if not option_ids:
         raise InvalidRequest(EMPTY_VOTE)
@@ -170,7 +172,10 @@ class PollsService:
             options,
         )
         await self._events.record(
-            EventType.POLL_CREATED, user_id=user_id, poll_id=poll.id, by_role=role
+            EventType.POLL_CREATED,
+            user_id=user_id,
+            poll_id=poll.id,
+            by_role=role,
         )
         return await self._card(poll, user_id)
 
@@ -179,7 +184,10 @@ class PollsService:
         return await self._card(poll, user_id)
 
     async def list_polls(
-        self, house_id: HouseId, user_id: UserId, status: PollStatus | None
+        self,
+        house_id: HouseId,
+        user_id: UserId,
+        status: PollStatus | None,
     ) -> list[PollListItemData]:
         polls = await self._polls.list_for_house(house_id)
         return [
@@ -207,7 +215,7 @@ class PollsService:
         houses = {
             house.id: house
             for house in await self._houses.list_by_ids(
-                {poll.house_id for poll, _status in page}
+                {poll.house_id for poll, _status in page},
             )
         }
 
@@ -221,7 +229,10 @@ class PollsService:
         return result, total
 
     async def vote(
-        self, poll_id: PollId, user_id: UserId, option_ids: Sequence[PollOptionId]
+        self,
+        poll_id: PollId,
+        user_id: UserId,
+        option_ids: Sequence[PollOptionId],
     ) -> PollResultsData:
         poll = await self._get_poll(poll_id)
         resident = await self._residents.get_for_house(user_id, poll.house_id)
@@ -255,7 +266,9 @@ class PollsService:
             raise InvalidState(ALREADY_VOTED)
 
         await self._events.record(
-            EventType.POLL_VOTED, user_id=user_id, poll_id=poll.id
+            EventType.POLL_VOTED,
+            user_id=user_id,
+            poll_id=poll.id,
         )
         return await self._results(poll)
 
@@ -271,7 +284,7 @@ class PollsService:
         flats = await self._house_flats(poll.house_id)
         non_voters = [flat for flat in flats if flat.id not in voted_ids]
         non_voters.sort(
-            key=lambda flat: (flat.entrance is None, flat.entrance or 0, flat.number)
+            key=lambda flat: (flat.entrance is None, flat.entrance or 0, flat.number),
         )
         return non_voters
 
@@ -304,12 +317,18 @@ class PollsService:
         )
 
     async def _list_item(
-        self, poll: Poll, user_id: UserId, status: PollStatus
+        self,
+        poll: Poll,
+        user_id: UserId,
+        status: PollStatus,
     ) -> PollListItemData:
         votes = await self._polls.get_vote(poll.id, user_id)
         voted_flats = await self._voted_flats_count(poll.id)
         return PollListItemData(
-            poll=poll, status=status, voted=bool(votes), voted_flats=voted_flats
+            poll=poll,
+            status=status,
+            voted=bool(votes),
+            voted_flats=voted_flats,
         )
 
     async def _results(self, poll: Poll) -> PollResultsData:
@@ -322,7 +341,7 @@ class PollsService:
         weighted = [vote for vote in votes if vote.counted_by_area]
         voted_flat_ids = {vote.flat_id for vote in weighted if vote.flat_id is not None}
         unverified_flats = len(
-            {vote.user_id for vote in votes if not vote.counted_by_area}
+            {vote.user_id for vote in votes if not vote.counted_by_area},
         )
         poll_forecast = forecast(
             [areas_by_flat.get(flat_id) for flat_id in voted_flat_ids],
@@ -370,7 +389,11 @@ class PollsService:
 
     async def _house_flats(self, house_id: HouseId) -> Sequence[Flat]:
         flats, _total = await self._houses.list_flats(
-            house_id, None, None, limit=_ALL_FLATS_LIMIT, offset=0
+            house_id,
+            None,
+            None,
+            limit=_ALL_FLATS_LIMIT,
+            offset=0,
         )
         return flats
 
@@ -401,7 +424,8 @@ class PollsService:
 
 
 def _by_status(
-    polls: Sequence[Poll], status: PollStatus | None
+    polls: Sequence[Poll],
+    status: PollStatus | None,
 ) -> list[tuple[Poll, PollStatus]]:
     now = datetime.now(UTC)
     dated = [(poll, _effective_status(poll, now)) for poll in polls]

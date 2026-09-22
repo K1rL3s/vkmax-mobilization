@@ -24,5 +24,5 @@ menu_dialog = Dialog(
         ),
         state=Menu.main,
         getter=get_menu,
-    )
+    ),
 )

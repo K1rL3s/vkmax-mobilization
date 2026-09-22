@@ -111,13 +111,11 @@ async def test_link_twice_returns_the_same_residency(
     await _consent(session, fixture)
 
     first = await _link(session, fixture, fixture.flat_id, role=ResidentRole.TENANT)
-    # обе вьюхи держат один объект жителя, поэтому флаг снимается до второй
     tenant_can_vote = first.resident.can_vote
     second = await _link(session, fixture, fixture.flat_id)
 
     assert second.resident.id == first.resident.id
     assert await _count(session, residents_table.c.user_id, fixture.user_id) == 1
-    # роль и флаги обновляются, иначе вошедший арендатором остался бы им навсегда
     assert (tenant_can_vote, second.resident.can_vote) == (False, True)
     assert second.resident.can_see_charges is True
 
@@ -126,7 +124,6 @@ async def test_demand_signal_counts_a_user_once(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
-    # кнопка спроса живет только у дома без УК
     fixture = await make_org_house_flat_user()
     house = await HousesRepo(session).get(fixture.house_id)
     assert house is not None
@@ -149,25 +146,49 @@ async def test_search_by_query_or_by_address_parts(
 ) -> None:
     fixture = await make_org_house_flat_user()
     wanted = await _add_house(
-        session, fixture.org_id, city="Казань", street="Баумана", building="12"
+        session,
+        fixture.org_id,
+        city="Казань",
+        street="Баумана",
+        building="12",
     )
     await _add_house(
-        session, fixture.org_id, city="Казань", street="Кремлевская", building="12"
+        session,
+        fixture.org_id,
+        city="Казань",
+        street="Кремлевская",
+        building="12",
     )
     await _add_house(
-        session, fixture.org_id, city="Москва", street="Баумана", building="3"
+        session,
+        fixture.org_id,
+        city="Москва",
+        street="Баумана",
+        building="3",
     )
     service = _make_service(session)
 
     for query in ("Баумана 12", "12 баумана", "  БАУМАНА   12 ", "казань баумана 12"):
         found, total = await service.search(
-            fixture.user_id, None, None, None, query, 20, 0
+            fixture.user_id,
+            None,
+            None,
+            None,
+            query,
+            20,
+            0,
         )
         assert [item.house.id for item in found] == [wanted], query
         assert total == 1
 
     found, total = await service.search(
-        fixture.user_id, "Казань", "Баумана", None, None, 20, 0
+        fixture.user_id,
+        "Казань",
+        "Баумана",
+        None,
+        None,
+        20,
+        0,
     )
     assert [item.house.id for item in found] == [wanted]
     assert total == 1
@@ -183,7 +204,13 @@ async def test_search_without_city_and_query_is_refused(
 
     with pytest.raises(InvalidRequest):
         await _make_service(session).search(
-            fixture.user_id, blank, None, None, blank, 20, 0
+            fixture.user_id,
+            blank,
+            None,
+            None,
+            blank,
+            20,
+            0,
         )
 
 
@@ -191,18 +218,20 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
-    # без множителя cos(широты) дом в 200 метрах к востоку выглядит как 356
-    # и выпадает из радиуса 250
     lat, lon = Decimal("55.751244"), Decimal("37.618423")
-    north = Decimal("0.001797")  # 200 метров по меридиану
-    east = Decimal("0.003195")  # 200 метров по параллели на этой широте
+    north = Decimal("0.001797")
+    east = Decimal("0.003195")
     fixture = await make_org_house_flat_user()
 
     north_id = await _add_house(session, fixture.org_id, lat=lat + north, lon=lon)
     east_id = await _add_house(session, fixture.org_id, lat=lat, lon=lon + east)
 
     found = await _make_service(session).nearest(
-        fixture.user_id, float(lat), float(lon), 250, 20
+        fixture.user_id,
+        float(lat),
+        float(lon),
+        250,
+        20,
     )
 
     distances = {item.house.id: item.distance_m for item in found}
@@ -210,10 +239,13 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     assert distances[north_id] == pytest.approx(200, abs=10)
     assert distances[east_id] == pytest.approx(200, abs=10)
 
-    # радиус из запроса доходит до базы целиком: потолка в сервисе нет
     far_id = await _add_house(session, fixture.org_id, lat=lat + north * 10, lon=lon)
     far = await _make_service(session).nearest(
-        fixture.user_id, float(lat), float(lon), 5000, 20
+        fixture.user_id,
+        float(lat),
+        float(lon),
+        5000,
+        20,
     )
     assert far_id in {item.house.id for item in far}
 
@@ -222,7 +254,6 @@ async def test_link_moves_an_unverified_residency_to_another_flat(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
-    # опечатка в номере не должна запирать жителя в чужой квартире
     fixture = await make_org_house_flat_user()
     await _consent(session, fixture)
     other_flat = Flat(house_id=fixture.house_id, number="2")
@@ -299,7 +330,8 @@ async def test_admin_house_surface(
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
     own = await make_org_house_flat_user(
-        org_role=OrgRole.CREATOR, resident_role=ResidentRole.OWNER
+        org_role=OrgRole.CREATOR,
+        resident_role=ResidentRole.OWNER,
     )
     other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     houses_service = _make_service(session)
@@ -317,7 +349,11 @@ async def test_admin_house_surface(
     assert card.chairman_name is None
 
     residents, total = await houses_service.house_residents(
-        own.org_id, own.house_id, "Тест", 50, 0
+        own.org_id,
+        own.house_id,
+        "Тест",
+        50,
+        0,
     )
     assert total == 1
     assert residents[0].flat is not None
@@ -342,13 +378,17 @@ async def test_flats_are_listed_to_a_resident_and_hidden_from_a_stranger(
     service = _make_service(session)
 
     flats, total, taken = await service.flats(
-        own.user_id, own.house_id, None, None, 50, 0
+        own.user_id,
+        own.house_id,
+        None,
+        None,
+        50,
+        0,
     )
 
     assert total == 2
     assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
     assert taken == {own.flat_id}
-    # is_taken выдает, где живут наши пользователи: чужой дом отвечает 404
     with pytest.raises(EntityNotFound):
         await service.flats(stranger.user_id, own.house_id, None, None, 50, 0)
 
@@ -357,7 +397,6 @@ async def test_a_chat_the_bot_was_removed_from_is_not_bound(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
-    # удаленный из чата бот оставляет bound_at, а написать туда уже нельзя
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     session.add(
         Chat(
@@ -366,7 +405,7 @@ async def test_a_chat_the_bot_was_removed_from_is_not_bound(
             title="Дом",
             bound_at=datetime.now(UTC),
             status=ChatStatus.REMOVED,
-        )
+        ),
     )
     await session.flush()
     repo = HousesRepo(session)

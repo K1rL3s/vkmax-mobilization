@@ -13,7 +13,9 @@ entities for the repos.
 Commands live in `justfile`. `just check` is the gate (ruff, ruff format,
 codespell, slotscheck, bandit, mypy strict) and `just test` runs pytest; keep
 both green. slotscheck's scanned-class count varies on an unchanged tree and is
-no evidence in a report or review.
+no evidence in a report or review. Format with `just format`, not bare
+`ruff format`: COM812 puts every construct that does not fit on one line one
+element per line with a trailing comma, and `just check` rejects the hugged form.
 
 ## Invariants
 

@@ -117,7 +117,8 @@ def _make_service(
 
 
 def _admin(
-    session: AsyncSession, publisher: TaskPublisher | None = None
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
 ) -> AdminRequestsService:
     return AdminRequestsService(
         RequestsRepo(session),
@@ -141,7 +142,6 @@ async def _member(session: AsyncSession, org_id: OrgId, role: OrgRole) -> UserId
 
 
 def _photo() -> str:
-    # ровно то, что отдает upload_file: uuid4().hex плюс известный суффикс
     return f"{uuid4().hex}.jpg"
 
 
@@ -176,8 +176,11 @@ async def _neighbour(session: AsyncSession, house_id: HouseId, number: str) -> U
     await session.flush()
     session.add(
         Resident(
-            user_id=user.id, house_id=house_id, flat_id=flat.id, role=ResidentRole.OWNER
-        )
+            user_id=user.id,
+            house_id=house_id,
+            flat_id=flat.id,
+            role=ResidentRole.OWNER,
+        ),
     )
     await session.flush()
     return user.id
@@ -190,17 +193,22 @@ async def _complain(
     category: RequestCategory = RequestCategory.LEAK,
 ) -> Request:
     card = await _make_service(session).create(
-        user_id, house_id, RequestDraft(category=category, description="Течет стояк")
+        user_id,
+        house_id,
+        RequestDraft(category=category, description="Течет стояк"),
     )
     return card.request
 
 
 async def _group_of_three(
-    session: AsyncSession, own: OrgHouseFlatUser
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
 ) -> tuple[list[Request], RequestGroupId]:
     members = [
         await _complain(
-            session, await _neighbour(session, own.house_id, number), own.house_id
+            session,
+            await _neighbour(session, own.house_id, number),
+            own.house_id,
         )
         for number in ("11", "12", "13")
     ]
@@ -263,7 +271,7 @@ async def _mark_on_review(session: AsyncSession, request_id: RequestId) -> Reque
 
 async def _logs(session: AsyncSession, request_id: RequestId) -> list[RequestStatusLog]:
     stmt = select(RequestStatusLog).where(
-        request_status_log_table.c.request_id == request_id
+        request_status_log_table.c.request_id == request_id,
     )
     return list((await session.execute(stmt)).scalars().all())
 
@@ -283,13 +291,16 @@ def _account(user_id: UserId) -> CurrentAccount:
 
 
 async def test_create_writes_the_request_its_photos_the_log_and_the_event(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     names = [_photo(), _photo()]
 
     card = await _make_service(session).create(
-        own.user_id, own.house_id, _draft(flat_id=own.flat_id, photos=names)
+        own.user_id,
+        own.house_id,
+        _draft(flat_id=own.flat_id, photos=names),
     )
 
     request_id = card.request.id
@@ -313,18 +324,19 @@ async def test_create_writes_the_request_its_photos_the_log_and_the_event(
 
 
 async def test_create_refuses_a_stranger(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     stranger = await _add_user(session)
 
-    # чужой дом отвечает 404, а не 403
     with pytest.raises(EntityNotFound):
         await _make_service(session).create(stranger, own.house_id, _draft())
 
 
 async def test_create_refuses_a_blocked_resident(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _block(session, own.user_id, own.house_id)
@@ -334,7 +346,8 @@ async def test_create_refuses_a_blocked_resident(
 
 
 async def test_create_refuses_a_flat_that_is_not_the_authors(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     neighbour_flat = Flat(house_id=own.house_id, number="2")
@@ -343,7 +356,9 @@ async def test_create_refuses_a_flat_that_is_not_the_authors(
 
     with pytest.raises(EntityNotFound):
         await _make_service(session).create(
-            own.user_id, own.house_id, _draft(flat_id=neighbour_flat.id)
+            own.user_id,
+            own.house_id,
+            _draft(flat_id=neighbour_flat.id),
         )
 
 
@@ -351,7 +366,6 @@ async def test_create_refuses_a_flat_that_is_not_the_authors(
     ("draft", "error"),
     [
         (_draft(photos=[_photo() for _ in range(MAX_PHOTOS + 1)]), InvalidRequest),
-        # подделка дожила бы до карточки и уронила бы ее на подписи ссылки
         (_draft(photos=["../../etc/passwd"]), EntityNotFound),
         (_draft(description="   "), InvalidRequest),
     ],
@@ -369,10 +383,12 @@ async def test_create_refuses_a_bad_draft(
 
 
 async def test_create_marks_a_request_written_by_staff_of_the_same_org(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(
-        resident_role=ResidentRole.OWNER, org_role=OrgRole.EMPLOYEE
+        resident_role=ResidentRole.OWNER,
+        org_role=OrgRole.EMPLOYEE,
     )
 
     card = await _make_service(session).create(own.user_id, own.house_id, _draft())
@@ -381,7 +397,8 @@ async def test_create_marks_a_request_written_by_staff_of_the_same_org(
 
 
 async def test_create_joins_an_open_group_of_the_same_house_and_category(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     group_id = await _add_group(session, own.house_id)
@@ -397,7 +414,8 @@ async def test_create_joins_an_open_group_of_the_same_house_and_category(
 
 
 async def test_create_refuses_a_group_of_another_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     foreign = await make_org_house_flat_user()
@@ -405,7 +423,9 @@ async def test_create_refuses_a_group_of_another_house(
 
     with pytest.raises(EntityNotFound):
         await _make_service(session).create(
-            own.user_id, own.house_id, _draft(group_id=group_id)
+            own.user_id,
+            own.house_id,
+            _draft(group_id=group_id),
         )
 
 
@@ -428,31 +448,36 @@ async def test_create_refuses_a_group_that_does_not_fit(
 
     with pytest.raises(error):
         await _make_service(session).create(
-            own.user_id, own.house_id, _draft(group_id=group_id)
+            own.user_id,
+            own.house_id,
+            _draft(group_id=group_id),
         )
 
 
 async def test_get_card_hides_a_request_of_another_resident(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     neighbour = await _neighbour(session, own.house_id, "2")
     service = _make_service(session)
     card = await service.create(own.user_id, own.house_id, _draft())
 
-    # сосед по дому - такой же чужой для заявки, как любой другой аккаунт
     with pytest.raises(EntityNotFound):
         await service.get_card(neighbour, card.request.id)
 
 
 async def test_card_takes_the_current_house_org_and_the_category_hours(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     other = await make_org_house_flat_user()
     service = _make_service(session)
     created = await service.create(
-        own.user_id, own.house_id, _draft(category=RequestCategory.ELEVATOR)
+        own.user_id,
+        own.house_id,
+        _draft(category=RequestCategory.ELEVATOR),
     )
     house = await HousesRepo(session).get(own.house_id)
     org = await OrgsRepo(session).get(other.org_id)
@@ -462,19 +487,24 @@ async def test_card_takes_the_current_house_org_and_the_category_hours(
     await session.flush()
 
     card = RequestCard.of(
-        await service.get_card(own.user_id, created.request.id), [], []
+        await service.get_card(own.user_id, created.request.id),
+        [],
+        [],
     )
 
     assert card.org_name == org.name
     assert card.normative_hours == 24
     admin_card = AdminRequestCard.of_admin(
-        await _admin(session).card(other.org_id, created.request.id), [], []
+        await _admin(session).card(other.org_id, created.request.id),
+        [],
+        [],
     )
     assert (admin_card.org_name, admin_card.normative_hours) == (org.name, 24)
 
 
 async def test_card_without_a_house_org_serializes_an_explicit_null(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -485,21 +515,26 @@ async def test_card_without_a_house_org_serializes_an_explicit_null(
     await session.flush()
 
     card = RequestCard.of(
-        await service.get_card(own.user_id, created.request.id), [], []
+        await service.get_card(own.user_id, created.request.id),
+        [],
+        [],
     )
 
     assert card.model_dump(mode="json")["org_name"] is None
 
 
 async def test_list_mine_shows_only_own_requests_of_the_current_house(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     other_house = await make_org_house_flat_user()
     session.add(
         Resident(
-            user_id=own.user_id, house_id=other_house.house_id, role=ResidentRole.OWNER
-        )
+            user_id=own.user_id,
+            house_id=other_house.house_id,
+            role=ResidentRole.OWNER,
+        ),
     )
     await session.flush()
     neighbour = await _neighbour(session, own.house_id, "2")
@@ -517,7 +552,8 @@ async def test_list_mine_shows_only_own_requests_of_the_current_house(
 
 
 async def test_list_mine_filters_by_status(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -526,7 +562,11 @@ async def test_list_mine_filters_by_status(
     await _mark_done(session, done.request.id)
 
     rows, total = await service.list_mine(
-        own.user_id, own.house_id, RequestStatus.DONE, 20, 0
+        own.user_id,
+        own.house_id,
+        RequestStatus.DONE,
+        20,
+        0,
     )
 
     assert total == 1
@@ -534,7 +574,8 @@ async def test_list_mine_filters_by_status(
 
 
 async def test_accept_closes_the_reviewed_request_and_opens_rating(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -572,7 +613,8 @@ async def test_accept_closes_the_reviewed_request_and_opens_rating(
 
 
 async def test_accept_refuses_a_request_outside_review(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -631,7 +673,8 @@ async def test_auto_close_ends_an_expired_review_once_and_tells_the_author(
 
 
 async def test_rate_puts_the_score_and_closes_the_rating(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -650,7 +693,8 @@ async def test_rate_puts_the_score_and_closes_the_rating(
 
 
 async def test_rate_refuses_a_request_that_is_not_done(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -661,7 +705,8 @@ async def test_rate_refuses_a_request_that_is_not_done(
 
 
 async def test_rate_refuses_the_second_score(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -676,9 +721,10 @@ async def test_rate_refuses_the_second_score(
 
 @pytest.mark.parametrize("rating", [0, 6])
 async def test_rate_refuses_a_score_outside_the_scale(
-    session: AsyncSession, make_org_house_flat_user: Fixture, rating: int
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    rating: int,
 ) -> None:
-    # кнопка бота присылает любую строку, схему API бот не проходит вовсе
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
     created = await service.create(own.user_id, own.house_id, _draft())
@@ -690,7 +736,8 @@ async def test_rate_refuses_a_score_outside_the_scale(
 
 
 async def test_repeat_refuses_a_parent_that_is_not_done(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -701,7 +748,8 @@ async def test_repeat_refuses_a_parent_that_is_not_done(
 
 
 async def test_repeat_from_review_rejects_the_result_and_opens_a_new_request(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -736,7 +784,8 @@ async def test_repeat_from_review_rejects_the_result_and_opens_a_new_request(
 
 
 async def test_repeat_from_review_requires_a_comment(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -753,18 +802,24 @@ async def test_repeat_from_review_requires_a_comment(
 
 
 async def test_repeat_copies_the_parent_and_starts_from_scratch(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
     created = await service.create(
-        own.user_id, own.house_id, _draft(flat_id=own.flat_id, photos=[_photo()])
+        own.user_id,
+        own.house_id,
+        _draft(flat_id=own.flat_id, photos=[_photo()]),
     )
     parent_id = created.request.id
     await _mark_done(session, parent_id)
 
     repeated = await service.repeat(
-        own.user_id, parent_id, "Течет снова, хуже прежнего", [_photo()]
+        own.user_id,
+        parent_id,
+        "Течет снова, хуже прежнего",
+        [_photo()],
     )
 
     assert repeated.request.parent_request_id == parent_id
@@ -778,7 +833,8 @@ async def test_repeat_copies_the_parent_and_starts_from_scratch(
 
 
 async def test_repeat_without_a_new_description_keeps_the_parents_one(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -792,7 +848,8 @@ async def test_repeat_without_a_new_description_keeps_the_parents_one(
 
 
 async def test_repeat_refuses_a_blocked_resident(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     service = _make_service(session)
@@ -806,7 +863,8 @@ async def test_repeat_refuses_a_blocked_resident(
 
 
 async def test_export_prints_the_whole_life_of_the_request(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
@@ -824,7 +882,10 @@ async def test_export_prints_the_whole_life_of_the_request(
     ):
         await admin.change_status(own.org_id, request_id, target, None, staff)
     await RequestsRepo(session).add_photo(
-        request_id, result, RequestPhotoKind.RESULT, staff
+        request_id,
+        result,
+        RequestPhotoKind.RESULT,
+        staff,
     )
     await service.accept(own.user_id, request_id)
     await service.rate(own.user_id, request_id, 4, "Быстро, но натоптали")
@@ -849,18 +910,18 @@ async def test_export_prints_the_whole_life_of_the_request(
     ]
     assert card.rating == 4
     assert card.feedback == "Быстро, но натоптали"
-    # фото результата в "было" выдало бы работу УК за ущерб
     assert [photo.name for photo in card.photos] == [issue]
     assert [photo.name for photo in card.result_photos] == [result]
     assert all("sig=" in photo.url for photo in [*card.photos, *card.result_photos])
     events = await _events(session, EventType.REQUEST_EXPORTED)
     assert [(event.user_id, event.payload["request_id"]) for event in events] == [
-        (own.user_id, request_id)
+        (own.user_id, request_id),
     ]
 
 
 async def test_export_hides_a_request_of_another_resident_and_records_nothing(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     neighbour = await _neighbour(session, own.house_id, "2")
@@ -886,13 +947,16 @@ class _StubClassifier(YandexClassifier):
 
 @pytest.mark.parametrize("category", [RequestCategory.HEATING, None])
 async def test_classify_answers_the_category_with_its_zone_and_records_it(
-    session: AsyncSession, category: RequestCategory | None
+    session: AsyncSession,
+    category: RequestCategory | None,
 ) -> None:
     user_id = await _add_user(session)
     service = _make_service(session, classifier=_StubClassifier(category))
 
     response = await classify_request_text(
-        _account(user_id), service, ClassifyRequestRequest(text="Батареи холодные")
+        _account(user_id),
+        service,
+        ClassifyRequestRequest(text="Батареи холодные"),
     )
 
     assert response.category is category
@@ -903,7 +967,7 @@ async def test_classify_answers_the_category_with_its_zone_and_records_it(
     else:
         assert response.zone is CATEGORY_RULES[category].zone
         assert [(event.user_id, event.payload) for event in events] == [
-            (user_id, {"category": category.value})
+            (user_id, {"category": category.value}),
         ]
 
 
@@ -945,10 +1009,12 @@ async def test_create_records_an_accepted_suggestion_only_when_accepted(
 
 
 async def test_create_refuses_a_house_whose_org_is_not_connected(
-    session: AsyncSession, make_org_house_flat_user: Fixture
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user(
-        resident_role=ResidentRole.OWNER, registered=False
+        resident_role=ResidentRole.OWNER,
+        registered=False,
     )
     service = _make_service(session)
 

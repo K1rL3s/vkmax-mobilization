@@ -76,7 +76,9 @@ class PollsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def list_for_org(
-        self, org_id: OrgId, house_id: HouseId | None
+        self,
+        org_id: OrgId,
+        house_id: HouseId | None,
     ) -> Sequence[Poll]:
         stmt = select(Poll).where(polls_table.c.org_id == org_id)
         if house_id is not None:
@@ -86,7 +88,8 @@ class PollsRepo(BaseAlchemyRepo):
 
     async def get_vote(self, poll_id: PollId, user_id: UserId) -> Sequence[PollVote]:
         stmt = select(PollVote).where(
-            poll_votes_table.c.poll_id == poll_id, poll_votes_table.c.user_id == user_id
+            poll_votes_table.c.poll_id == poll_id,
+            poll_votes_table.c.user_id == user_id,
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
@@ -119,14 +122,14 @@ class PollsRepo(BaseAlchemyRepo):
                         "counted_by_area": counted_by_area,
                     }
                     for option_id in option_ids
-                ]
+                ],
             )
             .on_conflict_do_nothing(
                 index_elements=[
                     poll_votes_table.c.poll_id,
                     poll_votes_table.c.user_id,
                     poll_votes_table.c.option_id,
-                ]
+                ],
             )
             .returning(PollVote)
         )
@@ -134,7 +137,10 @@ class PollsRepo(BaseAlchemyRepo):
         return result.scalars().all()
 
     async def voted_flat_ids(
-        self, poll_id: PollId, *, verified_only: bool
+        self,
+        poll_id: PollId,
+        *,
+        verified_only: bool,
     ) -> Sequence[FlatId]:
         stmt = (
             select(poll_votes_table.c.flat_id)
@@ -171,7 +177,8 @@ class PollsRepo(BaseAlchemyRepo):
         stmt = (
             update(polls_table)
             .where(
-                polls_table.c.status == PollStatus.ACTIVE, polls_table.c.ends_at <= now
+                polls_table.c.status == PollStatus.ACTIVE,
+                polls_table.c.ends_at <= now,
             )
             .values(status=PollStatus.CLOSED)
             .returning(polls_table.c.id)

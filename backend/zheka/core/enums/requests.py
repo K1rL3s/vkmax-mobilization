@@ -72,25 +72,39 @@ class CategoryRule(ZhekaType):
 CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = MappingProxyType(
     {
         RequestCategory.LEAK: CategoryRule(
-            label="Протечка", zone=ResponsibilityZone.MANAGEMENT, normative_hours=4
+            label="Протечка",
+            zone=ResponsibilityZone.MANAGEMENT,
+            normative_hours=4,
         ),
         RequestCategory.ELEVATOR: CategoryRule(
-            label="Лифт", zone=ResponsibilityZone.MANAGEMENT, normative_hours=24
+            label="Лифт",
+            zone=ResponsibilityZone.MANAGEMENT,
+            normative_hours=24,
         ),
         RequestCategory.GARBAGE: CategoryRule(
-            label="Мусор", zone=ResponsibilityZone.MANAGEMENT, normative_hours=24
+            label="Мусор",
+            zone=ResponsibilityZone.MANAGEMENT,
+            normative_hours=24,
         ),
         RequestCategory.HEATING: CategoryRule(
-            label="Отопление", zone=ResponsibilityZone.UTILITY, normative_hours=24
+            label="Отопление",
+            zone=ResponsibilityZone.UTILITY,
+            normative_hours=24,
         ),
         RequestCategory.WATER_SUPPLY: CategoryRule(
-            label="Водоснабжение", zone=ResponsibilityZone.UTILITY, normative_hours=8
+            label="Водоснабжение",
+            zone=ResponsibilityZone.UTILITY,
+            normative_hours=8,
         ),
         RequestCategory.ELECTRICITY: CategoryRule(
-            label="Электричество", zone=ResponsibilityZone.UTILITY, normative_hours=24
+            label="Электричество",
+            zone=ResponsibilityZone.UTILITY,
+            normative_hours=24,
         ),
         RequestCategory.ENTRANCE: CategoryRule(
-            label="Подъезд", zone=ResponsibilityZone.MANAGEMENT, normative_hours=72
+            label="Подъезд",
+            zone=ResponsibilityZone.MANAGEMENT,
+            normative_hours=72,
         ),
         RequestCategory.YARD: CategoryRule(
             label="Двор и территория",
@@ -108,7 +122,9 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = MappingProxyType(
             normative_hours=72,
         ),
         RequestCategory.OTHER: CategoryRule(
-            label="Другое", zone=ResponsibilityZone.MANAGEMENT, normative_hours=72
+            label="Другое",
+            zone=ResponsibilityZone.MANAGEMENT,
+            normative_hours=72,
         ),
-    }
+    },
 )

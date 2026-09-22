@@ -35,7 +35,8 @@ def check_transition(
 
 
 def transition_path(
-    current: RequestStatus, target: RequestStatus
+    current: RequestStatus,
+    target: RequestStatus,
 ) -> tuple[RequestStatus, ...]:
     start, end = _CHAIN.index(current), _CHAIN.index(target)
     if end < start:

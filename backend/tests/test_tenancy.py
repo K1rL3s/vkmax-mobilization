@@ -66,15 +66,14 @@ def test_resolve_org_infers_single_membership() -> None:
 @pytest.mark.parametrize(
     ("roles", "header"),
     [
-        # заголовок называет организацию, в которой пользователь не состоит
         ([(1, OrgRole.ADMIN)], OrgId(2)),
-        # членств несколько, а заголовка нет
         ([(1, OrgRole.ADMIN), (2, OrgRole.EMPLOYEE)], None),
         ([(1, OrgRole.EXECUTOR)], None),
     ],
 )
 def test_resolve_org_refuses(
-    roles: list[tuple[int, OrgRole]], header: OrgId | None
+    roles: list[tuple[int, OrgRole]],
+    header: OrgId | None,
 ) -> None:
     memberships = [
         OrgMember(org_id=OrgId(org_id), user_id=UserId(1), role=role)
@@ -91,7 +90,9 @@ async def test_upsert_by_max_id_updates_existing_row(session: AsyncSession) -> N
 
     first = await users_repo.upsert_by_max_id(max_user_id, "Иван", "ivan")
     second = await users_repo.upsert_by_max_id(
-        max_user_id, "Иван Переименованный", None
+        max_user_id,
+        "Иван Переименованный",
+        None,
     )
 
     assert second.id == first.id
@@ -104,13 +105,12 @@ async def test_events_service_record_swallows_write_failure(
 ) -> None:
     events_service = EventsService(EventsRepo(session))
 
-    # объект добавлен до record(): откат savepoint не должен его потерять
     pending_user = User(
-        max_user_id=MaxUserId(secrets.randbits(48)), name="До сбоя события"
+        max_user_id=MaxUserId(secrets.randbits(48)),
+        name="До сбоя события",
     )
     session.add(pending_user)
 
-    # user_id, которого нет в базе - нарушение внешнего ключа events.user_id
     await events_service.record(EventType.MINIAPP_OPEN, user_id=UserId(999_999_999))
 
     events = (await session.execute(select(Event))).scalars().all()
@@ -147,7 +147,9 @@ async def test_events_service_record_serializes_decimal_payload(
     ],
 )
 def test_can_remove_member(
-    actor_role: OrgRole, target_role: OrgRole, expected: bool
+    actor_role: OrgRole,
+    target_role: OrgRole,
+    expected: bool,
 ) -> None:
     assert can_remove_member(actor_role, target_role) is expected
 

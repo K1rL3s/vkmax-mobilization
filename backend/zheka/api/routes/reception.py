@@ -44,7 +44,8 @@ async def list_reception_slots(
 
 @router.get("/appointments", summary="Мои записи на прием")
 async def list_my_appointments(
-    residency: CurrentResidencyDep, reception_service: FromDishka[ReceptionService]
+    residency: CurrentResidencyDep,
+    reception_service: FromDishka[ReceptionService],
 ) -> list[AppointmentItem]:
     rows = await reception_service.mine(residency.user_id)
     return [AppointmentItem.of(row) for row in rows]
@@ -61,7 +62,10 @@ async def book_appointment(
     reception_service: FromDishka[ReceptionService],
 ) -> AppointmentItem:
     booked = await reception_service.book(
-        residency.user_id, residency.house_id, body.starts_at, body.request_id
+        residency.user_id,
+        residency.house_id,
+        body.starts_at,
+        body.request_id,
     )
     return AppointmentItem.of(booked)
 
@@ -82,7 +86,8 @@ async def cancel_appointment(
 
 @router.get("/access-requests", summary="Запросы доступа в мою квартиру")
 async def list_my_access_requests(
-    residency: CurrentResidencyDep, access_service: FromDishka[AccessService]
+    residency: CurrentResidencyDep,
+    access_service: FromDishka[AccessService],
 ) -> list[AccessRequestItem]:
     rows = await access_service.list_for_resident(residency.flat_id)
     return [AccessRequestItem.of(row) for row in rows]
@@ -100,6 +105,8 @@ async def pick_access_slot(
     access_service: FromDishka[AccessService],
 ) -> AccessRequestItem:
     picked = await access_service.pick(
-        current_account.user_id, access_request_id, slot_id
+        current_account.user_id,
+        access_request_id,
+        slot_id,
     )
     return AccessRequestItem.of(picked)

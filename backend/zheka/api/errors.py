@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 def error_response(
-    request: Request, status_code: int, title: str, detail: str
+    request: Request,
+    status_code: int,
+    title: str,
+    detail: str,
 ) -> Response:
     return JSONResponse(
         status_code=status_code,
@@ -33,7 +36,7 @@ def error_response(
                 ok=False,
                 trace_id=request.state.trace_id,
                 error=BaseError(title=title, detail=detail),
-            )
+            ),
         ),
     )
 
@@ -58,7 +61,10 @@ async def validation_handler(request: Request, exc: RequestValidationError) -> R
         for error in exc.errors()
     )
     return error_response(
-        request, status.HTTP_400_BAD_REQUEST, "RequestValidationError", detail
+        request,
+        status.HTTP_400_BAD_REQUEST,
+        "RequestValidationError",
+        detail,
     )
 
 

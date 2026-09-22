@@ -147,7 +147,9 @@ class MaxSender:
         with _undelivered():
             async with BOT_RATE_LIMIT, _chat_rate_limit(chat_id):
                 await self._bot.pin_message(
-                    chat_id=chat_id, message_id=mid, notify=False
+                    chat_id=chat_id,
+                    message_id=mid,
+                    notify=False,
                 )
                 done = True
         return done

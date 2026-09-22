@@ -11,13 +11,11 @@ from zheka.core.services.files import FilesService
 
 _TOKEN = "test-max-token"  # noqa: S105
 
-# 4 МБ при потолке в 1 МБ: поток обязан оборваться далеко не на последнем куске
 _CHUNK = 64 * 1024
 _CHUNKS = 64
 
 
 class _FakeUpload:
-    # считает прочитанное: save, читающий все разом, выдаст себя
     def __init__(self, content_type: str, size: int) -> None:
         self.content_type = content_type
         self.size = size
@@ -35,7 +33,6 @@ def _make_service(tmp_path: Path, max_size_mb: int) -> FilesService:
 
 
 def _generated_name() -> str:
-    # форма, которую реально производит save: uuid4().hex плюс суффикс
     return f"{uuid4().hex}.jpg"
 
 
@@ -45,7 +42,9 @@ def _generated_name() -> str:
     ids=["oversized", "not-an-image"],
 )
 async def test_save_rejects_an_upload_before_reading_it_fully(
-    tmp_path: Path, content_type: str, size: int
+    tmp_path: Path,
+    content_type: str,
+    size: int,
 ) -> None:
     service = _make_service(tmp_path, max_size_mb=1)
     upload = _FakeUpload(content_type, size=size)
@@ -87,7 +86,6 @@ def test_verify_rejects_an_expired_link(tmp_path: Path) -> None:
         service.verify(name, expired, sig)
 
 
-# не-ASCII подпись - 404, а не TypeError из compare_digest
 @pytest.mark.parametrize("sig", ["forged", "é" * 64])
 def test_verify_rejects_a_forged_signature(tmp_path: Path, sig: str) -> None:
     service = _make_service(tmp_path, max_size_mb=10)
@@ -98,10 +96,12 @@ def test_verify_rejects_a_forged_signature(tmp_path: Path, sig: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["../../etc/passwd", "g" * 32 + ".jpg", "0" * 32 + ".php"]
+    "name",
+    ["../../etc/passwd", "g" * 32 + ".jpg", "0" * 32 + ".php"],
 )
 def test_path_of_rejects_anything_that_is_not_a_generated_name(
-    tmp_path: Path, name: str
+    tmp_path: Path,
+    name: str,
 ) -> None:
     service = _make_service(tmp_path, max_size_mb=10)
 
@@ -141,7 +141,6 @@ async def test_save_download_refuses_a_non_image(tmp_path: Path) -> None:
 async def test_save_download_breaks_an_oversized_stream_instead_of_landing_it(
     tmp_path: Path,
 ) -> None:
-    # потолок рвет запись на превышении, а не судит уже скачанный файл
     service = _make_service(tmp_path, max_size_mb=1)
     written = 0
 

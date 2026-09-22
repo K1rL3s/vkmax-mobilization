@@ -24,7 +24,8 @@ router = Router(name=__name__)
 
 @router.bot_added_to_chat()
 async def bot_added_handler(
-    update: BotAddedToChat, publisher: FromDishka[TaskPublisher]
+    update: BotAddedToChat,
+    publisher: FromDishka[TaskPublisher],
 ) -> None:
     publisher.publish(
         TaskName.ON_BOT_ADDED,
@@ -36,7 +37,8 @@ async def bot_added_handler(
 
 @router.bot_removed_from_chat()
 async def bot_removed_handler(
-    update: BotRemovedFromChat, chats_service: FromDishka[ChatsService]
+    update: BotRemovedFromChat,
+    chats_service: FromDishka[ChatsService],
 ) -> None:
     await chats_service.on_bot_removed(MaxChatId(update.chat_id))
 
@@ -77,7 +79,8 @@ async def unpin_handler(
 
 @router.message_removed()
 async def message_removed_handler(
-    update: MessageRemoved, chats_service: FromDishka[ChatsService]
+    update: MessageRemoved,
+    chats_service: FromDishka[ChatsService],
 ) -> None:
     await chats_service.on_message_removed(MaxChatId(update.chat_id), update.message_id)
 

@@ -57,7 +57,7 @@ class NotificationSettingsResponse(BaseSchema):
             settings=[
                 NotificationSettingItem(category=category, level=level)
                 for category, level in levels.items()
-            ]
+            ],
         )
 
 

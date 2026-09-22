@@ -77,7 +77,7 @@ async def broadcast_access_request(
 ) -> int:
     targets = await access_repo.list_targets(access_request_id)
     residents = await residents_repo.list_verified_for_flats(
-        [target.flat_id for target in targets]
+        [target.flat_id for target in targets],
     )
     for resident in residents:
         await open_card(

@@ -63,7 +63,6 @@ class Zoned:
         return datetime.combine(day, time(), self.zone)
 
     def to_utc(self, moment: datetime) -> datetime:
-        # время без зоны от клиента - местное время этой зоны
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=self.zone)
         return moment.astimezone(UTC)

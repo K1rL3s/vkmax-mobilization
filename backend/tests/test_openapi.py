@@ -13,7 +13,6 @@ from zheka.api.schemas.polls import DISCLAIMER
 
 CYRILLIC = re.compile(r"[а-яё]", re.IGNORECASE)
 
-# контракт мини-аппа: правка этого списка ломает фронт
 CONTRACT: tuple[tuple[str, str, str], ...] = (
     ("get", "/api/healthcheck", "healthcheck"),
     ("get", "/api/me", "get_me"),
@@ -153,8 +152,6 @@ CONTRACT: tuple[tuple[str, str, str], ...] = (
 )
 
 
-# контракту бот не нужен, а настоящий диспетчер в прогоне один и принадлежит
-# фикстуре bot_setup
 @pytest.fixture(scope="module")
 def app() -> FastAPI:
     return app_factory(make_config(), empty_bot_setup())
@@ -191,8 +188,6 @@ def test_every_route_has_russian_summary(openapi: dict[str, Any]) -> None:
 
 
 def test_no_unreachable_validation_response(openapi: dict[str, Any]) -> None:
-    # валидация отвечает 400 конвертом ApiError, автоматический 422 от FastAPI
-    # описывал бы форму, которую приложение не отдает никогда
     with_422 = [
         operation["operationId"]
         for methods in openapi["paths"].values()
@@ -222,7 +217,7 @@ _NULLABLE_INT = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
                         "anyOf": [
                             {"type": "string", "format": "date-time"},
                             {"type": "null"},
-                        ]
+                        ],
                     },
                     False,
                 ),
@@ -257,8 +252,6 @@ _NULLABLE_INT = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
         ("ChannelsSplitResponse", "is_empty", {"type": "boolean"}, True),
         ("BenchmarkResponse", "is_empty", {"type": "boolean"}, True),
         ("MetersSeasonResponse", "window_open", {"type": "boolean"}, True),
-        # меньше трех организаций с данными - сравнения нет, иначе чужое
-        # значение получается вычитанием
         ("BenchmarkMetric", "platform_median", _NULLABLE_INT, True),
         ("BenchmarkMetric", "rank", _NULLABLE_INT, True),
         ("BenchmarkMetric", "total", _NULLABLE_INT, True),
@@ -279,7 +272,8 @@ def test_schema_field(
 
 @pytest.mark.parametrize("schema_name", ["RequestListItem", "AdminRequestListItem"])
 def test_request_list_items_leave_card_only_fields_out(
-    openapi: dict[str, Any], schema_name: str
+    openapi: dict[str, Any],
+    schema_name: str,
 ) -> None:
     properties = openapi["components"]["schemas"][schema_name]["properties"]
 
@@ -300,7 +294,6 @@ def test_metric_unit_carries_points(openapi: dict[str, Any]) -> None:
 
 
 def test_request_export_is_the_card_and_the_disclaimer(openapi: dict[str, Any]) -> None:
-    # название УК уже есть в карточке, второе поле с тем же значением разъедется
     schema = openapi["components"]["schemas"]["RequestExport"]
 
     assert set(schema["properties"]) == {"request", "disclaimer"}

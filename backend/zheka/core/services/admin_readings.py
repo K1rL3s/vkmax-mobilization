@@ -25,7 +25,10 @@ class AdminReadingsService:
     __slots__ = ("_houses", "_meters", "_users")
 
     def __init__(
-        self, meters_repo: MetersRepo, houses_repo: HousesRepo, users_repo: UsersRepo
+        self,
+        meters_repo: MetersRepo,
+        houses_repo: HousesRepo,
+        users_repo: UsersRepo,
     ) -> None:
         self._meters = meters_repo
         self._houses = houses_repo
@@ -57,19 +60,19 @@ class AdminReadingsService:
         meters = {
             meter.id: meter
             for meter in await self._meters.list_by_ids(
-                {reading.meter_id for reading in readings}
+                {reading.meter_id for reading in readings},
             )
         }
         flats = {
             flat.id: flat
             for flat in await self._houses.list_flats_by_ids(
-                {meter.flat_id for meter in meters.values()}
+                {meter.flat_id for meter in meters.values()},
             )
         }
         users = {
             user.id: user
             for user in await self._users.list_by_ids(
-                {reading.submitted_by for reading in readings}
+                {reading.submitted_by for reading in readings},
             )
         }
 
@@ -91,6 +94,6 @@ class AdminReadingsService:
                     values=values_map,
                     consumption=consumption(values_map, previous_values),
                     submitted_by=users[reading.submitted_by],
-                )
+                ),
             )
         return rows, total

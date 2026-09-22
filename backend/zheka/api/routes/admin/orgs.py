@@ -24,14 +24,16 @@ router = APIRouter(tags=["Админка: организация"], route_class=
 
 @router.get("/admin/org", summary="Карточка организации")
 async def get_org(
-    current_org: AdminOrgDep, orgs_service: FromDishka[OrgsService]
+    current_org: AdminOrgDep,
+    orgs_service: FromDishka[OrgsService],
 ) -> OrgCard:
     return OrgCard.of(await orgs_service.card(current_org.org_id))
 
 
 @router.get("/admin/org/settings", summary="Настройки организации")
 async def get_org_settings(
-    current_org: CurrentOrgDep, orgs_service: FromDishka[OrgsService]
+    current_org: CurrentOrgDep,
+    orgs_service: FromDishka[OrgsService],
 ) -> OrgSettingsResponse:
     return OrgSettingsResponse.of(await orgs_service.settings(current_org.org_id))
 
@@ -57,12 +59,14 @@ async def update_org_settings(
 
 @router.get("/admin/org/members", summary="Сотрудники организации")
 async def list_org_members(
-    current_org: AdminOrgDep, orgs_service: FromDishka[OrgsService]
+    current_org: AdminOrgDep,
+    orgs_service: FromDishka[OrgsService],
 ) -> list[OrgMemberItem]:
     members = await orgs_service.members(current_org.org_id)
     return [
         OrgMemberItem.of(
-            view, can_remove=can_remove_member(current_org.role, view.member.role)
+            view,
+            can_remove=can_remove_member(current_org.role, view.member.role),
         )
         for view in members
     ]
@@ -70,7 +74,9 @@ async def list_org_members(
 
 @router.delete("/admin/org/members/{user_id}", summary="Исключить сотрудника")
 async def remove_org_member(
-    user_id: UserId, current_org: AdminOrgDep, orgs_service: FromDishka[OrgsService]
+    user_id: UserId,
+    current_org: AdminOrgDep,
+    orgs_service: FromDishka[OrgsService],
 ) -> OkResponse:
     await orgs_service.remove_member(current_org.org_id, current_org.role, user_id)
     return OkResponse()
@@ -85,7 +91,8 @@ async def list_org_invites(
     invites = await orgs_service.invites(current_org.org_id)
     return [
         OrgInviteItem.of(
-            invite, create_start_link(bot, org_invite_payload(invite.code))
+            invite,
+            create_start_link(bot, org_invite_payload(invite.code)),
         )
         for invite in invites
     ]
@@ -107,13 +114,16 @@ async def create_org_invite(
         body.max_activations,
     )
     return OrgInviteItem.of(
-        invite, create_start_link(bot, org_invite_payload(invite.code))
+        invite,
+        create_start_link(bot, org_invite_payload(invite.code)),
     )
 
 
 @router.delete("/admin/org/invites/{code}", summary="Отозвать приглашение")
 async def revoke_org_invite(
-    code: str, current_org: AdminOrgDep, orgs_service: FromDishka[OrgsService]
+    code: str,
+    current_org: AdminOrgDep,
+    orgs_service: FromDishka[OrgsService],
 ) -> OkResponse:
     await orgs_service.revoke_invite(current_org.org_id, code)
     return OkResponse()

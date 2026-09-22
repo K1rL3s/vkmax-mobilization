@@ -28,7 +28,8 @@ class FlatCard(BaseSchema):
     residents_count: int
     entrance: int | None = None
     area: int | None = Field(
-        default=None, description="Площадь в сотых долях квадратного метра"
+        default=None,
+        description="Площадь в сотых долях квадратного метра",
     )
     account_no: str | None = None
     verification_status: VerificationStatus | None = None

@@ -19,7 +19,9 @@ _plain = escape
 
 
 def request_status_changed(
-    request_id: RequestId, status: RequestStatus, comment: str | None
+    request_id: RequestId,
+    status: RequestStatus,
+    comment: str | None,
 ) -> str:
     text = f"Заявка №{request_id}: {REQUEST_STATUS_LABELS[status]}"
     if comment:

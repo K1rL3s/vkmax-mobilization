@@ -49,7 +49,7 @@ def parse_line(raw: Mapping[str, Any]) -> ChargeLine:
         service = ServiceType(raw_service)
     except ValueError as error:
         raise InvalidValue(
-            f"Неизвестная услуга в начислении: {raw_service!r}"
+            f"Неизвестная услуга в начислении: {raw_service!r}",
         ) from error
     return ChargeLine(
         service=service,
@@ -92,12 +92,17 @@ def _changed_line(current: ChargeLine, previous: ChargeLine) -> LineDelta:
 
 def _whole_line(service: ServiceType, delta: int, kind: LineDeltaKind) -> LineDelta:
     return LineDelta(
-        service=service, delta=delta, tariff_effect=0, volume_effect=delta, kind=kind
+        service=service,
+        delta=delta,
+        tariff_effect=0,
+        volume_effect=delta,
+        kind=kind,
     )
 
 
 def breakdown(
-    current: Sequence[ChargeLine], previous: Sequence[ChargeLine]
+    current: Sequence[ChargeLine],
+    previous: Sequence[ChargeLine],
 ) -> ChargeBreakdown:
     current_by_service = {line.service: line for line in current}
     previous_by_service = {line.service: line for line in previous}

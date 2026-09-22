@@ -141,7 +141,10 @@ class ChargesService:
         return await self._charges.list_tariffs(house_id)
 
     async def list_for_flat(
-        self, flat_id: FlatId, limit: int, offset: int
+        self,
+        flat_id: FlatId,
+        limit: int,
+        offset: int,
     ) -> tuple[Sequence[Charge], int]:
         return await self._charges.list_for_flat(flat_id, limit, offset)
 
@@ -152,7 +155,10 @@ class ChargesService:
         if house is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         return ChargeCardData(
-            charge=charge, house=house, flat=flat, lines=parse_lines(charge.lines)
+            charge=charge,
+            house=house,
+            flat=flat,
+            lines=parse_lines(charge.lines),
         )
 
     async def breakdown(self, charge_id: ChargeId, user_id: UserId) -> BreakdownData:
@@ -161,7 +167,7 @@ class ChargesService:
         house_id = (await self._access.get_flat(flat_id)).house_id
 
         current_lines, previous_lines, previous_charge = await self._diffed_lines(
-            charge
+            charge,
         )
         core = compute_breakdown(current_lines, previous_lines)
 
@@ -179,7 +185,9 @@ class ChargesService:
         consumption = await self._consumption(user_id, flat_id, house_id, charge.period)
 
         await self._events.record(
-            EventType.CHARGE_BREAKDOWN_OPENED, user_id=user_id, charge_id=charge_id
+            EventType.CHARGE_BREAKDOWN_OPENED,
+            user_id=user_id,
+            charge_id=charge_id,
         )
         return BreakdownData(
             charge=charge,
@@ -201,11 +209,15 @@ class ChargesService:
         house_id = (await self._access.get_flat(flat_id)).house_id
 
         current_lines, previous_lines, _previous_charge = await self._diffed_lines(
-            charge
+            charge,
         )
         core = compute_breakdown(current_lines, previous_lines)
         description = _dispute_description(
-            charge, core.lines, core.delta, comment, service
+            charge,
+            core.lines,
+            core.delta,
+            comment,
+            service,
         )
         photos = await self._period_photos(flat_id, charge.period)
 
@@ -247,11 +259,13 @@ class ChargesService:
         return charge
 
     async def _diffed_lines(
-        self, charge: Charge
+        self,
+        charge: Charge,
     ) -> tuple[list[ChargeLine], list[ChargeLine], Charge | None]:
         current_lines = parse_lines(charge.lines)
         previous_charge = await self._charges.get_by_period(
-            charge.flat_id, previous_period(charge.period)
+            charge.flat_id,
+            previous_period(charge.period),
         )
         previous_lines = (
             [] if previous_charge is None else parse_lines(previous_charge.lines)
@@ -268,7 +282,11 @@ class ChargesService:
         return photos
 
     async def _consumption(
-        self, user_id: UserId, flat_id: FlatId, house_id: HouseId, period: date
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
+        house_id: HouseId,
+        period: date,
     ) -> list[ServiceConsumption]:
         meters = await self._meters.list_for_flat(flat_id)
         result: list[ServiceConsumption] = []
@@ -285,7 +303,9 @@ class ChargesService:
                 for recent in recent_periods
             ]
             house_average = await self._readings.house_average(
-                house_id, meter.type, period
+                house_id,
+                meter.type,
+                period,
             )
             result.append(
                 ServiceConsumption(
@@ -293,6 +313,6 @@ class ChargesService:
                     meter_id=meter.id,
                     points=points,
                     house_average=house_average,
-                )
+                ),
             )
         return result

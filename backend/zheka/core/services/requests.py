@@ -259,7 +259,11 @@ class RequestsService:
         return await self._built_card(request, house)
 
     async def rate(
-        self, user_id: UserId, request_id: RequestId, rating: int, feedback: str | None
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        rating: int,
+        feedback: str | None,
     ) -> RequestCardData:
         if not MIN_RATING <= rating <= MAX_RATING:
             raise InvalidRequest(RATING_OUT_OF_RANGE)
@@ -300,7 +304,10 @@ class RequestsService:
         requests = await self._requests.list_reviewed_before(now - AUTO_CLOSE_AFTER)
         for request in requests:
             await self._complete_review(
-                request, None, RequestCompletionReason.AUTO_CLOSED, now
+                request,
+                None,
+                RequestCompletionReason.AUTO_CLOSED,
+                now,
             )
             if request.author_user_id is not None:
                 self._notifications.notify_user(
@@ -321,7 +328,10 @@ class RequestsService:
         auto = completion_reason is RequestCompletionReason.AUTO_CLOSED
         by_role = RequestActorRole.SYSTEM if auto else RequestActorRole.RESIDENT
         await self._requests.set_status(
-            request, RequestStatus.DONE, at, completion_reason=completion_reason
+            request,
+            RequestStatus.DONE,
+            at,
+            completion_reason=completion_reason,
         )
         await self._requests.add_log(
             request.id,
@@ -340,7 +350,8 @@ class RequestsService:
         )
         if auto:
             await self._events.record(
-                EventType.REQUEST_AUTO_CLOSED, request_id=request.id
+                EventType.REQUEST_AUTO_CLOSED,
+                request_id=request.id,
             )
             return
         await self._events.record(
@@ -364,13 +375,20 @@ class RequestsService:
         offset: int,
     ) -> tuple[list[RequestRow], int]:
         requests, total = await self._requests.list_for_user(
-            user_id, house_id, status, limit, offset
+            user_id,
+            house_id,
+            status,
+            limit,
+            offset,
         )
         rows = await build_rows(self._requests, self._houses, self._users, requests)
         return rows, total
 
     async def similar(
-        self, user_id: UserId, house_id: HouseId, category: RequestCategory
+        self,
+        user_id: UserId,
+        house_id: HouseId,
+        category: RequestCategory,
     ) -> SimilarRequests:
         resident = await self._active_resident(user_id, house_id)
         return await self._grouping.similar(
@@ -383,24 +401,34 @@ class RequestsService:
         )
 
     async def _group(
-        self, request: Request, house: House, joined_group_id: RequestGroupId | None
+        self,
+        request: Request,
+        house: House,
+        joined_group_id: RequestGroupId | None,
     ) -> None:
         if joined_group_id is not None:
             await self._grouping.joined(request, joined_group_id)
             return
         await self._grouping.attach(
-            request, await self._rules(house), datetime.now(UTC)
+            request,
+            await self._rules(house),
+            datetime.now(UTC),
         )
 
     async def _rules(self, house: House) -> GroupingRules:
         org_id = house.org_id
         return rules_of(
-            None if org_id is None else await self._orgs.get_settings(org_id)
+            None if org_id is None else await self._orgs.get_settings(org_id),
         )
 
     async def _built_card(self, request: Request, house: House) -> RequestCardData:
         return await build_card(
-            self._requests, self._houses, self._users, self._orgs, request, house
+            self._requests,
+            self._houses,
+            self._users,
+            self._orgs,
+            request,
+            house,
         )
 
     async def _open(self, request: Request, user_id: UserId) -> None:
@@ -414,11 +442,17 @@ class RequestsService:
         )
 
     async def _add_photos(
-        self, request: Request, photos: Sequence[str], user_id: UserId
+        self,
+        request: Request,
+        photos: Sequence[str],
+        user_id: UserId,
     ) -> None:
         for name in photos:
             await self._requests.add_photo(
-                request.id, name, RequestPhotoKind.ISSUE, user_id
+                request.id,
+                name,
+                RequestPhotoKind.ISSUE,
+                user_id,
             )
 
     def _checked_photos(self, photos: Sequence[str]) -> Sequence[str]:
@@ -486,7 +520,9 @@ class RequestsService:
     async def export(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         card = await self.get_card(user_id, request_id)
         await self._events.record(
-            EventType.REQUEST_EXPORTED, user_id=user_id, request_id=request_id
+            EventType.REQUEST_EXPORTED,
+            user_id=user_id,
+            request_id=request_id,
         )
         return card
 
@@ -494,7 +530,9 @@ class RequestsService:
         category = await self._classifier.classify(text)
         if category is not None:
             await self._events.record(
-                EventType.LLM_SUGGESTED, user_id=user_id, category=category.value
+                EventType.LLM_SUGGESTED,
+                user_id=user_id,
+                category=category.value,
             )
         return category
 
@@ -506,15 +544,15 @@ async def build_rows(
     requests: Sequence[Request],
 ) -> list[RequestRow]:
     photo_counts = await requests_repo.count_photos(
-        [request.id for request in requests]
+        [request.id for request in requests],
     )
     group_sizes = await requests_repo.count_by_group(
-        {request.group_id for request in requests if request.group_id is not None}
+        {request.group_id for request in requests if request.group_id is not None},
     )
     flats: dict[FlatId | None, Flat] = {
         flat.id: flat
         for flat in await houses_repo.list_flats_by_ids(
-            [request.flat_id for request in requests if request.flat_id is not None]
+            [request.flat_id for request in requests if request.flat_id is not None],
         )
     }
     executors: dict[UserId | None, User] = {
@@ -524,7 +562,7 @@ async def build_rows(
                 request.executor_user_id
                 for request in requests
                 if request.executor_user_id is not None
-            ]
+            ],
         )
     }
     return [
@@ -554,11 +592,11 @@ async def build_card(
     authors = {
         user.id: user
         for user in await users_repo.list_by_ids(
-            [message.author_user_id for message in messages]
+            [message.author_user_id for message in messages],
         )
     }
     group_sizes = await requests_repo.count_by_group(
-        [] if request.group_id is None else [request.group_id]
+        [] if request.group_id is None else [request.group_id],
     )
     executor = (
         None
@@ -583,7 +621,8 @@ async def build_card(
         timeline=await requests_repo.list_log(request.id),
         messages=[
             RequestMessageView(
-                message=message, author=authors.get(message.author_user_id)
+                message=message,
+                author=authors.get(message.author_user_id),
             )
             for message in messages
         ],
