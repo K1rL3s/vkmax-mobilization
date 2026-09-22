@@ -1,0 +1,11 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px 24px;
+
+  h2 {
+    margin: 0;
+  }
+}

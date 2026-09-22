@@ -13,9 +13,9 @@ import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
 import { type Residency } from "@/shared/model/session";
 import { closeIcon, homeIcon, Icon, plusIcon } from "@/shared/ui/icon";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { IconTile } from "@/shared/ui/icon-tile";
 
-import { UnlinkDialog } from "./unlink-dialog";
 import { useResidencySwitcher } from "./use-residency-switcher";
 import { useUnlink } from "./use-unlink";
 
@@ -104,10 +104,23 @@ const ResidenciesPage = () => {
         </Button>
       </div>
 
-      <UnlinkDialog
-        target={unlink.target}
+      <ConfirmDialog
+        isOpen={unlink.isOpen}
+        title="Отвязаться от дома?"
+        description={
+          <>
+            Заявки и показания останутся. Чтобы указать другую квартиру,
+            привяжитесь к дому заново.
+            {unlink.target?.verified &&
+              " Подтверждение квартиры при этом слетит — получать его придётся снова."}
+          </>
+        }
+        confirmLabel="Отвязаться"
+        error={
+          unlink.isFailed &&
+          "Не получилось отвязаться. Проверьте связь и попробуйте ещё раз"
+        }
         isPending={unlink.isPending}
-        isFailed={unlink.isFailed}
         onConfirm={unlink.submit}
         onClose={unlink.cancel}
       />

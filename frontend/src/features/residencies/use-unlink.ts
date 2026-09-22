@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { authParams, rqClient } from "@/shared/api/instance";
@@ -9,11 +8,13 @@ import {
   useSession,
   type Residency,
 } from "@/shared/model/session";
+import { useConfirm } from "@/shared/ui/confirm-dialog";
 
 export const useUnlink = () => {
   const navigate = useNavigate();
   const { residencies, currentResidency } = useSession();
-  const [target, setTarget] = useState<Residency | null>(null);
+  const confirm = useConfirm<Residency>();
+  const target = confirm.target;
 
   const unlink = rqClient.useMutation(
     "delete",
@@ -30,7 +31,7 @@ export const useUnlink = () => {
           forgetResidency();
         }
 
-        setTarget(null);
+        confirm.dismiss();
         await queryClient.invalidateQueries();
       },
     },
@@ -38,13 +39,14 @@ export const useUnlink = () => {
 
   return {
     target,
+    isOpen: confirm.isOpen,
     ask: (residency: Residency) => {
       unlink.reset();
-      setTarget(residency);
+      confirm.ask(residency);
     },
     cancel: () => {
       unlink.reset();
-      setTarget(null);
+      confirm.dismiss();
     },
     submit: () => {
       if (!target) {

@@ -1,0 +1,27 @@
+.Row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* заголовок опроса длиннее строки: на 360px он занимает две и обрезается */
+.Title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.Voted {
+  color: var(--text-themed);
+}

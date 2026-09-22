@@ -29,9 +29,6 @@
   }
 
   .Footer {
-    position: sticky;
-    bottom: 0;
     padding: 12px 16px;
-    background-color: var(--background-surface);
   }
 }

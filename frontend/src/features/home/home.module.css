@@ -18,6 +18,15 @@
     white-space: nowrap;
   }
 
+  /* рядом с кнопкой у заголовка остаётся половина ширины: в одну строку
+     туда влезает три слова */
+  .TwoLines {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
   .HouseCard,
   .CardLink {
     position: relative;

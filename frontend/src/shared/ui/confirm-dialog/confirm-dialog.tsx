@@ -1,52 +1,53 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button, Flex, Typography } from "@maxhub/max-ui";
 
-import type { Residency } from "@/shared/model/session";
+import styles from "./confirm-dialog.module.css";
 
-import styles from "./unlink-dialog.module.css";
-
-type UnlinkDialogProps = {
-  target: Residency | null;
-  isPending: boolean;
-  isFailed: boolean;
+type ConfirmDialogProps = {
+  isOpen: boolean;
+  title: string;
+  description: ReactNode;
+  confirmLabel: string;
+  error?: ReactNode;
+  isPending?: boolean;
   onConfirm: () => void;
   onClose: () => void;
 };
 
-export const UnlinkDialog = ({
-  target,
-  isPending,
-  isFailed,
+export const ConfirmDialog = ({
+  isOpen,
+  title,
+  description,
+  confirmLabel,
+  error,
+  isPending = false,
   onConfirm,
   onClose,
-}: UnlinkDialogProps) => {
+}: ConfirmDialogProps) => {
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    if (target) {
+    if (isOpen) {
       dialog.current?.showModal();
     } else {
       dialog.current?.close();
     }
-  }, [target]);
+  }, [isOpen]);
 
   return (
     <dialog ref={dialog} className={styles.Dialog} onClose={onClose}>
       <Flex direction="column" align="stretch" gapY={12}>
         <Typography.Text asChild variant="title" color="primary">
-          <h2 className={styles.Title}>Отвязаться от дома?</h2>
+          <h2 className={styles.Title}>{title}</h2>
         </Typography.Text>
 
         <Typography.Text variant="description" color="secondary">
-          Заявки и показания останутся. Чтобы указать другую квартиру,
-          привяжитесь к дому заново.
-          {target?.verified &&
-            " Подтверждение квартиры при этом слетит — получать его придётся снова."}
+          {description}
         </Typography.Text>
 
-        {isFailed && (
-          <Typography.Text variant="description" className={styles.Failed}>
-            Не получилось отвязаться. Проверьте связь и попробуйте ещё раз
+        {error && (
+          <Typography.Text className={styles.Error} variant="description">
+            {error}
           </Typography.Text>
         )}
 
@@ -57,7 +58,7 @@ export const UnlinkDialog = ({
           loading={isPending}
           onClick={onConfirm}
         >
-          Отвязаться
+          {confirmLabel}
         </Button>
 
         <Button

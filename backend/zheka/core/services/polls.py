@@ -58,6 +58,7 @@ class PollCardData(ZhekaType):
     status: PollStatus
     options: Sequence[PollOption]
     can_vote: bool
+    can_manage: bool
     my_option_ids: list[PollOptionId]
     voted: bool
     voted_flats: int
@@ -311,6 +312,7 @@ class PollsService:
             status=status,
             options=options,
             can_vote=can_vote,
+            can_manage=await self._can_manage(poll, user_id),
             my_option_ids=[PollOptionId(vote.option_id) for vote in votes],
             voted=bool(votes),
             voted_flats=voted_flats,
@@ -410,10 +412,13 @@ class PollsService:
             raise EntityNotFound(POLL_NOT_FOUND)
         return poll
 
-    async def _require_initiator_or_staff(self, poll: Poll, user_id: UserId) -> None:
+    async def _can_manage(self, poll: Poll, user_id: UserId) -> bool:
         if poll.created_by_user_id == user_id:
-            return
-        if not await self._is_poll_staff(poll, user_id):
+            return True
+        return await self._is_poll_staff(poll, user_id)
+
+    async def _require_initiator_or_staff(self, poll: Poll, user_id: UserId) -> None:
+        if not await self._can_manage(poll, user_id):
             raise NotEnoughRights(NOT_INITIATOR)
 
     async def _is_poll_staff(self, poll: Poll, user_id: UserId) -> bool:

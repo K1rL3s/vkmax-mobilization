@@ -21,6 +21,13 @@ export const formatTime = (iso: string) => timeFormat.format(new Date(iso));
 export const formatDayTime = (iso: string) =>
   `${formatDay(iso)}, ${formatTime(iso)}`;
 
+// площадь и доли приходят в сотых долях: 5420 это 54,2 м², 5000 это 50%
+export const formatArea = (area: number) =>
+  `${(area / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} м²`;
+
+export const formatPercent = (percent: number) =>
+  `${(percent / 100).toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`;
+
 export const plural = (
   count: number,
   [one, few, many]: [string, string, string],

@@ -1,6 +1,7 @@
 import {
   createBrowserRouter,
   Outlet,
+  redirect,
   RouterProvider,
   type To,
 } from "react-router-dom";
@@ -10,10 +11,12 @@ import { Component as ErrorPage } from "@/features/error/error.page";
 import { protectedLoader } from "./protected-loader";
 import { Providers } from "./providers";
 import {
+  adminLoader,
   onboardedLoader,
   sessionLoader,
   welcomeLoader,
 } from "./session-loader";
+import { AdminTabBar } from "@/features/admin-tab-bar";
 import { TabBar } from "@/features/tab-bar";
 import { useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
@@ -72,6 +75,24 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.MEETINGS} />,
+            children: [
+              {
+                path: Routes.MEETING,
+                lazy: () => import("@/features/meetings/poll.page"),
+              },
+              {
+                path: Routes.MEETING_NON_VOTERS,
+                lazy: () => import("@/features/meetings/non-voters.page"),
+              },
+              {
+                path: Routes.MEETING_NEW,
+                lazy: () => import("@/features/meetings/new-poll.page"),
+              },
+            ],
+          },
+          {
+            loader: onboardedLoader,
             element: <PushedPage fallback={Routes.HOME} />,
             children: [
               {
@@ -85,6 +106,52 @@ const router = createBrowserRouter([
               {
                 path: Routes.RESIDENCIES,
                 lazy: () => import("@/features/residencies/residencies.page"),
+              },
+              {
+                path: Routes.NEWS,
+                lazy: () => import("@/features/news/news.page"),
+              },
+              {
+                path: Routes.FAQ,
+                lazy: () => import("@/features/faq/faq.page"),
+              },
+            ],
+          },
+          {
+            loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.FLAT} />,
+            children: [
+              {
+                path: Routes.CHARGES,
+                lazy: () => import("@/features/charges/charges.page"),
+              },
+              {
+                path: Routes.CHARGE,
+                lazy: () => import("@/features/charges/charge.page"),
+              },
+            ],
+          },
+          {
+            loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.PROFILE} />,
+            children: [
+              {
+                path: Routes.HOUSE_CARD,
+                lazy: () => import("@/features/house-card/house-card.page"),
+              },
+              {
+                path: Routes.NOTIFICATIONS,
+                lazy: () => import("@/features/profile/notifications.page"),
+              },
+            ],
+          },
+          {
+            loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.HOUSE_CARD} />,
+            children: [
+              {
+                path: Routes.APPOINTMENTS,
+                lazy: () => import("@/features/appointments/appointments.page"),
               },
             ],
           },
@@ -129,6 +196,154 @@ const router = createBrowserRouter([
               {
                 path: Routes.PROFILE,
                 lazy: () => import("@/features/profile/profile.page"),
+              },
+            ],
+          },
+          {
+            loader: adminLoader,
+            children: [
+              {
+                path: Routes.ADMIN,
+                loader: () => redirect(Routes.ADMIN_REQUESTS),
+              },
+              {
+                element: (
+                  <>
+                    <Outlet />
+                    <AdminTabBar />
+                  </>
+                ),
+                children: [
+                  {
+                    path: Routes.ADMIN_REQUESTS,
+                    lazy: () =>
+                      import("@/features/admin-requests/admin-requests.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_ANNOUNCEMENTS,
+                    lazy: () =>
+                      import("@/features/admin-announcements/admin-announcements.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_POLLS,
+                    lazy: () =>
+                      import("@/features/admin-polls/admin-polls.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_RECEPTION,
+                    lazy: () =>
+                      import("@/features/admin-reception/admin-reception.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_HOUSES,
+                    lazy: () =>
+                      import("@/features/admin-houses/admin-houses.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_ANALYTICS,
+                    lazy: () =>
+                      import("@/features/admin-analytics/admin-analytics.page"),
+                  },
+                ],
+              },
+              {
+                element: <PushedPage fallback={Routes.ADMIN_REQUESTS} />,
+                children: [
+                  {
+                    path: Routes.ADMIN_REQUEST,
+                    lazy: () =>
+                      import("@/features/admin-requests/admin-request.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_REQUEST_PHONE,
+                    lazy: () =>
+                      import("@/features/admin-requests/admin-request-phone.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_REQUEST_GROUP,
+                    lazy: () =>
+                      import("@/features/admin-requests/admin-request-group.page"),
+                  },
+                ],
+              },
+              {
+                element: <PushedPage fallback={Routes.ADMIN_ANNOUNCEMENTS} />,
+                children: [
+                  {
+                    path: Routes.ADMIN_ANNOUNCEMENT_NEW,
+                    lazy: () =>
+                      import("@/features/admin-announcements/admin-announcement-new.page"),
+                  },
+                ],
+              },
+              {
+                element: <PushedPage fallback={Routes.ADMIN_POLLS} />,
+                children: [
+                  {
+                    path: Routes.ADMIN_POLL,
+                    lazy: () =>
+                      import("@/features/admin-polls/admin-poll.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_POLL_NEW,
+                    lazy: () =>
+                      import("@/features/admin-polls/admin-poll-new.page"),
+                  },
+                ],
+              },
+              {
+                element: <PushedPage fallback={Routes.ADMIN_RECEPTION} />,
+                children: [
+                  {
+                    path: Routes.ADMIN_ACCESS,
+                    lazy: () =>
+                      import("@/features/admin-reception/admin-access.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_ACCESS_NEW,
+                    lazy: () =>
+                      import("@/features/admin-reception/admin-access-new.page"),
+                  },
+                ],
+              },
+              {
+                element: <PushedPage fallback={Routes.ADMIN_HOUSES} />,
+                children: [
+                  {
+                    path: Routes.ADMIN_HOUSE,
+                    lazy: () =>
+                      import("@/features/admin-houses/admin-house.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_HOUSE_QR,
+                    lazy: () =>
+                      import("@/features/admin-houses/admin-house-qr.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_VERIFICATIONS,
+                    lazy: () =>
+                      import("@/features/admin-verifications/admin-verifications.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_ORG,
+                    lazy: () => import("@/features/admin-org/admin-org.page"),
+                  },
+                  {
+                    path: Routes.ADMIN_ORG_INVITES,
+                    lazy: () =>
+                      import("@/features/admin-org/admin-org-invites.page"),
+                  },
+                ],
+              },
+              {
+                element: <PushedPage fallback={Routes.ADMIN_ANALYTICS} />,
+                children: [
+                  {
+                    path: Routes.ADMIN_BENCHMARK,
+                    lazy: () =>
+                      import("@/features/admin-analytics/admin-benchmark.page"),
+                  },
+                ],
               },
             ],
           },

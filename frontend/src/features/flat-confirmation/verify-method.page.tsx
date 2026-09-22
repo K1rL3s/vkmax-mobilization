@@ -50,6 +50,7 @@ const VerifyMethodPage = () => {
 
         {isOrg && (
           <Textarea
+            mode="secondary"
             placeholder="Комментарий (необязательно)"
             value={form.comment}
             onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>

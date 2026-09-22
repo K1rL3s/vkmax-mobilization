@@ -15,6 +15,7 @@
     "mock": "mcs"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "@maxhub/max-ui": "^0.5.0",
     "@siberiacancode/reactuse": "^1.0.17",
     "@tanstack/react-query": "^5.103.1",
@@ -22,9 +23,12 @@
     "openapi-fetch": "^0.17.0",
     "openapi-react-query": "^0.5.4",
     "openapi-typescript": "^7.13.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-hook-form": "^7.88.0",
     "react-router-dom": "^7.18.4",
+    "recharts": "^3.10.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
