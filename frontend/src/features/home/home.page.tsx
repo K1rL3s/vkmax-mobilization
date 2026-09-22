@@ -11,6 +11,7 @@ import { generatePath, Link, useNavigate } from "react-router-dom";
 
 import { confirmationCaption } from "@/features/flat-confirmation";
 import { useHouseCard } from "@/features/house";
+import { useNextPoll } from "@/features/meetings";
 import { useReadingsHint } from "@/features/meters";
 import {
   CATEGORY_ICON,
@@ -22,6 +23,7 @@ import {
   STATUS_TONE,
 } from "@/features/request";
 import { cn } from "@/shared/lib/css";
+import { formatDay } from "@/shared/lib/format";
 import { useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 import { Card } from "@/shared/ui/card";
@@ -134,7 +136,8 @@ const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const { poll, news } = HOME_MOCK;
+  const { news } = HOME_MOCK;
+  const poll = useNextPoll();
   const { currentResidency: residency } = useSession();
   const request = useActiveRequest();
   const readingsHint = useReadingsHint();
@@ -266,27 +269,39 @@ const HomePage = () => {
               </Card>
             </Flex>
 
-            <Flex asChild align="center" gap={12}>
-              <Card>
-                <IconTile icon={pollIcon} tone="promo" />
-                <Flex
-                  className={styles.Grow}
-                  align="stretch"
-                  direction="column"
-                  gapY={2}
-                >
-                  <Typography.Text variant="body-strong" color="primary">
-                    {poll.title}
-                  </Typography.Text>
-                  <Typography.Text variant="description" color="secondary">
-                    {poll.deadline}
-                  </Typography.Text>
-                </Flex>
-                <Button asChild size="small" variant="secondary">
-                  <Link to={Routes.MEETINGS}>Голосовать</Link>
-                </Button>
-              </Card>
-            </Flex>
+            {poll && (
+              <Flex asChild align="center" gap={12}>
+                <Card>
+                  <IconTile icon={pollIcon} tone="promo" />
+                  <Flex
+                    className={styles.Grow}
+                    align="stretch"
+                    direction="column"
+                    gapY={2}
+                  >
+                    <Typography.Text
+                      className={styles.TwoLines}
+                      variant="body-strong"
+                      color="primary"
+                    >
+                      {poll.title}
+                    </Typography.Text>
+                    <Typography.Text variant="description" color="secondary">
+                      до {formatDay(poll.ends_at)}
+                    </Typography.Text>
+                  </Flex>
+                  <Button asChild size="small" variant="secondary">
+                    <Link
+                      to={generatePath(Routes.MEETING, {
+                        pollId: String(poll.id),
+                      })}
+                    >
+                      Голосовать
+                    </Link>
+                  </Button>
+                </Card>
+              </Flex>
+            )}
           </section>
         </Flex>
       )}

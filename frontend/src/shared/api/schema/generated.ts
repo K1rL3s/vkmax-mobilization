@@ -3280,6 +3280,8 @@ export interface components {
       created_by_role: string;
       /** Can Vote */
       can_vote: boolean;
+      /** Can Manage */
+      can_manage: boolean;
       /** Options */
       options: components["schemas"]["PollOptionItem"][];
       /**

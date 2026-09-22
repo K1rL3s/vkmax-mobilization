@@ -11555,6 +11555,9 @@ components:
         can_vote:
           type: boolean
           title: Can Vote
+        can_manage:
+          type: boolean
+          title: Can Manage
         options:
           items:
             $ref: '#/components/schemas/PollOptionItem'
@@ -11591,6 +11594,7 @@ components:
       - house_id
       - created_by_role
       - can_vote
+      - can_manage
       - options
       - my_option_ids
       title: PollCard

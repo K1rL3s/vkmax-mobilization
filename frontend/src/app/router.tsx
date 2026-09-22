@@ -72,6 +72,24 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.MEETINGS} />,
+            children: [
+              {
+                path: Routes.MEETING,
+                lazy: () => import("@/features/meetings/poll.page"),
+              },
+              {
+                path: Routes.MEETING_NON_VOTERS,
+                lazy: () => import("@/features/meetings/non-voters.page"),
+              },
+              {
+                path: Routes.MEETING_NEW,
+                lazy: () => import("@/features/meetings/new-poll.page"),
+              },
+            ],
+          },
+          {
+            loader: onboardedLoader,
             element: <PushedPage fallback={Routes.HOME} />,
             children: [
               {

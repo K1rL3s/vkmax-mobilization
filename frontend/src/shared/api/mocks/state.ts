@@ -32,8 +32,10 @@ type MockFlat = {
   id: number;
   house_id: number;
   number: string;
-  entrance: number;
-  area: number;
+  // подъезд и площадь квартиры знает УК, и у части квартир их нет: на них
+  // держатся «Без подъезда» в непроголосовавших и квартиры вне расчёта кворума
+  entrance: number | null;
+  area: number | null;
   account_no: string;
 };
 
@@ -96,6 +98,33 @@ type MockResidency = {
   flat_number: string | null;
   role: Schemas["ResidentRole"];
   verified: boolean;
+};
+
+type MockPollVote = {
+  // голос самого жителя: из него берутся my_option_ids и запрет второго голоса
+  is_mine: boolean;
+  flat_id: number | null;
+  option_ids: number[];
+  // голос без веса: житель не подтвердил квартиру либо за эту квартиру уже
+  // проголосовал другой собственник
+  counted_by_area: boolean;
+};
+
+type MockPoll = {
+  id: number;
+  house_id: number;
+  title: string;
+  description: string | null;
+  created_by_role: string;
+  // опрос завёл сам житель: на бэке это created_by_user_id, наружу уходит
+  // одним признаком can_manage
+  created_by_me: boolean;
+  is_multiple: boolean;
+  closed: boolean;
+  created_at: string;
+  ends_at: string;
+  options: { id: number; text: string }[];
+  votes: MockPollVote[];
 };
 
 const ZHILSERVIS: Schemas["OrgContacts"] = {
@@ -211,6 +240,62 @@ const FLATS: MockFlat[] = [
     entrance: 1,
     area: 3890,
     account_no: "1600070055",
+  },
+  {
+    id: 105,
+    house_id: 1,
+    number: "12",
+    entrance: 1,
+    area: 4165,
+    account_no: "1600120088",
+  },
+  {
+    id: 106,
+    house_id: 1,
+    number: "28",
+    entrance: 1,
+    area: null,
+    account_no: "1600280091",
+  },
+  {
+    id: 107,
+    house_id: 1,
+    number: "63",
+    entrance: 3,
+    area: 6180,
+    account_no: "1600630014",
+  },
+  {
+    id: 108,
+    house_id: 1,
+    number: "90",
+    entrance: 4,
+    area: null,
+    account_no: "1600900027",
+  },
+  {
+    id: 109,
+    house_id: 1,
+    number: "101",
+    entrance: 4,
+    area: 5875,
+    account_no: "1601010063",
+  },
+  {
+    id: 110,
+    house_id: 1,
+    number: "77",
+    entrance: 3,
+    area: 3240,
+    account_no: "1600770049",
+  },
+  {
+    id: 111,
+    house_id: 1,
+    number: "5",
+    entrance: null,
+    area: 4100,
+    account_no: "1600050072",
   },
   {
     id: 104,
@@ -501,6 +586,278 @@ const SEED_REQUESTS: MockRequest[] = [
   }),
 ];
 
+// шесть состояний блока разом: идущий без моего голоса и с ним, закрытый с
+// кворумом и без, опрос с мнениями без веса и мультивыборный. Площади квартир
+// дома неровные, две квартиры без площади - процент считается не на удобных
+// числах
+const SEED_POLLS: MockPoll[] = [
+  {
+    id: 301,
+    house_id: 1,
+    title: "Ремонт подъезда: что делать в первую очередь",
+    description:
+      "УК выделила смету на один вид работ в этом году. Выберите, с чего начать.",
+    created_by_role: "chairman",
+    created_by_me: false,
+    is_multiple: false,
+    closed: false,
+    created_at: days(-2),
+    ends_at: days(2),
+    options: [
+      { id: 511, text: "Покрасить стены" },
+      { id: 512, text: "Заменить окна" },
+      { id: 513, text: "Починить почтовые ящики" },
+    ],
+    votes: [
+      { is_mine: true, flat_id: 101, option_ids: [512], counted_by_area: true },
+      {
+        is_mine: false,
+        flat_id: 102,
+        option_ids: [511],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 103,
+        option_ids: [512],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 109,
+        option_ids: [512],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 111,
+        option_ids: [511],
+        counted_by_area: true,
+      },
+    ],
+  },
+  {
+    id: 302,
+    house_id: 1,
+    title: "Установка шлагбаума во дворе",
+    description:
+      "Двор открыт для сквозного проезда, мест для жителей не хватает.",
+    created_by_role: "chairman",
+    created_by_me: true,
+    is_multiple: false,
+    closed: false,
+    created_at: days(-4),
+    ends_at: days(5),
+    options: [
+      { id: 521, text: "За" },
+      { id: 522, text: "Против" },
+      { id: 523, text: "Воздержусь" },
+    ],
+    votes: [
+      {
+        is_mine: false,
+        flat_id: 102,
+        option_ids: [521],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 107,
+        option_ids: [521],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 110,
+        option_ids: [521],
+        counted_by_area: true,
+      },
+    ],
+  },
+  {
+    id: 303,
+    house_id: 1,
+    title: "Где поставить детскую площадку",
+    description: null,
+    created_by_role: "chairman",
+    created_by_me: false,
+    is_multiple: false,
+    closed: false,
+    created_at: days(-6),
+    ends_at: days(9),
+    options: [
+      { id: 531, text: "У первого подъезда" },
+      { id: 532, text: "За домом, у сквера" },
+    ],
+    votes: [
+      {
+        is_mine: false,
+        flat_id: 102,
+        option_ids: [531],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 107,
+        option_ids: [532],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 106,
+        option_ids: [531],
+        counted_by_area: false,
+      },
+      {
+        is_mine: false,
+        flat_id: 108,
+        option_ids: [532],
+        counted_by_area: false,
+      },
+      {
+        is_mine: false,
+        flat_id: null,
+        option_ids: [531],
+        counted_by_area: false,
+      },
+    ],
+  },
+  {
+    id: 304,
+    house_id: 1,
+    title: "Что благоустроить во дворе в этом году",
+    description: "Можно выбрать несколько вариантов.",
+    created_by_role: "chairman",
+    created_by_me: false,
+    is_multiple: true,
+    closed: false,
+    created_at: days(-8),
+    ends_at: days(14),
+    options: [
+      { id: 541, text: "Детская площадка" },
+      { id: 542, text: "Парковка" },
+      { id: 543, text: "Озеленение" },
+      { id: 544, text: "Освещение" },
+    ],
+    votes: [
+      {
+        is_mine: false,
+        flat_id: 102,
+        option_ids: [541, 543],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 103,
+        option_ids: [543],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 109,
+        option_ids: [542],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 110,
+        option_ids: [541, 544],
+        counted_by_area: true,
+      },
+    ],
+  },
+  {
+    id: 305,
+    house_id: 1,
+    title: "Переход на прямые договоры с ресурсоснабжающими организациями",
+    description: null,
+    created_by_role: "staff",
+    created_by_me: false,
+    is_multiple: false,
+    closed: true,
+    created_at: days(-20),
+    ends_at: days(-3),
+    options: [
+      { id: 551, text: "Поддерживаю" },
+      { id: 552, text: "Не поддерживаю" },
+    ],
+    votes: [
+      { is_mine: true, flat_id: 101, option_ids: [552], counted_by_area: true },
+      {
+        is_mine: false,
+        flat_id: 102,
+        option_ids: [551],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 103,
+        option_ids: [551],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 107,
+        option_ids: [551],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 109,
+        option_ids: [551],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 110,
+        option_ids: [552],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 111,
+        option_ids: [551],
+        counted_by_area: true,
+      },
+    ],
+  },
+  {
+    id: 306,
+    house_id: 1,
+    title: "Смена подрядчика по уборке двора",
+    description: null,
+    created_by_role: "chairman",
+    created_by_me: true,
+    is_multiple: false,
+    closed: true,
+    created_at: days(-30),
+    ends_at: days(-10),
+    options: [
+      { id: 561, text: "Сменить" },
+      { id: 562, text: "Оставить текущего" },
+    ],
+    votes: [
+      {
+        is_mine: false,
+        flat_id: 103,
+        option_ids: [561],
+        counted_by_area: true,
+      },
+      {
+        is_mine: false,
+        flat_id: 110,
+        option_ids: [562],
+        counted_by_area: true,
+      },
+    ],
+  },
+];
+
+// голоса живут внутри опроса и правятся голосованием, поэтому сид копируется
+// вглубь: иначе первый же голос осел бы в константе и пережил сброс состояния
+const seedPolls = (): MockPoll[] =>
+  SEED_POLLS.map((poll) => ({ ...poll, votes: [...poll.votes] }));
+
 const TAKEN_FLAT_IDS = new Set<number>([103]);
 
 const state = {
@@ -516,11 +873,14 @@ const state = {
   demandSent: new Set<number>(),
   requests: [...SEED_REQUESTS],
   readings: [...SEED_READINGS],
+  polls: seedPolls(),
   files: new Map<string, string>(),
   nextResidentId: 501,
   nextVerificationId: 9001,
   nextRequestId: 150,
   nextReadingId: 3100,
+  nextPollId: 320,
+  nextPollOptionId: 600,
   nextFileId: 1,
 };
 
@@ -533,11 +893,14 @@ export const resetState = (): void => {
   state.demandSent = new Set();
   state.requests = [...SEED_REQUESTS];
   state.readings = [...SEED_READINGS];
+  state.polls = seedPolls();
   state.files = new Map();
   state.nextResidentId = 501;
   state.nextVerificationId = 9001;
   state.nextRequestId = 150;
   state.nextReadingId = 3100;
+  state.nextPollId = 320;
+  state.nextPollOptionId = 600;
   state.nextFileId = 1;
 };
 
@@ -1021,6 +1384,11 @@ export const flatCard = (
   };
 };
 
+// житель демо-данных - председатель совета дома 1: там же лежат опросы,
+// которые он завёл, и без этого создание опроса нечем проверить
+export const isChairman = (residency: MockResidency): boolean =>
+  residency.house_id === 1 && residency.role === "owner";
+
 export const removeResidency = (residentId: number): boolean => {
   const next = state.residencies.filter(
     (residency) => residency.resident_id !== residentId,
@@ -1051,7 +1419,7 @@ export function residencySummary(
     role: residency.role,
     status: "active",
     verified: residency.verified,
-    is_chairman: false,
+    is_chairman: isChairman(residency),
     can_see_charges: residency.role === "owner",
     can_vote: residency.role === "owner",
     is_connected: house?.is_connected ?? false,
@@ -1288,4 +1656,211 @@ export const recognizedValues = (
       value + (zone === "night" ? Math.round(step / 3000) * 1000 : step),
     ]),
   );
+};
+
+// порог кворума и дисклеймер приходят полями ответа, фронт их не зашивает
+const QUORUM_PERCENT = 5000;
+
+const POLL_DISCLAIMER =
+  "предварительный сбор позиций собственников, не является голосованием (ОСС) по ЖК РФ";
+
+// доля в сотых долях процента: площадь * 10000 / площадь дома
+const areaPercent = (area: number, totalArea: number): number =>
+  totalArea === 0 ? 0 : Math.floor((area * 10000) / totalArea);
+
+const pollStatus = (poll: MockPoll): Schemas["PollStatus"] =>
+  poll.closed || new Date(poll.ends_at) <= new Date() ? "closed" : "active";
+
+// вес считает квартиры, а не голоса: у квартиры один голос, и голос без веса
+// в счёт не идёт вовсе
+const weightedFlats = (poll: MockPoll): number[] => [
+  ...new Set(
+    poll.votes.flatMap((vote) =>
+      vote.counted_by_area && vote.flat_id !== null ? [vote.flat_id] : [],
+    ),
+  ),
+];
+
+export const myVote = (poll: MockPoll): MockPollVote | undefined =>
+  poll.votes.find((vote) => vote.is_mine);
+
+export const housePolls = (houseId: number): MockPoll[] => {
+  const items = state.polls.filter((poll) => poll.house_id === houseId);
+
+  // порядок задаёт бэк, фронт его не пересортировывает: свежие сверху, идущие
+  // опросы перед завершёнными
+  items.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+  items.sort(
+    (a, b) =>
+      Number(pollStatus(a) === "closed") - Number(pollStatus(b) === "closed"),
+  );
+
+  return items;
+};
+
+export const pollListItem = (poll: MockPoll): Schemas["PollListItem"] => ({
+  id: poll.id,
+  title: poll.title,
+  status: pollStatus(poll),
+  // опрос начинается в момент создания, отдельной даты старта у него нет
+  starts_at: poll.created_at,
+  ends_at: poll.ends_at,
+  is_multiple: poll.is_multiple,
+  voted: myVote(poll) !== undefined,
+  voted_flats: weightedFlats(poll).length,
+});
+
+export const findPoll = (pollId: number): MockPoll | undefined =>
+  state.polls.find((poll) => poll.id === pollId);
+
+export const pollCard = (poll: MockPoll): Schemas["PollCard"] => {
+  const residency = residencyForHouse(poll.house_id);
+
+  return {
+    ...pollListItem(poll),
+    house_id: poll.house_id,
+    created_by_role: poll.created_by_role,
+    can_vote:
+      residency !== undefined &&
+      residency.role === "owner" &&
+      pollStatus(poll) === "active",
+    can_manage: poll.created_by_me,
+    options: poll.options.map((option, index) => ({
+      id: option.id,
+      text: option.text,
+      position: index,
+    })),
+    disclaimer: POLL_DISCLAIMER,
+    description: poll.description,
+    my_option_ids: myVote(poll)?.option_ids ?? [],
+    is_oss: false,
+  };
+};
+
+export const pollResults = (poll: MockPoll): Schemas["PollResults"] => {
+  const flats = FLATS.filter((flat) => flat.house_id === poll.house_id);
+  const areaOf = (flatId: number) =>
+    flats.find((flat) => flat.id === flatId)?.area ?? null;
+  const totalArea = flats.reduce((sum, flat) => sum + (flat.area ?? 0), 0);
+  const votedIds = weightedFlats(poll);
+  const votedArea = votedIds.reduce((sum, id) => sum + (areaOf(id) ?? 0), 0);
+  const percent = areaPercent(votedArea, totalArea);
+
+  return {
+    poll_id: poll.id,
+    status: pollStatus(poll),
+    total_flats: flats.length,
+    voted_flats: votedIds.length,
+    total_area: totalArea,
+    voted_area: votedArea,
+    voted_area_percent: percent,
+    quorum_percent: QUORUM_PERCENT,
+    quorum_reached: percent >= QUORUM_PERCENT,
+    // мнение без веса считается по голосующему, а не по квартире: у квартиры
+    // без веса квартиры и нет
+    unverified_flats: poll.votes.filter((vote) => !vote.counted_by_area).length,
+    options: poll.options.map((option) => {
+      const optionFlats = [
+        ...new Set(
+          poll.votes.flatMap((vote) =>
+            vote.counted_by_area &&
+            vote.flat_id !== null &&
+            vote.option_ids.includes(option.id)
+              ? [vote.flat_id]
+              : [],
+          ),
+        ),
+      ];
+      const area = optionFlats.reduce((sum, id) => sum + (areaOf(id) ?? 0), 0);
+
+      return {
+        option_id: option.id,
+        text: option.text,
+        flats_count: optionFlats.length,
+        area,
+        area_percent: areaPercent(area, totalArea),
+      };
+    }),
+    disclaimer: POLL_DISCLAIMER,
+    is_oss: false,
+    flats_without_area: flats.filter((flat) => flat.area === null).length,
+  };
+};
+
+export const addPollVote = (poll: MockPoll, optionIds: number[]): void => {
+  const residency = residencyForHouse(poll.house_id);
+  const flatId = residency?.flat_id ?? null;
+
+  poll.votes = [
+    ...poll.votes,
+    {
+      is_mine: true,
+      flat_id: flatId,
+      option_ids: optionIds,
+      // вес даёт подтверждённая квартира, за которую ещё никто не голосовал
+      counted_by_area:
+        residency?.verified === true &&
+        flatId !== null &&
+        !weightedFlats(poll).includes(flatId),
+    },
+  ];
+};
+
+export const pollNonVoters = (
+  poll: MockPoll,
+): Schemas["PollNonVoterItem"][] => {
+  const voted = weightedFlats(poll);
+  const items = FLATS.filter(
+    (flat) => flat.house_id === poll.house_id && !voted.includes(flat.id),
+  );
+
+  // порядок задаёт бэк: по подъездам, квартиры без подъезда в конце
+  items.sort(
+    (a, b) =>
+      Number(a.entrance === null) - Number(b.entrance === null) ||
+      (a.entrance ?? 0) - (b.entrance ?? 0) ||
+      a.number.localeCompare(b.number, "ru"),
+  );
+
+  return items.map((flat) => ({
+    flat_id: flat.id,
+    flat_number: flat.number,
+    entrance: flat.entrance,
+  }));
+};
+
+export const createPoll = (
+  houseId: number,
+  draft: {
+    title: string;
+    description: string | null;
+    options: string[];
+    ends_at: string;
+    is_multiple: boolean;
+  },
+): MockPoll => {
+  const now = new Date().toISOString();
+  const poll: MockPoll = {
+    id: state.nextPollId,
+    house_id: houseId,
+    title: draft.title,
+    description: draft.description,
+    created_by_role: "chairman",
+    created_by_me: true,
+    is_multiple: draft.is_multiple,
+    closed: false,
+    created_at: now,
+    ends_at: draft.ends_at,
+    options: draft.options.map((text, index) => ({
+      id: state.nextPollOptionId + index,
+      text,
+    })),
+    votes: [],
+  };
+
+  state.nextPollId += 1;
+  state.nextPollOptionId += draft.options.length;
+  state.polls = [...state.polls, poll];
+
+  return poll;
 };

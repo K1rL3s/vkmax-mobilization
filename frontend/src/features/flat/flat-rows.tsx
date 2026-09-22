@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { CellSimple, Typography } from "@maxhub/max-ui";
 import { useNavigate } from "react-router-dom";
 
-import { plural } from "@/shared/lib/format";
+import { formatArea, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 
 import type { FlatCard } from "./use-flat";
@@ -26,11 +26,7 @@ export const FlatRows = ({ flat }: { flat: FlatCard }) => {
   const navigate = useNavigate();
   const isMetersOpen = flat.verified && flat.meters_count > 0;
 
-  // площадь приезжает в сотых долях квадратного метра
-  const area =
-    flat.area == null
-      ? null
-      : `${(flat.area / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} м²`;
+  const area = flat.area == null ? null : formatArea(flat.area);
 
   const meters = flat.verified
     ? `${flat.meters_count} ${plural(flat.meters_count, ["счётчик", "счётчика", "счётчиков"])}`

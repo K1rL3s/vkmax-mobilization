@@ -12,6 +12,9 @@ export const Routes = {
   REQUEST: "/requests/:requestId",
   METERS: "/meters",
   MEETINGS: "/meetings",
+  MEETING_NEW: "/meetings/new",
+  MEETING: "/meetings/:pollId",
+  MEETING_NON_VOTERS: "/meetings/:pollId/non-voters",
   PROFILE: "/profile",
   OUTSIDE_MAX: "/outside-max",
 } as const;

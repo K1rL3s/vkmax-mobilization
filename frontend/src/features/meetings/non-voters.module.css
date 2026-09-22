@@ -1,0 +1,31 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px 24px;
+
+  h1,
+  h2 {
+    margin: 0;
+  }
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+/* номера квартир идут плиткой: списком строк сотня квартир превращается в
+   бесконечную ленту */
+.Flats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.Flat {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background-color: var(--background-card);
+}

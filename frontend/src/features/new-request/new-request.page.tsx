@@ -41,6 +41,7 @@ const NewRequestPage = () => {
 
             <Textarea
               className={styles.Description}
+              mode="secondary"
               rows={4}
               placeholder="Опишите проблему своими словами: что, где и когда началось"
               value={form.description}

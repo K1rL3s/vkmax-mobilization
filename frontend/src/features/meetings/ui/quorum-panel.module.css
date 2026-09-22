@@ -1,0 +1,48 @@
+.Panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Value {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.Track {
+  position: relative;
+  overflow: hidden;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--controls-inactive);
+}
+
+.Fill {
+  height: 100%;
+  border-radius: 3px;
+  background-color: var(--icon-themed);
+}
+
+.Mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background-color: var(--text-primary);
+}
+
+.reached {
+  color: var(--text-positive);
+}
+
+.Fill.reached {
+  background-color: var(--icon-positive);
+}

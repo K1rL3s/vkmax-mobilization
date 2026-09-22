@@ -1,0 +1,65 @@
+.Option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Option.selected {
+  border-color: var(--icon-themed);
+}
+
+.Option.mine {
+  border-color: color-mix(in srgb, var(--icon-themed) 40%, transparent);
+}
+
+.Control {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+}
+
+.Marker {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--controls-inactive);
+  border-radius: 50%;
+}
+
+.Marker.square {
+  border-radius: 6px;
+}
+
+.Marker.checked {
+  border-color: var(--icon-themed);
+  background-color: var(--icon-themed);
+  box-shadow: inset 0 0 0 3px var(--background-card);
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Mine {
+  flex-shrink: 0;
+  color: var(--icon-themed);
+}
+
+.Track {
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--controls-inactive);
+}
+
+.Fill {
+  height: 100%;
+  border-radius: 2px;
+  background-color: var(--icon-themed);
+}

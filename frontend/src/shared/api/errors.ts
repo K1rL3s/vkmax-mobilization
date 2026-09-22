@@ -16,10 +16,9 @@ const isApiError = (error: unknown): error is ApiError => {
   return typeof error.status === "number";
 };
 
-export const isConflict = (error: unknown): boolean => {
-  if (!isApiError(error)) {
-    return false;
-  }
+const hasStatus = (error: unknown, status: number): boolean =>
+  isApiError(error) && error.status === status;
 
-  return error.status === 409;
-};
+export const isConflict = (error: unknown): boolean => hasStatus(error, 409);
+
+export const isForbidden = (error: unknown): boolean => hasStatus(error, 403);

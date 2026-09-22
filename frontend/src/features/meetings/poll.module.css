@@ -1,0 +1,25 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px 24px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.Disclaimer {
+  color: var(--text-secondary);
+}
+
+.Failed {
+  color: var(--text-negative);
+}
+
+.Panel {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-secondary);
+}

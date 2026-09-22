@@ -15,6 +15,7 @@
     "mock": "mcs"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "@maxhub/max-ui": "^0.5.0",
     "@siberiacancode/reactuse": "^1.0.17",
     "@tanstack/react-query": "^5.103.1",
@@ -24,6 +25,7 @@
     "openapi-typescript": "^7.13.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-hook-form": "^7.88.0",
     "react-router-dom": "^7.18.4",
     "zod": "^4.6.5"
   },

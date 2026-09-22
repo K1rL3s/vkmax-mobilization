@@ -2,6 +2,7 @@ import { flatsConfigs } from "./flats";
 import { housesConfigs } from "./houses";
 import { meConfigs } from "./me";
 import { metersConfigs } from "./meters";
+import { pollsConfigs } from "./polls";
 import { requestsConfigs } from "./requests";
 
 export const mockConfigs = [
@@ -10,6 +11,7 @@ export const mockConfigs = [
   ...flatsConfigs,
   ...metersConfigs,
   ...requestsConfigs,
+  ...pollsConfigs,
 ];
 
 export { resetState } from "./state";
