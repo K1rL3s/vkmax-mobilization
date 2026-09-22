@@ -7,6 +7,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.logger.context import trace_id
@@ -65,3 +66,12 @@ async def transaction_middleware(request: Request, call_next: Call) -> Response:
     else:
         await session.rollback()
     return response
+
+
+class RequestStateMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        scope["state"] = dict(scope.get("state", {}))
+        await self.app(scope, receive, send)

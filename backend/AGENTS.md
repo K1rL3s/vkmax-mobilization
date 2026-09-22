@@ -83,7 +83,10 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   `agen.asend(exc)`, so it cannot decide. A new entry point with a REQUEST
   container brings its own decider or its writes are silently dropped.
 - Http middleware order lives only in `setup_middlewares` (`zheka/api/app.py`);
-  `trace_id_middleware` registers last, i.e. outermost.
+  `trace_id_middleware` is the outermost `app.middleware("http")`.
+  `RequestStateMiddleware` registers last: gunicorn 26 hands every request the
+  one worker `scope["state"]` instead of a copy, so without it concurrent
+  requests share the dishka container of the last one to arrive.
 - `EventsService.record` writes on a savepoint and flushes the caller's
   pending session: call it after the business action's own flush.
 - Cross-org isolation has one tool, `scoped_to_org`

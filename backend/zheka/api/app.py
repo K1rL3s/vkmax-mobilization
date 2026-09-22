@@ -16,6 +16,7 @@ from maxo.routing.utils import collect_used_updates
 from zheka.__meta__ import API_PREFIX, __version__
 from zheka.api.errors import ERROR_RESPONSES, exception_handlers
 from zheka.api.middlewares import (
+    RequestStateMiddleware,
     request_logging_middleware,
     trace_id_middleware,
     transaction_middleware,
@@ -158,6 +159,7 @@ def setup_middlewares(
     )
 
     setup_dishka(container, app)
+    app.add_middleware(RequestStateMiddleware)
 
 
 def _lifespan(

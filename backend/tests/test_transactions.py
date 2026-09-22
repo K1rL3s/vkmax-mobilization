@@ -21,6 +21,7 @@ from maxo.types import ChatTitleChanged, User as MaxUser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.pool import QueuePool
+from starlette.types import Receive, Scope, Send
 from taskiq import TaskiqMessage, TaskiqResult
 
 from tests.conftest import (
@@ -334,3 +335,24 @@ async def test_failed_bot_handler_leaves_nothing(
 
     assert await _committed(bot_engine, marker) == 0
     assert _delivered(bot_broker, marker) == 0
+
+
+async def test_a_request_leaves_the_worker_state_alone(
+    probe_container: AsyncContainer,
+) -> None:
+    app = FastAPI()
+    app.include_router(probe_router)
+    setup_middlewares(app, probe_container, ())
+    worker_state: dict[str, object] = {}
+
+    async def gunicorn_worker(scope: Scope, receive: Receive, send: Send) -> None:
+        await app({**scope, "state": worker_state}, receive, send)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=gunicorn_worker),
+        base_url="http://probe",
+    ) as client:
+        response = await client.get("/probe/no-database")
+
+    assert response.json() == {"ok": True}
+    assert worker_state == {}
