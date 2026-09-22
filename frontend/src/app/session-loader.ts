@@ -5,16 +5,30 @@ import { parseStartParam, shouldHandleDeeplink } from "@/features/deeplink";
 import { getMaxLaunch } from "@/shared/lib/max";
 import {
   currentResidency,
+  hasWorkingOrg,
   isOnboarded,
   loadSession,
+  startTarget,
+  type StartTarget,
 } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
+
+const startRoute = (target: StartTarget) => {
+  switch (target) {
+    case "admin":
+      return Routes.ADMIN;
+    case "home":
+      return Routes.HOME;
+    case "onboarding":
+      return Routes.WELCOME;
+  }
+};
 
 export const onboardedLoader = async () => {
   const session = await loadSession();
 
   if (!isOnboarded(session)) {
-    throw redirect(Routes.WELCOME);
+    throw redirect(startRoute(startTarget(session)));
   }
 
   const current = currentResidency(session);
@@ -36,17 +50,17 @@ export const welcomeLoader = async () => {
     throw redirect(Routes.DEEPLINK);
   }
 
-  if (isOnboarded(await loadSession())) {
-    throw redirect(Routes.HOME);
+  const target = startTarget(await loadSession());
+
+  if (target !== "onboarding") {
+    throw redirect(startRoute(target));
   }
 
   return null;
 };
 
 export const adminLoader = async () => {
-  const session = await loadSession();
-
-  if (session.orgs.length === 0) {
+  if (!hasWorkingOrg(await loadSession())) {
     throw redirect(Routes.HOME);
   }
 

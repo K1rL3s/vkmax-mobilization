@@ -41,6 +41,7 @@ import {
 } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import { DemandCard } from "./demand-card";
 import { useActiveRequest } from "./use-active-request";
@@ -88,12 +89,7 @@ const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
             >
               Заявка №{request.id}
             </Typography.Text>
-            <Typography.Text
-              variant="label-strong"
-              className={cn(styles.StatusPill, styles[tone])}
-            >
-              {STATUS_LABEL[request.status]}
-            </Typography.Text>
+            <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
           </Flex>
           <Typography.Text
             variant="body-strong"

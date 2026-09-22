@@ -1,11 +1,13 @@
-import { Typography } from "@maxhub/max-ui";
-import { NavLink } from "react-router-dom";
+import { Tappable, Typography } from "@maxhub/max-ui";
+import { NavLink, useNavigate } from "react-router-dom";
 
 import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
+import { useSession } from "@/shared/model/session";
 import {
   buildingIcon,
   chartIcon,
+  chevronSmallIcon,
   Icon,
   megaphoneIcon,
   navMeetingsIcon,
@@ -25,22 +27,43 @@ const TABS = [
 ];
 
 export const AdminTabBar = () => {
+  const navigate = useNavigate();
+  const { currentResidency, selectCabinet } = useSession();
+
+  const exit = currentResidency
+    ? { label: "Кабинет жителя", to: Routes.HOME }
+    : { label: "Привязать квартиру", to: Routes.ONBOARDING_HOUSE };
+
+  const leave = () => {
+    selectCabinet("resident");
+    void navigate(exit.to, { replace: true });
+  };
+
   return (
     <nav className={styles.AdminTabBar}>
-      {TABS.map((tab) => (
-        <NavLink
-          key={tab.to}
-          to={tab.to}
-          className={({ isActive }) =>
-            cn(styles.Tab, isActive && styles.TabActive)
-          }
-        >
-          <Icon src={tab.icon} size={20} />
-          <Typography.Text variant="tag" className={styles.Label}>
-            {tab.label}
-          </Typography.Text>
-        </NavLink>
-      ))}
+      <Tappable className={styles.Exit} onClick={leave}>
+        <Icon src={chevronSmallIcon} size={10} className={styles.ExitArrow} />
+        <Typography.Text variant="tag" color="primary">
+          {exit.label}
+        </Typography.Text>
+      </Tappable>
+
+      <div className={styles.Tabs}>
+        {TABS.map((tab) => (
+          <NavLink
+            key={tab.to}
+            to={tab.to}
+            className={({ isActive }) =>
+              cn(styles.Tab, isActive && styles.TabActive)
+            }
+          >
+            <Icon src={tab.icon} size={20} />
+            <Typography.Text variant="tag" className={styles.Label}>
+              {tab.label}
+            </Typography.Text>
+          </NavLink>
+        ))}
+      </div>
     </nav>
   );
 };

@@ -10,11 +10,11 @@ import {
   type RequestCompletionReason,
   type RequestListItem,
 } from "@/features/request";
-import { cn } from "@/shared/lib/css";
 import { formatDay, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { Chevron } from "@/shared/ui/chevron";
 import { IconTile } from "@/shared/ui/icon-tile";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import styles from "./request-row.module.css";
 
@@ -83,12 +83,7 @@ export const RequestRow = ({ request }: { request: RequestListItem }) => {
           >
             №{request.id} · {formatDay(request.created_at)}
           </Typography.Text>
-          <Typography.Text
-            className={cn(styles.StatusPill, styles[tone])}
-            variant="label-strong"
-          >
-            {STATUS_LABEL[request.status]}
-          </Typography.Text>
+          <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
         </Flex>
 
         <Typography.Text
