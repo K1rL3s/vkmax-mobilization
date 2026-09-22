@@ -89,7 +89,10 @@ async def list_my_access_requests(
     residency: CurrentResidencyDep,
     access_service: FromDishka[AccessService],
 ) -> list[AccessRequestItem]:
-    rows = await access_service.list_for_resident(residency.flat_id)
+    rows = await access_service.list_for_resident(
+        residency.flat_id,
+        verified=residency.verified,
+    )
     return [AccessRequestItem.of(row) for row in rows]
 
 

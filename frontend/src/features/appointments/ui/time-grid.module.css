@@ -1,0 +1,12 @@
+.Grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* кит даёт кнопке 20px отступа по бокам: в четверти экрана шириной 360 время
+   не помещается и режется многоточием */
+.Grid > .Slot {
+  min-width: 0;
+  padding-inline: 4px;
+}

@@ -36,6 +36,9 @@ class OrgContacts(BaseSchema):
     license_no: str | None = None
     reception_note: str | None = None
     is_demo: bool = False
+    timezone: str = Field(
+        description="Часовой пояс IANA: в нем приемные часы и слоты записи",
+    )
 
     @classmethod
     def of(cls, org: Organization) -> Self:

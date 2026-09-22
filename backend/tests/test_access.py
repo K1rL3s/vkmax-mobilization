@@ -392,7 +392,7 @@ async def test_the_resident_list_carries_the_flat_and_the_choice(
     slot_id = grid.request.slots[0].slot.id
     await service.pick(user_id, request_id, slot_id)
 
-    rows = await service.list_for_resident(flat_id)
+    rows = await service.list_for_resident(flat_id, verified=True)
 
     assert len(rows) == 1
     assert rows[0].my_flat_id == flat_id
@@ -401,7 +401,7 @@ async def test_the_resident_list_carries_the_flat_and_the_choice(
     assert rows[0].targets_count == 2
     assert rows[0].house.address.endswith("Тестовая, 1")
 
-    neighbour_rows = await service.list_for_resident(neighbour_flat)
+    neighbour_rows = await service.list_for_resident(neighbour_flat, verified=True)
 
     assert neighbour_rows[0].my_slot_id is None
 
@@ -558,3 +558,20 @@ async def test_the_access_day_is_past_by_the_house_clock(
                 datetime.combine(day, time(23), MOSCOW),
             ),
         )
+
+
+async def test_an_unverified_resident_sees_no_access_request(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    fixture = await make_org_house_flat_user()
+    service = _make_service(session)
+    flat_id, _ = await _with_resident(session, fixture.house_id, "12")
+    await service.create(
+        fixture.org_id,
+        fixture.user_id,
+        _draft(fixture.house_id, [flat_id]),
+    )
+
+    assert await service.list_for_resident(flat_id, verified=False) == []
+    assert len(await service.list_for_resident(flat_id, verified=True)) == 1

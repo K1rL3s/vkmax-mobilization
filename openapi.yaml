@@ -11116,12 +11116,17 @@ components:
           type: boolean
           title: Is Demo
           default: false
+        timezone:
+          type: string
+          title: Timezone
+          description: 'Часовой пояс IANA: в нем приемные часы и слоты записи'
       type: object
       required:
       - id
       - name
       - phone
       - address
+      - timezone
       title: OrgContacts
     OrgInviteItem:
       properties:

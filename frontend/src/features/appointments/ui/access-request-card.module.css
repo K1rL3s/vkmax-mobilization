@@ -1,0 +1,26 @@
+.Card {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.Error {
+  color: var(--text-negative);
+}
+
+/* боковые 20px кита режут «с 15:00» многоточием на ширине 360 */
+.Grid > .Slot {
+  min-width: 0;
+  padding-inline: 4px;
+}

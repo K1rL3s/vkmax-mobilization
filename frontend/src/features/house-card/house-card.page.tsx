@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Button, CellSimple, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link, Navigate } from "react-router-dom";
 
+import { MyAppointmentsSection } from "@/features/appointments";
 import { type HouseCard, useHouseCard } from "@/features/house";
 import { cn } from "@/shared/lib/css";
 import { formatArea } from "@/shared/lib/format";
@@ -137,9 +138,12 @@ const Org = ({ house }: { house: HouseCard }) => {
       </div>
 
       {house.is_connected ? (
-        <Button asChild size="large" stretched>
-          <Link to={Routes.APPOINTMENTS}>Записаться на приём</Link>
-        </Button>
+        <>
+          <Button asChild size="large" stretched>
+            <Link to={Routes.APPOINTMENTS}>Записаться на приём</Link>
+          </Button>
+          <MyAppointmentsSection timeZone={org.timezone} />
+        </>
       ) : (
         <Typography.Text variant="description" color="secondary">
           УК ещё не подключилась к сервису, поэтому запись на приём, тарифы и

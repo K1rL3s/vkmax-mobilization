@@ -1,0 +1,9 @@
+.Panel {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Close {
+  color: var(--icon-tertiary);
+}

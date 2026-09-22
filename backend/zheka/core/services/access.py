@@ -223,8 +223,11 @@ class AccessService:
     async def list_for_resident(
         self,
         flat_id: FlatId | None,
+        *,
+        verified: bool,
     ) -> list[AccessRequestData]:
-        if flat_id is None:
+        # выбор слота (`_target`) принимает только подтвержденную квартиру
+        if flat_id is None or not verified:
             return []
         pairs = await self._access.list_for_flat(flat_id)
         mine = {request.id: target for request, target in pairs}

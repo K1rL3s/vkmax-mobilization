@@ -135,6 +135,7 @@ const ZHILSERVIS: Schemas["OrgContacts"] = {
   license_no: "16-000123",
   reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
   is_demo: true,
+  timezone: "Europe/Moscow",
 };
 
 // УК неподключённого дома известна из реестра лицензий, поэтому контакты у неё
@@ -147,6 +148,7 @@ const LENINSKIY: Schemas["OrgContacts"] = {
   license_no: "16-000456",
   reception_note: null,
   is_demo: false,
+  timezone: "Europe/Moscow",
 };
 
 const HOUSES: MockHouse[] = [

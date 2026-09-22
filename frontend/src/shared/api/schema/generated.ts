@@ -500,6 +500,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/classify": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Подсказать категорию по описанию */
+    post: operations["classify_request_text"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/flats/{flat_id}/meters": {
     parameters: {
       query?: never;
@@ -816,7 +833,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Свободные слоты приема */
+    /**
+     * Свободные слоты приема
+     * @description Без даты - слоты на две недели вперед, с датой - только на этот день. Занятый слот приходит с is_free=false, прошедший не приходит вовсе
+     */
     get: operations["list_reception_slots"];
     put?: never;
     post?: never;
@@ -836,7 +856,10 @@ export interface paths {
     /** Мои записи на прием */
     get: operations["list_my_appointments"];
     put?: never;
-    /** Записаться на прием */
+    /**
+     * Записаться на прием
+     * @description request_id - заявка жителя по этому дому, чтобы обсудить ее
+     */
     post: operations["book_appointment"];
     delete?: never;
     options?: never;
@@ -854,7 +877,10 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Отменить запись на прием */
+    /**
+     * Отменить запись на прием
+     * @description Отмена освобождает слот для следующего жителя
+     */
     delete: operations["cancel_appointment"];
     options?: never;
     head?: never;
@@ -887,7 +913,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Выбрать слот доступа */
+    /**
+     * Выбрать слот доступа
+     * @description Выбор можно поменять, пока в окне есть места
+     */
     post: operations["pick_access_slot"];
     delete?: never;
     options?: never;
@@ -1469,7 +1498,10 @@ export interface paths {
     };
     /** Часы приема организации */
     get: operations["list_reception_windows"];
-    /** Задать часы приема */
+    /**
+     * Задать часы приема
+     * @description Заменяет всю сетку целиком. Несколько окон в один день - это обеденный перерыв, пустой список - прием не ведется. capacity - сколько жителей принимают в один слот
+     */
     put: operations["set_reception_windows"];
     post?: never;
     delete?: never;
@@ -1485,7 +1517,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Записи на прием */
+    /**
+     * Записи на прием
+     * @description Без даты - на сегодня
+     */
     get: operations["list_org_appointments"];
     put?: never;
     post?: never;
@@ -1505,7 +1540,10 @@ export interface paths {
     /** Запросы доступа организации */
     get: operations["list_org_access_requests"];
     put?: never;
-    /** Собрать доступ в квартиры */
+    /**
+     * Собрать доступ в квартиры
+     * @description Ячейку получают только квартиры с подтвержденным жителем, остальные возвращаются в flats_without_residents
+     */
     post: operations["create_access_request"];
     delete?: never;
     options?: never;
@@ -1675,6 +1713,12 @@ export interface components {
       access_request: components["schemas"]["AccessRequestItem"];
       /** Targets */
       targets: components["schemas"]["AccessTargetCell"][];
+      /**
+       * Flats Without Residents
+       * @description Квартиры, которым не досталось ячейки: в них некому ответить - подтвержденного жителя нет вовсе или он заблокирован УК. Заполняется только при создании запроса
+       * @default []
+       */
+      flats_without_residents: number[];
     };
     /** AccessRequestItem */
     AccessRequestItem: {
@@ -1714,7 +1758,10 @@ export interface components {
        * Format: date-time
        */
       starts_at: string;
-      /** Capacity */
+      /**
+       * Capacity
+       * @description Сколько квартир помещается в окно
+       */
       capacity: number;
     };
     /** AccessSlotItem */
@@ -1726,9 +1773,15 @@ export interface components {
        * Format: date-time
        */
       starts_at: string;
-      /** Capacity */
+      /**
+       * Capacity
+       * @description Сколько квартир помещается в окно
+       */
       capacity: number;
-      /** Taken */
+      /**
+       * Taken
+       * @description Сколько квартир уже выбрали это окно
+       */
       taken: number;
     };
     /** AccessTargetCell */
@@ -1741,11 +1794,6 @@ export interface components {
       slot_id?: number | null;
       /** Responded At */
       responded_at?: string | null;
-    };
-    /** ActivateDemoRequest */
-    ActivateDemoRequest: {
-      /** Code */
-      code?: string | null;
     };
     /** AddMeterRequest */
     AddMeterRequest: {
@@ -1772,7 +1820,7 @@ export interface components {
       /** Building */
       building: string;
       /** Cadastral No */
-      cadastral_no: string;
+      cadastral_no: string | null;
       /** Entrances */
       entrances: number;
       /** Flats Count */
@@ -2045,9 +2093,15 @@ export interface components {
       org_name?: string | null;
       /**
        * Recipients Count
+       * @description Сколько адресатов было на момент отправки: по одному на жителя для канала direct и по одному на привязанный чат для канала chat
        * @default 0
        */
       recipients_count: number;
+      /**
+       * Houses Without Chat
+       * @description Дома, у которых не привязан чат, поэтому объявление туда не ушло. Заполняется только при создании объявления
+       */
+      houses_without_chat?: number[];
     };
     /** ApiError[BaseError] */
     ApiError_BaseError_: {
@@ -2123,18 +2177,24 @@ export interface components {
       unit: components["schemas"]["MetricUnit"];
       /**
        * Value
-       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках
+       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках, points в сотых долях балла оценки
        */
       value: number;
       /**
        * Platform Median
-       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках
+       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках, points в сотых долях балла оценки. null, если организаций с данными меньше трех: иначе сравнение выдает чужое значение
        */
-      platform_median: number;
-      /** Rank */
-      rank: number;
-      /** Total */
-      total: number;
+      platform_median: number | null;
+      /**
+       * Rank
+       * @description null, если организаций с данными меньше трех: иначе сравнение выдает чужое значение
+       */
+      rank: number | null;
+      /**
+       * Total
+       * @description null, если организаций с данными меньше трех: иначе сравнение выдает чужое значение
+       */
+      total: number | null;
     };
     /** BenchmarkRegionRow */
     BenchmarkRegionRow: {
@@ -2145,7 +2205,7 @@ export interface components {
       unit: components["schemas"]["MetricUnit"];
       /**
        * Value
-       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках
+       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках, points в сотых долях балла оценки
        */
       value: number;
       /** City */
@@ -2159,6 +2219,11 @@ export interface components {
       regions: components["schemas"]["BenchmarkRegionRow"][];
       /** Unconnected Houses */
       unconnected_houses: components["schemas"]["UnconnectedHouseItem"][];
+      /**
+       * Is Empty
+       * @description Нет ни своих метрик, ни разрезов, ни неподключенных домов: фронт показывает пустое состояние
+       */
+      is_empty: boolean;
     };
     /** BindingCodeResponse */
     BindingCodeResponse: {
@@ -2218,6 +2283,11 @@ export interface components {
       total: number;
       /** Items */
       items: components["schemas"]["ChannelSplitItem"][];
+      /**
+       * Is Empty
+       * @description Данных нет: фронт показывает пустое состояние, а не пустоту
+       */
+      is_empty: boolean;
     };
     /** ChargeBreakdown */
     ChargeBreakdown: {
@@ -2367,7 +2437,7 @@ export interface components {
       label: string;
       /**
        * Value
-       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках
+       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках, points в сотых долях балла оценки
        */
       value: number;
     };
@@ -2387,6 +2457,19 @@ export interface components {
       region: string;
       /** City */
       city: string;
+    };
+    /** ClassifyRequestRequest */
+    ClassifyRequestRequest: {
+      /**
+       * Text
+       * @description Описание проблемы жителем
+       */
+      text: string;
+    };
+    /** ClassifyRequestResponse */
+    ClassifyRequestResponse: {
+      category: components["schemas"]["RequestCategory"] | null;
+      zone: components["schemas"]["ResponsibilityZone"] | null;
     };
     /** ConsentRequest */
     ConsentRequest: {
@@ -2492,6 +2575,11 @@ export interface components {
       caller_name?: string | null;
       /** Caller Phone */
       caller_phone?: string | null;
+      /**
+       * Resident Id
+       * @description Житель дома, от чьего имени заявка: он становится ее автором, получает уведомления, принимает и оценивает работу. Квартира - его, имя и телефон звонившего тогда необязательны
+       */
+      resident_id?: number | null;
     };
     /** CreatePollRequest */
     CreatePollRequest: {
@@ -2553,6 +2641,11 @@ export interface components {
       tiles: components["schemas"]["DashboardTile"][];
       /** Charts */
       charts: components["schemas"]["ChartSeries"][];
+      /**
+       * Is Empty
+       * @description Данных нет: фронт показывает пустое состояние, а не пустоту
+       */
+      is_empty: boolean;
     };
     /** DashboardTile */
     DashboardTile: {
@@ -2563,7 +2656,7 @@ export interface components {
       unit: components["schemas"]["MetricUnit"];
       /**
        * Value
-       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках
+       * @description Целое в единицах unit: count без масштаба, minutes в минутах, percent в сотых долях процента, kopeck в копейках, points в сотых долях балла оценки
        */
       value: number;
       /**
@@ -2581,8 +2674,8 @@ export interface components {
     };
     /** DemoActivationResponse */
     DemoActivationResponse: {
-      org?: components["schemas"]["OrgMembership"] | null;
-      residency?: components["schemas"]["ResidencySummary"] | null;
+      org: components["schemas"]["OrgMembership"];
+      residency: components["schemas"]["ResidencySummary"];
     };
     /** DisputeChargeRequest */
     DisputeChargeRequest: {
@@ -2773,7 +2866,7 @@ export interface components {
       /** Building */
       building: string;
       /** Cadastral No */
-      cadastral_no: string;
+      cadastral_no: string | null;
       /** Entrances */
       entrances: number;
       /** Is Connected */
@@ -2959,18 +3052,28 @@ export interface components {
        * Format: date
        */
       window_to: string;
+      /**
+       * Window Open
+       * @description Окно подачи открыто и период текущий: кнопка напоминания активна
+       */
+      window_open: boolean;
       /** Submitted */
       submitted: number;
       /** Not Submitted */
       not_submitted: number;
       /** Houses */
       houses: components["schemas"]["MetersSeasonHouse"][];
+      /**
+       * Is Empty
+       * @description Данных нет: фронт показывает пустое состояние, а не пустоту
+       */
+      is_empty: boolean;
     };
     /**
      * MetricUnit
      * @enum {string}
      */
-    MetricUnit: "count" | "percent" | "minutes" | "kopeck";
+    MetricUnit: "count" | "percent" | "minutes" | "kopeck" | "points";
     /**
      * NotificationCategory
      * @enum {string}
@@ -3043,6 +3146,11 @@ export interface components {
        * @default false
        */
       is_demo: boolean;
+      /**
+       * Timezone
+       * @description Часовой пояс IANA: в нем приемные часы и слоты записи
+       */
+      timezone: string;
     };
     /** OrgInviteItem */
     OrgInviteItem: {
@@ -3489,7 +3597,10 @@ export interface components {
     };
     /** ReceptionWindowInput */
     ReceptionWindowInput: {
-      /** Weekday */
+      /**
+       * Weekday
+       * @description День недели, 0 - понедельник, 6 - воскресенье
+       */
       weekday: number;
       /**
        * Time From
@@ -3501,12 +3612,24 @@ export interface components {
        * Format: time
        */
       time_to: string;
-      /** Slot Minutes */
+      /**
+       * Slot Minutes
+       * @description Длина слота в минутах, от 5 до 240
+       */
       slot_minutes: number;
+      /**
+       * Capacity
+       * @description Сколько жителей принимают в один слот: столько, сколько сотрудников ведет прием в этот день
+       * @default 1
+       */
+      capacity: number;
     };
     /** ReceptionWindowItem */
     ReceptionWindowItem: {
-      /** Weekday */
+      /**
+       * Weekday
+       * @description День недели, 0 - понедельник, 6 - воскресенье
+       */
       weekday: number;
       /**
        * Time From
@@ -3518,8 +3641,17 @@ export interface components {
        * Format: time
        */
       time_to: string;
-      /** Slot Minutes */
+      /**
+       * Slot Minutes
+       * @description Длина слота в минутах, от 5 до 240
+       */
       slot_minutes: number;
+      /**
+       * Capacity
+       * @description Сколько жителей принимают в один слот: столько, сколько сотрудников ведет прием в этот день
+       * @default 1
+       */
+      capacity: number;
       /** Id */
       id: number;
     };
@@ -3695,8 +3827,6 @@ export interface components {
     /** RequestExport */
     RequestExport: {
       request: components["schemas"]["RequestCard"];
-      /** Org Name */
-      org_name: string | null;
       /** Disclaimer */
       disclaimer: string;
     };
@@ -6908,6 +7038,95 @@ export interface operations {
       };
     };
   };
+  classify_request_text: {
+    parameters: {
+      query?: never;
+      header: {
+        WebAppData: string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ClassifyRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ClassifyRequestResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
   list_flat_meters: {
     parameters: {
       query?: never;
@@ -9572,11 +9791,7 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ActivateDemoRequest"];
-      };
-    };
+    requestBody?: never;
     responses: {
       /** @description Successful Response */
       200: {

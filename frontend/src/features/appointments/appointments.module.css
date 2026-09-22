@@ -1,0 +1,37 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+
+  h2 {
+    margin: 0;
+  }
+
+  .Content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 24px;
+    padding: 16px 16px 24px;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Org {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .OrgIcon {
+    flex-shrink: 0;
+    color: var(--icon-secondary);
+  }
+
+  .Failed {
+    color: var(--text-negative);
+  }
+}
