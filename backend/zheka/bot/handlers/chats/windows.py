@@ -15,12 +15,12 @@ from zheka.bot.handlers.chats.handlers import (
 )
 from zheka.bot.states import ChatBinding
 
-HOUSE_TEXT = "Вы добавили меня в чат «{title}». К какому дому привязать?"
+HOUSE_TEXT = "🏢 Вы добавили меня в чат «{title}». К какому дому привязать?"
 CODE_TEXT = (
-    "Привязать чат «{title}» к дому может УК или председатель. Если у вас "
-    "есть код привязки - отправьте его сюда"
+    "🔑 Привязать чат «{title}» к дому может УК или председатель. Если у вас "
+    "есть код привязки, отправьте его сюда"
 )
-RIGHTS_TEXT = "Повысьте меня до администратора в чате «{title}» и нажмите «Готово»"
+RIGHTS_TEXT = "🛡 Повысьте меня до администратора в чате «{title}» и нажмите «Готово»"
 NOTICE = Format("{notice}", when=F["notice"])
 
 chat_binding_dialog = Dialog(
@@ -28,7 +28,7 @@ chat_binding_dialog = Dialog(
         Format(HOUSE_TEXT),
         Column(
             Select(
-                Format("{item.title}"),
+                Format("🏢 {item.title}"),
                 id="house",
                 item_id_getter=lambda house: house.id,
                 type_factory=int,
@@ -42,13 +42,13 @@ chat_binding_dialog = Dialog(
     Window(
         Multi(Format(CODE_TEXT), NOTICE, sep="\n\n"),
         TextInput(id="code", on_success=on_code),
-        Cancel(Const("Отмена")),
+        Cancel(Const("❌ Отмена")),
         state=ChatBinding.code,
         getter=get_binding,
     ),
     Window(
         Multi(Format(RIGHTS_TEXT), NOTICE, sep="\n\n"),
-        Button(Const("Готово"), id="rights", on_click=on_rights),
+        Button(Const("✅ Готово"), id="rights", on_click=on_rights),
         state=ChatBinding.rights,
         getter=get_binding,
     ),

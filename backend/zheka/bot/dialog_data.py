@@ -40,10 +40,7 @@ class BaseDialogData(ZhekaMutableType, slots=True):
 
 class ConsentData(BaseDialogData):
     payload: str | None = None
-
-
-class MenuData(BaseDialogData):
-    notice: str | None = None
+    given: bool = False
 
 
 class HouseItem(ZhekaType):

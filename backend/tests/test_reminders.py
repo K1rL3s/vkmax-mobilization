@@ -822,7 +822,7 @@ async def test_the_verification_warning_waits_for_nine_of_the_local_day(
     await service.warn_verification(datetime(2026, 9, 14, 23, tzinfo=UTC))
     await publisher.flush()
     [text] = _texts(broker, user_id)
-    assert text.startswith("15.10.2026 истекает поверка")
+    assert "15.10.2026 истекает поверка" in text
 
 
 async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(

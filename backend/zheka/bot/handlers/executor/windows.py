@@ -15,9 +15,11 @@ from zheka.bot.handlers.executor.handlers import (
 from zheka.bot.states import ExecutorCard
 from zheka.core.enums import RequestStatus
 
-CARD_TEXT = "Заявка №{request_id}: {status_label}\n{place}\n{category}\n\n{description}"
-HANDED_OVER_TEXT = "Заявку №{request_id} передали другому исполнителю"
-RESULT_PHOTO_TEXT = "Пришлите фото результата"
+CARD_TEXT = (
+    "🛠 Заявка №{request_id}: {status_label}\n{place}\n{category}\n\n{description}"
+)
+HANDED_OVER_TEXT = "↪️ Заявку №{request_id} передали другому исполнителю"
+RESULT_PHOTO_TEXT = "📷 Пришлите фото результата"
 
 executor_dialog = Dialog(
     Window(
@@ -27,19 +29,19 @@ executor_dialog = Dialog(
         ),
         DynamicMedia("photos"),
         Button(
-            Const("Принял"),
+            Const("✅ Принял"),
             id=RequestStatus.ACCEPTED.value,
             on_click=on_advance,
             when=F["status"] == RequestStatus.NEW,
         ),
         Button(
-            Const("Выехал"),
+            Const("🚗 Выехал"),
             id=RequestStatus.IN_PROGRESS.value,
             on_click=on_advance,
             when=F["status"] == RequestStatus.ACCEPTED,
         ),
         Button(
-            Const("Готово"),
+            Const("🏁 Готово"),
             id="ready",
             on_click=on_ready,
             when=F["status"] == RequestStatus.IN_PROGRESS,
@@ -50,7 +52,7 @@ executor_dialog = Dialog(
     Window(
         Const(RESULT_PHOTO_TEXT),
         MessageInput(on_result_photo, content_types=[AttachmentType.IMAGE]),
-        Cancel(Const("Отмена")),
+        Cancel(Const("❌ Отмена")),
         state=ExecutorCard.result_photo,
     ),
 )

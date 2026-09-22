@@ -7,10 +7,10 @@ from zheka.bot.handlers.access.handlers import get_slots, on_slot, on_start
 from zheka.bot.states import AccessSlots
 
 SLOTS_TEXT = (
-    "УК просит доступ в квартиру {date}\n{address}\n\n{reason}\n\n"
-    "Выберите удобное время"
+    "🔑 УК просит доступ в квартиру {date}\n{address}\n\n{reason}\n\n"
+    "🕐 Выберите удобное время"
 )
-GONE_TEXT = "Этот запрос доступа вам больше не адресован"
+GONE_TEXT = "🤷 Этот запрос доступа вам больше не адресован"
 
 access_dialog = Dialog(
     Window(

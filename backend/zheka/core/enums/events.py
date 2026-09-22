@@ -66,6 +66,8 @@ class EventType(StrEnum):
     CHARGE_BREAKDOWN_OPENED = "charge_breakdown_opened"
     CHARGE_DISPUTED = "charge_disputed"
 
+    CONSENT_GIVEN = "consent_given"
+
 
 class EventSource(StrEnum):
     DIRECT = "direct"

@@ -18,8 +18,8 @@ from zheka.core.ids import HouseId, MaxChatId
 from zheka.core.services.chats import ChatsService
 from zheka.infra.max.sender import is_chat_admin
 
-NO_RIGHTS_YET = "Пока не вижу прав, проверьте и нажмите еще раз"
-BOUND_TEXT = "Чат «{title}» привязан, приветствие отправил туда"
+NO_RIGHTS_YET = "🤔 Пока не вижу прав, проверьте и нажмите еще раз"
+BOUND_TEXT = "✅ Чат «{title}» привязан, приветствие отправил туда"
 
 
 async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:

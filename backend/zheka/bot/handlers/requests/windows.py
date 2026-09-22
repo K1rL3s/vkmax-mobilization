@@ -1,5 +1,5 @@
 from magic_filter import F
-from maxo.dialogs import Dialog, StartMode, Window
+from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import MessageInput, TextInput
 from maxo.dialogs.widgets.kbd import (
     Button,
@@ -12,6 +12,7 @@ from maxo.dialogs.widgets.kbd import (
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 
+from zheka.bot.cards import TO_MENU
 from zheka.bot.handlers.requests.handlers import (
     SENT_TEXT,
     get_category,
@@ -22,21 +23,21 @@ from zheka.bot.handlers.requests.handlers import (
     on_photo,
     on_send,
 )
-from zheka.bot.states import Menu, NewRequest, Onboarding
+from zheka.bot.states import NewRequest, Onboarding
 
 PAGE = 6
 
-NO_HOUSE_TEXT = "Сначала найди свой дом - тогда будет кому передать заявку."
-CATEGORY_TEXT = "{address}\n\nЧто случилось?"
+NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
+CATEGORY_TEXT = "🏢 {address}\n\n🛠 Что случилось?"
 NOT_CONNECTED_TEXT = (
-    "{address}\n\nУправляющая компания этого дома еще не подключена к Жэке, "
-    "заявку передать некому. Нажми «Мне нужен» в карточке дома в приложении - "
-    "так УК узнает, что сервис здесь ждут."
+    "🏢 {address}\n\n😔 Управляющая компания этого дома еще не подключена к "
+    "Жэке, заявку передать некому. Нажмите «Мне нужен» в карточке дома в "
+    "приложении - так УК узнает, что сервис здесь ждут"
 )
-DESCRIPTION_TEXT = "Опиши проблему одним сообщением"
-PHOTO_TEXT = "Пришли фото, если есть. Приложено: {photos}"
-CONFIRM_TEXT = "{category}\n\n{description}\n\nФото: {photos}"
-CREATED_TEXT = "Заявка №{request_id} принята"
+DESCRIPTION_TEXT = "✍️ Опишите проблему одним сообщением"
+PHOTO_TEXT = "📷 Пришлите фото, если есть. Приложено: {photos}"
+CONFIRM_TEXT = "📋 Проверьте заявку\n\n{category}\n\n{description}\n\nФото: {photos}"
+CREATED_TEXT = "✅ Заявка №{request_id} принята"
 
 request_dialog = Dialog(
     Window(
@@ -56,32 +57,32 @@ request_dialog = Dialog(
             height=PAGE,
         ),
         Start(
-            Const("Найти дом"),
+            Const("🔎 Найти дом"),
             id="find_house",
             state=Onboarding.method,
             when=~F["address"],
         ),
-        Cancel(Const("Отмена")),
+        Cancel(Const("❌ Отмена")),
         state=NewRequest.category,
         getter=get_category,
     ),
     Window(
         Const(DESCRIPTION_TEXT),
         TextInput(id="description", on_success=on_description),
-        SwitchTo(Const("Назад"), id="to_category", state=NewRequest.category),
+        SwitchTo(Const("⬅️ Назад"), id="to_category", state=NewRequest.category),
         state=NewRequest.description,
     ),
     Window(
         Format(PHOTO_TEXT),
         MessageInput(on_photo, content_types=[AttachmentType.IMAGE]),
-        SwitchTo(Const("Дальше"), id="to_confirm", state=NewRequest.confirm),
+        SwitchTo(Const("➡️ Дальше"), id="to_confirm", state=NewRequest.confirm),
         state=NewRequest.photo,
         getter=get_draft,
     ),
     Window(
         Format(CONFIRM_TEXT),
-        Button(Const("Отправить"), id="send", on_click=on_send),
-        SwitchTo(Const("Изменить фото"), id="to_photo", state=NewRequest.photo),
+        Button(Const("📨 Отправить"), id="send", on_click=on_send),
+        SwitchTo(Const("📷 Изменить фото"), id="to_photo", state=NewRequest.photo),
         state=NewRequest.confirm,
         getter=get_draft,
     ),
@@ -90,12 +91,7 @@ request_dialog = Dialog(
             Const(SENT_TEXT, when=~F["request_id"]),
             Format(CREATED_TEXT, when=F["request_id"]),
         ),
-        Start(
-            Const("В меню"),
-            id="to_menu",
-            state=Menu.main,
-            mode=StartMode.RESET_STACK,
-        ),
+        TO_MENU,
         state=NewRequest.sent,
         getter=get_sent,
     ),

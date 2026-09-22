@@ -66,6 +66,7 @@ class UsersRepo(BaseAlchemyRepo):
             raise EntityNotFound("Пользователь не найден")
         user.consent_version = version
         user.consent_at = datetime.now(UTC)
+        await self._session.flush()
 
     async def set_bot_stopped(self, max_user_id: MaxUserId, at: datetime) -> None:
         user = await self.get_by_max_id(max_user_id)

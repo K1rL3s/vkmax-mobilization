@@ -1,8 +1,11 @@
 import asyncio
+import json
+import re
 import secrets
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, time, timedelta
+from html import escape
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
@@ -42,6 +45,7 @@ from maxo.types.link_button import LinkButton
 from maxo.types.simple_query_result import SimpleQueryResult
 from maxo.utils.deeplink import create_start_link
 from maxo.utils.link import id_to_message_url
+from maxo.utils.payload import decode_payload
 from sqlalchemy import Row, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import InMemoryBroker
@@ -57,7 +61,9 @@ from zheka.bot.handlers.commands.deeplinks import (
     DEMO_ADMIN_NOTICE,
     DEMO_RESIDENT_NOTICE,
     DEMO_STAFF_NOTICE,
+    ORG_JOINED,
 )
+from zheka.bot.handlers.consent.windows import GIVEN_TEXT
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
 from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
 from zheka.bot.handlers.menu.windows import MENU_TEXT
@@ -81,8 +87,13 @@ from zheka.broker.tasks.requests import (
     send_executor_card,
     send_review_card,
 )
-from zheka.core.consent import CONSENT_TEXT
-from zheka.core.deeplinks import house_payload, org_invite_payload
+from zheka.core.consent import CONSENT_TEXT, CONSENT_VERSION
+from zheka.core.deeplinks import (
+    DeeplinkKind,
+    entrance_qr_payload,
+    house_payload,
+    org_invite_payload,
+)
 from zheka.core.enums import (
     CATEGORY_RULES,
     ChatStatus,
@@ -116,7 +127,7 @@ from zheka.core.services.chats import (
     UNPIN_HINT,
     WRONG_CODE,
 )
-from zheka.core.services.demo import DEMO_INNS, demo_flat_number
+from zheka.core.services.demo import DEMO_INNS, NOT_SEEDED, demo_flat_number
 from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
 from zheka.core.texts import REQUEST_STATUS_LABELS
 from zheka.infra.database.models import (
@@ -124,6 +135,7 @@ from zheka.infra.database.models import (
     ChatPin,
     Flat,
     House,
+    OrgInvite,
     OrgMember,
     Organization,
     Request,
@@ -151,6 +163,8 @@ class _RecordingBot(FakeBot):
         super().__init__()
         self.notifies: list[bool] = []
         self.texts: list[str | None] = []
+        self.chat_ids: list[Any] = []
+        self.user_ids: list[Any] = []
 
     async def send_message(  # type: ignore[mutable-override]
         self,
@@ -159,6 +173,8 @@ class _RecordingBot(FakeBot):
     ) -> SendMessageResult:
         self.notifies.append(kwargs["notify"])
         self.texts.append(kwargs.get("text"))
+        self.chat_ids.append(kwargs.get("chat_id"))
+        self.user_ids.append(kwargs.get("user_id"))
         return SendMessageResult(
             message=Message(
                 recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=1),
@@ -175,14 +191,14 @@ def _new_message() -> NewMessage:
     )
 
 
-ACCEPT = InlineButtonTextLocator("Согласен")
-NEW_REQUEST = InlineButtonTextLocator("Подать заявку")
+ACCEPT = InlineButtonTextLocator("✅ Даю согласие")
+NEW_REQUEST = InlineButtonTextLocator("📝 Подать заявку")
 FIRST_CATEGORY = InlineButtonTextLocator(
-    CATEGORY_RULES[next(iter(RequestCategory))].label,
+    CATEGORY_RULES[next(iter(RequestCategory))].caption,
 )
-NEXT = InlineButtonTextLocator("Дальше")
-SEND = InlineButtonTextLocator("Отправить")
-TO_MENU = InlineButtonTextLocator("В меню")
+NEXT = InlineButtonTextLocator("➡️ Дальше")
+SEND = InlineButtonTextLocator("📨 Отправить")
+TO_MENU = InlineButtonTextLocator("🏠 Меню")
 
 
 def _max_id() -> MaxUserId:
@@ -624,9 +640,10 @@ async def test_the_request_goes_to_the_house_the_resident_linked_last(
     assert MENU_TEXT in (message_manager.last_message().body.text or "")
 
 
-DEPART = InlineButtonTextLocator("Выехал")
-READY = InlineButtonTextLocator("Готово")
-REJECT = InlineButtonTextLocator("Сделано плохо")
+DEPART = InlineButtonTextLocator("🚗 Выехал")
+READY = InlineButtonTextLocator("🏁 Готово")
+RIGHTS_DONE = InlineButtonTextLocator("✅ Готово")
+REJECT = InlineButtonTextLocator("👎 Сделано плохо")
 RESULT_URL = "https://max.ru/result.jpg"
 PHOTO_TOKEN = "photo-token"  # noqa: S105
 
@@ -803,6 +820,7 @@ async def test_ready_asks_for_the_photo_where_a_message_reaches_it(
     bot_session: AsyncSession,
     bot_broker: RecordingBroker,
     shows: list[Show],
+    notices: _RecordingBot,
 ) -> None:
     request_id = await _executor_on(bot_session, client, RequestStatus.IN_PROGRESS)
     request = await _status(bot_session, request_id)
@@ -820,7 +838,7 @@ async def test_ready_asks_for_the_photo_where_a_message_reaches_it(
     }
     text = message_manager.last_message().body.text or ""
     assert MENU_TEXT in text
-    assert PHOTO_TAKEN in text
+    assert PHOTO_TAKEN in notices.texts
 
 
 async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
@@ -829,6 +847,7 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
     shows: list[Show],
+    notices: _RecordingBot,
 ) -> None:
     request_id = await _reviewing(bot_session, client, task_broker)
     mode, _, chat_id, _ = shows[-1]
@@ -847,11 +866,11 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
     assert repeat.description == "Кран все еще течет"
     text = message_manager.last_message().body.text or ""
     assert MENU_TEXT in text
-    assert repeat_sent(repeat.id) in text
+    assert repeat_sent(repeat.id) in notices.texts
 
 
-ACCEPT_WORK = InlineButtonTextLocator("Принять")
-TOP_RATING = InlineButtonTextLocator(str(MAX_RATING))
+ACCEPT_WORK = InlineButtonTextLocator("👍 Принять")
+TOP_RATING = InlineButtonTextLocator(f"{MAX_RATING}️⃣")
 
 
 async def _reviewing(
@@ -883,6 +902,7 @@ async def test_a_stale_rejection_prompt_files_no_repeat(
     task_broker: InMemoryBroker,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
+    notices: _RecordingBot,
 ) -> None:
     request_id = await _reviewing(bot_session, client, task_broker)
     card = message_manager.last_message()
@@ -895,7 +915,7 @@ async def test_a_stale_rejection_prompt_files_no_repeat(
     assert await _repeats_of(bot_session, request_id) == []
     text = message_manager.last_message().body.text or ""
     assert MENU_TEXT in text
-    assert REJECT_NOT_ON_REVIEW in text
+    assert REJECT_NOT_ON_REVIEW in notices.texts
 
 
 async def test_a_tap_on_a_card_that_is_no_longer_his_shows_the_handover(
@@ -1177,11 +1197,12 @@ async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
     window = message_manager.last_message()
     assert HOUSE_TEXT.format(title=CHAT_TITLE) in (window.body.text or "")
     assert _shown(shows, HOUSE_TEXT.format(title=CHAT_TITLE))[0] is ShowMode.SEND
-    await client.click(window, InlineButtonTextLocator(house.address))
-    await client.click(message_manager.last_message(), READY)
+    house_button = InlineButtonTextLocator(re.escape(f"🏢 {house.address}"))
+    await client.click(window, house_button)
+    await client.click(message_manager.last_message(), RIGHTS_DONE)
     assert NO_RIGHTS_YET in (message_manager.last_message().body.text or "")
     chat_api.is_admin = True
-    await client.click(message_manager.last_message(), READY)
+    await client.click(message_manager.last_message(), RIGHTS_DONE)
 
     text = message_manager.last_message().body.text or ""
     assert BOUND_TEXT.format(title=CHAT_TITLE) in text
@@ -1204,6 +1225,7 @@ async def test_a_resident_binds_the_chat_by_code(
     chat_api: _ChatApi,
     bot_session: AsyncSession,
     shows: list[Show],
+    notices: _RecordingBot,
 ) -> None:
     user_id = await _started(bot_session, client)
     _, house_id = await _org_house(bot_session)
@@ -1225,11 +1247,11 @@ async def test_a_resident_binds_the_chat_by_code(
     assert WRONG_CODE in (message_manager.last_message().body.text or "")
     await client.send(code)
     chat_api.is_admin = True
-    await client.click(message_manager.last_message(), READY)
+    await client.click(message_manager.last_message(), RIGHTS_DONE)
 
     text = message_manager.last_message().body.text or ""
     assert MENU_TEXT in text
-    assert BOUND_TEXT.format(title=CHAT_TITLE) in text
+    assert BOUND_TEXT.format(title=CHAT_TITLE) in notices.texts
     bot_session.expire_all()
     chat = await ChatsRepo(bot_session).get(chat_id)
     assert chat is not None
@@ -1395,6 +1417,7 @@ async def test_a_code_for_a_chat_the_bot_left_ends_on_the_menu(
     task_broker: InMemoryBroker,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
+    notices: _RecordingBot,
 ) -> None:
     chat_id, code = await _code_window(bot_session, client, task_broker)
     await _bot_removed(client, chat_id)
@@ -1406,7 +1429,7 @@ async def test_a_code_for_a_chat_the_bot_left_ends_on_the_menu(
 
     text = message_manager.last_message().body.text or ""
     assert MENU_TEXT in text
-    assert CHAT_TAKEN in text
+    assert CHAT_TAKEN in notices.texts
 
 
 @pytest.mark.usefixtures("chat_api")
@@ -1415,16 +1438,19 @@ async def test_rights_for_a_chat_the_bot_left_end_on_the_menu(
     task_broker: InMemoryBroker,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
+    shows: list[Show],
+    notices: _RecordingBot,
 ) -> None:
     chat_id, code = await _code_window(bot_session, client, task_broker)
     await client.send(code)
     await _bot_removed(client, chat_id)
+    shows.clear()
 
-    await client.click(message_manager.last_message(), READY)
+    await client.click(message_manager.last_message(), RIGHTS_DONE)
 
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
-    assert CHAT_NOT_BOUND in text
+    assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
+    assert CHAT_NOT_BOUND in notices.texts
+    assert notices.chat_ids == [client.chat.chat_id]
 
 
 async def _feed(client: BotClient, update: Any) -> None:
@@ -1556,7 +1582,7 @@ async def test_a_delivered_chat_message_is_counted(
     assert await _broadcast(task_broker, chat_id) == 1
 
 
-FIRST_SLOT = InlineButtonTextLocator("10:00")
+FIRST_SLOT = InlineButtonTextLocator("🕐 10:00")
 ACCESS_REASON = "Поверка газового оборудования"
 
 
@@ -1750,6 +1776,7 @@ async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
     bot_session: AsyncSession,
     payload: str,
     number: int,
+    notices: _RecordingBot,
 ) -> None:
     org_id, address = await _bot_demo(bot_session, number)
     await client.send("/start")
@@ -1767,7 +1794,7 @@ async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
             address=address,
             org=f"Демо-УК «{number}»",
         )
-        in text
+        in notices.texts
     )
     houses = await HousesRepo(bot_session).list_for_org(org_id)
     assert await _demo_roles(bot_session, client) == ([], [houses[0].id])
@@ -1781,6 +1808,7 @@ async def test_a_demo_link_without_consent_asks_for_it_and_then_grants_access(
     client: BotClient,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
+    notices: _RecordingBot,
 ) -> None:
     org_id, _address = await _bot_demo(bot_session)
 
@@ -1789,7 +1817,8 @@ async def test_a_demo_link_without_consent_asks_for_it_and_then_grants_access(
     await client.click(message_manager.last_message(), ACCEPT)
 
     text = message_manager.last_message().body.text or ""
-    assert DEMO_STAFF_NOTICE.format(org="Демо-УК «1»") in text
+    assert MENU_TEXT in text
+    assert DEMO_STAFF_NOTICE.format(org="Демо-УК «1»") in notices.texts
     assert await _demo_roles(bot_session, client) == (
         [(org_id, OrgRole.EMPLOYEE)],
         [],
@@ -1804,15 +1833,15 @@ async def test_a_demo_staff_link_lowers_a_demo_admin_to_an_employee(
     client: BotClient,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
+    notices: _RecordingBot,
 ) -> None:
     org_id, _address = await _bot_demo(bot_session, 3)
     await client.send("/start")
     await client.click(message_manager.last_message(), ACCEPT)
 
     await _bot_started(client, "demo_admin_3")
-    assert DEMO_ADMIN_NOTICE.format(org="Демо-УК «3»") in (
-        message_manager.last_message().body.text or ""
-    )
+    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+    assert DEMO_ADMIN_NOTICE.format(org="Демо-УК «3»") in notices.texts
     assert await _demo_roles(bot_session, client) == ([(org_id, OrgRole.ADMIN)], [])
 
     await _bot_started(client, "demo_staff_3")
@@ -2163,3 +2192,232 @@ async def test_deleting_the_list_message_in_the_chat_unpins_everything(
     )
 
     assert await _pin_mids(bot_session, chat_id) == []
+
+
+async def test_the_consent_tap_marks_the_message_and_sends_the_menu_anew(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    shows: list[Show],
+) -> None:
+    await client.send("/start")
+
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    mode, text, *_ = _shown(shows, GIVEN_TEXT)
+    assert mode is ShowMode.EDIT
+    assert CONSENT_TEXT in (text or "")
+    marked = next(
+        message
+        for message in message_manager.sent_messages
+        if GIVEN_TEXT in (message.body.text or "")
+    )
+    assert marked.body.keyboard is None
+    assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
+
+
+async def test_the_policy_button_opens_the_privacy_page_of_the_mini_app(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+) -> None:
+    await client.send("/start")
+
+    keyboard = message_manager.last_message().body.keyboard
+    assert keyboard is not None
+    [policy] = [
+        button
+        for row in keyboard.buttons
+        for button in row
+        if isinstance(button, OpenAppButton)
+    ]
+    assert policy.web_app == fake_bot.state.info.username
+    assert isinstance(policy.payload, str)
+    assert json.loads(decode_payload(policy.payload)) == {"path": "/privacy"}
+
+
+@pytest.mark.parametrize(
+    ("link", "source"),
+    [
+        (None, EventSource.DIRECT),
+        (DeeplinkKind.HOUSE, EventSource.CHAT),
+        (DeeplinkKind.ENTRANCE_QR, EventSource.QR),
+        (DeeplinkKind.DEMO_STAFF, EventSource.DEEPLINK),
+    ],
+)
+async def test_a_consent_in_the_bot_records_where_the_resident_came_from(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    link: DeeplinkKind | None,
+    source: EventSource,
+) -> None:
+    house_id, _address = await _bot_house(bot_session)
+    await _bot_demo(bot_session)
+    payloads: dict[DeeplinkKind | None, Omittable[str | None]] = {
+        None: Omitted(),
+        DeeplinkKind.HOUSE: house_payload(house_id),
+        DeeplinkKind.ENTRANCE_QR: entrance_qr_payload(house_id, 1),
+        DeeplinkKind.DEMO_STAFF: "demo_staff_1",
+    }
+    await _bot_started(client, payloads[link])
+
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    user = await _saved(bot_session, MaxUserId(client.user.id))
+    assert user is not None
+    stmt = select(events_table.c.payload).where(
+        events_table.c.type == EventType.CONSENT_GIVEN,
+        events_table.c.user_id == user.id,
+    )
+    assert (await bot_session.execute(stmt)).scalars().all() == [
+        {"source": source.value, "version": CONSENT_VERSION},
+    ]
+
+
+async def test_a_consent_given_in_the_mini_app_is_not_asked_again(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await client.send("/start")
+    user = await _saved(bot_session, MaxUserId(client.user.id))
+    assert user is not None
+    await UsersRepo(bot_session).set_consent(user.id, CONSENT_VERSION)
+    await bot_session.commit()
+
+    await client.send("/start")
+
+    text = message_manager.last_message().body.text or ""
+    assert MENU_TEXT in text
+    assert CONSENT_TEXT not in text
+
+
+@pytest.fixture
+def notices(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> _RecordingBot:
+    recorder = _RecordingBot()
+    monkeypatch.setattr(fake_bot, "send_message", recorder.send_message)
+    return recorder
+
+
+@pytest.mark.parametrize("deeplinked", [True, False])
+async def test_a_bot_start_over_an_open_menu_comes_as_a_new_message(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    shows: list[Show],
+    deeplinked: bool,
+) -> None:
+    house_id, address = await _bot_house(bot_session)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    shows.clear()
+
+    await _bot_started(client, house_payload(house_id) if deeplinked else Omitted())
+
+    assert _shown(shows, address if deeplinked else MENU_TEXT)[0] is ShowMode.SEND
+
+
+async def test_a_deeplink_result_is_its_own_message_before_the_menu(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    shows: list[Show],
+    notices: _RecordingBot,
+) -> None:
+    await _bot_demo(bot_session)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+    shows.clear()
+
+    await _bot_started(client, "demo_staff_1")
+
+    notice = DEMO_STAFF_NOTICE.format(org="Демо-УК «1»")
+    assert notices.texts == [notice]
+    assert notices.notifies == [False]
+    assert notices.chat_ids == [client.chat.chat_id]
+    mode, text, *_ = _shown(shows, MENU_TEXT)
+    assert mode is ShowMode.SEND
+    assert notice not in (text or "")
+
+
+async def test_a_consent_survives_a_deeplink_target_that_refuses(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _bot_started(client, "demo_staff_5")
+
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    user = await _saved(bot_session, MaxUserId(client.user.id))
+    assert user is not None
+    assert user.consent_at is not None
+    stmt = select(events_table.c.type).where(
+        events_table.c.type == EventType.CONSENT_GIVEN,
+        events_table.c.user_id == user.id,
+    )
+    assert (await bot_session.execute(stmt)).scalars().all() == [
+        EventType.CONSENT_GIVEN,
+    ]
+    assert notices.texts == [NOT_SEEDED]
+    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+
+
+async def test_the_org_name_is_escaped_in_the_invite_notice(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    user_id = await _started(bot_session, client)
+    org_name = f"УК <{secrets.token_hex(4)}> & {secrets.token_hex(4)}"
+    org = Organization(
+        timezone="Europe/Moscow",
+        name=org_name,
+        inn=secrets.token_hex(6),
+        phone="+70000000000",
+        address="Тестовая область, Тестоград, Тестовая, 1",
+        registered_at=datetime.now(UTC),
+    )
+    bot_session.add(org)
+    await bot_session.flush()
+    code = secrets.token_hex(4)
+    bot_session.add(
+        OrgInvite(
+            code=code,
+            org_id=org.id,
+            role=OrgRole.EMPLOYEE,
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+            max_activations=1,
+            created_by=user_id,
+        ),
+    )
+    await bot_session.commit()
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    await _bot_started(client, org_invite_payload(code))
+
+    notice = ORG_JOINED.format(name=escape(org_name))
+    assert notices.texts == [notice]
+
+
+async def test_a_refused_deeplink_of_a_consented_user_ends_on_the_menu(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    shows: list[Show],
+    notices: _RecordingBot,
+) -> None:
+    user_id = await _started(bot_session, client)
+    await client.click(message_manager.last_message(), ACCEPT)
+    shows.clear()
+
+    await _bot_started(client, org_invite_payload(secrets.token_hex(4)))
+
+    assert notices.texts == [INVITE_NOT_FOUND]
+    assert notices.notifies == [False]
+    assert notices.chat_ids == [client.chat.chat_id]
+    assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
+    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+    assert await _events_of(bot_session, user_id, EventType.BOT_START) == 2

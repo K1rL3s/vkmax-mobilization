@@ -1,15 +1,9 @@
 from typing import Any
 
 from maxo import Bot
-from maxo.dialogs import DialogManager
-from maxo.omit import is_defined
 
-from zheka.bot.dialog_data import MenuData
+from zheka.bot.cards import web_app_name
 
 
-async def get_menu(bot: Bot, dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    username = bot.state.info.username
-    return {
-        "bot_username": username if is_defined(username) else None,
-        "notice": MenuData.load_start(dialog_manager).notice,
-    }
+async def get_menu(bot: Bot, **_: Any) -> dict[str, Any]:
+    return {"bot_username": web_app_name(bot)}

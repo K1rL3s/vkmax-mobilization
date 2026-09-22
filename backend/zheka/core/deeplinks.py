@@ -1,6 +1,7 @@
 from enum import StrEnum
 
 from zheka.base import ZhekaType
+from zheka.core.enums import EventSource
 from zheka.core.ids import HouseId
 from zheka.core.services.demo import DEMO_INNS
 
@@ -19,6 +20,14 @@ class DeeplinkKind(StrEnum):
 class Deeplink(ZhekaType):
     kind: DeeplinkKind
     value: str = ""
+
+    @property
+    def source(self) -> EventSource:
+        if self.kind is DeeplinkKind.HOUSE:
+            return EventSource.CHAT
+        if self.kind is DeeplinkKind.ENTRANCE_QR:
+            return EventSource.QR
+        return EventSource.DEEPLINK
 
 
 _DEMO = (DeeplinkKind.DEMO_ADMIN, DeeplinkKind.DEMO_STAFF, DeeplinkKind.DEMO_RESIDENT)

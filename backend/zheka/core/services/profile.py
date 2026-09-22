@@ -1,9 +1,10 @@
 from zheka.base import ZhekaType
 from zheka.core.consent import CONSENT_VERSION
-from zheka.core.enums import VerificationStatus
+from zheka.core.enums import EventSource, EventType, VerificationStatus
 from zheka.core.errors import EntityNotFound, InvalidRequest
 from zheka.core.ids import UserId
 from zheka.core.models import OrgMember, Organization, User, VerificationRequest
+from zheka.core.services.events import EventsService
 from zheka.core.services.houses import ResidencyView, is_connected
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -31,7 +32,7 @@ class MeView(ZhekaType):
 
 
 class ProfileService:
-    __slots__ = ("_flats", "_houses", "_orgs", "_residents", "_users")
+    __slots__ = ("_events", "_flats", "_houses", "_orgs", "_residents", "_users")
 
     def __init__(
         self,
@@ -40,12 +41,14 @@ class ProfileService:
         houses_repo: HousesRepo,
         orgs_repo: OrgsRepo,
         flats_repo: FlatsRepo,
+        events_service: EventsService,
     ) -> None:
         self._users = users_repo
         self._residents = residents_repo
         self._houses = houses_repo
         self._orgs = orgs_repo
         self._flats = flats_repo
+        self._events = events_service
 
     async def me(self, user_id: UserId) -> MeView:
         user = await self._users.get_by_id(user_id)
@@ -110,8 +113,19 @@ class ProfileService:
             is_demo=any(org.is_demo for org in orgs.values()),
         )
 
-    async def accept_consent(self, user_id: UserId, version: str) -> MeView:
+    async def accept_consent(
+        self,
+        user_id: UserId,
+        version: str,
+        source: EventSource,
+    ) -> MeView:
         if version != CONSENT_VERSION:
             raise InvalidRequest(f"Актуальная версия согласия - {CONSENT_VERSION}")
         await self._users.set_consent(user_id, version)
+        await self._events.record(
+            EventType.CONSENT_GIVEN,
+            user_id=user_id,
+            source=source.value,
+            version=version,
+        )
         return await self.me(user_id)

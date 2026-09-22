@@ -13,7 +13,7 @@ from zheka.core.errors import ZhekaError
 from zheka.core.ids import AccessRequestId, AccessSlotId
 from zheka.core.services.access import AccessService
 
-PICKED = "{time} - выбрано"
+PICKED = "✅ {time} - выбрано"
 
 
 class SlotItem(ZhekaType):
@@ -51,7 +51,7 @@ async def get_slots(
             label=(
                 PICKED.format(time=f"{view.house.local(slot.slot.starts_at):%H:%M}")
                 if slot.slot.id == view.my_slot_id
-                else f"{view.house.local(slot.slot.starts_at):%H:%M}"
+                else f"🕐 {view.house.local(slot.slot.starts_at):%H:%M}"
             ),
         )
         for slot in view.slots

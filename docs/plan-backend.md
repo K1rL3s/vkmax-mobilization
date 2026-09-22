@@ -395,9 +395,10 @@
 
 ## Перечень событий
 
-47 членов `EventType` в одном модуле, не строки по месту (payload в скобках):
+48 членов `EventType` в одном модуле, не строки по месту (payload в скобках):
 
-`bot_start(source)`, `bot_muted`, `bot_unmuted`, `bot_stopped`,
+`bot_start(source)`, `consent_given(source, version)`, `bot_muted`,
+`bot_unmuted`, `bot_stopped`,
 `miniapp_open(source, tab, announcement_id)`,
 `announcement_click(source, tab, announcement_id)`,
 `house_search(method, city, street, query | found)`,

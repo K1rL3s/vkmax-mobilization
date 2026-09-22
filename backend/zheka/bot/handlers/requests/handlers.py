@@ -16,7 +16,7 @@ from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestChannel
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.requests import MAX_PHOTOS
 
-SENT_TEXT = "Принял, оформляю"
+SENT_TEXT = "⏳ Принял, оформляю"
 
 
 @inject
@@ -40,7 +40,7 @@ async def get_category(
         "address": address,
         "connected": True,
         "categories": [
-            {"id": category.value, "label": CATEGORY_RULES[category].label}
+            {"id": category.value, "label": CATEGORY_RULES[category].caption}
             for category in RequestCategory
         ],
     }
@@ -50,7 +50,7 @@ async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
     data = NewRequestData.load(dialog_manager)
     return {
         "category": (
-            None if data.category is None else CATEGORY_RULES[data.category].label
+            None if data.category is None else CATEGORY_RULES[data.category].caption
         ),
         "description": data.description,
         "photos": len(data.photos),

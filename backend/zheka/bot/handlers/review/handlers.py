@@ -136,4 +136,4 @@ async def on_rejection(
 
 
 def repeat_sent(request_id: RequestId) -> str:
-    return f"Повторная заявка №{request_id} ушла в УК"
+    return f"↩️ Повторная заявка №{request_id} ушла в УК"

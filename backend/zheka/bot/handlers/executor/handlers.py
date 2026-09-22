@@ -22,7 +22,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.requests import MAX_PHOTOS
 from zheka.core.texts import REQUEST_STATUS_LABELS
 
-PHOTO_TAKEN = "Фото получил, карточка заявки обновится"
+PHOTO_TAKEN = "✅ Фото получил, карточка заявки обновится"
 
 
 def _request_id(dialog_manager: DialogManager) -> RequestId:
@@ -54,7 +54,7 @@ async def get_card(
         "status": request.status,
         "status_label": REQUEST_STATUS_LABELS[request.status],
         "place": escape(place),
-        "category": CATEGORY_RULES[request.category].label,
+        "category": CATEGORY_RULES[request.category].caption,
         "description": escape(request.description),
         "photos": photo_media(files_service, card.issue_photos[:MAX_PHOTOS]),
     }

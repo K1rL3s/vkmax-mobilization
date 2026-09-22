@@ -13,8 +13,8 @@ from zheka.core.services.demo import DemoService
 from zheka.core.services.notifications import NotificationsService
 from zheka.seed.demo import seed
 
-SEEDED = "Демо-данные готовы"
-ALREADY_SEEDED = "Демо-данные уже есть, ничего не менял"
+SEEDED = "✅ Демо-данные готовы"
+ALREADY_SEEDED = "👌 Демо-данные уже есть, ничего не менял"
 
 
 @async_shared_broker.task(task_name=TaskName.SEED_DEMO.value)

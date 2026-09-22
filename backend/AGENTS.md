@@ -164,8 +164,9 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   window opens there: `ask_in_default_stack` (`zheka/bot/cards.py`) via
   `bg().start()` with `ShowMode.SEND` (`fg()` in a handler deadlocks on the
   `users` row), replacing whatever the user had there, a request draft
-  included. `back_to_menu` returns to `Menu.main` after the input. The service
-  rechecks state (`RequestsService.reject` accepts only `ON_REVIEW`).
+  included. `back_to_menu` sends the result as its own message, then
+  `Menu.main` as a new one. The service rechecks state (`RequestsService.reject`
+  accepts only `ON_REVIEW`).
 - The service validates every value the bot hands it: `Select` passes raw
   callback strings and `when=`-hidden buttons still fire from old keyboards.
   The rating range lives in `RequestsService.rate` (`MIN_RATING` /
@@ -181,6 +182,17 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   `ContainerMiddleware` and `CommitMiddleware`,
   `task.kicker().with_broker(task_broker).kiq(...)`); published follow-ups land
   in `bot_broker` and the test runs them itself.
+- Bot texts: formal «вы», an emoji and a space before every button text and
+  at the start of a message, no period at the end of a message or a line. A
+  result is its own message (`back_to_menu`), never a line above the menu.
+  Both `bot_started` handlers set `ShowMode.SEND` first: maxo's AUTO edits the
+  last message for anything but `MessageCreated`.
+- The consent tap edits its message to «✅ Согласие дано» and the next window
+  comes as a new message. `CONSENT_GIVEN` carries the entry source
+  (`Deeplink.source`, `DIRECT` without a payload, `MINIAPP` from the API). The
+  policy button opens the mini-app with `startParam`
+  `encode_payload('{"path":"/privacy"}')`; the frontend half that decodes and
+  routes it is pending, so today the button opens the start screen.
 
 ### Requests and chats
 
@@ -313,10 +325,11 @@ element per line with a trailing comma, and `just check` rejects the hugged form
 - Plans and block history: `.superpowers/sdd/` at the repo root
   (`progress.md` maps blocks to commits); `refactor-startapp-routing.md` waits
   for its frontend half.
-- `EventType`'s 47 members split 41 + 4 + 2. 41 are recorded inside
+- `EventType`'s 48 members split 42 + 4 + 2. 42 are recorded inside
   `core/services/` (e.g. `HOUSE_SEARCH` / `HOUSE_LINKED` in `HousesService`,
-  `CHAT_BOUND`, `LLM_SUGGESTED`), so a handler or route recording them doubles
-  the count: pass the service `source`, `method` or `entrance`. 4 in bot
+  `CHAT_BOUND`, `LLM_SUGGESTED`, `CONSENT_GIVEN` in `ProfileService`), so a
+  handler or route recording them doubles the count: pass the service
+  `source`, `method` or `entrance`. 4 in bot
   handlers: `BOT_START` (`bot/handlers/commands/start.py`, `deeplinks.py`), `BOT_STOPPED`,
   `BOT_MUTED`, `BOT_UNMUTED` (`bot/handlers/lifecycle.py`); `BOT_START` never
   in the fallback router or a getter. `MINIAPP_OPEN` / `ANNOUNCEMENT_CLICK` come

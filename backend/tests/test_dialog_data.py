@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from zheka.bot.dialog_data import MenuData, OnboardingData
+from zheka.bot.dialog_data import ConsentData, OnboardingData
 
 
 def _manager(start_data: Any = None) -> Any:
@@ -35,7 +35,7 @@ def test_proxy_drops_mutation_when_body_raises() -> None:
 
 
 def test_load_start_without_data_gives_defaults() -> None:
-    assert MenuData.load_start(_manager()) == MenuData()
+    assert ConsentData.load_start(_manager()) == ConsentData()
 
 
 def test_chosen_house_without_house_raises() -> None:

@@ -65,64 +65,80 @@ class RequestCategory(StrEnum):
 
 class CategoryRule(ZhekaType):
     label: str
+    emoji: str
     zone: ResponsibilityZone
     normative_hours: int
+
+    @property
+    def caption(self) -> str:
+        return f"{self.emoji} {self.label}"
 
 
 CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = MappingProxyType(
     {
         RequestCategory.LEAK: CategoryRule(
             label="Протечка",
+            emoji="💧",
             zone=ResponsibilityZone.MANAGEMENT,
             normative_hours=4,
         ),
         RequestCategory.ELEVATOR: CategoryRule(
             label="Лифт",
+            emoji="🛗",
             zone=ResponsibilityZone.MANAGEMENT,
             normative_hours=24,
         ),
         RequestCategory.GARBAGE: CategoryRule(
             label="Мусор",
+            emoji="🗑",
             zone=ResponsibilityZone.MANAGEMENT,
             normative_hours=24,
         ),
         RequestCategory.HEATING: CategoryRule(
             label="Отопление",
+            emoji="🔥",
             zone=ResponsibilityZone.UTILITY,
             normative_hours=24,
         ),
         RequestCategory.WATER_SUPPLY: CategoryRule(
             label="Водоснабжение",
+            emoji="🚰",
             zone=ResponsibilityZone.UTILITY,
             normative_hours=8,
         ),
         RequestCategory.ELECTRICITY: CategoryRule(
             label="Электричество",
+            emoji="💡",
             zone=ResponsibilityZone.UTILITY,
             normative_hours=24,
         ),
         RequestCategory.ENTRANCE: CategoryRule(
             label="Подъезд",
+            emoji="🚪",
             zone=ResponsibilityZone.MANAGEMENT,
             normative_hours=72,
         ),
         RequestCategory.YARD: CategoryRule(
             label="Двор и территория",
+            emoji="🌳",
             zone=ResponsibilityZone.MUNICIPALITY,
             normative_hours=72,
         ),
         RequestCategory.METER_ERROR: CategoryRule(
             label="Ошибка в показаниях",
+            emoji="📟",
             zone=ResponsibilityZone.MANAGEMENT,
             normative_hours=72,
         ),
         RequestCategory.CHARGE_DISPUTE: CategoryRule(
             label="Спор по начислению",
+            emoji="🧾",
             zone=ResponsibilityZone.MANAGEMENT,
             normative_hours=72,
         ),
         RequestCategory.OTHER: CategoryRule(
             label="Другое",
+            emoji="📝",
             zone=ResponsibilityZone.MANAGEMENT,
             normative_hours=72,
         ),

@@ -1,20 +1,23 @@
 from collections.abc import Sequence
+from html import escape
 from typing import Any
 
 from dishka import FromDishka
-from maxo.dialogs import DialogManager, StartMode
+from maxo.dialogs import DialogManager
 from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import ManagedTextInput, MessageInput
 from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import LocationAttachment, MessageCallback, MessageCreated
 
-from zheka.bot.dialog_data import HouseItem, MenuData, OnboardingData
+from zheka.bot.cards import back_to_menu
+from zheka.bot.dialog_data import HouseItem, OnboardingData
 from zheka.bot.middlewares.user import dialog_user_id
-from zheka.bot.states import Menu, Onboarding
+from zheka.bot.states import Onboarding
 from zheka.core.enums import ResidentRole
 from zheka.core.services.houses import HouseFound, HousesService
 
 HOUSES_LIMIT = 30
+HOUSE_LINKED = "✅ Дом добавлен: {address}"
 
 
 def _house_items(found: Sequence[HouseFound]) -> list[HouseItem]:
@@ -158,7 +161,7 @@ async def link_house(
     flat_number: str | None,
 ) -> None:
     data = OnboardingData.load(dialog_manager)
-    await houses_service.link(
+    view = await houses_service.link(
         dialog_user_id(dialog_manager),
         data.chosen_house(),
         None,
@@ -167,10 +170,9 @@ async def link_house(
         data.source,
         data.entrance,
     )
-    await dialog_manager.start(
-        Menu.main,
-        data=MenuData(notice="Дом добавлен").to_data(),
-        mode=StartMode.RESET_STACK,
+    await back_to_menu(
+        dialog_manager,
+        HOUSE_LINKED.format(address=escape(view.house.address)),
     )
 
 

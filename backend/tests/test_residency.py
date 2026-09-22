@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser
@@ -18,17 +19,27 @@ from zheka.api.dependencies.current_residency import (
     resolve_residency,
 )
 from zheka.api.schemas.houses import ResidencySummary
-from zheka.core.enums import ResidentRole, ResidentStatus, VerificationStatus
+from zheka.core.consent import CONSENT_VERSION
+from zheka.core.enums import (
+    EventSource,
+    EventType,
+    ResidentRole,
+    ResidentStatus,
+    VerificationStatus,
+)
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
+from zheka.core.services.events import EventsService
 from zheka.core.services.profile import ProfileService
 from zheka.core.texts import BLOCKED
 from zheka.infra.database.models import Resident
+from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.database.tables.events import events_table
 
 BLOCK_REASON = "Задолженность по коммунальным услугам"
 REJECT_REASON = "Лицевой счет принадлежит другой квартире"
@@ -43,6 +54,7 @@ def _profile_service(session: AsyncSession) -> ProfileService:
         HousesRepo(session),
         OrgsRepo(session),
         FlatsRepo(session),
+        EventsService(EventsRepo(session)),
     )
 
 
@@ -298,3 +310,24 @@ async def test_get_me_keeps_each_residency_on_its_own_request(
         pending.flat_id: VerificationStatus.PENDING,
         rejected.flat_id: VerificationStatus.REJECTED,
     }
+
+
+async def test_a_consent_is_recorded_with_its_source(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    ids = await make_org_house_flat_user()
+
+    await _profile_service(session).accept_consent(
+        ids.user_id,
+        CONSENT_VERSION,
+        EventSource.MINIAPP,
+    )
+
+    stmt = select(events_table.c.payload).where(
+        events_table.c.type == EventType.CONSENT_GIVEN,
+        events_table.c.user_id == ids.user_id,
+    )
+    assert (await session.execute(stmt)).scalars().all() == [
+        {"source": EventSource.MINIAPP.value, "version": CONSENT_VERSION},
+    ]

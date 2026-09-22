@@ -1,6 +1,6 @@
 from dishka import FromDishka
 from maxo import Router
-from maxo.dialogs import DialogManager, StartMode
+from maxo.dialogs import DialogManager, ShowMode, StartMode
 from maxo.routing.filters import Command, CommandStart
 from maxo.types import BotStarted, MessageCreated
 
@@ -14,13 +14,12 @@ from zheka.core.services.events import EventsService
 router = Router(name=__name__)
 
 HELP_TEXT = (
-    "Команды:\n"
+    "ℹ️ Команды\n"
     "/start - открыть меню\n"
     "/help - эта справка\n\n"
-    "Заявки, начисления и показания счётчиков живут в приложении - "
-    "кнопка под меню."
+    "📱 Заявки, начисления и показания счетчиков - в приложении, кнопка под меню"
 )
-SEEDING_TEXT = "Заполняю демо-данные, это займет до минуты"
+SEEDING_TEXT = "⏳ Заполняю демо-данные, это займет до минуты"
 
 
 @router.bot_started()
@@ -30,6 +29,8 @@ async def bot_start_handler(
     user: User,
     events_service: FromDishka[EventsService],
 ) -> None:
+    # AUTO правит последнее сообщение на всем, что не MessageCreated
+    dialog_manager.show_mode = ShowMode.SEND
     await events_service.record(
         EventType.BOT_START,
         user_id=user.id,

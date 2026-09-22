@@ -16,7 +16,7 @@ from zheka.core.errors import ZhekaError
 
 logger = logging.getLogger(__name__)
 
-STALE_WINDOW = "Это окно устарело, открываю меню заново"
+STALE_WINDOW = "🔄 Это окно устарело, открываю меню заново"
 
 router = Router(name=__name__)
 

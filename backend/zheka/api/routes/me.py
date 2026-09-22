@@ -11,6 +11,7 @@ from zheka.api.schemas.me import (
     TrackEventRequest,
     UpdateNotificationSettingsRequest,
 )
+from zheka.core.enums import EventSource
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.profile import ProfileService
@@ -32,7 +33,11 @@ async def accept_consent(
     profile_service: FromDishka[ProfileService],
     body: ConsentRequest,
 ) -> MeResponse:
-    view = await profile_service.accept_consent(current_account.user_id, body.version)
+    view = await profile_service.accept_consent(
+        current_account.user_id,
+        body.version,
+        EventSource.MINIAPP,
+    )
     return MeResponse.of(view)
 
 

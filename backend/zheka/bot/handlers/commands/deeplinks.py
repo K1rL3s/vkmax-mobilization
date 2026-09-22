@@ -1,16 +1,19 @@
+from html import escape
 from typing import Any
 
 from dishka import FromDishka
 from maxo import Router
-from maxo.dialogs import DialogManager, StartMode
+from maxo.dialogs import DialogManager, ShowMode, StartMode
 from maxo.omit import is_not_defined
 from maxo.routing.sentinels import UNHANDLED
 from maxo.types import BotStarted
 
-from zheka.bot.dialog_data import ConsentData, MenuData, OnboardingData
-from zheka.bot.states import Consent, Menu, Onboarding
+from zheka.bot.cards import back_to_menu
+from zheka.bot.dialog_data import ConsentData, OnboardingData
+from zheka.bot.states import Consent, Onboarding
 from zheka.core.deeplinks import Deeplink, DeeplinkKind, parse_deeplink
-from zheka.core.enums import EventSource, EventType, OrgRole
+from zheka.core.enums import EventType, OrgRole
+from zheka.core.errors import ZhekaError
 from zheka.core.models import User
 from zheka.core.services.demo import DemoService, demo_flat_number
 from zheka.core.services.events import EventsService
@@ -19,27 +22,26 @@ from zheka.core.services.orgs import OrgsService
 
 router = Router(name=__name__)
 
-REGISTER_NOTICE = "Регистрация управляющей компании открывается в приложении"
-ORG_JOINED = "Вы в команде «{name}»"
-FLAT_JOINED = "Квартира подтверждена"
+REGISTER_NOTICE = "🏢 Регистрация управляющей компании открывается в приложении"
+ORG_JOINED = "🎉 Вы в команде «{name}»"
+FLAT_JOINED = "✅ Квартира подтверждена"
 DEMO_ADMIN_NOTICE = (
-    "Демо-доступ открыт: вы администратор {org}. Кабинет УК с командой и "
+    "🎟 Демо-доступ открыт: вы администратор {org}. Кабинет УК с командой и "
     "настройками - в приложении"
 )
-DEMO_STAFF_NOTICE = "Демо-доступ открыт: вы сотрудник {org}. Кабинет УК - в приложении"
+DEMO_STAFF_NOTICE = (
+    "🎟 Демо-доступ открыт: вы сотрудник {org}. Кабинет УК - в приложении"
+)
 DEMO_RESIDENT_NOTICE = (
-    "Демо-доступ открыт: ваша квартира {flat}, {address}, дом обслуживает "
-    "{org}. Подайте показания за этот месяц в приложении"
+    "🎟 Демо-доступ открыт: ваша квартира {flat}, {address}, дом обслуживает "
+    "{org}. Передайте показания за этот месяц в приложении"
 )
 
 _DEMO_STAFF = {
     DeeplinkKind.DEMO_ADMIN: (OrgRole.ADMIN, DEMO_ADMIN_NOTICE),
     DeeplinkKind.DEMO_STAFF: (OrgRole.EMPLOYEE, DEMO_STAFF_NOTICE),
 }
-_HOUSE_SOURCES = {
-    DeeplinkKind.HOUSE: EventSource.CHAT,
-    DeeplinkKind.ENTRANCE_QR: EventSource.QR,
-}
+_HOUSE_KINDS = (DeeplinkKind.HOUSE, DeeplinkKind.ENTRANCE_QR)
 
 
 @router.bot_started()
@@ -60,7 +62,8 @@ async def deeplink_handler(
     if deeplink is None:
         return UNHANDLED
 
-    source = _HOUSE_SOURCES.get(deeplink.kind, EventSource.DEEPLINK)
+    dialog_manager.show_mode = ShowMode.SEND
+    source = deeplink.source
     await events_service.record(
         EventType.BOT_START,
         user_id=user.id,
@@ -96,28 +99,34 @@ async def open_deeplink(
         return
 
     user_id = user.id
-    if deeplink.kind is DeeplinkKind.ORG_INVITE:
-        membership = await orgs_service.activate_invite(user_id, deeplink.value)
-        await _menu(dialog_manager, ORG_JOINED.format(name=membership.org.name))
-    elif deeplink.kind is DeeplinkKind.FLAT_INVITE:
-        await flats_service.activate_invite(user_id, deeplink.value)
-        await _menu(dialog_manager, FLAT_JOINED)
-    elif deeplink.kind is DeeplinkKind.ORG_REGISTER:
-        await _menu(dialog_manager, REGISTER_NOTICE)
-    elif deeplink.kind in _HOUSE_SOURCES:
-        await _start_house(deeplink, dialog_manager)
-    elif deeplink.kind is DeeplinkKind.DEMO_RESIDENT:
-        org, residency = await demo_service.settle(user_id, int(deeplink.value))
-        notice = DEMO_RESIDENT_NOTICE.format(
-            flat=demo_flat_number(user_id),
-            address=residency.house.address,
-            org=org.name,
-        )
-        await _menu(dialog_manager, notice)
-    else:
-        role, notice = _DEMO_STAFF[deeplink.kind]
-        access = await demo_service.join(user_id, int(deeplink.value), role)
-        await _menu(dialog_manager, notice.format(org=access.org.name))
+    # каждая цель отказывает до первой записи, поэтому отказ можно закоммитить
+    try:
+        if deeplink.kind is DeeplinkKind.ORG_INVITE:
+            membership = await orgs_service.activate_invite(user_id, deeplink.value)
+            notice = ORG_JOINED.format(name=escape(membership.org.name))
+            await back_to_menu(dialog_manager, notice)
+        elif deeplink.kind is DeeplinkKind.FLAT_INVITE:
+            await flats_service.activate_invite(user_id, deeplink.value)
+            await back_to_menu(dialog_manager, FLAT_JOINED)
+        elif deeplink.kind is DeeplinkKind.ORG_REGISTER:
+            await back_to_menu(dialog_manager, REGISTER_NOTICE)
+        elif deeplink.kind in _HOUSE_KINDS:
+            await _start_house(deeplink, dialog_manager)
+        elif deeplink.kind is DeeplinkKind.DEMO_RESIDENT:
+            org, residency = await demo_service.settle(user_id, int(deeplink.value))
+            notice = DEMO_RESIDENT_NOTICE.format(
+                flat=demo_flat_number(user_id),
+                address=escape(residency.house.address),
+                org=escape(org.name),
+            )
+            await back_to_menu(dialog_manager, notice)
+        else:
+            role, template = _DEMO_STAFF[deeplink.kind]
+            access = await demo_service.join(user_id, int(deeplink.value), role)
+            notice = template.format(org=escape(access.org.name))
+            await back_to_menu(dialog_manager, notice)
+    except ZhekaError as error:
+        await back_to_menu(dialog_manager, str(error))
 
 
 async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> None:
@@ -131,15 +140,7 @@ async def _start_house(deeplink: Deeplink, dialog_manager: DialogManager) -> Non
         data=OnboardingData(
             house_id=int(house_id),
             entrance=int(entrance) if entrance.isdigit() else None,
-            source=_HOUSE_SOURCES[deeplink.kind],
+            source=deeplink.source,
         ).to_data(),
-        mode=StartMode.RESET_STACK,
-    )
-
-
-async def _menu(dialog_manager: DialogManager, notice: str) -> None:
-    await dialog_manager.start(
-        Menu.main,
-        data=MenuData(notice=notice).to_data(),
         mode=StartMode.RESET_STACK,
     )

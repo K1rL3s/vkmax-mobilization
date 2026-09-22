@@ -617,10 +617,11 @@ MAX-события `dialog_muted`, `dialog_unmuted`, `bot_stopped` пишутс�
 ## Аналитика
 
 Сбор в таблицу `events` (user_id, тип, payload, created_at). Закрытый перечень
-из 47 типов, `EventType` в одном модуле (payload в скобках):
+из 48 типов, `EventType` в одном модуле (payload в скобках):
 
-- бот и мини-апп: `bot_start(source)`, `bot_muted`, `bot_unmuted`,
-  `bot_stopped`, `miniapp_open(source, tab, announcement_id)`,
+- бот и мини-апп: `bot_start(source)`, `consent_given(source, version)`,
+  `bot_muted`, `bot_unmuted`, `bot_stopped`,
+  `miniapp_open(source, tab, announcement_id)`,
   `announcement_click(source, tab, announcement_id)`;
 - дом и квартира: `house_search(method, city, street, query | found)`,
   `house_linked(house_id, flat_id, flat_number, source, entrance)`,
