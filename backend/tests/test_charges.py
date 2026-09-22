@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, make_config, make_notifications_service
-from tests.test_requests import _events, _photo
+from tests.test_requests import _StubClassifier, _events, _photo
 
 from zheka.core.enums import (
     EventType,
@@ -33,7 +33,6 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
-from zheka.infra.yandex import YandexClassifier
 
 Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
@@ -65,7 +64,7 @@ def _make_service(session: AsyncSession) -> ChargesService:
         GroupingService(requests_repo, events),
         make_notifications_service(session),
         events,
-        YandexClassifier(make_config().yandex),
+        _StubClassifier(None),
     )
     return ChargesService(
         ChargesRepo(session),

@@ -4,7 +4,7 @@ from dishka.integrations.taskiq import ContainerMiddleware
 from maxo import Dispatcher
 from maxo.dialogs import BgManagerFactory
 from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
-from taskiq import AsyncBroker, SmartRetryMiddleware
+from taskiq import AsyncBroker, SmartRetryMiddleware, TaskiqEvents
 
 from zheka.bot import make_dispatcher
 from zheka.broker.middlewares import CommitMiddleware, ContextVarsMiddleware
@@ -32,9 +32,11 @@ def main() -> AsyncBroker:
     setup_maxo_dishka(container, bot_setup.dp, auto_inject=True)
 
     logger.debug("Инициализирую брокер")
-    return make_broker(config.redis).with_middlewares(
+    broker = make_broker(config.redis).with_middlewares(
         ContextVarsMiddleware(),
         ContainerMiddleware(container),
         SmartRetryMiddleware(use_delay_exponent=True),
         CommitMiddleware(),
     )
+    broker.add_event_handler(TaskiqEvents.WORKER_SHUTDOWN, lambda _: container.close())
+    return broker

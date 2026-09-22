@@ -38,6 +38,11 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   names follow the family canon (`POSTGRES_*`, `REDIS_DB`, `LOG_LEVEL`).
 - An API change regenerates the root `openapi.yaml` with `just openapi`;
   `test_committed_openapi_yaml_matches_the_app` fails on a stale one.
+- Every entry point closes its APP container (api lifespan, worker
+  `WORKER_SHUTDOWN`, scheduler and seed in `finally`): it owns the database
+  pool, the bot session and the one `aiohttp.ClientSession` of the process
+  (`YandexProvider.http_session`). Both Yandex clients share it and pass their
+  own timeout on each request, never on the session.
 
 ### Code conventions
 
@@ -187,16 +192,16 @@ element per line with a trailing comma, and `just check` rejects the hugged form
   first. `make_org_house_flat_user` registers its org unless `registered=False`.
 - A phone request with `resident_id` is that resident's own request (author,
   flat, notifications, review, rating); without one it has no author.
-- The LLM category hint (`YandexClassifier`,
-  `zheka/infra/yandex/classifier.py`) is optional: no call without
-  `YANDEX_API_KEY` / `YANDEX_FOLDER_ID`; 401, 403 or a non-ASCII key disables
+- The LLM category hint (`YandexClassifier`, `zheka/infra/yandex/classifier.py`)
+  is optional: no call without `YANDEX_API_KEY` / `YANDEX_FOLDER_ID`; 401, 403
+  or a key that cannot be a header (non-ASCII or a control character) disables
   it for the process; any other failure or an answer outside `RequestCategory`
   is `None` for that call. `POST /requests/classify` then answers 200 with
-  `category: null`. The key is never logged. The model picks only the
-  category, the zone comes from `CATEGORY_RULES`; the resident's text is its
-  own `user` message. The bot does not classify (`NewRequest` asks the
-  category first). `RequestChannel.CHAT` is written nowhere yet (no chat
-  interaction in the spec). The missing per-user limit is a `ponytail:` marker at
+  `category: null`. The key is never logged. The model picks only the category,
+  the zone comes from `CATEGORY_RULES`; the resident's text is its own `user`
+  message. The bot does not classify (`NewRequest` asks the category first).
+  `RequestChannel.CHAT` is written nowhere yet (no chat interaction in the
+  spec). The missing per-user limit is a `ponytail:` marker at
   `RequestsService.classify`.
 - A chat is bound when `house_id` and `bound_at` are set and `status ==
   ACTIVE`: `BOUND_CHAT` (`infra/database/repos/chats.py`), shared by the house

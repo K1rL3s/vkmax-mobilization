@@ -24,7 +24,6 @@ from zheka.api.schemas.requests import (
 )
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
-from zheka.config import YandexConfig
 from zheka.core.enums import (
     CATEGORY_RULES,
     EventType,
@@ -112,7 +111,7 @@ def _make_service(
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
-        classifier or YandexClassifier(make_config().yandex),
+        classifier or _StubClassifier(None),
     )
 
 
@@ -937,8 +936,8 @@ async def test_export_hides_a_request_of_another_resident_and_records_nothing(
 class _StubClassifier(YandexClassifier):
     __slots__ = ("_category",)
 
+    # без super().__init__: заглушке не нужны ни ключ, ни http-сессия
     def __init__(self, category: RequestCategory | None) -> None:
-        super().__init__(YandexConfig(api_key=None, folder_id=None))
         self._category = category
 
     async def classify(self, text: str) -> RequestCategory | None:  # noqa: ARG002

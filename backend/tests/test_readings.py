@@ -1,14 +1,19 @@
+import base64
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import aiohttp
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import TestServer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, freeze_now, make_config
 from tests.test_requests import _add_user, _events, _photo
 
-from zheka.config import YandexConfig
+from zheka.config import FilesConfig, YandexConfig
 from zheka.core.enums import (
     EventType,
     MeterType,
@@ -315,18 +320,43 @@ def test_parse_reading(text: str, value: int | None) -> None:
 
 
 @pytest.mark.parametrize(
-    "config",
+    ("config", "photo", "values"),
     [
-        YandexConfig(api_key=None, folder_id=None),
-        YandexConfig(api_key="key", folder_id="folder"),
+        (YandexConfig(api_key=None, folder_id=None), b"jpeg", None),
+        (YandexConfig(api_key="key", folder_id="folder"), None, None),
+        (
+            YandexConfig(api_key="key", folder_id="folder"),
+            b"jpeg",
+            {TariffZone.SINGLE: 123_450},
+        ),
     ],
 )
-async def test_vision_client_returns_none_without_calling_ocr(
+async def test_vision_client_sends_ocr_only_a_photo_it_can_send(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
     config: YandexConfig,
+    photo: bytes | None,
+    values: dict[TariffZone, int] | None,
 ) -> None:
-    client = VisionClient(config, FilesService(make_config().files, "test-token"))
+    sent: list[bytes] = []
 
-    assert await client.recognize(_photo()) is None
+    async def recognize(request: web.Request) -> web.StreamResponse:
+        sent.append(base64.b64decode((await request.json())["content"]))
+        text = {"textAnnotation": {"fullText": "00123,45 м3"}}
+        return web.json_response({"result": text})
+
+    app = web.Application()
+    app.router.add_post("/ocr", recognize)
+    name = _photo()
+    if photo is not None:
+        (tmp_path / name).write_bytes(photo)
+    files = FilesService(FilesConfig(dir=str(tmp_path), max_size_mb=10), "token")
+    async with TestServer(app) as server, aiohttp.ClientSession() as http:
+        url = str(server.make_url("/ocr"))
+        monkeypatch.setattr("zheka.infra.yandex.vision._RECOGNIZE_URL", url)
+        assert await VisionClient(config, files, http).recognize(name) == values
+
+    assert sent == ([] if values is None else [photo])
 
 
 async def test_readings_are_refused_to_an_unverified_resident(

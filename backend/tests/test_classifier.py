@@ -1,50 +1,35 @@
+import asyncio
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any, Self
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AsyncExitStack
 
+import aiohttp
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import TestServer
+from yarl import URL
 
 from zheka.config import YandexConfig
 from zheka.core.enums import RequestCategory
+from zheka.infra.yandex import classifier as classifier_module
 from zheka.infra.yandex.classifier import COMPLETION_URL, YandexClassifier
 
 KEY = "b22-secret-api-key"
 FOLDER = "b1gfolder"
 TEXT = "Течет труба в ванной"
 
-
-@dataclass
-class _Request:
-    url: str
-    headers: dict[str, str]
-    json: dict[str, Any]
+Reply = Callable[[], Awaitable[web.StreamResponse]]
+Serve = Callable[..., Awaitable[tuple[YandexClassifier, list[web.Request]]]]
 
 
-@dataclass
-class _Response:
-    status: int
-    body: dict[str, Any] = field(default_factory=dict)
+def _json(body: object, status: int = 200) -> Reply:
+    async def reply() -> web.StreamResponse:
+        return web.json_response(body, status=status)
 
-    @property
-    def ok(self) -> bool:
-        return self.status < 400
-
-    async def json(self, content_type: str | None = None) -> dict[str, Any]:
-        del content_type
-        return self.body
-
-    async def __aenter__(self) -> "Self":
-        return self
-
-    async def __aexit__(self, *exc_info: object) -> None:
-        return None
+    return reply
 
 
-Handler = Callable[[_Request], _Response]
-
-
-def _answer(text: str, *, wrapped: bool = True) -> _Response:
+def _answer(text: str, *, wrapped: bool = True, status: int = 200) -> Reply:
     body = {
         "alternatives": [
             {
@@ -55,118 +40,135 @@ def _answer(text: str, *, wrapped: bool = True) -> _Response:
         "usage": {"inputTextTokens": "1", "completionTokens": "1"},
         "modelVersion": "07.03.2024",
     }
-    return _Response(200, {"result": body} if wrapped else body)
+    return _json({"result": body} if wrapped else body, status)
 
 
-class _FakeSession:
-    def __init__(self, handler: Handler) -> None:
-        self._handler = handler
-        self.sent: list[_Request] = []
-
-    def post(
-        self,
-        url: str,
-        *,
-        headers: dict[str, str],
-        json: dict[str, Any],
-    ) -> _Response:
-        request = _Request(url, headers, json)
-        self.sent.append(request)
-        return self._handler(request)
+def _status(code: int) -> Reply:
+    return _json({"error": "nope"}, code)
 
 
-def _classifier(
-    handler: Handler,
-    api_key: str | None = KEY,
-    folder_id: str | None = FOLDER,
-) -> tuple[YandexClassifier, list[_Request]]:
-    session = _FakeSession(handler)
-    classifier = YandexClassifier(
-        YandexConfig(api_key=api_key, folder_id=folder_id),
-        session,  # type: ignore[arg-type]
-    )
-    return classifier, session.sent
+async def _timeout() -> web.StreamResponse:
+    await asyncio.sleep(1)
+    return await _answer("leak")()
 
 
-def _status(code: int) -> Handler:
-    return lambda _: _Response(code, {"error": "nope"})
+async def _html() -> web.StreamResponse:
+    return web.Response(text="<html>Bad Gateway</html>", content_type="text/html")
 
 
-def _timeout(request: _Request) -> _Response:
-    del request
-    raise TimeoutError("timed out")
+@pytest.fixture
+async def serve(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Serve]:
+    monkeypatch.setattr(classifier_module, "LLM_TIMEOUT", 0.2)
+    path = URL(COMPLETION_URL).path
+    async with AsyncExitStack() as stack:
+        http = await stack.enter_async_context(aiohttp.ClientSession())
+
+        async def serve(
+            reply: Reply,
+            api_key: str | None = KEY,
+            folder_id: str | None = FOLDER,
+        ) -> tuple[YandexClassifier, list[web.Request]]:
+            sent: list[web.Request] = []
+
+            async def handle(request: web.Request) -> web.StreamResponse:
+                await request.read()
+                sent.append(request)
+                return await reply()
+
+            app = web.Application()
+            app.router.add_post(path, handle)
+            server = await stack.enter_async_context(TestServer(app))
+            url = str(server.make_url(path))
+            monkeypatch.setattr(classifier_module, "COMPLETION_URL", url)
+            config = YandexConfig(api_key=api_key, folder_id=folder_id)
+            return YandexClassifier(config, http), sent
+
+        yield serve
 
 
 @pytest.mark.parametrize(("api_key", "folder_id"), [(None, FOLDER), (KEY, None)])
 async def test_without_credentials_no_request_is_made(
+    serve: Serve,
     api_key: str | None,
     folder_id: str | None,
 ) -> None:
-    classifier, sent = _classifier(lambda _: _answer("leak"), api_key, folder_id)
+    classifier, sent = await serve(_answer("leak"), api_key, folder_id)
 
     assert await classifier.classify(TEXT) is None
     assert sent == []
 
 
-async def test_a_valid_answer_is_the_category_after_trimming() -> None:
-    classifier, sent = _classifier(lambda _: _answer("  elevator\n"))
+async def test_a_valid_answer_is_the_category_after_trimming(serve: Serve) -> None:
+    classifier, sent = await serve(_answer("  elevator\n"))
 
     assert await classifier.classify(TEXT) is RequestCategory.ELEVATOR
     [request] = sent
-    assert request.url == COMPLETION_URL
     assert request.headers["Authorization"] == f"Api-Key {KEY}"
-    assert request.json["modelUri"] == f"gpt://{FOLDER}/yandexgpt-5-lite"
-    assert request.json["completionOptions"]["temperature"] == 0
-    assert request.json["messages"][-1] == {"role": "user", "text": TEXT}
+    body = await request.json()
+    assert body["modelUri"] == f"gpt://{FOLDER}/yandexgpt-5-lite"
+    assert body["completionOptions"]["temperature"] == 0
+    assert body["messages"][-1] == {"role": "user", "text": TEXT}
 
 
 @pytest.mark.parametrize("answer", ["Протечка", "LEAK"])
-async def test_an_answer_outside_the_enum_is_no_answer(answer: str) -> None:
-    classifier, _ = _classifier(lambda _: _answer(answer))
+async def test_an_answer_outside_the_enum_is_no_answer(
+    serve: Serve,
+    answer: str,
+) -> None:
+    classifier, _ = await serve(_answer(answer))
 
     assert await classifier.classify(TEXT) is None
 
 
 @pytest.mark.parametrize("code", [401, 403])
-async def test_a_refused_key_turns_the_classifier_off(code: int) -> None:
-    classifier, sent = _classifier(_status(code))
+async def test_a_refused_key_turns_the_classifier_off(serve: Serve, code: int) -> None:
+    classifier, sent = await serve(_status(code))
 
     assert await classifier.classify(TEXT) is None
     assert await classifier.classify(TEXT) is None
     assert len(sent) == 1
 
 
-@pytest.mark.parametrize("handler", [_status(500), _status(429), _timeout])
-async def test_a_failed_call_leaves_the_classifier_on(handler: Handler) -> None:
-    classifier, sent = _classifier(handler)
+@pytest.mark.parametrize("reply", [_status(500), _status(429), _timeout, _html])
+async def test_a_failed_call_leaves_the_classifier_on(
+    serve: Serve,
+    reply: Reply,
+) -> None:
+    classifier, sent = await serve(reply)
 
     assert await classifier.classify(TEXT) is None
     assert await classifier.classify(TEXT) is None
     assert len(sent) == 2
 
 
+@pytest.mark.parametrize(
+    ("reply", "code"),
+    [(_json({}, 500), 500), (_answer("leak", status=503), 503)],
+)
 async def test_an_error_status_is_logged_with_its_code(
+    serve: Serve,
+    reply: Reply,
+    code: int,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    empty, _ = _classifier(lambda _: _Response(500, {}))
-    lookalike, _ = _classifier(lambda _: _Response(503, _answer("leak").body))
+    classifier, _ = await serve(reply)
 
     with caplog.at_level(logging.WARNING, logger="zheka.infra.yandex.classifier"):
-        assert await empty.classify(TEXT) is None
-        assert await lookalike.classify(TEXT) is None
+        assert await classifier.classify(TEXT) is None
 
-    assert [record.args for record in caplog.records] == [(500,), (503,)]
+    assert [record.args for record in caplog.records] == [(code,)]
 
 
 @pytest.mark.parametrize(
-    "handler",
-    [_status(401), _status(500), _timeout, lambda _: _answer("nonsense")],
+    "reply",
+    [_status(401), _status(500), _timeout, _answer("nonsense")],
 )
 async def test_the_key_never_reaches_a_log_record(
-    handler: Handler,
+    serve: Serve,
+    reply: Reply,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    classifier, _ = _classifier(handler)
+    classifier, _ = await serve(reply)
 
     with caplog.at_level(logging.DEBUG):
         await classifier.classify(TEXT)
@@ -177,17 +179,19 @@ async def test_the_key_never_reaches_a_log_record(
         assert KEY not in (record.exc_text or "")
 
 
-async def test_an_unwrapped_answer_is_read_too() -> None:
-    classifier, _ = _classifier(lambda _: _answer("heating", wrapped=False))
+async def test_an_unwrapped_answer_is_read_too(serve: Serve) -> None:
+    classifier, _ = await serve(_answer("heating", wrapped=False))
 
     assert await classifier.classify(TEXT) is RequestCategory.HEATING
 
 
+@pytest.mark.parametrize("key", [f"{KEY}ё", f"{KEY}\n"])
 async def test_a_key_that_cannot_be_a_header_turns_the_classifier_off(
+    serve: Serve,
     caplog: pytest.LogCaptureFixture,
+    key: str,
 ) -> None:
-    key = f"{KEY} "
-    classifier, sent = _classifier(lambda _: _answer("leak"), api_key=key)
+    classifier, sent = await serve(_answer("leak"), api_key=key)
 
     with caplog.at_level(logging.DEBUG):
         assert await classifier.classify(TEXT) is None

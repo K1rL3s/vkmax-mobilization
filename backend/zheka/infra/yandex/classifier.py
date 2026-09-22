@@ -1,7 +1,6 @@
+import json
 import logging
-from collections.abc import Mapping
 from http import HTTPStatus
-from typing import Any
 
 import aiohttp
 
@@ -30,17 +29,23 @@ _INSTRUCTION = (
 class YandexClassifier:
     __slots__ = ("_config", "_refused", "_session")
 
-    def __init__(
-        self,
-        config: YandexConfig,
-        session: aiohttp.ClientSession | None = None,
-    ) -> None:
+    def __init__(self, config: YandexConfig, session: aiohttp.ClientSession) -> None:
         self._config = config
         self._session = session
         self._refused = False
 
     async def classify(self, text: str) -> RequestCategory | None:
-        if self._refused or not self._config.api_key or not self._config.folder_id:
+        key = self._config.api_key
+        if self._refused or not key or not self._config.folder_id:
+            return None
+        # aiohttp молча шлет не-ASCII ключ в utf-8,
+        # а на управляющем символе падает с ValueError
+        if not (key.isascii() and key.isprintable()):
+            self._refused = True
+            logger.error(
+                "Ключ Yandex AI Studio не годится для заголовка, подсказки "
+                "категорий выключены до перезапуска процесса",
+            )
             return None
 
         payload = {
@@ -51,69 +56,37 @@ class YandexClassifier:
                 {"role": "user", "text": text},
             ],
         }
-        headers = {"Authorization": f"Api-Key {self._config.api_key}"}
         try:
-            # aiohttp encodes headers as utf-8 and never raises here itself,
-            # unlike httpx - check ourselves so a garbled key still disables
-            # the classifier instead of sending it out silently
-            headers["Authorization"].encode("ascii")
-            status, data = await self._request(headers, payload)
-        except UnicodeEncodeError:
-            self._refused = True
-            logger.error(  # noqa: TRY400
-                "Ключ Yandex AI Studio содержит символы не из ASCII, подсказки "
-                "категорий выключены до перезапуска процесса",
-            )
-            return None
+            async with self._session.post(
+                COMPLETION_URL,
+                headers={"Authorization": f"Api-Key {key}"},
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=LLM_TIMEOUT),
+            ) as response:
+                body = await response.read()
         except (aiohttp.ClientError, TimeoutError):
             logger.warning("Yandex AI Studio не ответила на классификацию заявки")
             return None
 
-        if status in _KEY_REFUSED:
+        if response.status in _KEY_REFUSED:
             self._refused = True
             logger.error(
                 "Yandex AI Studio отвергла ключ (HTTP %s), подсказки категорий "
                 "выключены до перезапуска процесса",
-                status,
+                response.status,
             )
             return None
-        if data is None:
+        if not response.ok:
             logger.warning(
                 "Yandex AI Studio ответила HTTP %s на классификацию заявки",
-                status,
+                response.status,
             )
             return None
 
         try:
+            data = json.loads(body)
             answer = data.get("result", data)["alternatives"][0]["message"]["text"]
             return RequestCategory(answer.strip())
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             logger.warning("Yandex AI Studio вернула категорию не из списка")
             return None
-
-    async def _request(
-        self,
-        headers: dict[str, str],
-        payload: Mapping[str, object],
-    ) -> tuple[int, Any | None]:
-        if self._session is not None:
-            return await self._post(self._session, headers, payload)
-        timeout = aiohttp.ClientTimeout(total=LLM_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            return await self._post(session, headers, payload)
-
-    @staticmethod
-    async def _post(
-        session: aiohttp.ClientSession,
-        headers: dict[str, str],
-        payload: Mapping[str, object],
-    ) -> tuple[int, Any | None]:
-        async with session.post(
-            COMPLETION_URL,
-            headers=headers,
-            json=payload,
-        ) as response:
-            if not response.ok:
-                return response.status, None
-            data = await response.json(content_type=None)
-            return response.status, data

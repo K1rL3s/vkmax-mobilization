@@ -39,11 +39,17 @@ def _full_text(data: Mapping[str, Any]) -> str | None:
 
 
 class VisionClient:
-    __slots__ = ("_config", "_files")
+    __slots__ = ("_config", "_files", "_session")
 
-    def __init__(self, config: YandexConfig, files_service: FilesService) -> None:
+    def __init__(
+        self,
+        config: YandexConfig,
+        files_service: FilesService,
+        session: aiohttp.ClientSession,
+    ) -> None:
         self._config = config
         self._files = files_service
+        self._session = session
 
     async def recognize(self, photo_path: str) -> dict[TariffZone, int] | None:
         if not self._config.api_key or not self._config.folder_id:
@@ -73,11 +79,12 @@ class VisionClient:
             "content": base64.b64encode(content).decode(),
         }
         try:
-            timeout = aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)
-            async with (
-                aiohttp.ClientSession(timeout=timeout) as session,
-                session.post(_RECOGNIZE_URL, headers=headers, json=payload) as response,
-            ):
+            async with self._session.post(
+                _RECOGNIZE_URL,
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS),
+            ) as response:
                 response.raise_for_status()
                 data: dict[str, Any] = await response.json(content_type=None)
         except (aiohttp.ClientError, TimeoutError, ValueError):
