@@ -1,0 +1,28 @@
+.Form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.Inline {
+  align-self: flex-start;
+}
+
+.Cells {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -12px;
+}
+
+.Selected {
+  color: var(--text-themed);
+}

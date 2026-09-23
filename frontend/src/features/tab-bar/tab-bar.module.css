@@ -1,6 +1,7 @@
 .TabBar {
   position: sticky;
   bottom: 0;
+  z-index: 2;
   margin-top: auto;
   display: flex;
   padding: 8px 0 8px;

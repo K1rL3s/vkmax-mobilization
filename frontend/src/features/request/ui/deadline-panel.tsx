@@ -8,7 +8,12 @@ import type { RequestCard } from "../domain/types";
 
 import styles from "./deadline-panel.module.css";
 
-export const DeadlinePanel = ({ request }: { request: RequestCard }) => {
+type DeadlineSource = Pick<
+  RequestCard,
+  "created_at" | "deadline_at" | "normative_hours"
+>;
+
+export const DeadlinePanel = ({ request }: { request: DeadlineSource }) => {
   const left = deadlineLeft(request.deadline_at);
   const progress = deadlineProgress(request.created_at, request.deadline_at);
   const hours = request.normative_hours;

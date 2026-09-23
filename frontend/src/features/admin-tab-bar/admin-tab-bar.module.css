@@ -1,6 +1,7 @@
 .AdminTabBar {
   position: sticky;
   bottom: 0;
+  z-index: 2;
   margin-top: auto;
   display: flex;
   flex-direction: column;
