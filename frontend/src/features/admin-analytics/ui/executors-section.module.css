@@ -1,0 +1,46 @@
+.Scroll {
+  overflow-x: auto;
+  /* таблица доезжает до краёв карточки, а не до её отступов */
+  margin: 0 -12px;
+  padding: 0 12px;
+  scrollbar-width: none;
+}
+
+.Table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  white-space: nowrap;
+
+  th,
+  td {
+    padding: 6px 10px 6px 0;
+    text-align: right;
+    font-weight: 400;
+    color: var(--text-primary);
+  }
+
+  thead th {
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  tbody tr + tr th,
+  tbody tr + tr td {
+    border-top: 1px solid var(--divider-primary);
+  }
+
+  .Name {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: 124px;
+    min-width: 124px;
+    max-width: 124px;
+    overflow: hidden;
+    padding-right: 12px;
+    background-color: var(--background-card);
+    text-align: left;
+    text-overflow: ellipsis;
+  }
+}
