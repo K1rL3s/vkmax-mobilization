@@ -11,6 +11,7 @@ import {
   addPollVote,
   createPoll,
   isChairman,
+  isOrgStaff,
   findPoll,
   housePolls,
   myVote,
@@ -21,11 +22,12 @@ import {
   residencyForHouse,
 } from "./state";
 
-// опрос виден жителю его дома, чужой дом отвечает 404
+// опрос виден жителю его дома и сотруднику УК: карточку и результаты кабинет
+// УК открывает теми же ручками, что и житель
 const pollAccess = (rawPollId: string) => {
   const poll = findPoll(Number(rawPollId));
 
-  if (!poll || !residencyForHouse(poll.house_id)) {
+  if (!poll || !(residencyForHouse(poll.house_id) || isOrgStaff())) {
     return notFound("Опрос не найден");
   }
 
@@ -133,8 +135,7 @@ export const pollsConfigs = [
           return poll;
         }
 
-        // бэк пускает сюда организатора опроса или сотрудника УК
-        if (!poll.created_by_me) {
+        if (!poll.created_by_me && !isOrgStaff()) {
           return forbidden("Доступно только организатору опроса");
         }
 
@@ -153,7 +154,7 @@ export const pollsConfigs = [
           return poll;
         }
 
-        if (!poll.created_by_me) {
+        if (!poll.created_by_me && !isOrgStaff()) {
           return forbidden("Доступно только организатору опроса");
         }
 
@@ -177,11 +178,15 @@ export const pollsConfigs = [
         const card = pollCard(poll);
         const residency = residencyForHouse(poll.house_id);
 
+        if (!residency) {
+          return notFound("Опрос не найден");
+        }
+
         if (card.status === "closed") {
           return conflict("Опрос завершен");
         }
 
-        if (residency?.role === "tenant") {
+        if (residency.role === "tenant") {
           return forbidden("Арендатор не участвует в опросах");
         }
 

@@ -967,6 +967,9 @@ export const residencies = (): MockResidency[] => state.residencies;
 export const residencyForHouse = (houseId: number): MockResidency | undefined =>
   state.residencies.find((residency) => residency.house_id === houseId);
 
+export const isOrgStaff = (): boolean =>
+  state.orgs.some((org) => org.role !== "executor");
+
 export const addResidency = (
   houseId: number,
   flat: MockFlat | null,
