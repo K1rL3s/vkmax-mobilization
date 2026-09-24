@@ -4,6 +4,7 @@ import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
 import { Card } from "@/shared/ui/card";
 import { Checkbox } from "@/shared/ui/checkbox";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { FieldError } from "@/shared/ui/field-error";
 import { alertIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
@@ -45,13 +46,6 @@ const Option = ({
     </Flex>
   </Checkbox>
 );
-
-const FieldError = ({ message }: { message?: string }) =>
-  message && (
-    <Typography.Text className={styles.Error} variant="description">
-      {message}
-    </Typography.Text>
-  );
 
 export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
   const form = useAnnouncementForm(houses);

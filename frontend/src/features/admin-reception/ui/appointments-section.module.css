@@ -1,0 +1,66 @@
+.Section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Arrow {
+  display: flex;
+  flex: 0 0 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background-color: var(--background-card);
+  color: var(--text-primary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.List {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+/* список предыдущего дня, пока едет новый: он остаётся читаемым, но видно,
+   что данные ещё не те */
+.stale {
+  opacity: 0.6;
+}
+
+.Row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.Row + .Row {
+  border-top: 1px solid var(--background-secondary);
+}
+
+.link {
+  cursor: pointer;
+}
+
+.cancelled {
+  opacity: 0.6;
+}
+
+.Time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}

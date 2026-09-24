@@ -1,0 +1,46 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.Content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px 24px;
+}
+
+.Title {
+  margin: 0;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Window {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+/* номера квартир переносятся строками: окно на десять квартир не уезжает
+   скроллом вбок, ради чего сбор и показывается окнами, а не матрицей */
+.Flats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.Flat {
+  padding: 4px 10px;
+  border-radius: 10px;
+  background-color: var(--background-secondary);
+}

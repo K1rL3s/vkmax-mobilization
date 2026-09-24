@@ -1,12 +1,12 @@
 import { Button, Typography } from "@maxhub/max-ui";
 
 import { STATUS_LABEL, type RequestStatus } from "@/features/request";
+import { FieldError } from "@/shared/ui/field-error";
 
 import { STATUS_ACTION, type StatusTarget } from "../domain/request-workflow";
 import { useRequestStatus } from "../model/use-request-status";
 
 import { ChipRow } from "./chip-row";
-import { FieldError } from "./field-error";
 
 import styles from "./form-card.module.css";
 

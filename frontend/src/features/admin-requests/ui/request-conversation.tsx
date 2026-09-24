@@ -3,13 +3,12 @@ import { Flex, Spinner, Textarea, Typography } from "@maxhub/max-ui";
 
 import { formatDayTime } from "@/shared/lib/format";
 import { Card } from "@/shared/ui/card";
+import { FieldError } from "@/shared/ui/field-error";
 import { arrowUpIcon, Icon } from "@/shared/ui/icon";
 
 import { requestFormConstraints } from "../domain/request-form-constraints";
 import type { AdminRequest } from "../domain/request-workflow";
 import { useRequestReplyForm } from "../model/use-request-reply-form";
-
-import { FieldError } from "./field-error";
 
 import styles from "./request-conversation.module.css";
 

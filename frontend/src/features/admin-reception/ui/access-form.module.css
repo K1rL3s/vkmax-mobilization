@@ -1,0 +1,68 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.Form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 24px;
+  padding: 16px 16px 24px;
+}
+
+.Title {
+  margin: 0;
+}
+
+.Section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Cells {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Selected {
+  color: var(--text-themed);
+}
+
+/* подпись колонки переносится на 360px - поля равняются по низу, иначе одно
+   уезжает выше другого */
+.Pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+/* Input не тянется во флексе сам: без этого поле вылезает за колонку */
+.Field > * {
+  min-width: 0;
+}
+
+.Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.Chip {
+  padding: 4px 10px;
+  border-radius: 10px;
+  background-color: var(--background-card);
+}
