@@ -1,17 +1,12 @@
 import type { components } from "../schema/generated";
 
-import { forbidden, number, ok, route } from "./reply";
-import { findHouse, residencies, type MockHttpRequest } from "./state";
+import { endpoint, forbidden, houseOf, ok, page } from "./reply";
+import { findHouse, minutes } from "./state";
 
 type Schemas = components["schemas"];
 
 type Seed = { daysAgo: number; at: string; text: string; urgent?: boolean };
 
-// новости есть только у дома 1: у второго дома лента пустая, так до пустого
-// состояния можно дойти переключением адреса
-const NEWS_HOUSE = 1;
-
-// сверху вниз от новых к старым; время - местное, день - сдвиг от сегодня
 const SEEDS: Seed[] = [
   {
     daysAgo: 0,
@@ -134,62 +129,43 @@ const SEEDS: Seed[] = [
 
 const createdAt = ({ daysAgo, at }: Seed): string => {
   if (at === "now") {
-    return new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    return minutes(-5);
   }
 
-  const [hours, minutes] = at.split(":").map(Number);
+  const [hours, minutesPart] = at.split(":").map(Number);
   const date = new Date();
   date.setDate(date.getDate() - daysAgo);
-  date.setHours(hours, minutes, 0, 0);
+  date.setHours(hours, minutesPart, 0, 0);
 
   return date.toISOString();
 };
 
-const houseOf = (request: MockHttpRequest): number | null =>
-  number(request.headers["x-house-id"]) ??
-  residencies().at(-1)?.house_id ??
-  null;
-
-const announcements = (houseId: number): Schemas["AnnouncementItem"][] => {
-  if (houseId !== NEWS_HOUSE) {
-    return [];
-  }
-
-  const orgName = findHouse(houseId)?.org?.name ?? null;
-
-  return SEEDS.map((seed, index) => ({
-    id: SEEDS.length - index,
-    created_at: createdAt(seed),
-    text: seed.text,
-    urgent: seed.urgent ?? false,
-    org_name: orgName,
-    house_ids: [houseId],
-    channels: ["chat"],
-    recipients_count: 0,
-  }));
-};
-
 export const announcementsConfigs = [
-  {
-    path: "/announcements" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const houseId = houseOf(request);
+  endpoint("get", "/announcements", (request) => {
+    const houseId = houseOf(request);
 
-        if (houseId === null) {
-          return forbidden("Укажите X-House-Id");
-        }
+    if (houseId === null) {
+      return forbidden("Укажите X-House-Id");
+    }
 
-        const limit = number(request.query.limit) ?? 20;
-        const offset = number(request.query.offset) ?? 0;
-        const found = announcements(houseId);
+    const orgName = findHouse(houseId)?.org?.name ?? null;
 
-        return ok({
-          items: found.slice(offset, offset + limit),
-          total: found.length,
-        } satisfies Schemas["Page_AnnouncementItem_"]);
-      }),
-    ],
-  },
+    return ok(
+      page(
+        houseId === 1
+          ? SEEDS.map((seed, index) => ({
+              id: SEEDS.length - index,
+              created_at: createdAt(seed),
+              text: seed.text,
+              urgent: seed.urgent ?? false,
+              org_name: orgName,
+              house_ids: [houseId],
+              channels: ["chat" as const],
+              recipients_count: 0,
+            }))
+          : [],
+        request.query,
+      ) satisfies Schemas["Page_AnnouncementItem_"],
+    );
+  }),
 ];

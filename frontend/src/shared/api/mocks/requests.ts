@@ -4,28 +4,24 @@ import { readUploadedFile } from "./multipart";
 import {
   badRequest,
   conflict,
+  endpoint,
   forbidden,
+  houseOf,
   notFound,
-  number,
   ok,
-  route,
+  page,
 } from "./reply";
 import {
-  acceptRequest,
   createRequest,
   findRequest,
   houseRequests,
   nextFileName,
-  rateRequest,
-  rejectRequest,
   repeatRequest,
   requestCard,
   requestCategories,
   requestListItem,
-  residencies,
-  saveFile,
   similarRequests,
-  type MockHttpRequest,
+  uploads,
 } from "./state";
 
 type Schemas = components["schemas"];
@@ -38,194 +34,124 @@ const STATUSES: Schemas["RequestStatus"][] = [
   "done",
 ];
 
-// дом запроса: житель одного дома может заголовок не слать, житель нескольких
-// обязан - бэк отбивает такой запрос, и мок отбивает его так же
-const houseOf = (request: MockHttpRequest): number | null =>
-  number(request.headers["x-house-id"]) ??
-  residencies().at(-1)?.house_id ??
-  null;
-
 const categoryOf = (value: string | undefined) =>
   requestCategories().find(({ category }) => category === value)?.category;
 
 export const requestsConfigs = [
-  {
-    path: "/requests" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const houseId = houseOf(request);
+  endpoint("get", "/requests", (request) => {
+    const houseId = houseOf(request);
 
-        if (houseId === null) {
-          return forbidden("Укажите X-House-Id");
-        }
+    if (houseId === null) {
+      return forbidden("Укажите X-House-Id");
+    }
 
-        const limit = number(request.query.limit) ?? 20;
-        const offset = number(request.query.offset) ?? 0;
-        const status =
-          STATUSES.find((value) => value === request.query.status) ?? null;
-        const found = houseRequests(houseId, status);
+    const status =
+      STATUSES.find((value) => value === request.query.status) ?? null;
 
-        return ok({
-          items: found.slice(offset, offset + limit).map(requestListItem),
-          total: found.length,
-        });
-      }),
-    ],
-  },
-  {
-    path: "/requests" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const houseId = houseOf(request);
+    return ok(
+      page(houseRequests(houseId, status).map(requestListItem), request.query),
+    );
+  }),
+  endpoint("post", "/requests", (request) => {
+    const houseId = houseOf(request);
 
-        if (houseId === null) {
-          return forbidden("Укажите X-House-Id");
-        }
+    if (houseId === null) {
+      return forbidden("Укажите X-House-Id");
+    }
 
-        const body = request.body as Schemas["CreateRequestRequest"];
+    const body = request.body as Schemas["CreateRequestRequest"];
 
-        if (!categoryOf(body.category) || !body.description?.trim()) {
-          return badRequest("Опишите проблему и выберите категорию");
-        }
+    return categoryOf(body.category) && body.description?.trim()
+      ? ok(requestCard(createRequest(houseId, body)))
+      : badRequest("Опишите проблему и выберите категорию");
+  }),
+  endpoint("get", "/requests/similar", (request) => {
+    const houseId = houseOf(request);
+    const category = categoryOf(request.query.category);
 
-        return ok(requestCard(createRequest(houseId, body)));
-      }),
-    ],
-  },
-  {
-    path: "/requests/similar" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const houseId = houseOf(request);
-        const category = categoryOf(request.query.category);
+    return houseId === null || !category
+      ? badRequest("Укажите дом и категорию")
+      : ok(similarRequests(houseId, category));
+  }),
+  endpoint("get", "/requests/:request_id", (request) => {
+    const item = findRequest(Number(request.params.request_id));
 
-        if (houseId === null || !category) {
-          return badRequest("Укажите дом и категорию");
-        }
+    return item ? ok(requestCard(item)) : notFound("Заявка не найдена");
+  }),
+  endpoint("post", "/requests/:request_id/rating", (request) => {
+    const item = findRequest(Number(request.params.request_id));
 
-        return ok(similarRequests(houseId, category));
-      }),
-    ],
-  },
-  {
-    path: "/requests/:request_id" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(Number(request.params.request_id));
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
 
-        return item ? ok(requestCard(item)) : notFound("Заявка не найдена");
-      }),
-    ],
-  },
-  {
-    path: "/requests/:request_id/rating" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(Number(request.params.request_id));
+    if (item.status !== "done" || item.rating !== null) {
+      return badRequest("Заявку сейчас нельзя оценить");
+    }
 
-        if (!item) {
-          return notFound("Заявка не найдена");
-        }
+    const body = request.body as Schemas["RateRequestRequest"];
 
-        if (item.status !== "done" || item.rating !== null) {
-          return badRequest("Заявку сейчас нельзя оценить");
-        }
+    if (!Number.isInteger(body.rating) || body.rating < 1 || body.rating > 5) {
+      return badRequest("Оценка - от 1 до 5");
+    }
 
-        const body = request.body as Schemas["RateRequestRequest"];
+    item.rating = body.rating;
+    item.feedback = body.feedback ?? null;
 
-        if (
-          !Number.isInteger(body.rating) ||
-          body.rating < 1 ||
-          body.rating > 5
-        ) {
-          return badRequest("Оценка - от 1 до 5");
-        }
+    return ok(requestCard(item));
+  }),
+  endpoint("post", "/requests/:request_id/accept", (request) => {
+    const item = findRequest(Number(request.params.request_id));
 
-        return ok(
-          requestCard(rateRequest(item, body.rating, body.feedback ?? null)),
-        );
-      }),
-    ],
-  },
-  {
-    path: "/requests/:request_id/accept" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(Number(request.params.request_id));
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
 
-        if (!item) {
-          return notFound("Заявка не найдена");
-        }
+    if (item.status !== "on_review") {
+      return conflict("Заявка не на приёмке");
+    }
 
-        if (item.status !== "on_review") {
-          return conflict("Заявка не на приёмке");
-        }
+    item.status = "done";
+    item.completion_reason = "resident_accepted";
 
-        return ok(requestCard(acceptRequest(item)));
-      }),
-    ],
-  },
-  {
-    path: "/requests/:request_id/repeat" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(Number(request.params.request_id));
+    return ok(requestCard(item));
+  }),
+  endpoint("post", "/requests/:request_id/repeat", (request) => {
+    const item = findRequest(Number(request.params.request_id));
 
-        if (!item) {
-          return notFound("Заявка не найдена");
-        }
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
 
-        if (item.status !== "done" && item.status !== "on_review") {
-          return conflict("Повтор заводится по завершённой заявке");
-        }
+    if (item.status !== "done" && item.status !== "on_review") {
+      return conflict("Повтор заводится по завершённой заявке");
+    }
 
-        const body = request.body as Schemas["RepeatRequestRequest"];
-        const description = body.description?.trim() || null;
+    const body = request.body as Schemas["RepeatRequestRequest"];
+    const description = body.description?.trim() || null;
 
-        // отказ от результата обязан объяснить исполнителю, что не так:
-        // это описание становится текстом повтора
-        if (item.status === "on_review") {
-          if (!description) {
-            return badRequest("Опишите, что не так с работой");
-          }
+    if (item.status === "on_review") {
+      if (!description) {
+        return badRequest("Опишите, что не так с работой");
+      }
 
-          rejectRequest(item);
-        }
+      item.status = "done";
+      item.completion_reason = "resident_rejected";
+    }
 
-        return ok(
-          requestCard(repeatRequest(item, description, body.photos ?? [])),
-        );
-      }),
-    ],
-  },
-  {
-    path: "/request-categories" as const,
-    method: "get" as const,
-    routes: [route(() => ok(requestCategories()))],
-  },
-  {
-    path: "/files" as const,
-    method: "post" as const,
-    routes: [
-      route(async (request) => {
-        const name = nextFileName();
-        const url = await readUploadedFile(request);
+    return ok(requestCard(repeatRequest(item, description, body.photos ?? [])));
+  }),
+  endpoint("get", "/request-categories", () => ok(requestCategories())),
+  endpoint("post", "/files", async (request) => {
+    const name = nextFileName();
+    const url = await readUploadedFile(request);
 
-        if (!url) {
-          return badRequest("Файл не пришёл");
-        }
+    if (!url) {
+      return badRequest("Файл не пришёл");
+    }
 
-        saveFile(name, url);
+    uploads.set(name, url);
 
-        return ok({ name, url });
-      }),
-    ],
-  },
+    return ok({ name, url });
+  }),
 ];

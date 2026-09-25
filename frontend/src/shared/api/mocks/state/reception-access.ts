@@ -1,26 +1,19 @@
 import type { components } from "../../schema/generated";
 
-import { address, findFlat, findHouse, houseFlats } from "./houses";
+import { addressOf, findFlat, houseFlats, orgOf } from "./houses";
 import { residencyForHouse } from "./profile";
 import {
   DAY,
-  MINUTE,
   at,
+  days,
   fromOrgNaive,
+  hours,
   isoDate,
-  orgOf,
   startOfToday,
   weekdayAfter,
-} from "./reception-time";
+} from "./time";
 
 type Schemas = components["schemas"];
-
-type MockAccessTarget = {
-  flat_id: number;
-  flat_number: string;
-  slot_id: number | null;
-  responded_at: string | null;
-};
 
 type MockAccessRequest = {
   id: number;
@@ -29,107 +22,89 @@ type MockAccessRequest = {
   reason: string;
   date: string;
   slots: { id: number; starts_at: string; capacity: number }[];
-  targets: MockAccessTarget[];
+  targets: {
+    flat_id: number;
+    flat_number: string;
+    slot_id: number | null;
+    responded_at: string | null;
+  }[];
 };
 
-const seedAccessRequests = (): MockAccessRequest[] => {
-  const day = weekdayAfter(3);
-  // квартира 12 остаётся без ответа: её занимает мок-житель по рецепту посева,
-  // и окно он выбирает сам. Окно 12 забито под завязку соседями - на нём
-  // проверяется «мест больше нет»
-  const responses: Record<string, number> = {
-    "45": 11,
-    "112": 11,
-    "7": 12,
-    "28": 12,
-    "63": 12,
-    "90": 13,
-  };
+const day = weekdayAfter(3);
 
-  const passed = new Date(startOfToday().getTime() - 9 * DAY);
+const passed = new Date(startOfToday().getTime() - 9 * DAY);
 
-  return [
-    {
-      id: 1,
-      created_at: new Date(Date.now() - DAY).toISOString(),
-      house_id: 1,
-      reason:
-        "Плановая проверка газового оборудования: мастер осмотрит плиту и подводку, займёт 15 минут",
-      date: isoDate(day),
-      slots: [9, 12, 15, 18].map((hour, index) => ({
-        id: 11 + index,
-        starts_at: at(day, hour),
-        capacity: 3,
-      })),
-      targets: houseFlats(1, "").map((flat) => ({
+const responses: Record<string, number> = {
+  "45": 11,
+  "112": 11,
+  "7": 12,
+  "28": 12,
+  "63": 12,
+  "90": 13,
+};
+
+const accessRequests: MockAccessRequest[] = [
+  {
+    id: 1,
+    created_at: days(-1),
+    house_id: 1,
+    reason:
+      "Плановая проверка газового оборудования: мастер осмотрит плиту и подводку, займёт 15 минут",
+    date: isoDate(day),
+    slots: [9, 12, 15, 18].map((hour, index) => ({
+      id: 11 + index,
+      starts_at: at(day, hour),
+      capacity: 3,
+    })),
+    targets: houseFlats(1, "").map((flat) => ({
+      flat_id: flat.id,
+      flat_number: flat.number,
+      slot_id: responses[flat.number] ?? null,
+      responded_at: flat.number in responses ? hours(-12) : null,
+    })),
+  },
+  {
+    id: 2,
+    created_at: days(-11),
+    house_id: 1,
+    reason: "Замена стояка холодной воды в первом подъезде",
+    date: isoDate(passed),
+    slots: [10, 13].map((hour, index) => ({
+      id: 21 + index,
+      starts_at: at(passed, hour),
+      capacity: 2,
+    })),
+    targets: houseFlats(1, "")
+      .slice(0, 4)
+      .map((flat, index) => ({
         flat_id: flat.id,
         flat_number: flat.number,
-        slot_id: responses[flat.number] ?? null,
-        responded_at:
-          flat.number in responses
-            ? new Date(Date.now() - 12 * 60 * MINUTE).toISOString()
-            : null,
+        slot_id: index < 3 ? 21 + (index % 2) : null,
+        responded_at: index < 3 ? days(-10) : null,
       })),
-    },
-    // прошедший сбор: сборы на бэке не удаляются и не архивируются, поэтому
-    // кабинет УК должен разводить идущие и прошлые с первого же экрана
-    {
-      id: 2,
-      created_at: new Date(Date.now() - 11 * DAY).toISOString(),
-      house_id: 1,
-      reason: "Замена стояка холодной воды в первом подъезде",
-      date: isoDate(passed),
-      slots: [10, 13].map((hour, index) => ({
-        id: 21 + index,
-        starts_at: at(passed, hour),
-        capacity: 2,
-      })),
-      targets: houseFlats(1, "")
-        .slice(0, 4)
-        .map((flat, index) => ({
-          flat_id: flat.id,
-          flat_number: flat.number,
-          slot_id: index < 3 ? 21 + (index % 2) : null,
-          responded_at:
-            index < 3 ? new Date(Date.now() - 10 * DAY).toISOString() : null,
-        })),
-    },
-  ];
-};
+  },
+];
 
-const state = {
-  accessRequests: seedAccessRequests(),
-  nextId: 10,
-  nextSlotId: 100,
-};
+let nextId = 10;
 
-export const resetReceptionAccess = (): void => {
-  state.accessRequests = seedAccessRequests();
-  state.nextId = 10;
-  state.nextSlotId = 100;
-};
+let nextSlotId = 100;
 
 const slotTaken = (item: MockAccessRequest, slotId: number) =>
   item.targets.filter((target) => target.slot_id === slotId).length;
 
-const myTarget = (item: MockAccessRequest) => {
-  const flatId = residencyForHouse(item.house_id)?.flat_id ?? null;
-
-  return flatId === null
-    ? undefined
-    : item.targets.find((target) => target.flat_id === flatId);
-};
+const myFlatId = (item: MockAccessRequest) =>
+  residencyForHouse(item.house_id)?.flat_id ?? null;
 
 export const accessRequestItem = (
   item: MockAccessRequest,
 ): Schemas["AccessRequestItem"] => {
-  const house = findHouse(item.house_id);
+  const flatId = myFlatId(item);
 
   return {
     id: item.id,
     created_at: item.created_at,
     house_id: item.house_id,
-    address: house ? address(house) : "",
+    address: addressOf(item.house_id),
     reason: item.reason,
     date: item.date,
     slots: item.slots.map((slot) => ({
@@ -139,13 +114,12 @@ export const accessRequestItem = (
     responded_count: item.targets.filter((target) => target.slot_id !== null)
       .length,
     targets_count: item.targets.length,
-    my_flat_id: residencyForHouse(item.house_id)?.flat_id ?? null,
-    my_slot_id: myTarget(item)?.slot_id ?? null,
+    my_flat_id: flatId,
+    my_slot_id:
+      item.targets.find((target) => target.flat_id === flatId)?.slot_id ?? null,
   };
 };
 
-// квартиры без ячейки бэк отдаёт только в ответе на создание, поэтому
-// список сюда передаёт создающая ручка, а чтение сбора возвращает пустой
 export const accessRequestGrid = (
   item: MockAccessRequest,
   flatsWithoutResidents: number[] = [],
@@ -158,39 +132,36 @@ export const accessRequestGrid = (
 export const houseAccessRequests = (
   houseId: number,
 ): Schemas["AccessRequestItem"][] =>
-  state.accessRequests
+  accessRequests
     .filter((item) => item.house_id === houseId)
     .map(accessRequestItem);
 
 export const orgAccessRequests = (
   orgId: number,
 ): Schemas["AccessRequestItem"][] =>
-  state.accessRequests
+  accessRequests
     .filter((item) => orgOf(item.house_id) === orgId)
     .map(accessRequestItem)
-    // идущие сборы впереди архива
     .sort((a, b) => b.date.localeCompare(a.date));
 
 export const findAccessRequest = (
   accessRequestId: number,
 ): MockAccessRequest | undefined =>
-  state.accessRequests.find((item) => item.id === accessRequestId);
+  accessRequests.find((item) => item.id === accessRequestId);
 
 export const chooseAccessSlot = (
   item: MockAccessRequest,
   slotId: number,
 ): "no-slot" | "full" | "ok" => {
   const slot = item.slots.find((candidate) => candidate.id === slotId);
-  const flatId = residencyForHouse(item.house_id)?.flat_id ?? null;
+  const flatId = myFlatId(item);
   const flat = flatId === null ? undefined : findFlat(flatId);
 
   if (!slot || !flat) {
     return "no-slot";
   }
 
-  // сбор сеется на квартиры дома, а мок заводит квартиру только после
-  // подтверждения: житель, попавший в дом позже, дописывается в цели сам
-  const target = myTarget(item) ?? {
+  const target = item.targets.find((target) => target.flat_id === flat.id) ?? {
     flat_id: flat.id,
     flat_number: flat.number,
     slot_id: null,
@@ -213,20 +184,18 @@ export const chooseAccessSlot = (
   return "ok";
 };
 
-// ячейку получает только квартира с подтверждённым жителем: кого взял бы бэк,
-// решает вызывающая ручка, здесь остаётся разложить их по сбору
 export const createAccessRequest = (
   body: Schemas["CreateAccessRequestRequest"],
   eligible: { flat_id: number; flat_number: string }[],
 ): Schemas["AccessRequestGrid"] => {
   const created: MockAccessRequest = {
-    id: state.nextId++,
+    id: nextId++,
     created_at: new Date().toISOString(),
     house_id: body.house_id,
     reason: body.reason,
     date: body.date,
     slots: body.slots.map((slot) => ({
-      id: state.nextSlotId++,
+      id: nextSlotId++,
       starts_at: fromOrgNaive(slot.starts_at),
       capacity: slot.capacity,
     })),
@@ -236,7 +205,7 @@ export const createAccessRequest = (
       responded_at: null,
     })),
   };
-  state.accessRequests.push(created);
+  accessRequests.push(created);
 
   return accessRequestGrid(
     created,

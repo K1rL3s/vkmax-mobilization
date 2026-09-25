@@ -1,7 +1,7 @@
 import type { components } from "../schema/generated";
 
-import { badRequest, forbidden, notFound, ok, route } from "./reply";
-import { me } from "./state";
+import { badRequest, endpoint, forbidden, notFound, ok } from "./reply";
+import { hours, user } from "./state";
 
 type Schemas = components["schemas"];
 
@@ -11,138 +11,42 @@ type MockMember = Omit<Schemas["OrgMemberItem"], "can_remove">;
 
 type MockInvite = Omit<Schemas["OrgInviteItem"], "deeplink">;
 
-// X-Org-Id мок не сверяет, как и дома: мок-пользователь в state.ts сотрудник
-// чужой организации, и бэк отказал бы ему во всём этом файле. Здесь он
-// администратор «Жилсервиса» - так видны оба запрета: создателя не исключить,
-// другого администратора тоже, а приглашать администраторов нельзя
-const ACTOR_ROLE: OrgRole = "admin";
-
-const HOUR = 60 * 60 * 1000;
-
-const hours = (count: number) =>
-  new Date(Date.now() + count * HOUR).toISOString();
-
-// правила - копия core/roles.py бэка
-const canInvite = (actor: OrgRole, target: OrgRole) =>
-  target !== "creator" &&
-  (actor === "creator" ||
-    (actor === "admin" && (target === "employee" || target === "executor")));
-
-const canRemove = (actor: OrgRole, target: OrgRole) =>
-  target !== "creator" &&
-  (actor === "creator" || (actor === "admin" && target !== "admin"));
-
-const ROLES: OrgRole[] = ["creator", "admin", "employee", "executor"];
+const canRemove = (role: OrgRole) => role !== "creator" && role !== "admin";
 
 const isRole = (value: unknown): value is OrgRole =>
-  ROLES.includes(value as OrgRole);
+  ["creator", "admin", "employee", "executor"].includes(value as OrgRole);
 
-// token_urlsafe(8) бэка: 11 символов base64url
 const inviteCode = () =>
   btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(8))))
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replace(/=+$/, "");
 
-const seedMembers = (): MockMember[] => [
-  {
-    user_id: 41,
-    name: "Марина Ковалёва",
-    username: "kovaleva",
-    role: "creator",
-    created_at: "2026-06-01T09:00:00Z",
-  },
-  {
-    user_id: me().user_id,
-    name: me().name,
-    username: null,
-    role: ACTOR_ROLE,
-    created_at: "2026-06-03T10:30:00Z",
-  },
-  {
-    user_id: 42,
-    name: "Олег Петров",
-    username: "opetrov",
-    role: "admin",
-    created_at: "2026-06-10T08:15:00Z",
-  },
-  {
-    user_id: 43,
-    name: "Светлана Иванова",
-    username: "ivanova_s",
-    role: "employee",
-    created_at: "2026-07-02T12:00:00Z",
-  },
-  {
-    user_id: 44,
-    name: "Константин Александрович Верещагин-Нестеров",
-    username: null,
-    role: "employee",
-    created_at: "2026-08-19T07:45:00Z",
-  },
-  {
-    user_id: 45,
-    name: "Рустам Галиев",
-    username: "galiev_master",
-    role: "executor",
-    created_at: "2026-07-15T06:20:00Z",
-  },
-  {
-    user_id: 46,
-    name: "Игорь Никитин",
-    username: null,
-    role: "executor",
-    created_at: "2026-09-01T06:00:00Z",
-  },
-];
+const member = (
+  user_id: number,
+  name: string,
+  username: string | null,
+  role: OrgRole,
+  created_at: string,
+): MockMember => ({ user_id, name, username, role, created_at });
 
-const seedInvites = (): MockInvite[] => [
-  {
-    code: "q3Zr8sKd1Aw",
-    role: "employee",
-    created_at: hours(-2),
-    expires_at: hours(70),
-    max_activations: 1,
-    activations_used: 0,
-    revoked_at: null,
-  },
-  {
-    code: "Xk2-Pm9_vTe",
-    role: "executor",
-    created_at: hours(-30),
-    expires_at: hours(138),
-    max_activations: 5,
-    activations_used: 2,
-    revoked_at: null,
-  },
-  {
-    code: "Lb7nQw0rYc4",
-    role: "employee",
-    created_at: hours(-50),
-    expires_at: hours(22),
-    max_activations: 1,
-    activations_used: 1,
-    revoked_at: null,
-  },
-  {
-    code: "Hs5_uJ1oEe8",
-    role: "executor",
-    created_at: hours(-120),
-    expires_at: hours(48),
-    max_activations: 3,
-    activations_used: 0,
-    revoked_at: hours(-100),
-  },
-  {
-    code: "Rt4mZa9-Ngk",
-    role: "employee",
-    created_at: hours(-400),
-    expires_at: hours(-328),
-    max_activations: 1,
-    activations_used: 0,
-    revoked_at: null,
-  },
-];
+const invite = (
+  code: string,
+  role: OrgRole,
+  created_at: string,
+  expires_at: string,
+  max_activations: number,
+  activations_used = 0,
+  revoked_at: string | null = null,
+): MockInvite => ({
+  code,
+  role,
+  created_at,
+  expires_at,
+  max_activations,
+  activations_used,
+  revoked_at,
+});
 
 const state = {
   settings: {
@@ -154,25 +58,69 @@ const state = {
     phone: "+7 843 200-10-10",
     reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
   } as Schemas["OrgSettingsResponse"],
-  members: seedMembers(),
-  invites: seedInvites(),
+  members: [
+    member(
+      41,
+      "Марина Ковалёва",
+      "kovaleva",
+      "creator",
+      "2026-06-01T09:00:00Z",
+    ),
+    member(user.user_id, user.name, null, "admin", "2026-06-03T10:30:00Z"),
+    member(42, "Олег Петров", "opetrov", "admin", "2026-06-10T08:15:00Z"),
+    member(
+      43,
+      "Светлана Иванова",
+      "ivanova_s",
+      "employee",
+      "2026-07-02T12:00:00Z",
+    ),
+    member(
+      44,
+      "Константин Александрович Верещагин-Нестеров",
+      null,
+      "employee",
+      "2026-08-19T07:45:00Z",
+    ),
+    member(
+      45,
+      "Рустам Галиев",
+      "galiev_master",
+      "executor",
+      "2026-07-15T06:20:00Z",
+    ),
+    member(46, "Игорь Никитин", null, "executor", "2026-09-01T06:00:00Z"),
+  ],
+  invites: [
+    invite("q3Zr8sKd1Aw", "employee", hours(-2), hours(70), 1),
+    invite("Xk2-Pm9_vTe", "executor", hours(-30), hours(138), 5, 2),
+    invite("Lb7nQw0rYc4", "employee", hours(-50), hours(22), 1, 1),
+    invite(
+      "Hs5_uJ1oEe8",
+      "executor",
+      hours(-120),
+      hours(48),
+      3,
+      0,
+      hours(-100),
+    ),
+    invite("Rt4mZa9-Ngk", "employee", hours(-400), hours(-328), 1),
+  ],
 };
 
-const memberItem = (member: MockMember): Schemas["OrgMemberItem"] => ({
-  ...member,
-  can_remove: canRemove(ACTOR_ROLE, member.role),
+const memberItem = (item: MockMember): Schemas["OrgMemberItem"] => ({
+  ...item,
+  can_remove: canRemove(item.role),
 });
 
-const inviteItem = (invite: MockInvite): Schemas["OrgInviteItem"] => ({
-  ...invite,
-  deeplink: `https://max.ru/zheka_bot?start=inv_${invite.code}`,
+const inviteItem = (item: MockInvite): Schemas["OrgInviteItem"] => ({
+  ...item,
+  deeplink: `https://max.ru/zheka_bot?start=inv_${item.code}`,
 });
 
 const isInteger = (value: unknown): value is number =>
   typeof value === "number" && Number.isInteger(value);
 
-// проверки и тексты - из OrgsService.update_settings; не то число бэк
-// отвергает pydantic'ом с 422, мок отвечает 400 тем же конвертом
 const settingsError = (body: Record<string, unknown>): string | null => {
   const numbers = [
     body.meter_window_day_from,
@@ -208,154 +156,106 @@ const settingsError = (body: Record<string, unknown>): string | null => {
 };
 
 export const adminOrgConfigs = [
-  {
-    path: "/admin/org" as const,
-    method: "get" as const,
-    routes: [
-      route(() =>
-        ok({
-          id: 1,
-          name: "ООО «Жилсервис»",
-          inn: "1655123450",
-          license_no: "016-000123",
-          phone: state.settings.phone,
-          address: "Казань, ул. Баумана, 10",
-          reception_note: state.settings.reception_note,
-          registered_at: "2026-06-01T09:00:00Z",
-          is_demo: true,
-          houses_count: 3,
-          members_count: state.members.length,
-        } satisfies Schemas["OrgCard"]),
-      ),
-    ],
-  },
-  {
-    path: "/admin/org/settings" as const,
-    method: "get" as const,
-    routes: [route(() => ok(state.settings))],
-  },
-  {
-    path: "/admin/org/settings" as const,
-    method: "put" as const,
-    routes: [
-      route((request) => {
-        const error = settingsError(request.body);
+  endpoint("get", "/admin/org", () =>
+    ok({
+      id: 1,
+      name: "ООО «Жилсервис»",
+      inn: "1655123450",
+      license_no: "016-000123",
+      phone: state.settings.phone,
+      address: "Казань, ул. Баумана, 10",
+      reception_note: state.settings.reception_note,
+      registered_at: "2026-06-01T09:00:00Z",
+      is_demo: true,
+      houses_count: 3,
+      members_count: state.members.length,
+    } satisfies Schemas["OrgCard"]),
+  ),
+  endpoint("get", "/admin/org/settings", () => ok(state.settings)),
+  endpoint("put", "/admin/org/settings", (request) => {
+    const error = settingsError(request.body);
 
-        if (error) {
-          return badRequest(error);
-        }
+    if (error) {
+      return badRequest(error);
+    }
 
-        state.settings = {
-          ...(request.body as Schemas["UpdateOrgSettingsRequest"]),
-          reception_note:
-            (request.body.reception_note as string | undefined) ?? null,
-        };
+    state.settings = {
+      ...(request.body as Schemas["UpdateOrgSettingsRequest"]),
+      reception_note:
+        (request.body.reception_note as string | undefined) ?? null,
+    };
 
-        return ok(state.settings);
-      }),
-    ],
-  },
-  {
-    path: "/admin/org/members" as const,
-    method: "get" as const,
-    routes: [route(() => ok(state.members.map(memberItem)))],
-  },
-  {
-    path: "/admin/org/members/:user_id" as const,
-    method: "delete" as const,
-    routes: [
-      route((request) => {
-        const userId = Number(request.params.user_id);
-        const member = state.members.find((item) => item.user_id === userId);
+    return ok(state.settings);
+  }),
+  endpoint("get", "/admin/org/members", () =>
+    ok(state.members.map(memberItem)),
+  ),
+  endpoint("delete", "/admin/org/members/:user_id", (request) => {
+    const userId = Number(request.params.user_id);
+    const found = state.members.find((item) => item.user_id === userId);
 
-        if (!member) {
-          return notFound("Сотрудник не найден");
-        }
+    if (!found) {
+      return notFound("Сотрудник не найден");
+    }
 
-        if (!canRemove(ACTOR_ROLE, member.role)) {
-          return forbidden("Этого сотрудника исключить нельзя");
-        }
+    if (!canRemove(found.role)) {
+      return forbidden("Этого сотрудника исключить нельзя");
+    }
 
-        state.members = state.members.filter((item) => item !== member);
+    state.members = state.members.filter((item) => item !== found);
 
-        return ok({ ok: true });
-      }),
-    ],
-  },
-  {
-    path: "/admin/org/invites" as const,
-    method: "get" as const,
-    routes: [
-      route(() =>
-        ok(
-          [...state.invites]
-            .sort((a, b) => b.created_at.localeCompare(a.created_at))
-            .map(inviteItem),
-        ),
-      ),
-    ],
-  },
-  {
-    path: "/admin/org/invites" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const { role } = request.body;
-        const expiresIn = request.body.expires_in_hours ?? 72;
-        const maxActivations = request.body.max_activations ?? 1;
+    return ok({ ok: true });
+  }),
+  endpoint("get", "/admin/org/invites", () =>
+    ok(
+      [...state.invites]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map(inviteItem),
+    ),
+  ),
+  endpoint("post", "/admin/org/invites", (request) => {
+    const { role } = request.body;
+    const expiresIn = request.body.expires_in_hours ?? 72;
+    const maxActivations = request.body.max_activations ?? 1;
 
-        if (
-          !isRole(role) ||
-          !isInteger(expiresIn) ||
-          !isInteger(maxActivations)
-        ) {
-          return badRequest("Некорректные поля приглашения");
-        }
+    if (!isRole(role) || !isInteger(expiresIn) || !isInteger(maxActivations)) {
+      return badRequest("Некорректные поля приглашения");
+    }
 
-        if (!canInvite(ACTOR_ROLE, role)) {
-          return forbidden("Эту роль выдать нельзя");
-        }
+    if (role !== "employee" && role !== "executor") {
+      return forbidden("Эту роль выдать нельзя");
+    }
 
-        if (expiresIn <= 0) {
-          return badRequest("Срок жизни кода - больше нуля часов");
-        }
+    if (expiresIn <= 0) {
+      return badRequest("Срок жизни кода - больше нуля часов");
+    }
 
-        if (maxActivations <= 0) {
-          return badRequest("Число активаций - больше нуля");
-        }
+    if (maxActivations <= 0) {
+      return badRequest("Число активаций - больше нуля");
+    }
 
-        const invite: MockInvite = {
-          code: inviteCode(),
-          role,
-          created_at: new Date().toISOString(),
-          expires_at: hours(expiresIn),
-          max_activations: maxActivations,
-          activations_used: 0,
-          revoked_at: null,
-        };
-        state.invites = [...state.invites, invite];
+    const created = invite(
+      inviteCode(),
+      role,
+      new Date().toISOString(),
+      hours(expiresIn),
+      maxActivations,
+    );
+    state.invites.push(created);
 
-        return ok(inviteItem(invite));
-      }),
-    ],
-  },
-  {
-    path: "/admin/org/invites/:code" as const,
-    method: "delete" as const,
-    routes: [
-      route((request) => {
-        const invite = state.invites.find(
-          (item) => item.code === request.params.code,
-        );
+    return ok(inviteItem(created));
+  }),
+  endpoint("delete", "/admin/org/invites/:code", (request) => {
+    const found = state.invites.find(
+      (item) => item.code === request.params.code,
+    );
 
-        if (!invite) {
-          return notFound("Приглашение не найдено");
-        }
+    if (!found) {
+      return notFound("Приглашение не найдено");
+    }
 
-        invite.revoked_at = new Date().toISOString();
+    found.revoked_at = new Date().toISOString();
 
-        return ok({ ok: true });
-      }),
-    ],
-  },
+    return ok({ ok: true });
+  }),
 ];

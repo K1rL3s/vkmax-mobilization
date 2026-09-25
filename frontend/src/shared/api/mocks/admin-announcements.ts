@@ -1,7 +1,7 @@
 import type { components } from "../schema/generated";
 
-import { badRequest, notFound, number, ok, route } from "./reply";
-import { findHouse } from "./state";
+import { badRequest, endpoint, notFound, number, ok, page } from "./reply";
+import { ZHILSERVIS, hours } from "./state";
 
 type Schemas = components["schemas"];
 
@@ -9,17 +9,12 @@ type Item = Schemas["AnnouncementItem"];
 
 type Channel = Schemas["AnnouncementChannel"];
 
-// своя копия фактов из admin-houses.ts: у дома 2 чат не привязан, жителей
-// считаем по residents_count
 const ORG_HOUSES: Record<number, { residents: number; chatBound: boolean }> = {
   1: { residents: 86, chatBound: true },
   2: { residents: 31, chatBound: false },
   3: { residents: 12, chatBound: true },
 };
 
-const HOUR = 60 * 60 * 1000;
-
-// тот же счёт, что у бэка: чат дома - один адресат, личные - каждый житель
 const deliver = (houseIds: number[], channels: Channel[]) => {
   const withoutChat = channels.includes("chat")
     ? houseIds.filter((id) => !ORG_HOUSES[id].chatBound)
@@ -34,8 +29,6 @@ const deliver = (houseIds: number[], channels: Channel[]) => {
   return { recipients: chats + residents, withoutChat };
 };
 
-const orgName = () => findHouse(1)?.org?.name ?? null;
-
 const item = (
   id: number,
   hoursAgo: number,
@@ -45,16 +38,15 @@ const item = (
   urgent = false,
 ): Item => ({
   id,
-  created_at: new Date(Date.now() - hoursAgo * HOUR).toISOString(),
+  created_at: hours(-hoursAgo),
   text,
   house_ids: houseIds,
   channels,
-  org_name: orgName(),
+  org_name: ZHILSERVIS.name,
   recipients_count: deliver(houseIds, channels).recipients,
   urgent,
 });
 
-// сверху вниз от новых к старым, как отвечает бэк
 const announcements: Item[] = [
   item(
     8,
@@ -117,79 +109,59 @@ const announcements: Item[] = [
 ];
 
 export const adminAnnouncementsConfigs = [
-  {
-    path: "/admin/announcements" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const houseId = number(request.query.house_id);
-        const limit = number(request.query.limit) ?? 20;
-        const offset = number(request.query.offset) ?? 0;
+  endpoint("get", "/admin/announcements", (request) => {
+    const houseId = number(request.query.house_id);
+    const found = page(
+      announcements.filter(
+        (announcement) =>
+          houseId === null || announcement.house_ids.includes(houseId),
+      ),
+      request.query,
+    );
 
-        if (houseId !== null && !(houseId in ORG_HOUSES)) {
-          return notFound("Дом не найден");
-        }
+    return houseId !== null && !(houseId in ORG_HOUSES)
+      ? notFound("Дом не найден")
+      : ok(found satisfies Schemas["Page_AnnouncementItem_"]);
+  }),
+  endpoint("post", "/admin/announcements", (request) => {
+    const body = request.body as Partial<Schemas["CreateAnnouncementRequest"]>;
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    const houseIds = [...new Set(body.house_ids ?? [])];
+    const channels = [...new Set(body.channels ?? ["chat" as const])];
 
-        const found = announcements.filter(
-          (announcement) =>
-            houseId === null || announcement.house_ids.includes(houseId),
-        );
+    if (!text) {
+      return badRequest("Напишите текст объявления");
+    }
 
-        return ok({
-          items: found.slice(offset, offset + limit),
-          total: found.length,
-        } satisfies Schemas["Page_AnnouncementItem_"]);
-      }),
-    ],
-  },
-  {
-    path: "/admin/announcements" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const body = request.body as Partial<
-          Schemas["CreateAnnouncementRequest"]
-        >;
-        const text = typeof body.text === "string" ? body.text.trim() : "";
-        const houseIds = [...new Set(body.house_ids ?? [])];
-        const channels = [...new Set(body.channels ?? ["chat" as const])];
+    if (text.length > 2000) {
+      return badRequest("Сократите объявление до 2000 символов");
+    }
 
-        if (!text) {
-          return badRequest("Напишите текст объявления");
-        }
+    if (houseIds.length === 0) {
+      return badRequest("Выберите хотя бы один дом");
+    }
 
-        if (text.length > 2000) {
-          return badRequest("Сократите объявление до 2000 символов");
-        }
+    if (channels.length === 0) {
+      return badRequest("Выберите хотя бы один канал");
+    }
 
-        if (houseIds.length === 0) {
-          return badRequest("Выберите хотя бы один дом");
-        }
+    if (houseIds.some((id) => !(id in ORG_HOUSES))) {
+      return notFound("Дом не найден");
+    }
 
-        if (channels.length === 0) {
-          return badRequest("Выберите хотя бы один канал");
-        }
+    const created = item(
+      Math.max(0, ...announcements.map(({ id }) => id)) + 1,
+      0,
+      houseIds,
+      channels,
+      text,
+      body.urgent ?? false,
+    );
+    announcements.unshift(created);
 
-        if (houseIds.some((id) => !(id in ORG_HOUSES))) {
-          return notFound("Дом не найден");
-        }
-
-        const { withoutChat } = deliver(houseIds, channels);
-        const created = item(
-          Math.max(0, ...announcements.map(({ id }) => id)) + 1,
-          0,
-          houseIds,
-          channels,
-          text,
-          body.urgent ?? false,
-        );
-        announcements.unshift(created);
-
-        return ok({
-          ...created,
-          houses_without_chat: withoutChat,
-        } satisfies Item);
-      }),
-    ],
-  },
+    return ok({
+      ...created,
+      houses_without_chat: deliver(houseIds, channels).withoutChat,
+    } satisfies Item);
+  }),
 ];

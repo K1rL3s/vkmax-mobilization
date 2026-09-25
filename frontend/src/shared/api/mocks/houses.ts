@@ -1,11 +1,11 @@
 import {
   badRequest,
   conflict,
+  endpoint,
   fail,
   notFound,
-  number,
   ok,
-  route,
+  page,
 } from "./reply";
 import {
   addResidency,
@@ -23,136 +23,86 @@ import {
   signalDemand,
 } from "./state";
 
-// «Ошибка» в поиске - способ увидеть экран ошибки, не выключая мок
-const ERROR_QUERY = "ошибка";
-
 export const housesConfigs = [
-  {
-    path: "/houses" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const query = request.query.q ?? request.query.street ?? "";
+  endpoint("get", "/houses", (request) => {
+    const query = request.query.q ?? request.query.street ?? "";
 
-        if (query.trim().toLowerCase() === ERROR_QUERY) {
-          return fail(500, "Внутренняя ошибка сервера", "Что-то пошло не так");
-        }
+    return query.trim().toLowerCase() === "ошибка"
+      ? fail(500, "Внутренняя ошибка сервера", "Что-то пошло не так")
+      : ok(page(searchHouses(query).map(houseListItem), request.query));
+  }),
+  endpoint("get", "/houses/:house_id", (request) => {
+    const house = findHouse(Number(request.params.house_id));
 
-        const limit = number(request.query.limit) ?? 20;
-        const offset = number(request.query.offset) ?? 0;
-        const found = searchHouses(query);
+    return house ? ok(houseCard(house)) : notFound("Дом не найден");
+  }),
+  endpoint("get", "/houses/:house_id/flats", (request) => {
+    const house = findHouse(Number(request.params.house_id));
 
-        return ok({
-          items: found.slice(offset, offset + limit).map(houseListItem),
-          total: found.length,
-        });
-      }),
-    ],
-  },
-  {
-    path: "/houses/:house_id" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const house = findHouse(Number(request.params.house_id));
+    return house
+      ? ok(
+          page(
+            houseFlats(house.id, request.query.q ?? "").map(flatListItem),
+            request.query,
+            50,
+          ),
+        )
+      : notFound("Дом не найден");
+  }),
+  endpoint("post", "/houses/:house_id/link", (request) => {
+    const house = findHouse(Number(request.params.house_id));
 
-        return house ? ok(houseCard(house)) : notFound("Дом не найден");
-      }),
-    ],
-  },
-  {
-    path: "/houses/:house_id/flats" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const house = findHouse(Number(request.params.house_id));
+    if (!house) {
+      return notFound("Дом не найден");
+    }
 
-        if (!house) {
-          return notFound("Дом не найден");
-        }
+    const { flat_id: flatId, flat_number: flatNumber } = request.body;
 
-        const limit = number(request.query.limit) ?? 50;
-        const offset = number(request.query.offset) ?? 0;
-        const found = houseFlats(house.id, request.query.q ?? "");
+    if (flatId != null && flatNumber != null) {
+      return badRequest("Укажите либо квартиру из списка, либо номер");
+    }
 
-        return ok({
-          items: found.slice(offset, offset + limit).map(flatListItem),
-          total: found.length,
-        });
-      }),
-    ],
-  },
-  {
-    path: "/houses/:house_id/link" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const house = findHouse(Number(request.params.house_id));
+    const existing = residencyForHouse(house.id);
 
-        if (!house) {
-          return notFound("Дом не найден");
-        }
+    if (existing) {
+      return ok(residencySummary(existing));
+    }
 
-        const { flat_id: flatId, flat_number: flatNumber } = request.body;
+    const flat = flatId == null ? null : (findFlat(Number(flatId)) ?? null);
 
-        if (flatId != null && flatNumber != null) {
-          return badRequest("Укажите либо квартиру из списка, либо номер");
-        }
+    if (flatId != null && flat?.house_id !== house.id) {
+      return notFound("Квартира не найдена");
+    }
 
-        const existing = residencyForHouse(house.id);
-
-        if (existing) {
-          return ok(residencySummary(existing));
-        }
-
-        const flat = flatId == null ? null : (findFlat(Number(flatId)) ?? null);
-
-        if (flatId != null && (!flat || flat.house_id !== house.id)) {
-          return notFound("Квартира не найдена");
-        }
-
-        const role = request.body.role === "tenant" ? "tenant" : "owner";
-        const residency = addResidency(
+    return ok(
+      residencySummary(
+        addResidency(
           house.id,
           flat,
           flatNumber == null ? null : String(flatNumber),
-          role,
-        );
-
-        return ok(residencySummary(residency));
-      }),
-    ],
-  },
-  {
-    path: "/residencies/:resident_id" as const,
-    method: "delete" as const,
-    routes: [
-      route((request) =>
-        removeResidency(Number(request.params.resident_id))
-          ? ok({ ok: true })
-          : notFound("Привязка к дому не найдена"),
+          request.body.role === "tenant" ? "tenant" : "owner",
+        ),
       ),
-    ],
-  },
-  {
-    path: "/houses/:house_id/demand" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const house = findHouse(Number(request.params.house_id));
+    );
+  }),
+  endpoint("delete", "/residencies/:resident_id", (request) =>
+    removeResidency(Number(request.params.resident_id))
+      ? ok({ ok: true })
+      : notFound("Привязка к дому не найдена"),
+  ),
+  endpoint("post", "/houses/:house_id/demand", (request) => {
+    const house = findHouse(Number(request.params.house_id));
 
-        if (!house) {
-          return notFound("Дом не найден");
-        }
+    if (!house) {
+      return notFound("Дом не найден");
+    }
 
-        if (house.is_connected) {
-          return conflict("УК этого дома уже подключена");
-        }
+    if (house.is_connected) {
+      return conflict("УК этого дома уже подключена");
+    }
 
-        signalDemand(house.id);
+    signalDemand(house.id);
 
-        return ok({ house_id: house.id, total: demandTotal(house.id) });
-      }),
-    ],
-  },
+    return ok({ house_id: house.id, total: demandTotal(house.id) });
+  }),
 ];

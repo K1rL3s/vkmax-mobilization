@@ -1,7 +1,15 @@
 import type { components } from "../schema/generated";
 
-import { badRequest, conflict, notFound, number, ok, route } from "./reply";
-import { address, findHouse, houseFlats } from "./state";
+import {
+  badRequest,
+  conflict,
+  endpoint,
+  notFound,
+  ok,
+  page,
+  type MockHttpRequest,
+} from "./reply";
+import { addressOf, days, findHouse, houseFlats, period } from "./state";
 
 type Schemas = components["schemas"];
 
@@ -9,9 +17,6 @@ type Resident = Schemas["HouseResidentItem"];
 
 type Reading = Schemas["AdminReadingItem"];
 
-// дома ООО «Жилсервис». X-Org-Id мок не сверяет, как и очередь подтверждений:
-// мок-пользователь без демо-доступа сотрудник другой организации, и список
-// домов был бы пуст у всех экранов, которые из него выбирают дом
 const ORG_HOUSES = [
   {
     id: 1,
@@ -36,16 +41,6 @@ const ORG_HOUSES = [
   },
 ];
 
-const houseListItem = (
-  item: (typeof ORG_HOUSES)[number],
-): Schemas["AdminHouseListItem"][] => {
-  const house = findHouse(item.id);
-
-  return house
-    ? [{ ...item, address: address(house), entrances: house.entrances }]
-    : [];
-};
-
 const BOT_LINK = "https://max.ru/zheka_bot?start=";
 
 const CHAT_TITLES: Record<number, string> = {
@@ -53,22 +48,13 @@ const CHAT_TITLES: Record<number, string> = {
   3: "ЖК на Баумана 16, официальный чат жильцов дома",
 };
 
-// ждущие запросы в очереди подтверждений (admin-verifications.ts) по домам
 const PENDING_VERIFICATIONS: Record<number, number> = { 1: 3, 2: 2, 3: 3 };
 
-const bindingCodes = new Map<number, string>([
-  [1, "a3f91c07"],
-  [2, "5be20d4a"],
-  [3, "0c7d18e2"],
-]);
-
-const newCode = () =>
-  Array.from({ length: 8 }, () =>
-    Math.floor(Math.random() * 16).toString(16),
-  ).join("");
-
-const daysAgo = (count: number) =>
-  new Date(Date.now() - count * 24 * 60 * 60 * 1000).toISOString();
+const bindingCodes: Record<number, string> = {
+  1: "a3f91c07",
+  2: "5be20d4a",
+  3: "0c7d18e2",
+};
 
 const NAMES = [
   "Алексей Иванов",
@@ -88,8 +74,6 @@ const NAMES = [
 
 type Seed = Pick<Resident, "name" | "flat_number"> & Partial<Resident>;
 
-// у первого дома жители на все проверки экрана: председатель, заблокированный,
-// неподтверждённые из очереди, арендатор, длинное имя
 const HAND_MADE: Record<number, Seed[]> = {
   1: [
     { name: "Марат Галиев", flat_number: "112", is_chairman: true },
@@ -121,101 +105,51 @@ const HAND_MADE: Record<number, Seed[]> = {
   ],
 };
 
-const flatIdOf = (houseId: number, flatNumber: string | null | undefined) =>
-  flatNumber ? (houseFlats(houseId, flatNumber)[0]?.id ?? null) : null;
-
-const buildResidents = (houseId: number, count: number): Resident[] => {
-  const flats = ORG_HOUSES.find((house) => house.id === houseId)?.flats_count;
-  const seeds: Seed[] = [...(HAND_MADE[houseId] ?? [])];
-
-  for (let index = seeds.length; index < count; index += 1) {
-    seeds.push({
-      name: NAMES[index % NAMES.length],
-      flat_number: String(((index * 7) % (flats ?? 100)) + 1),
-      role: index % 6 === 0 ? "tenant" : "owner",
-      verified: index % 5 !== 0,
-    });
-  }
-
-  return seeds.map((seed, index) => ({
-    resident_id: houseId * 1000 + index + 1,
-    user_id: houseId * 1000 + index + 501,
-    created_at: daysAgo(count - index),
-    role: "owner",
-    status: "active",
-    verified: true,
-    is_chairman: false,
-    flat_id: flatIdOf(houseId, seed.flat_number),
-    block_reason: null,
-    ...seed,
-  }));
-};
-
 const residents = new Map(
-  ORG_HOUSES.map((house) => [
-    house.id,
-    buildResidents(house.id, house.residents_count),
-  ]),
+  ORG_HOUSES.map((house): [number, Resident[]] => {
+    const seeds: Seed[] = [...HAND_MADE[house.id]];
+
+    for (let index = seeds.length; index < house.residents_count; index += 1) {
+      seeds.push({
+        name: NAMES[index % NAMES.length],
+        flat_number: String(((index * 7) % house.flats_count) + 1),
+        role: index % 6 === 0 ? "tenant" : "owner",
+        verified: index % 5 !== 0,
+      });
+    }
+
+    return [
+      house.id,
+      seeds.map((seed, index) => ({
+        resident_id: house.id * 1000 + index + 1,
+        user_id: house.id * 1000 + index + 501,
+        created_at: days(index - house.residents_count),
+        role: "owner",
+        status: "active",
+        verified: true,
+        is_chairman: false,
+        flat_id: seed.flat_number
+          ? (houseFlats(house.id, seed.flat_number)[0]?.id ?? null)
+          : null,
+        block_reason: null,
+        ...seed,
+      })),
+    ];
+  }),
 );
 
-const findResident = (residentId: number) =>
+const findResident = (request: MockHttpRequest) =>
   [...residents.values()]
     .flat()
-    .find((resident) => resident.resident_id === residentId);
+    .find(
+      (resident) => resident.resident_id === Number(request.params.resident_id),
+    );
 
 export const houseResidents = (houseId: number): Resident[] =>
   residents.get(houseId) ?? [];
 
-const adminHouseCard = (
-  item: (typeof ORG_HOUSES)[number],
-): Schemas["AdminHouseCard"] | null => {
-  const house = findHouse(item.id);
-
-  if (!house) {
-    return null;
-  }
-
-  const list = houseResidents(item.id);
-
-  return {
-    id: house.id,
-    address: address(house),
-    region: house.region,
-    city: house.city,
-    street: house.street,
-    building: house.building,
-    cadastral_no: house.cadastral_no,
-    entrances: house.entrances,
-    flats_count: item.flats_count,
-    residents_count: list.length,
-    verified_residents_count: list.filter((resident) => resident.verified)
-      .length,
-    pending_verifications: PENDING_VERIFICATIONS[house.id] ?? 0,
-    open_requests: item.open_requests,
-    chat_bound: item.chat_bound,
-    chat_binding_code: bindingCodes.get(house.id) ?? "",
-    entrance_qrs: Array.from({ length: house.entrances }, (_, index) => ({
-      entrance: index + 1,
-      code: `qr_${house.id}_${index + 1}`,
-      deeplink: `${BOT_LINK}qr_${house.id}_${index + 1}`,
-    })),
-    built_year: house.built_year,
-    floors: house.floors,
-    area: house.area,
-    chairman_name: list.find((resident) => resident.is_chairman)?.name ?? null,
-    chat_title: item.chat_bound ? (CHAT_TITLES[house.id] ?? null) : null,
-  };
-};
-
-const orgHouse = (houseId: string | undefined) =>
-  ORG_HOUSES.find((house) => house.id === Number(houseId));
-
-const period = (monthsBack: number): string => {
-  const today = new Date();
-  const month = new Date(today.getFullYear(), today.getMonth() - monthsBack, 1);
-
-  return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-01`;
-};
+const orgHouse = (request: MockHttpRequest) =>
+  ORG_HOUSES.find((house) => house.id === Number(request.params.house_id));
 
 const READING_FLATS = [
   { number: "7", by: "Игорь Тимофеев" },
@@ -242,8 +176,6 @@ const READING_METERS: {
   },
 ];
 
-// показания только у первого дома: у остальных проверяется пустое состояние.
-// Квартира 28 в прошлом месяце подала холодную воду меньше предыдущей
 const houseReadings: Reading[] = READING_FLATS.flatMap((flat, flatIndex) =>
   READING_METERS.flatMap((meter, meterIndex) =>
     [2, 1, 0].map((monthsBack): Reading => {
@@ -253,7 +185,6 @@ const houseReadings: Reading[] = READING_FLATS.flatMap((flat, flatIndex) =>
         flat.number === "28" && meter.type === "cold_water" && monthsBack === 1;
       const total =
         meter.base * (flatIndex + 1) + meter.step * (below ? month - 2 : month);
-      // ночная зона двухтарифного счётчика набегает медленнее дневной
       const byZone = (amount: number) =>
         Object.fromEntries(
           meter.zones.map((zone, index) => [
@@ -287,226 +218,210 @@ const houseReadings: Reading[] = READING_FLATS.flatMap((flat, flatIndex) =>
   ),
 ).sort((a, b) => b.submitted_at.localeCompare(a.submitted_at));
 
-const HOUSE_NOT_FOUND = "Дом не найден";
-
-const RESIDENT_NOT_FOUND = "Житель не найден";
-
 const reasonOf = (body: Record<string, unknown>) =>
   typeof body.reason === "string" ? body.reason.trim() : "";
 
 export const adminHousesConfigs = [
-  {
-    path: "/admin/houses" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const query = (request.query.q ?? "").trim().toLowerCase();
-        const limit = number(request.query.limit) ?? 50;
-        const offset = number(request.query.offset) ?? 0;
-        const found = ORG_HOUSES.flatMap(houseListItem).filter((item) =>
-          item.address.toLowerCase().includes(query),
-        );
+  endpoint("get", "/admin/houses", (request) => {
+    const query = (request.query.q ?? "").trim().toLowerCase();
 
-        return ok({
-          items: found.slice(offset, offset + limit),
-          total: found.length,
-        } satisfies Schemas["Page_AdminHouseListItem_"]);
-      }),
-    ],
-  },
-  {
-    path: "/admin/houses/:house_id" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const item = orgHouse(request.params.house_id);
-        const card = item && adminHouseCard(item);
+    return ok(
+      page(
+        ORG_HOUSES.map((item) => ({
+          ...item,
+          address: addressOf(item.id),
+          entrances: findHouse(item.id)!.entrances,
+        })).filter((item) => item.address.toLowerCase().includes(query)),
+        request.query,
+        50,
+      ) satisfies Schemas["Page_AdminHouseListItem_"],
+    );
+  }),
+  endpoint("get", "/admin/houses/:house_id", (request) => {
+    const item = orgHouse(request);
 
-        return card ? ok(card) : notFound(HOUSE_NOT_FOUND);
-      }),
-    ],
-  },
-  {
-    path: "/admin/houses/:house_id/binding-code" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const item = orgHouse(request.params.house_id);
+    if (!item) {
+      return notFound("Дом не найден");
+    }
 
-        if (!item) {
-          return notFound(HOUSE_NOT_FOUND);
-        }
+    const house = findHouse(item.id)!;
+    const list = houseResidents(item.id);
 
-        const code = newCode();
-        bindingCodes.set(item.id, code);
+    return ok({
+      id: house.id,
+      address: addressOf(house.id),
+      region: house.region,
+      city: house.city,
+      street: house.street,
+      building: house.building,
+      cadastral_no: house.cadastral_no,
+      entrances: house.entrances,
+      flats_count: item.flats_count,
+      residents_count: list.length,
+      verified_residents_count: list.filter((resident) => resident.verified)
+        .length,
+      pending_verifications: PENDING_VERIFICATIONS[house.id],
+      open_requests: item.open_requests,
+      chat_bound: item.chat_bound,
+      chat_binding_code: bindingCodes[house.id],
+      entrance_qrs: Array.from({ length: house.entrances }, (_, index) => ({
+        entrance: index + 1,
+        code: `qr_${house.id}_${index + 1}`,
+        deeplink: `${BOT_LINK}qr_${house.id}_${index + 1}`,
+      })),
+      built_year: house.built_year,
+      floors: house.floors,
+      area: house.area,
+      chairman_name:
+        list.find((resident) => resident.is_chairman)?.name ?? null,
+      chat_title: item.chat_bound ? CHAT_TITLES[house.id] : null,
+    } satisfies Schemas["AdminHouseCard"]);
+  }),
+  endpoint("post", "/admin/houses/:house_id/binding-code", (request) => {
+    const item = orgHouse(request);
 
-        return ok({
-          house_id: item.id,
-          code,
-          deeplink: `${BOT_LINK}house_${item.id}`,
-        } satisfies Schemas["BindingCodeResponse"]);
-      }),
-    ],
-  },
-  {
-    path: "/admin/houses/:house_id/residents" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const item = orgHouse(request.params.house_id);
+    if (!item) {
+      return notFound("Дом не найден");
+    }
 
-        if (!item) {
-          return notFound(HOUSE_NOT_FOUND);
-        }
+    const code = Array.from({ length: 8 }, () =>
+      Math.floor(Math.random() * 16).toString(16),
+    ).join("");
+    bindingCodes[item.id] = code;
 
-        const query = (request.query.q ?? "").trim().toLowerCase();
-        const limit = number(request.query.limit) ?? 50;
-        const offset = number(request.query.offset) ?? 0;
-        const found = houseResidents(item.id).filter(
+    return ok({
+      house_id: item.id,
+      code,
+      deeplink: `${BOT_LINK}house_${item.id}`,
+    } satisfies Schemas["BindingCodeResponse"]);
+  }),
+  endpoint("get", "/admin/houses/:house_id/residents", (request) => {
+    const item = orgHouse(request);
+
+    if (!item) {
+      return notFound("Дом не найден");
+    }
+
+    const query = (request.query.q ?? "").trim().toLowerCase();
+
+    return ok(
+      page(
+        houseResidents(item.id).filter(
           (resident) =>
             resident.name.toLowerCase().includes(query) ||
             (resident.flat_number ?? "").toLowerCase().startsWith(query),
-        );
+        ),
+        request.query,
+        50,
+      ) satisfies Schemas["Page_HouseResidentItem_"],
+    );
+  }),
+  endpoint("get", "/admin/houses/:house_id/readings", (request) => {
+    const item = orgHouse(request);
 
-        return ok({
-          items: found.slice(offset, offset + limit),
-          total: found.length,
-        } satisfies Schemas["Page_HouseResidentItem_"]);
-      }),
-    ],
-  },
-  {
-    path: "/admin/houses/:house_id/readings" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const item = orgHouse(request.params.house_id);
+    if (!item) {
+      return notFound("Дом не найден");
+    }
 
-        if (!item) {
-          return notFound(HOUSE_NOT_FOUND);
-        }
+    const { query } = request;
 
-        const onlyBelow = request.query.only_below_previous === "true";
-        const limit = number(request.query.limit) ?? 50;
-        const offset = number(request.query.offset) ?? 0;
-        const found = (item.id === 1 ? houseReadings : []).filter(
+    return ok(
+      page(
+        (item.id === 1 ? houseReadings : []).filter(
           (reading) =>
-            (!onlyBelow || reading.is_below_previous) &&
-            (request.query.period === undefined ||
-              reading.period === request.query.period) &&
-            (request.query.meter_type === undefined ||
-              reading.meter_type === request.query.meter_type),
+            (query.only_below_previous !== "true" ||
+              reading.is_below_previous) &&
+            (query.period === undefined || reading.period === query.period) &&
+            (query.meter_type === undefined ||
+              reading.meter_type === query.meter_type),
+        ),
+        query,
+        50,
+      ) satisfies Schemas["Page_AdminReadingItem_"],
+    );
+  }),
+  endpoint("post", "/admin/residents/:resident_id/block", (request) => {
+    const reason = reasonOf(request.body);
+
+    if (!reason) {
+      return badRequest("Укажите причину");
+    }
+
+    const resident = findResident(request);
+
+    if (!resident) {
+      return notFound("Житель не найден");
+    }
+
+    if (resident.is_chairman) {
+      return conflict("Нельзя заблокировать председателя совета дома");
+    }
+
+    resident.status = "blocked";
+    resident.block_reason = reason;
+
+    return ok(resident);
+  }),
+  endpoint("post", "/admin/residents/:resident_id/unblock", (request) => {
+    const resident = findResident(request);
+
+    if (!resident) {
+      return notFound("Житель не найден");
+    }
+
+    resident.status = "active";
+    resident.block_reason = null;
+
+    return ok(resident);
+  }),
+  endpoint(
+    "post",
+    "/admin/residents/:resident_id/revoke-verification",
+    (request) => {
+      const reason = reasonOf(request.body);
+
+      if (!reason) {
+        return badRequest("Укажите причину");
+      }
+
+      const resident = findResident(request);
+
+      if (!resident) {
+        return notFound("Житель не найден");
+      }
+
+      if (!resident.verified) {
+        return conflict("Квартира жителя не подтверждена");
+      }
+
+      resident.verified = false;
+
+      return ok(resident);
+    },
+  ),
+  endpoint("post", "/admin/residents/:resident_id/chairman", (request) => {
+    const resident = findResident(request);
+
+    if (!resident) {
+      return notFound("Житель не найден");
+    }
+
+    if (request.body.is_chairman === true) {
+      if (!resident.verified) {
+        return conflict(
+          "Председателем становится житель с подтвержденной квартирой",
         );
+      }
 
-        return ok({
-          items: found.slice(offset, offset + limit),
-          total: found.length,
-        } satisfies Schemas["Page_AdminReadingItem_"]);
-      }),
-    ],
-  },
-  {
-    path: "/admin/residents/:resident_id/block" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const reason = reasonOf(request.body);
+      for (const neighbour of houseResidents(
+        Math.floor(resident.resident_id / 1000),
+      )) {
+        neighbour.is_chairman = false;
+      }
+    }
 
-        if (!reason) {
-          return badRequest("Укажите причину");
-        }
+    resident.is_chairman = request.body.is_chairman === true;
 
-        const resident = findResident(Number(request.params.resident_id));
-
-        if (!resident) {
-          return notFound(RESIDENT_NOT_FOUND);
-        }
-
-        if (resident.is_chairman) {
-          return conflict("Нельзя заблокировать председателя совета дома");
-        }
-
-        resident.status = "blocked";
-        resident.block_reason = reason;
-
-        return ok(resident);
-      }),
-    ],
-  },
-  {
-    path: "/admin/residents/:resident_id/unblock" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const resident = findResident(Number(request.params.resident_id));
-
-        if (!resident) {
-          return notFound(RESIDENT_NOT_FOUND);
-        }
-
-        resident.status = "active";
-        resident.block_reason = null;
-
-        return ok(resident);
-      }),
-    ],
-  },
-  {
-    path: "/admin/residents/:resident_id/revoke-verification" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const reason = reasonOf(request.body);
-
-        if (!reason) {
-          return badRequest("Укажите причину");
-        }
-
-        const resident = findResident(Number(request.params.resident_id));
-
-        if (!resident) {
-          return notFound(RESIDENT_NOT_FOUND);
-        }
-
-        if (!resident.verified) {
-          return conflict("Квартира жителя не подтверждена");
-        }
-
-        resident.verified = false;
-
-        return ok(resident);
-      }),
-    ],
-  },
-  {
-    path: "/admin/residents/:resident_id/chairman" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const resident = findResident(Number(request.params.resident_id));
-
-        if (!resident) {
-          return notFound(RESIDENT_NOT_FOUND);
-        }
-
-        if (request.body.is_chairman === true) {
-          if (!resident.verified) {
-            return conflict(
-              "Председателем становится житель с подтвержденной квартирой",
-            );
-          }
-
-          for (const neighbour of houseResidents(
-            Math.floor(resident.resident_id / 1000),
-          )) {
-            neighbour.is_chairman = false;
-          }
-        }
-
-        resident.is_chairman = request.body.is_chairman === true;
-
-        return ok(resident);
-      }),
-    ],
-  },
+    return ok(resident);
+  }),
 ];

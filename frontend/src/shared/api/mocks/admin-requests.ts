@@ -1,15 +1,22 @@
 import type { components } from "../schema/generated";
 
 import { houseResidents } from "./admin-houses";
-import { badRequest, conflict, notFound, number, ok, route } from "./reply";
 import {
-  address,
+  badRequest,
+  conflict,
+  endpoint,
+  notFound,
+  number,
+  ok,
+  page,
+} from "./reply";
+import {
+  addressOf,
   findFlat,
   findHouse,
   houseRequests,
   requestCard,
   requestCategories,
-  type MockHttpRequest,
 } from "./state";
 
 type Schemas = components["schemas"];
@@ -38,7 +45,6 @@ const executors: Schemas["ExecutorItem"][] = [
   },
 ];
 
-// Снимок общего посева: мутации У1 меняют только это состояние.
 const requests: Request[] = houseIds.flatMap((houseId) =>
   houseRequests(houseId, null).map((item) => ({
     ...structuredClone(requestCard(item)),
@@ -57,13 +63,12 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
   const category = requestCategories().find(
     (item) => item.category === (fields.category ?? "other"),
   )!;
-  const house = findHouse(houseId)!;
   const at = new Date().toISOString();
   return {
     id: nextId++,
     house_id: houseId,
-    address: address(house),
-    org_name: house.org?.name ?? null,
+    address: addressOf(houseId),
+    org_name: findHouse(houseId)!.org?.name ?? null,
     created_at: at,
     category: category.category,
     category_label: category.label,
@@ -101,7 +106,6 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
   };
 };
 
-// Группы содержат настоящих участников: счётчик совпадает с раскрытым списком.
 for (const groupId of new Set(
   requests.flatMap((request) =>
     request.group_id == null ? [] : [request.group_id],
@@ -153,18 +157,17 @@ requests.push(
     caller_phone: "+7 999 123-45-67",
   }),
 );
-const repeatParent = requests.find((request) => request.status === "done");
-if (repeatParent)
-  requests.push(
-    makeRequest(repeatParent.house_id, {
-      parent_request_id: repeatParent.id,
-      author_name: "Анна Морозова",
-      channel: "miniapp",
-      is_staff_author: false,
-      description:
-        "После ремонта проблема появилась снова. Проверьте соединение ещё раз.",
-    }),
-  );
+const repeatParent = requests.find((request) => request.status === "done")!;
+requests.push(
+  makeRequest(repeatParent.house_id, {
+    parent_request_id: repeatParent.id,
+    author_name: "Анна Морозова",
+    channel: "miniapp",
+    is_staff_author: false,
+    description:
+      "После ремонта проблема появилась снова. Проверьте соединение ещё раз.",
+  }),
+);
 
 const findRequest = (id: string) =>
   requests.find((request) => request.id === Number(id));
@@ -224,254 +227,182 @@ const changeStatus = (
       text: comment.trim(),
     });
 };
-const page = <T>(items: T[], request: MockHttpRequest) => ({
-  items: items.slice(
-    number(request.query.offset) ?? 0,
-    (number(request.query.offset) ?? 0) + (number(request.query.limit) ?? 50),
-  ),
-  total: items.length,
-});
 
 export const adminRequestsConfigs = [
-  {
-    path: "/admin/requests" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const found = requests
-          .filter(
-            (item) =>
-              (!request.query.house_id ||
-                item.house_id === number(request.query.house_id)) &&
-              (!request.query.category ||
-                item.category === request.query.category) &&
-              (!request.query.status || item.status === request.query.status) &&
-              (!request.query.channel ||
-                item.channel === request.query.channel) &&
-              (!request.query.executor_user_id ||
-                item.executor_user_id ===
-                  number(request.query.executor_user_id)) &&
-              (request.query.overdue !== "true" ||
-                (item.status !== "done" &&
-                  !!item.deadline_at &&
-                  Date.parse(item.deadline_at) < Date.now())),
+  endpoint("get", "/admin/requests", (request) => {
+    const found = requests
+      .filter(
+        (item) =>
+          (!request.query.house_id ||
+            item.house_id === number(request.query.house_id)) &&
+          (!request.query.category ||
+            item.category === request.query.category) &&
+          (!request.query.status || item.status === request.query.status) &&
+          (!request.query.channel || item.channel === request.query.channel) &&
+          (!request.query.executor_user_id ||
+            item.executor_user_id === number(request.query.executor_user_id)) &&
+          (request.query.overdue !== "true" ||
+            (item.status !== "done" &&
+              !!item.deadline_at &&
+              Date.parse(item.deadline_at) < Date.now())),
+      )
+      .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+    const rows =
+      request.query.grouped === "true"
+        ? found.filter(
+            (item, index) =>
+              item.group_id == null ||
+              found.findIndex((other) => other.group_id === item.group_id) ===
+                index,
           )
-          .sort(
-            (a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id,
-          );
-        const rows =
-          request.query.grouped === "true"
-            ? found.filter(
-                (item, index) =>
-                  item.group_id == null ||
-                  found.findIndex(
-                    (other) => other.group_id === item.group_id,
-                  ) === index,
-              )
-            : found;
-        return ok(
-          page(
-            rows.map(listItem),
-            request,
-          ) satisfies Schemas["Page_AdminRequestListItem_"],
-        );
-      }),
-    ],
-  },
-  {
-    path: "/admin/requests/:request_id" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(request.params.request_id);
-        return item
-          ? ok({
-              ...item,
-              group_size: listItem(item).group_size,
-            } satisfies Request)
-          : notFound("Заявка не найдена");
-      }),
-    ],
-  },
-  {
-    path: "/admin/requests/:request_id/status" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(request.params.request_id);
-        if (!item) return notFound("Заявка не найдена");
-        const body = request.body as Schemas["ChangeRequestStatusRequest"];
-        if (!statusOrder.includes(body.status))
-          return badRequest("Неизвестный статус");
-        if (
-          statusOrder.indexOf(body.status) !==
-          statusOrder.indexOf(item.status) + 1
-        )
-          return conflict("Статус заявки меняется на следующий шаг");
-        if (body.status === "done" && item.author_name != null)
-          return conflict("Заявку закрывает житель после приёмки");
-        changeStatus(item, body.status, body.comment);
-        return ok(item);
-      }),
-    ],
-  },
-  {
-    path: "/admin/requests/:request_id/reply" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(request.params.request_id);
-        if (!item) return notFound("Заявка не найдена");
-        const text =
-          typeof request.body.text === "string" ? request.body.text.trim() : "";
-        if (!text) return badRequest("Напишите ответ");
-        item.messages.push({
-          created_at: new Date().toISOString(),
-          author_role: "staff",
-          author_name: "Диспетчер УК",
-          text,
-        });
-        return ok(item);
-      }),
-    ],
-  },
-  {
-    path: "/admin/requests/:request_id/assign" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const item = findRequest(request.params.request_id);
-        if (!item) return notFound("Заявка не найдена");
-        const executor = executors.find(
-          (person) => person.user_id === Number(request.body.user_id),
-        );
-        if (!executor) return badRequest("Выберите исполнителя");
-        item.executor_user_id = executor.user_id;
-        item.executor_name = executor.name;
-        return ok(item);
-      }),
-    ],
-  },
-  {
-    path: "/admin/request-groups/:group_id" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const group = groupCard(Number(request.params.group_id));
-        return group ? ok(group) : notFound("Коллективная заявка не найдена");
-      }),
-    ],
-  },
-  {
-    path: "/admin/request-groups/:group_id/status" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const id = Number(request.params.group_id);
-        const members = membersOf(id);
-        if (!members.length) return notFound("Коллективная заявка не найдена");
-        const body = request.body as Schemas["ChangeGroupStatusRequest"];
-        if (!statusOrder.includes(body.status))
-          return badRequest("Неизвестный статус");
-        const targetIndex = statusOrder.indexOf(body.status);
-        if (
-          members.some(
-            (member) => statusOrder.indexOf(member.status) > targetIndex,
-          )
-        )
-          return conflict("Статус заявки назад не двигается");
-        if (members.every((member) => member.status === body.status))
-          return conflict("Все заявки уже в этом статусе");
-        if (
-          body.status === "done" &&
-          members.some(
-            (member) => member.status !== "done" && member.author_name != null,
-          )
-        )
-          return conflict("Заявки закрывают жители после приёмки");
-        // Сначала проверяем всю группу, затем меняем: ошибка не оставляет половину группы обновлённой.
-        for (const member of members) {
-          for (const step of statusOrder.slice(
-            statusOrder.indexOf(member.status) + 1,
-            targetIndex + 1,
-          ))
-            changeStatus(
-              member,
-              step,
-              step === body.status ? body.comment : null,
-            );
-        }
-        if (body.status === "done") closedGroups.add(id);
-        return ok(groupCard(id));
-      }),
-    ],
-  },
-  {
-    path: "/admin/requests/phone" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const body = request.body as Schemas["CreatePhoneRequestRequest"];
-        if (!houseIds.includes(body.house_id)) return notFound("Дом не найден");
-        if (
-          !body.description?.trim() ||
-          !requestCategories().some(
-            (category) => category.category === body.category,
-          )
-        )
-          return badRequest("Выберите категорию и опишите проблему");
-        const resident = houseResidents(body.house_id).find(
-          (person) => person.resident_id === body.resident_id,
-        );
-        if (body.resident_id && !resident)
-          return notFound("Житель этого дома не найден");
-        if (resident?.status === "blocked")
-          return conflict("Житель заблокирован в доме");
-        if (resident && body.flat_id && body.flat_id !== resident.flat_id)
-          return badRequest("Квартира не принадлежит выбранному жителю");
-        const flatId = resident ? resident.flat_id : body.flat_id;
-        const flat = flatId ? findFlat(flatId) : null;
-        if (flatId && (!flat || flat.house_id !== body.house_id))
-          return notFound("Квартира этого дома не найдена");
-        if (
-          !resident &&
-          !flat &&
-          !(body.caller_name?.trim() && body.caller_phone?.trim())
-        )
-          return badRequest(
-            "Выберите квартиру или укажите имя и телефон звонившего",
-          );
-        const item = makeRequest(body.house_id, {
-          category: body.category,
-          description: body.description.trim(),
-          flat_id: flat?.id ?? null,
-          flat_number: flat?.number ?? resident?.flat_number ?? null,
-          author_name: resident?.name ?? null,
-          is_staff_author: !resident,
-          caller_name: body.caller_name?.trim() || null,
-          caller_phone: body.caller_phone?.trim() || null,
-        });
-        requests.push(item);
-        return ok(item);
-      }),
-    ],
-  },
-  {
-    path: "/admin/executors" as const,
-    method: "get" as const,
-    routes: [
-      route(() =>
-        ok(
-          executors.map((executor) => ({
-            ...executor,
-            active_requests: requests.filter(
-              (request) =>
-                request.executor_user_id === executor.user_id &&
-                request.status !== "done",
-            ).length,
-          })),
-        ),
-      ),
-    ],
-  },
+        : found;
+    return ok(
+      page(
+        rows.map(listItem),
+        request.query,
+        50,
+      ) satisfies Schemas["Page_AdminRequestListItem_"],
+    );
+  }),
+  endpoint("get", "/admin/requests/:request_id", (request) => {
+    const item = findRequest(request.params.request_id);
+    return item
+      ? ok({
+          ...item,
+          group_size: listItem(item).group_size,
+        } satisfies Request)
+      : notFound("Заявка не найдена");
+  }),
+  endpoint("post", "/admin/requests/:request_id/status", (request) => {
+    const item = findRequest(request.params.request_id);
+    if (!item) return notFound("Заявка не найдена");
+    const body = request.body as Schemas["ChangeRequestStatusRequest"];
+    if (!statusOrder.includes(body.status))
+      return badRequest("Неизвестный статус");
+    if (
+      statusOrder.indexOf(body.status) !==
+      statusOrder.indexOf(item.status) + 1
+    )
+      return conflict("Статус заявки меняется на следующий шаг");
+    if (body.status === "done" && item.author_name != null)
+      return conflict("Заявку закрывает житель после приёмки");
+    changeStatus(item, body.status, body.comment);
+    return ok(item);
+  }),
+  endpoint("post", "/admin/requests/:request_id/reply", (request) => {
+    const item = findRequest(request.params.request_id);
+    if (!item) return notFound("Заявка не найдена");
+    const text =
+      typeof request.body.text === "string" ? request.body.text.trim() : "";
+    if (!text) return badRequest("Напишите ответ");
+    item.messages.push({
+      created_at: new Date().toISOString(),
+      author_role: "staff",
+      author_name: "Диспетчер УК",
+      text,
+    });
+    return ok(item);
+  }),
+  endpoint("post", "/admin/requests/:request_id/assign", (request) => {
+    const item = findRequest(request.params.request_id);
+    if (!item) return notFound("Заявка не найдена");
+    const executor = executors.find(
+      (person) => person.user_id === Number(request.body.user_id),
+    );
+    if (!executor) return badRequest("Выберите исполнителя");
+    item.executor_user_id = executor.user_id;
+    item.executor_name = executor.name;
+    return ok(item);
+  }),
+  endpoint("get", "/admin/request-groups/:group_id", (request) => {
+    const group = groupCard(Number(request.params.group_id));
+    return group ? ok(group) : notFound("Коллективная заявка не найдена");
+  }),
+  endpoint("post", "/admin/request-groups/:group_id/status", (request) => {
+    const id = Number(request.params.group_id);
+    const members = membersOf(id);
+    if (!members.length) return notFound("Коллективная заявка не найдена");
+    const body = request.body as Schemas["ChangeGroupStatusRequest"];
+    if (!statusOrder.includes(body.status))
+      return badRequest("Неизвестный статус");
+    const targetIndex = statusOrder.indexOf(body.status);
+    if (
+      members.some((member) => statusOrder.indexOf(member.status) > targetIndex)
+    )
+      return conflict("Статус заявки назад не двигается");
+    if (members.every((member) => member.status === body.status))
+      return conflict("Все заявки уже в этом статусе");
+    if (
+      body.status === "done" &&
+      members.some(
+        (member) => member.status !== "done" && member.author_name != null,
+      )
+    )
+      return conflict("Заявки закрывают жители после приёмки");
+    for (const member of members) {
+      for (const step of statusOrder.slice(
+        statusOrder.indexOf(member.status) + 1,
+        targetIndex + 1,
+      ))
+        changeStatus(member, step, step === body.status ? body.comment : null);
+    }
+    if (body.status === "done") closedGroups.add(id);
+    return ok(groupCard(id));
+  }),
+  endpoint("post", "/admin/requests/phone", (request) => {
+    const body = request.body as Schemas["CreatePhoneRequestRequest"];
+    if (!houseIds.includes(body.house_id)) return notFound("Дом не найден");
+    if (
+      !body.description?.trim() ||
+      !requestCategories().some(
+        (category) => category.category === body.category,
+      )
+    )
+      return badRequest("Выберите категорию и опишите проблему");
+    const resident = houseResidents(body.house_id).find(
+      (person) => person.resident_id === body.resident_id,
+    );
+    if (body.resident_id && !resident)
+      return notFound("Житель этого дома не найден");
+    if (resident?.status === "blocked")
+      return conflict("Житель заблокирован в доме");
+    if (resident && body.flat_id && body.flat_id !== resident.flat_id)
+      return badRequest("Квартира не принадлежит выбранному жителю");
+    const flatId = resident ? resident.flat_id : body.flat_id;
+    const flat = flatId ? findFlat(flatId) : null;
+    if (flatId && (!flat || flat.house_id !== body.house_id))
+      return notFound("Квартира этого дома не найдена");
+    if (
+      !resident &&
+      !flat &&
+      !(body.caller_name?.trim() && body.caller_phone?.trim())
+    )
+      return badRequest(
+        "Выберите квартиру или укажите имя и телефон звонившего",
+      );
+    const item = makeRequest(body.house_id, {
+      category: body.category,
+      description: body.description.trim(),
+      flat_id: flat?.id ?? null,
+      flat_number: flat?.number ?? resident?.flat_number ?? null,
+      author_name: resident?.name ?? null,
+      is_staff_author: !resident,
+      caller_name: body.caller_name?.trim() || null,
+      caller_phone: body.caller_phone?.trim() || null,
+    });
+    requests.push(item);
+    return ok(item);
+  }),
+  endpoint("get", "/admin/executors", () =>
+    ok(
+      executors.map((executor) => ({
+        ...executor,
+        active_requests: requests.filter(
+          (request) =>
+            request.executor_user_id === executor.user_id &&
+            request.status !== "done",
+        ).length,
+      })),
+    ),
+  ),
 ];

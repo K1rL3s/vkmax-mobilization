@@ -3,42 +3,37 @@ import type { components } from "../schema/generated";
 import {
   badRequest,
   conflict,
+  endpoint,
   forbidden,
+  isReply,
   notFound,
   number,
   ok,
-  route,
+  page,
+  type MockHttpRequest,
+  type Reply,
 } from "./reply";
 import {
-  address,
+  HOUSE_AVERAGE,
+  addressOf,
   createRequest,
   findFlat,
   findHouse,
   flatMeters,
-  residencies,
+  period,
+  residencyForFlat,
+  residencyForHouse,
+  type MockFlat,
 } from "./state";
 
 type Schemas = components["schemas"];
 
 type Service = Schemas["ServiceType"];
 
-// полгода истории: столько же точек у графика расхода на бэке
+type Found = { id: number; flat: MockFlat; monthsBack: number };
+
 const HISTORY = 6;
 
-// id квитанции собран из квартиры и сдвига месяца назад, так квитанции не
-// нужно хранить: 10502 - квартира 105, позапрошлый месяц
-const chargeId = (flatId: number, monthsBack: number) =>
-  flatId * 100 + monthsBack;
-
-const period = (monthsBack: number): string => {
-  const today = new Date();
-  const month = new Date(today.getFullYear(), today.getMonth() - monthsBack, 1);
-
-  return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-01`;
-};
-
-// тариф в 1/10000 рубля; индексация пришлась на позапрошлый месяц, чтобы
-// разбор показал и вклад тарифа, и вклад расхода
 const TARIFF: Record<string, [old: number, current: number]> = {
   cold_water: [350000, 384000],
   hot_water: [1980000, 2125000],
@@ -47,22 +42,13 @@ const TARIFF: Record<string, [old: number, current: number]> = {
   maintenance: [289000, 289000],
 };
 
-const INDEXED_SINCE = 2;
-
-// расход в тысячных долях единицы по месяцам назад: [текущий, прошлый, ...]
 const VOLUME: Record<string, number[]> = {
   cold_water: [5200, 4800, 4100, 4300, 4500, 4600],
   hot_water: [3600, 3300, 2900, 3000, 3100, 3200],
   electricity: [182000, 168000, 150000, 171000, 176000, 190000],
 };
 
-const HOUSE_AVERAGE: Partial<Record<Service, number>> = {
-  cold_water: 4200,
-  hot_water: 3100,
-  electricity: 210000,
-};
-
-const METERED: Service[] = ["cold_water", "hot_water", "electricity"];
+const METERED = ["cold_water", "hot_water", "electricity"] as const;
 
 const UNIT: Record<string, string> = {
   cold_water: "м³",
@@ -85,10 +71,8 @@ const LABEL: Record<Service, string> = {
   recalculation: "Перерасчёт",
 };
 
-// оплату житель меняет демо-кнопкой, остальное выводится из месяца
-const paidAt = new Map<number, string | null>();
+const paidAt = new Map<number, string>();
 
-// тысячные объёма * тариф (1/10000 рубля) дают 1/100000 копейки
 const kopecks = (volume: number, tariff: number) =>
   Math.round((volume * tariff) / 100000);
 
@@ -97,8 +81,8 @@ const metered = (
   volume: number,
   monthsBack: number,
 ): Schemas["ChargeLine"] => {
-  const [old, current] = TARIFF[service] ?? [0, 0];
-  const tariff = monthsBack <= INDEXED_SINCE ? current : old;
+  const [old, current] = TARIFF[service];
+  const tariff = monthsBack <= 2 ? current : old;
 
   return {
     service,
@@ -106,56 +90,31 @@ const metered = (
     amount: kopecks(volume, tariff),
     volume,
     tariff,
-    unit: UNIT[service] ?? null,
+    unit: UNIT[service],
   };
 };
 
-const chargeLines = (
-  flatArea: number,
-  monthsBack: number,
-): Schemas["ChargeLine"][] => [
+const lines = ({
+  flat,
+  monthsBack,
+}: Omit<Found, "id">): Schemas["ChargeLine"][] => [
   ...METERED.map((service) =>
-    metered(service, VOLUME[service]?.[monthsBack] ?? 0, monthsBack),
+    metered(service, VOLUME[service][monthsBack] ?? 0, monthsBack),
   ),
-  // отопительный сезон начался в текущем месяце: строка новая, разложить её
-  // на тариф и расход нельзя
   ...(monthsBack === 0 ? [metered("heating", 450, monthsBack)] : []),
-  metered("maintenance", flatArea * 10, monthsBack),
+  metered("maintenance", (flat.area ?? 5000) * 10, monthsBack),
   { service: "overhaul", label: LABEL.overhaul, amount: 118000 },
   { service: "waste", label: LABEL.waste, amount: 42000 },
 ];
 
-const findCharge = (rawChargeId: string) => {
-  const id = number(rawChargeId);
-
-  if (id === null) {
-    return null;
-  }
-
-  const monthsBack = id % 100;
-  const flat = findFlat(Math.floor(id / 100));
-
-  return flat && monthsBack < HISTORY ? { id, flat, monthsBack } : null;
-};
-
-type Found = NonNullable<ReturnType<typeof findCharge>>;
-
-const lines = ({ flat, monthsBack }: Pick<Found, "flat" | "monthsBack">) =>
-  chargeLines(flat.area ?? 5000, monthsBack);
-
 const total = (items: Schemas["ChargeLine"][]) =>
   items.reduce((sum, line) => sum + line.amount, 0);
 
-// старые месяцы оплачены десятого числа следующего
-const paid = ({ id, monthsBack }: Pick<Found, "id" | "monthsBack">) => {
-  if (paidAt.has(id)) {
-    return paidAt.get(id) ?? null;
-  }
-
-  return monthsBack >= 2
+const paid = ({ id, monthsBack }: Found) =>
+  paidAt.get(id) ??
+  (monthsBack >= 2
     ? `${period(monthsBack - 1).slice(0, 8)}10T09:00:00Z`
-    : null;
-};
+    : null);
 
 const listItem = (found: Found): Schemas["ChargeListItem"] => ({
   id: found.id,
@@ -166,10 +125,8 @@ const listItem = (found: Found): Schemas["ChargeListItem"] => ({
   paid_at: paid(found),
 });
 
-// начисления видит только подтвержденный собственник: арендатору и
-// неподтвержденному бэк отказывает, а не отдает пустой список
 const flatAccess = (flatId: number) => {
-  const residency = residencies().find((item) => item.flat_id === flatId);
+  const residency = residencyForFlat(flatId);
 
   if (!residency) {
     return notFound("Квартира не найдена");
@@ -196,34 +153,6 @@ const breakdown = (found: Found): Schemas["ChargeBreakdown"] => {
       .map((line) => line.service)
       .filter((service) => !current.some((line) => line.service === service)),
   ];
-
-  // целую строку бэк относит к расходу и ставит строки по размеру дельты
-  const breakdownLines = services.map((service) => {
-    const now = current.find((line) => line.service === service);
-    const before = previous.find((line) => line.service === service);
-    const delta = (now?.amount ?? 0) - (before?.amount ?? 0);
-    const tariffEffect =
-      now?.volume != null &&
-      now.tariff != null &&
-      before?.tariff != null &&
-      before.volume != null
-        ? kopecks(now.volume, now.tariff - before.tariff)
-        : 0;
-
-    return {
-      service,
-      label: (now ?? before)?.label ?? LABEL[service],
-      amount: now?.amount ?? 0,
-      delta,
-      tariff_effect: tariffEffect,
-      volume_effect: delta - tariffEffect,
-      appeared: !before,
-      disappeared: !now,
-      previous_amount: before?.amount ?? null,
-    };
-  });
-  breakdownLines.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-
   const meters = flatMeters(found.flat.id);
 
   return {
@@ -231,7 +160,32 @@ const breakdown = (found: Found): Schemas["ChargeBreakdown"] => {
     period: period(found.monthsBack),
     total: total(current),
     delta: total(current) - total(previous),
-    lines: breakdownLines,
+    lines: services
+      .map((service) => {
+        const now = current.find((line) => line.service === service);
+        const before = previous.find((line) => line.service === service);
+        const delta = (now?.amount ?? 0) - (before?.amount ?? 0);
+        const tariffEffect =
+          now?.volume != null &&
+          now.tariff != null &&
+          before?.tariff != null &&
+          before.volume != null
+            ? kopecks(now.volume, now.tariff - before.tariff)
+            : 0;
+
+        return {
+          service,
+          label: LABEL[service],
+          amount: now?.amount ?? 0,
+          delta,
+          tariff_effect: tariffEffect,
+          volume_effect: delta - tariffEffect,
+          appeared: !before,
+          disappeared: !now,
+          previous_amount: before?.amount ?? null,
+        };
+      })
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
     previous_period: hasPrevious ? period(found.monthsBack + 1) : null,
     previous_total: hasPrevious ? total(previous) : null,
     consumption: METERED.map((service) => ({
@@ -244,151 +198,139 @@ const breakdown = (found: Found): Schemas["ChargeBreakdown"] => {
         .reverse()
         .map((monthsBack) => ({
           period: period(monthsBack),
-          consumption: VOLUME[service]?.[monthsBack] ?? 0,
+          consumption: VOLUME[service][monthsBack] ?? 0,
         })),
-      house_average: HOUSE_AVERAGE[service] ?? null,
+      house_average: HOUSE_AVERAGE[service],
     })),
   };
 };
 
-// квитанция доступна тем же, кому доступна ее квартира
-const chargeAccess = (rawChargeId: string) => {
-  const found = findCharge(rawChargeId);
+const chargeAccess = (request: MockHttpRequest): Found | Reply => {
+  const id = number(request.params.charge_id);
+  const flat = id === null ? undefined : findFlat(Math.floor(id / 100));
 
-  if (!found) {
-    return { reply: notFound("Квитанция не найдена") };
+  if (id === null || !flat || id % 100 >= HISTORY) {
+    return notFound("Квитанция не найдена");
   }
 
-  const denied = flatAccess(found.flat.id);
-
-  return denied ? { reply: denied } : { found };
+  return flatAccess(flat.id) ?? { id, flat, monthsBack: id % 100 };
 };
 
+const TARIFFS = (
+  [
+    [6, "cold_water", 384000, "2026-07-01"],
+    [7, "hot_water", 2125000, "2026-07-01"],
+    [8, "electricity", 56200, "2026-07-01"],
+    [1, "cold_water", 351000, "2025-07-01"],
+    [2, "hot_water", 1980000, "2025-07-01"],
+    [3, "electricity", 52100, "2025-07-01"],
+    [4, "heating", 24500000, "2025-07-01"],
+    [5, "maintenance", 289000, "2025-07-01"],
+  ] as const
+).map(([id, service, value, validFrom]): Schemas["TariffItem"] => ({
+  id,
+  service,
+  label: LABEL[service],
+  value,
+  unit: UNIT[service],
+  valid_from: validFrom,
+  document: null,
+}));
+
 export const chargesConfigs = [
-  {
-    path: "/flats/:flat_id/charges" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const flat = findFlat(Number(request.params.flat_id));
+  endpoint("get", "/flats/:flat_id/charges", (request) => {
+    const flat = findFlat(Number(request.params.flat_id));
 
-        if (!flat) {
-          return notFound("Квартира не найдена");
-        }
+    if (!flat) {
+      return notFound("Квартира не найдена");
+    }
 
-        const denied = flatAccess(flat.id);
+    return (
+      flatAccess(flat.id) ??
+      ok(
+        page(
+          Array.from({ length: HISTORY }, (_, monthsBack) =>
+            listItem({ id: flat.id * 100 + monthsBack, flat, monthsBack }),
+          ),
+          request.query,
+          50,
+        ) satisfies Schemas["Page_ChargeListItem_"],
+      )
+    );
+  }),
+  endpoint("get", "/charges/:charge_id", (request) => {
+    const found = chargeAccess(request);
 
-        if (denied) {
-          return denied;
-        }
-
-        const limit = number(request.query.limit) ?? 50;
-        const offset = number(request.query.offset) ?? 0;
-        const items = Array.from({ length: HISTORY }, (_, monthsBack) =>
-          listItem({ id: chargeId(flat.id, monthsBack), flat, monthsBack }),
-        );
-
-        return ok({
-          items: items.slice(offset, offset + limit),
-          total: items.length,
-        } satisfies Schemas["Page_ChargeListItem_"]);
-      }),
-    ],
-  },
-  {
-    path: "/charges/:charge_id" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const { found, reply } = chargeAccess(request.params.charge_id);
-
-        if (!found) {
-          return reply;
-        }
-
-        const flat = found.flat;
-        const items = lines(found);
-        const house = findHouse(flat.house_id);
-
-        return ok({
+    return isReply(found)
+      ? found
+      : ok({
           ...listItem(found),
-          address: house ? address(house) : "",
-          flat_number: flat.number,
-          lines: items,
-          flat_area: flat.area,
+          address: addressOf(found.flat.house_id),
+          flat_number: found.flat.number,
+          lines: lines(found),
+          flat_area: found.flat.area,
         } satisfies Schemas["ChargeCard"]);
-      }),
-    ],
-  },
-  {
-    path: "/charges/:charge_id/breakdown" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const { found, reply } = chargeAccess(request.params.charge_id);
+  }),
+  endpoint("get", "/charges/:charge_id/breakdown", (request) => {
+    const found = chargeAccess(request);
 
-        return found ? ok(breakdown(found)) : reply;
-      }),
-    ],
-  },
-  {
-    path: "/charges/:charge_id/dispute" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const { found, reply } = chargeAccess(request.params.charge_id);
+    return isReply(found) ? found : ok(breakdown(found));
+  }),
+  endpoint("post", "/charges/:charge_id/dispute", (request) => {
+    const found = chargeAccess(request);
 
-        if (!found) {
-          return reply;
-        }
+    if (isReply(found)) {
+      return found;
+    }
 
-        const body = request.body as Schemas["DisputeChargeRequest"];
+    const comment = (request.body as Schemas["DisputeChargeRequest"]).comment;
 
-        if (typeof body.comment !== "string") {
-          return badRequest("Нужен комментарий");
-        }
+    if (typeof comment !== "string") {
+      return badRequest("Нужен комментарий");
+    }
 
-        const { delta } = breakdown(found);
-        const [year, month] = period(found.monthsBack).split("-");
-        const created = createRequest(found.flat.house_id, {
-          category: "charge_dispute",
-          description: `Начисление за ${month}.${year} изменилось на ${delta < 0 ? "-" : "+"}${(Math.abs(delta) / 100).toFixed(2)} руб.\n\n${body.comment.trim()}`,
-          flat_id: found.flat.id,
-          photos: [],
-          llm_suggested: false,
-          llm_accepted: false,
-        });
+    const { delta } = breakdown(found);
+    const [year, month] = period(found.monthsBack).split("-");
+    const created = createRequest(found.flat.house_id, {
+      category: "charge_dispute",
+      description: `Начисление за ${month}.${year} изменилось на ${delta < 0 ? "-" : "+"}${(Math.abs(delta) / 100).toFixed(2)} руб.\n\n${comment.trim()}`,
+      flat_id: found.flat.id,
+      photos: [],
+      llm_suggested: false,
+      llm_accepted: false,
+    });
 
-        return ok({
-          request_id: created.id,
-        } satisfies Schemas["DisputeChargeResponse"]);
-      }),
-    ],
-  },
-  {
-    path: "/charges/:charge_id/pay" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const { found, reply } = chargeAccess(request.params.charge_id);
+    return ok({
+      request_id: created.id,
+    } satisfies Schemas["DisputeChargeResponse"]);
+  }),
+  endpoint("post", "/charges/:charge_id/pay", (request) => {
+    const found = chargeAccess(request);
 
-        if (!found) {
-          return reply;
-        }
+    if (isReply(found)) {
+      return found;
+    }
 
-        if (paid(found) !== null) {
-          return conflict("Квитанция уже оплачена");
-        }
+    if (paid(found) !== null) {
+      return conflict("Квитанция уже оплачена");
+    }
 
-        const at = new Date().toISOString();
-        paidAt.set(found.id, at);
+    const at = new Date().toISOString();
+    paidAt.set(found.id, at);
 
-        return ok({
-          charge_id: found.id,
-          paid_at: at,
-          is_demo: true,
-        } satisfies Schemas["PayChargeResponse"]);
-      }),
-    ],
-  },
+    return ok({
+      charge_id: found.id,
+      paid_at: at,
+      is_demo: true,
+    } satisfies Schemas["PayChargeResponse"]);
+  }),
+  endpoint("get", "/houses/:house_id/tariffs", (request) => {
+    const house = findHouse(Number(request.params.house_id));
+
+    if (!house || !residencyForHouse(house.id)) {
+      return notFound("Дом не найден");
+    }
+
+    return ok(house.is_connected ? TARIFFS : []);
+  }),
 ];

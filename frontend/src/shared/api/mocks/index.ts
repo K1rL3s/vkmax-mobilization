@@ -9,7 +9,6 @@ import { adminVerificationsConfigs } from "./admin-verifications";
 import { announcementsConfigs } from "./announcements";
 import { appointmentsConfigs } from "./appointments";
 import { chargesConfigs } from "./charges";
-import { demoConfigs } from "./demo";
 import { flatInvitesConfigs } from "./flat-invites";
 import { flatsConfigs } from "./flats";
 import { housesConfigs } from "./houses";
@@ -31,7 +30,6 @@ export const mockConfigs = [
   ...notificationsConfigs,
   ...appointmentsConfigs,
   ...announcementsConfigs,
-  ...demoConfigs,
   ...adminRequestsConfigs,
   ...adminAnnouncementsConfigs,
   ...adminPollsConfigs,
@@ -41,5 +39,3 @@ export const mockConfigs = [
   ...adminAnalyticsConfigs,
   ...adminOrgConfigs,
 ];
-
-export { resetState } from "./state";

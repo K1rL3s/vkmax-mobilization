@@ -1,15 +1,213 @@
 import type { components } from "../../schema/generated";
 
+import { fileUrl } from "./files";
+import { addressOf, findHouse } from "./houses";
+import { residencyForHouse } from "./profile";
+import { days, minutes, shift } from "./time";
+
 type Schemas = components["schemas"];
 
-import { fileUrl } from "./files";
-import { address, findHouse } from "./houses";
-import { residencyForHouse } from "./profile";
-import { SEED_REQUESTS, request, type MockRequest } from "./requests-seed";
-import { minutes, shift } from "./time";
+type MockRequest = {
+  id: number;
+  house_id: number;
+  created_at: string;
+  category: Schemas["RequestCategory"];
+  description: string;
+  status: Schemas["RequestStatus"];
+  channel: Schemas["RequestChannel"];
+  has_photos: boolean;
+  group_size: number;
+  group_id: number | null;
+  flat_number: string | null;
+  executor_name: string | null;
+  rating: number | null;
+  feedback: string | null;
+  has_result_photos: boolean;
+  deadline_at: string | null;
+  parent_request_id: number | null;
+  completion_reason: Schemas["RequestCompletionReason"] | null;
+  photo_names: string[];
+  messages: { after_minutes: number; text: string }[];
+};
 
-// копия CATEGORY_RULES бэка: справочник категорий отдаёт те же подписи,
-// зоны и нормативы
+const request = (
+  fields: Pick<
+    MockRequest,
+    "id" | "category" | "description" | "status" | "created_at"
+  > &
+    Partial<MockRequest>,
+): MockRequest => {
+  const item: MockRequest = {
+    house_id: 1,
+    channel: "miniapp",
+    has_photos: true,
+    group_size: 1,
+    group_id: null,
+    flat_number: "45",
+    executor_name: null,
+    rating: null,
+    feedback: null,
+    has_result_photos: false,
+    deadline_at: null,
+    parent_request_id: null,
+    completion_reason: null,
+    photo_names: [],
+    messages: [],
+    ...fields,
+  };
+
+  if (item.status === "done" && item.completion_reason === null) {
+    item.completion_reason = "resident_accepted";
+  }
+
+  return item;
+};
+
+const requests: MockRequest[] = [
+  request({
+    id: 145,
+    category: "water_supply",
+    description: "Нет холодной воды",
+    status: "accepted",
+    created_at: days(-2),
+    deadline_at: minutes(20 * 60),
+    messages: [
+      {
+        after_minutes: 26,
+        text: "Авария на водоводе, работы ведёт Водоканал. Передали вашу заявку, следим за сроками.",
+      },
+    ],
+  }),
+  request({
+    id: 142,
+    category: "leak",
+    description: "Протечка, 2-й подъезд",
+    status: "in_progress",
+    created_at: days(-3),
+    deadline_at: minutes(332),
+    group_size: 7,
+    group_id: 12,
+    executor_name: "Сантехник Алексей Петров",
+    messages: [
+      {
+        after_minutes: 18,
+        text: "Заявку приняли, передаём сантехнику. Напишем, когда назначим время.",
+      },
+      {
+        after_minutes: 104,
+        text: "Сантехник придёт сегодня до 16:00. Обеспечьте, пожалуйста, доступ в квартиру.",
+      },
+    ],
+  }),
+  request({
+    id: 141,
+    category: "electricity",
+    description: "Снова не горит свет на 5 этаже",
+    status: "in_progress",
+    created_at: days(-1),
+    deadline_at: minutes(10 * 60),
+    parent_request_id: 131,
+  }),
+  request({
+    id: 139,
+    category: "heating",
+    description: "Холодные батареи в квартире",
+    status: "in_progress",
+    created_at: days(-5),
+    deadline_at: minutes(-190),
+  }),
+  request({
+    id: 137,
+    category: "elevator",
+    description: "Не закрывается дверь лифта",
+    status: "on_review",
+    created_at: days(-2),
+    deadline_at: days(-1),
+    executor_name: "Механик Ильдар Гафуров",
+    has_result_photos: true,
+    messages: [
+      {
+        after_minutes: 1330,
+        text: "Заменили доводчик двери. Посмотрите, пожалуйста, и примите работу.",
+      },
+    ],
+  }),
+  request({
+    id: 133,
+    category: "garbage",
+    description: "Не вывезли мусор с площадки",
+    status: "new",
+    created_at: minutes(-120),
+    deadline_at: minutes(22 * 60),
+    has_photos: false,
+  }),
+  request({
+    id: 131,
+    category: "electricity",
+    description: "Не горит свет на 5 этаже",
+    status: "done",
+    created_at: days(-16),
+    executor_name: "Электрик Олег Смирнов",
+    messages: [
+      {
+        after_minutes: 1425,
+        text: "Заменили лампу и датчик движения на 5 этаже.",
+      },
+    ],
+  }),
+  request({
+    id: 128,
+    category: "entrance",
+    description: "Разбито стекло в подъезде",
+    status: "done",
+    created_at: days(-20),
+    completion_reason: "auto_closed",
+  }),
+  request({
+    id: 126,
+    category: "yard",
+    description: "Яма у детской площадки",
+    status: "done",
+    created_at: days(-24),
+    rating: 4,
+    feedback: "Засыпали быстро, но асфальт положили не везде.",
+  }),
+  request({
+    id: 120,
+    category: "garbage",
+    description: "Мусор у контейнерной площадки",
+    status: "done",
+    created_at: days(-28),
+    rating: 5,
+  }),
+  request({
+    id: 118,
+    category: "meter_error",
+    description: "Ошибка в показаниях за июль",
+    status: "done",
+    created_at: days(-33),
+    rating: 4,
+    has_photos: false,
+  }),
+  request({
+    id: 112,
+    category: "charge_dispute",
+    description: "Спор по начислению за отопление",
+    status: "done",
+    created_at: days(-40),
+    rating: 5,
+    has_photos: false,
+  }),
+  request({
+    id: 108,
+    category: "other",
+    description: "Не работает домофон у первого подъезда",
+    status: "done",
+    created_at: days(-46),
+    rating: 5,
+  }),
+];
+
 const CATEGORY_RULES: Record<
   Schemas["RequestCategory"],
   { label: string; zone: Schemas["ResponsibilityZone"]; hours: number }
@@ -31,21 +229,13 @@ const CATEGORY_RULES: Record<
   other: { label: "Другое", zone: "management", hours: 72 },
 };
 
-const state = {
-  requests: [...SEED_REQUESTS],
-  nextRequestId: 150,
-};
-
-export const resetRequests = (): void => {
-  state.requests = [...SEED_REQUESTS];
-  state.nextRequestId = 150;
-};
+let nextRequestId = 150;
 
 export const houseRequests = (
   houseId: number,
   status: Schemas["RequestStatus"] | null,
 ): MockRequest[] =>
-  state.requests
+  requests
     .filter(
       (item) =>
         item.house_id === houseId &&
@@ -73,7 +263,6 @@ export const requestListItem = (
   completion_reason: item.completion_reason,
 });
 
-// заявка держит только случившееся; шаг помечается ролью того, кто его сделал
 const STEP: {
   status: Schemas["RequestStatus"];
   after_minutes: number;
@@ -102,20 +291,6 @@ const requestTimeline = (
   }));
 };
 
-// бэковая AUTO_CLOSE_AFTER: момент автозакрытия считает бэк, мок стоит на
-// его месте и считает так же - от шага «На приёмке»
-const autoCloseAt = (item: MockRequest): string | null => {
-  if (item.status !== "on_review") {
-    return null;
-  }
-
-  const sent = requestTimeline(item).find(
-    (entry) => entry.to_status === "on_review",
-  );
-
-  return sent ? shift(sent.at, 48 * 60) : null;
-};
-
 const RESULT_PHOTO: Schemas["FileRef"] = {
   name: "Фото исполнителя",
   url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23c7d4e0'/%3E%3C/svg%3E",
@@ -126,7 +301,6 @@ const PHOTO: Schemas["FileRef"] = {
   url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23d9d9d9'/%3E%3C/svg%3E",
 };
 
-// загруженные фото приезжают по именам, демо-заявки обходятся заглушкой
 const requestPhotos = (item: MockRequest): Schemas["FileRef"][] => {
   if (item.photo_names.length > 0) {
     return item.photo_names.map((name) => ({
@@ -139,13 +313,13 @@ const requestPhotos = (item: MockRequest): Schemas["FileRef"][] => {
 };
 
 export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
-  const house = findHouse(item.house_id);
+  const timeline = requestTimeline(item);
 
   return {
     ...requestListItem(item),
     house_id: item.house_id,
-    address: house ? address(house) : "",
-    org_name: house?.org?.name ?? null,
+    address: addressOf(item.house_id),
+    org_name: findHouse(item.house_id)?.org?.name ?? null,
     normative_hours: CATEGORY_RULES[item.category].hours,
     photos: requestPhotos(item),
     result_photos: item.has_result_photos ? [RESULT_PHOTO] : [],
@@ -155,49 +329,21 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
       author_name: "Диспетчер УК",
       text: message.text,
     })),
-    timeline: requestTimeline(item),
+    timeline,
     can_review: item.status === "on_review",
     can_rate:
       item.completion_reason === "resident_accepted" && item.rating === null,
     feedback: item.feedback,
     parent_request_id: item.parent_request_id,
     flat_id: residencyForHouse(item.house_id)?.flat_id ?? null,
-    auto_close_at: autoCloseAt(item),
+    auto_close_at:
+      item.status === "on_review" ? shift(timeline[3].at, 48 * 60) : null,
   };
 };
 
 export const findRequest = (requestId: number): MockRequest | undefined =>
-  state.requests.find((item) => item.id === requestId);
+  requests.find((item) => item.id === requestId);
 
-// приёмка закрывает заявку в обе стороны; отказ отличается причиной, по
-// которой заявку потом нельзя оценить
-export const acceptRequest = (item: MockRequest): MockRequest => {
-  item.status = "done";
-  item.completion_reason = "resident_accepted";
-
-  return item;
-};
-
-export const rejectRequest = (item: MockRequest): MockRequest => {
-  item.status = "done";
-  item.completion_reason = "resident_rejected";
-
-  return item;
-};
-
-export const rateRequest = (
-  item: MockRequest,
-  rating: number,
-  feedback: string | null,
-): MockRequest => {
-  item.rating = rating;
-  item.feedback = feedback;
-
-  return item;
-};
-
-// демо-соседи: у протечки уже собрана группа, к отоплению присоединиться
-// нельзя - окно склейки закрыто, но пожаловавшиеся соседи есть
 const NEIGHBOURS: Partial<Record<Schemas["RequestCategory"], number>> = {
   heating: 3,
   elevator: 1,
@@ -207,7 +353,7 @@ export const similarRequests = (
   houseId: number,
   category: Schemas["RequestCategory"],
 ): Schemas["SimilarRequestsResponse"] => {
-  const group = state.requests.find(
+  const group = requests.find(
     (item) =>
       item.house_id === houseId &&
       item.category === category &&
@@ -239,7 +385,7 @@ export const createRequest = (
   body: Schemas["CreateRequestRequest"],
 ): MockRequest => {
   const created = request({
-    id: state.nextRequestId,
+    id: nextRequestId++,
     house_id: houseId,
     category: body.category,
     description: body.description,
@@ -251,12 +397,10 @@ export const createRequest = (
     has_photos: (body.photos?.length ?? 0) > 0,
     photo_names: body.photos ?? [],
   });
-  state.nextRequestId += 1;
-  state.requests.push(created);
+  requests.push(created);
 
-  // присоединение растит группу: новое число квартир видят все её заявки
   if (created.group_id !== null) {
-    const members = state.requests.filter(
+    const members = requests.filter(
       (item) => item.group_id === created.group_id && item.id !== created.id,
     );
     const size = (members[0]?.group_size ?? 0) + 1;
@@ -269,15 +413,13 @@ export const createRequest = (
   return created;
 };
 
-// повтор наследует категорию и квартиру исходной заявки: житель жалуется на
-// ту же проблему, а не заводит новую
 export const repeatRequest = (
   item: MockRequest,
   description: string | null,
   photos: string[],
 ): MockRequest => {
   const created = request({
-    id: state.nextRequestId,
+    id: nextRequestId++,
     house_id: item.house_id,
     category: item.category,
     description: description?.trim() || `Повторно по заявке №${item.id}`,
@@ -289,8 +431,7 @@ export const repeatRequest = (
     has_photos: photos.length > 0,
     photo_names: photos,
   });
-  state.nextRequestId += 1;
-  state.requests.push(created);
+  requests.push(created);
 
   return created;
 };

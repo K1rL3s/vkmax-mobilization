@@ -23,8 +23,6 @@ export type MockFlat = {
   id: number;
   house_id: number;
   number: string;
-  // подъезд и площадь квартиры знает УК, и у части квартир их нет: на них
-  // держатся «Без подъезда» в непроголосовавших и квартиры вне расчёта кворума
   entrance: number | null;
   area: number | null;
   account_no: string;
@@ -41,20 +39,7 @@ export const ZHILSERVIS: Schemas["OrgContacts"] = {
   timezone: "Europe/Moscow",
 };
 
-// УК неподключённого дома известна из реестра лицензий, поэтому контакты у неё
-// есть, а кабинета в сервисе - нет
-export const LENINSKIY: Schemas["OrgContacts"] = {
-  id: 2,
-  name: "ООО «УК Ленинская»",
-  phone: "+7 843 200-40-40",
-  address: "Казань, ул. Ленина, 2",
-  license_no: "16-000456",
-  reception_note: null,
-  is_demo: false,
-  timezone: "Europe/Moscow",
-};
-
-export const HOUSES: MockHouse[] = [
+const HOUSES: MockHouse[] = [
   {
     id: 1,
     region: "Республика Татарстан",
@@ -117,134 +102,72 @@ export const HOUSES: MockHouse[] = [
     area: 310800,
     lat: 55.7841,
     lon: 49.1103,
-    org: LENINSKIY,
+    org: {
+      id: 2,
+      name: "ООО «УК Ленинская»",
+      phone: "+7 843 200-40-40",
+      address: "Казань, ул. Ленина, 2",
+      license_no: "16-000456",
+      reception_note: null,
+      is_demo: false,
+      timezone: "Europe/Moscow",
+    },
   },
 ];
+
+const flat = (
+  id: number,
+  number: string,
+  entrance: number | null,
+  area: number | null,
+  account_no: string,
+  house_id = 1,
+): MockFlat => ({ id, house_id, number, entrance, area, account_no });
 
 export const FLATS: MockFlat[] = [
-  {
-    id: 101,
-    house_id: 1,
-    number: "45",
-    entrance: 2,
-    area: 5420,
-    account_no: "1600450012",
-  },
-  {
-    id: 102,
-    house_id: 1,
-    number: "112",
-    entrance: 4,
-    area: 7310,
-    account_no: "1601120034",
-  },
-  {
-    id: 103,
-    house_id: 1,
-    number: "7",
-    entrance: 1,
-    area: 3890,
-    account_no: "1600070055",
-  },
-  {
-    id: 105,
-    house_id: 1,
-    number: "12",
-    entrance: 1,
-    area: 4165,
-    account_no: "1600120088",
-  },
-  {
-    id: 106,
-    house_id: 1,
-    number: "28",
-    entrance: 1,
-    area: null,
-    account_no: "1600280091",
-  },
-  {
-    id: 107,
-    house_id: 1,
-    number: "63",
-    entrance: 3,
-    area: 6180,
-    account_no: "1600630014",
-  },
-  {
-    id: 108,
-    house_id: 1,
-    number: "90",
-    entrance: 4,
-    area: null,
-    account_no: "1600900027",
-  },
-  {
-    id: 109,
-    house_id: 1,
-    number: "101",
-    entrance: 4,
-    area: 5875,
-    account_no: "1601010063",
-  },
-  {
-    id: 110,
-    house_id: 1,
-    number: "77",
-    entrance: 3,
-    area: 3240,
-    account_no: "1600770049",
-  },
-  {
-    id: 111,
-    house_id: 1,
-    number: "5",
-    entrance: null,
-    area: 4100,
-    account_no: "1600050072",
-  },
-  {
-    id: 104,
-    house_id: 2,
-    number: "3",
-    entrance: 1,
-    area: 4210,
-    account_no: "1400030077",
-  },
+  flat(101, "45", 2, 5420, "1600450012"),
+  flat(102, "112", 4, 7310, "1601120034"),
+  flat(103, "7", 1, 3890, "1600070055"),
+  flat(105, "12", 1, 4165, "1600120088"),
+  flat(106, "28", 1, null, "1600280091"),
+  flat(107, "63", 3, 6180, "1600630014"),
+  flat(108, "90", 4, null, "1600900027"),
+  flat(109, "101", 4, 5875, "1601010063"),
+  flat(110, "77", 3, 3240, "1600770049"),
+  flat(111, "5", null, 4100, "1600050072"),
+  flat(104, "3", 1, 4210, "1400030077", 2),
 ];
-
-export const TAKEN_FLAT_IDS = new Set<number>([103]);
 
 export const findHouse = (houseId: number): MockHouse | undefined =>
   HOUSES.find((house) => house.id === houseId);
 
-export const normalize = (value: string): string =>
+export const orgOf = (houseId: number): number | null =>
+  findHouse(houseId)?.org?.id ?? null;
+
+const normalize = (value: string): string =>
   value.trim().toLowerCase().replace(/\s+/g, " ");
 
 export const searchHouses = (query: string): MockHouse[] => {
   const words = normalize(query).split(" ").filter(Boolean);
 
-  if (words.length === 0) {
-    return [];
-  }
+  return words.length === 0
+    ? []
+    : HOUSES.filter((house) => {
+        const address = normalize(
+          `${house.city} ${house.street} ${house.building}`,
+        );
 
-  return HOUSES.filter((house) => {
-    const address = normalize(
-      `${house.city} ${house.street} ${house.building}`,
-    );
-
-    return words.every((word) => address.includes(word));
-  });
+        return words.every((word) => address.includes(word));
+      });
 };
 
 export const houseFlats = (houseId: number, query: string): MockFlat[] => {
   const normalized = normalize(query);
   const flats = FLATS.filter((flat) => flat.house_id === houseId);
 
-  if (!normalized) {
-    return flats;
-  }
-
-  return flats.filter((flat) => flat.number.toLowerCase() === normalized);
+  return normalized
+    ? flats.filter((flat) => flat.number.toLowerCase() === normalized)
+    : flats;
 };
 
 export const findFlat = (flatId: number): MockFlat | undefined =>
@@ -252,6 +175,12 @@ export const findFlat = (flatId: number): MockFlat | undefined =>
 
 export const address = (house: MockHouse): string =>
   `${house.city}, ул. ${house.street}, д. ${house.building}`;
+
+export const addressOf = (houseId: number): string => {
+  const house = findHouse(houseId);
+
+  return house ? address(house) : "";
+};
 
 export const houseListItem = (house: MockHouse): Schemas["HouseListItem"] => ({
   id: house.id,
@@ -269,5 +198,22 @@ export const flatListItem = (flat: MockFlat): Schemas["FlatListItem"] => ({
   number: flat.number,
   entrance: flat.entrance,
   area: flat.area,
-  is_taken: TAKEN_FLAT_IDS.has(flat.id),
+  is_taken: flat.id === 103,
 });
+
+const demand = new Map<number, number>([[4, 11]]);
+
+const demandSent = new Set<number>();
+
+export const signalDemand = (houseId: number): void => {
+  if (!demandSent.has(houseId)) {
+    demand.set(houseId, demandTotal(houseId) + 1);
+    demandSent.add(houseId);
+  }
+};
+
+export const isDemandSent = (houseId: number): boolean =>
+  demandSent.has(houseId);
+
+export const demandTotal = (houseId: number): number =>
+  demand.get(houseId) ?? 0;

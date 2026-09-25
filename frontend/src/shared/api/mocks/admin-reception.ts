@@ -1,7 +1,7 @@
 import type { components } from "../schema/generated";
 
 import { houseResidents } from "./admin-houses";
-import { badRequest, notFound, ok, route } from "./reply";
+import { badRequest, endpoint, notFound, ok } from "./reply";
 import {
   accessRequestGrid,
   createAccessRequest,
@@ -15,13 +15,8 @@ import {
 
 type Schemas = components["schemas"];
 
-// X-Org-Id мок не сверяет, как и остальные админские файлы: кабинет работает
-// с «Жилсервисом», чьи дома, заявки и часы приёма лежат в посеве. Иначе
-// переключение организации уводило бы часы в пустую сетку чужой УК
 const ORG_ID = 1;
 
-// границы - из ReceptionService.set_windows бэка: окно внутри суток, слот от
-// пяти минут до четырёх часов и не длиннее самого окна
 const windowError = (
   window: Schemas["ReceptionWindowInput"],
 ): string | null => {
@@ -42,9 +37,6 @@ const windowError = (
     : null;
 };
 
-// границы - из AccessService.create бэка: причина непустая, окна и квартиры
-// есть, в окно помещается хотя бы одна квартира, день не прошёл, окна не
-// повторяются и все лежат в этом дне
 const createError = (
   body: Schemas["CreateAccessRequestRequest"],
 ): string | null => {
@@ -80,99 +72,60 @@ const createError = (
 };
 
 export const adminReceptionConfigs = [
-  {
-    path: "/admin/appointments" as const,
-    method: "get" as const,
-    routes: [
-      route((request) =>
-        // «без даты - на сегодня», как написано в контракте
-        ok(orgAppointments(ORG_ID, request.query.on_date ?? todayIso())),
-      ),
-    ],
-  },
-  {
-    path: "/admin/reception/windows" as const,
-    method: "get" as const,
-    routes: [route(() => ok(receptionWindows(ORG_ID)))],
-  },
-  {
-    path: "/admin/reception/windows" as const,
-    method: "put" as const,
-    routes: [
-      route((request) => {
-        const body = request.body as Schemas["SetReceptionWindowsRequest"];
-        const invalid = body.windows.map(windowError).find(Boolean);
+  endpoint("get", "/admin/appointments", (request) =>
+    ok(orgAppointments(ORG_ID, request.query.on_date ?? todayIso())),
+  ),
+  endpoint("get", "/admin/reception/windows", () =>
+    ok(receptionWindows(ORG_ID)),
+  ),
+  endpoint("put", "/admin/reception/windows", (request) => {
+    const body = request.body as Schemas["SetReceptionWindowsRequest"];
+    const invalid = body.windows.map(windowError).find(Boolean);
 
-        if (invalid) {
-          return badRequest(invalid);
-        }
+    if (invalid) {
+      return badRequest(invalid);
+    }
 
-        return ok(setReceptionWindows(ORG_ID, body.windows));
-      }),
-    ],
-  },
-  {
-    path: "/admin/access-requests" as const,
-    method: "get" as const,
-    routes: [route(() => ok(orgAccessRequests(ORG_ID)))],
-  },
-  {
-    path: "/admin/access-requests/:access_request_id" as const,
-    method: "get" as const,
-    routes: [
-      route((request) => {
-        const found = findAccessRequest(
-          Number(request.params.access_request_id),
-        );
+    return ok(setReceptionWindows(ORG_ID, body.windows));
+  }),
+  endpoint("get", "/admin/access-requests", () =>
+    ok(orgAccessRequests(ORG_ID)),
+  ),
+  endpoint("get", "/admin/access-requests/:access_request_id", (request) => {
+    const found = findAccessRequest(Number(request.params.access_request_id));
 
-        // квартиры без ячейки бэк отдаёт только в ответе на создание: чтение
-        // сбора возвращает пустой список, и карточка их больше не показывает
-        return found
-          ? ok(accessRequestGrid(found))
-          : notFound("Запрос доступа не найден");
-      }),
-    ],
-  },
-  {
-    path: "/admin/access-requests" as const,
-    method: "post" as const,
-    routes: [
-      route((request) => {
-        const body = request.body as Schemas["CreateAccessRequestRequest"];
-        const invalid = createError(body);
+    return found
+      ? ok(accessRequestGrid(found))
+      : notFound("Запрос доступа не найден");
+  }),
+  endpoint("post", "/admin/access-requests", (request) => {
+    const body = request.body as Schemas["CreateAccessRequestRequest"];
+    const invalid = createError(body);
 
-        if (invalid) {
-          return badRequest(invalid);
-        }
+    if (invalid) {
+      return badRequest(invalid);
+    }
 
-        // предикат бэка: ячейку получает квартира с подтверждённым и не
-        // заблокированным жителем. Жители лежат в файле «Домов», поэтому
-        // считает его ручка, а не состояние
-        const eligible = new Map<
-          number,
-          { flat_id: number; flat_number: string }
-        >();
+    const eligible = new Map<
+      number,
+      { flat_id: number; flat_number: string }
+    >();
 
-        for (const resident of houseResidents(body.house_id)) {
-          const { flat_id: flatId, flat_number: flatNumber } = resident;
+    for (const resident of houseResidents(body.house_id)) {
+      const { flat_id, flat_number } = resident;
 
-          if (
-            resident.verified &&
-            resident.status !== "blocked" &&
-            flatId != null &&
-            flatNumber != null &&
-            body.flat_ids.includes(flatId) &&
-            !eligible.has(flatId)
-          ) {
-            eligible.set(flatId, {
-              flat_id: flatId,
-              flat_number: flatNumber,
-            });
-          }
-        }
+      if (
+        resident.verified &&
+        resident.status !== "blocked" &&
+        flat_id != null &&
+        flat_number != null &&
+        body.flat_ids.includes(flat_id) &&
+        !eligible.has(flat_id)
+      ) {
+        eligible.set(flat_id, { flat_id, flat_number });
+      }
+    }
 
-        return ok(createAccessRequest(body, [...eligible.values()]));
-      }),
-    ],
-  },
+    return ok(createAccessRequest(body, [...eligible.values()]));
+  }),
 ];
