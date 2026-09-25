@@ -1,7 +1,7 @@
 import type { components } from "../schema/generated";
 
 import { badRequest, conflict, notFound, number, ok, route } from "./reply";
-import { address, findHouse } from "./state";
+import { address, findHouse, houseFlats } from "./state";
 
 type Schemas = components["schemas"];
 
@@ -121,6 +121,9 @@ const HAND_MADE: Record<number, Seed[]> = {
   ],
 };
 
+const flatIdOf = (houseId: number, flatNumber: string | null | undefined) =>
+  flatNumber ? (houseFlats(houseId, flatNumber)[0]?.id ?? null) : null;
+
 const buildResidents = (houseId: number, count: number): Resident[] => {
   const flats = ORG_HOUSES.find((house) => house.id === houseId)?.flats_count;
   const seeds: Seed[] = [...(HAND_MADE[houseId] ?? [])];
@@ -142,7 +145,7 @@ const buildResidents = (houseId: number, count: number): Resident[] => {
     status: "active",
     verified: true,
     is_chairman: false,
-    flat_id: houseId * 1000 + Number(seed.flat_number),
+    flat_id: flatIdOf(houseId, seed.flat_number),
     block_reason: null,
     ...seed,
   }));
@@ -160,7 +163,8 @@ const findResident = (residentId: number) =>
     .flat()
     .find((resident) => resident.resident_id === residentId);
 
-const houseResidents = (houseId: number) => residents.get(houseId) ?? [];
+export const houseResidents = (houseId: number): Resident[] =>
+  residents.get(houseId) ?? [];
 
 const adminHouseCard = (
   item: (typeof ORG_HOUSES)[number],

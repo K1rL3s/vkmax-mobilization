@@ -1,0 +1,100 @@
+.Section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.Card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Muted {
+  gap: 4px;
+}
+
+.Summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.Days {
+  display: flex;
+  gap: 6px;
+}
+
+.Day {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background-color: var(--background-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.Day.selected {
+  background-color: var(--button-primary);
+  color: var(--text-primary-inverse-static);
+}
+
+/* точка отмечает дни, в которые приём идёт: в ките нет --text-accent, поэтому
+   цвет берётся у кнопки */
+.Dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: transparent;
+}
+
+.Dot.on {
+  background-color: var(--button-primary);
+}
+
+.Day.selected .Dot.on {
+  background-color: var(--text-primary-inverse-static);
+}
+
+.Switch {
+  padding: 0;
+  background: none;
+}
+
+/* подпись одной колонки может перенестись на 360px - поля равняются по низу,
+   а не по верху, иначе одно поле уезжает выше другого */
+.Pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+/* Input не тянется во флексе сам: без этого поле вылезает за колонку */
+.Field > * {
+  min-width: 0;
+}
+
+.Error {
+  color: var(--text-negative);
+}

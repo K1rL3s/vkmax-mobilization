@@ -1,4 +1,5 @@
 import alertIcon from "./alert.svg";
+import arrowUpIcon from "./arrow-up.svg";
 import buildingIcon from "./building.svg";
 import bulbIcon from "./bulb.svg";
 import cameraIcon from "./camera.svg";
@@ -39,6 +40,7 @@ import wrenchIcon from "./wrench.svg";
 
 export {
   alertIcon,
+  arrowUpIcon,
   buildingIcon,
   bulbIcon,
   cameraIcon,

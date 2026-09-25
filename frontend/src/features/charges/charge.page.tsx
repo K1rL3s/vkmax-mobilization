@@ -2,6 +2,7 @@ import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { errorDetail } from "@/shared/api/errors";
 import { cn } from "@/shared/lib/css";
 import { formatDay } from "@/shared/lib/format";
 import { useRouteParams } from "@/shared/lib/router";
@@ -28,12 +29,6 @@ import styles from "./charge.module.css";
 const paramsSchema = z.object({ chargeId: z.coerce.number().int().positive() });
 
 const signed = (kopecks: number) => formatMoney(kopecks, true);
-
-// сетевой сбой приходит не конвертом API, а исключением fetch: текст отказа
-// есть только у ответа бэка
-const errorDetail = (error: unknown) =>
-  z.object({ error: z.object({ detail: z.string() }) }).safeParse(error).data
-    ?.error.detail;
 
 const Amount = ({ value }: { value: string }) => (
   <Typography.Text variant="body-strong" color="primary">

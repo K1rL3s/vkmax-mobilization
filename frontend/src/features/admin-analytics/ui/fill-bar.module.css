@@ -1,0 +1,12 @@
+.Track {
+  overflow: hidden;
+  height: 4px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--text-secondary) 24%, transparent);
+}
+
+.Fill {
+  height: 100%;
+  border-radius: 999px;
+  background-color: var(--button-primary);
+}

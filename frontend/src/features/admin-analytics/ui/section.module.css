@@ -1,0 +1,5 @@
+.Section {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}

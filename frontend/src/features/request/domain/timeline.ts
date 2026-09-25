@@ -59,6 +59,11 @@ const stepState = (
   return index === current ? "current" : "future";
 };
 
+export type TimelineSource = Pick<
+  RequestCard,
+  "status" | "timeline" | "deadline_at" | "auto_close_at" | "completion_reason"
+> & { author_name?: string | null };
+
 export type TimelineStep = {
   status: RequestStatus;
   title: string;
@@ -66,29 +71,58 @@ export type TimelineStep = {
   state: "done" | "current" | "future";
 };
 
-const COMPLETION_HINT: Record<RequestCompletionReason, string> = {
-  resident_accepted: " · вы приняли работу",
-  resident_rejected: " · вы не приняли работу",
-  auto_closed: " · закрыта автоматически",
+export type TimelineAudience = "resident" | "staff";
+
+const COMPLETION_HINT: Record<
+  TimelineAudience,
+  Record<RequestCompletionReason, string>
+> = {
+  resident: {
+    resident_accepted: " · вы приняли работу",
+    resident_rejected: " · вы не приняли работу",
+    auto_closed: " · закрыта автоматически",
+  },
+  staff: {
+    resident_accepted: " · житель принял работу",
+    resident_rejected: " · житель не принял работу",
+    auto_closed: " · закрыта автоматически",
+  },
 };
 
-const closedBy = (status: RequestStatus, request: RequestCard) => {
+const REVIEW_HINT: Record<TimelineAudience, string> = {
+  resident: "После вашей проверки",
+  staff: "После проверки жителем",
+};
+
+const closedBy = (
+  status: RequestStatus,
+  request: TimelineSource,
+  audience: TimelineAudience,
+) => {
   if (status !== "done" || !request.completion_reason) {
     return "";
   }
 
-  return COMPLETION_HINT[request.completion_reason];
+  return COMPLETION_HINT[audience][request.completion_reason];
 };
 
-const futureHint = (status: RequestStatus, request: RequestCard) => {
+const futureHint = (
+  status: RequestStatus,
+  request: TimelineSource,
+  audience: TimelineAudience,
+) => {
   if (status === "on_review" && request.deadline_at) {
     return `Ожидается до ${formatDayTime(request.deadline_at)}`;
   }
 
   if (status === "done") {
+    if (audience === "staff" && request.author_name == null) {
+      return "Закрывает УК: жителя у заявки нет";
+    }
+
     return request.auto_close_at
-      ? `После вашей проверки или ${formatDayTime(request.auto_close_at)}`
-      : "После вашей проверки";
+      ? `${REVIEW_HINT[audience]} или ${formatDayTime(request.auto_close_at)}`
+      : REVIEW_HINT[audience];
   }
 
   return null;
@@ -98,7 +132,10 @@ const futureHint = (status: RequestStatus, request: RequestCard) => {
  * Ход заявки: `timeline` отдаёт только случившееся, поэтому будущие шаги
  * достраиваются из текущего статуса - житель должен видеть, что его ждёт.
  */
-export const buildTimeline = (request: RequestCard): TimelineStep[] => {
+export const buildTimeline = (
+  request: TimelineSource,
+  audience: TimelineAudience = "resident",
+): TimelineStep[] => {
   const happened = new Map(
     request.timeline.map((entry) => [entry.to_status, entry]),
   );
@@ -113,7 +150,7 @@ export const buildTimeline = (request: RequestCard): TimelineStep[] => {
         status,
         title: STEP_TITLE[status],
         hint: entry
-          ? formatDayTime(entry.at) + closedBy(status, request)
+          ? formatDayTime(entry.at) + closedBy(status, request, audience)
           : null,
         state,
       };
@@ -122,7 +159,7 @@ export const buildTimeline = (request: RequestCard): TimelineStep[] => {
     return {
       status,
       title: STEP_TITLE[status],
-      hint: futureHint(status, request),
+      hint: futureHint(status, request, audience),
       state,
     };
   });

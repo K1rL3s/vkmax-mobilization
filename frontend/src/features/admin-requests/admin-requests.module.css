@@ -1,0 +1,55 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 16px 24px;
+  min-width: 0;
+  overflow-x: clip;
+  overflow-wrap: anywhere;
+
+  h1,
+  h2 {
+    margin: 0;
+  }
+}
+.Text {
+  white-space: pre-wrap;
+}
+.Link {
+  color: var(--text-themed);
+  text-decoration: none;
+}
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+.Facts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+
+  div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  dt,
+  dd {
+    margin: 0;
+  }
+
+  dt {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  dd {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+  }
+}

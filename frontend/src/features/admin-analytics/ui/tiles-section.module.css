@@ -1,0 +1,20 @@
+.Grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.Tile {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Value {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+
+.alert {
+  color: var(--text-negative);
+}

@@ -1,0 +1,12 @@
+.Link {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.Grow {
+  min-width: 0;
+  flex: 1;
+}

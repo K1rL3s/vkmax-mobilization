@@ -7,7 +7,9 @@ import { orgParams } from "@/shared/model/session";
 
 import { nextOffset } from "./next-offset";
 
-export const useHouseResidents = (houseId: number) => {
+// размер страницы - аргумент: карточке дома хватает десятки, выбору квартир
+// в сборе доступа нужна полусотня, иначе «Показать ещё» жмут весь дом
+export const useHouseResidents = (houseId: number, limit = 10) => {
   const [query, setQuery] = useState("");
   const search = useDebounceValue(query.trim(), 300);
 
@@ -18,7 +20,7 @@ export const useHouseResidents = (houseId: number) => {
       params: {
         ...orgParams(),
         path: { house_id: houseId },
-        query: { q: search || undefined, limit: 10 },
+        query: { q: search || undefined, limit },
       },
     },
     {
