@@ -1,5 +1,5 @@
 import secrets
-from collections.abc import Awaitable, Callable
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -7,7 +7,12 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, RecordingBroker, make_notifications_service
+from tests.conftest import (
+    Fixture,
+    OrgHouseFlatUser,
+    RecordingBroker,
+    make_notifications_service,
+)
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -23,6 +28,10 @@ from zheka.core.errors import EntityNotFound, InvalidRequest
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.services.announcements import (
     ANNOUNCEMENT_TEXT_LIMIT,
+    EMPTY_TEXT,
+    NO_CHANNELS,
+    TEXT_TOO_LONG,
+    AnnouncementData,
     AnnouncementsService,
 )
 from zheka.core.services.events import EventsService
@@ -35,8 +44,6 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.events import events_table
-
-Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 TEXT = "Завтра отключат воду с 9 до 15"
 
@@ -131,26 +138,29 @@ async def test_house_of_another_org_is_not_found(
 
 
 @pytest.mark.parametrize(
-    ("text", "channels"),
-    [("   ", [AnnouncementChannel.CHAT]), (TEXT, [])],
+    ("text", "channels", "message"),
+    [
+        ("   ", [AnnouncementChannel.CHAT], EMPTY_TEXT),
+        (
+            "я" * (ANNOUNCEMENT_TEXT_LIMIT + 1),
+            [AnnouncementChannel.CHAT],
+            TEXT_TOO_LONG,
+        ),
+        (TEXT, [], NO_CHANNELS),
+    ],
+    ids=["empty", "too_long", "no_channels"],
 )
-async def test_empty_text_or_channels_are_rejected(
+async def test_empty_or_long_text_and_no_channels_are_rejected(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
-    publisher: TaskPublisher,
     text: str,
     channels: list[AnnouncementChannel],
+    message: str,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
 
-    with pytest.raises(InvalidRequest):
-        await _service(session, publisher).create(
-            data.org_id,
-            data.user_id,
-            [data.house_id],
-            text,
-            channels,
-        )
+    with pytest.raises(InvalidRequest, match=message):
+        await _create(_service(session), data, text=text, channels=channels)
 
 
 @pytest.mark.parametrize(
@@ -173,13 +183,7 @@ async def test_house_without_a_reachable_chat_is_reported_back(
     if chat is not None:
         await _bind_chat(session, data.house_id, **chat)
 
-    created = await _service(session, publisher).create(
-        data.org_id,
-        data.user_id,
-        [data.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT],
-    )
+    created = await _create(_service(session, publisher), data)
 
     await publisher.flush()
     assert list(created.houses_without_chat) == [data.house_id]
@@ -196,13 +200,7 @@ async def test_bound_chat_gets_the_announcement(
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _bind_chat(session, data.house_id)
 
-    created = await _service(session, publisher).create(
-        data.org_id,
-        data.user_id,
-        [data.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT],
-    )
+    created = await _create(_service(session, publisher), data)
 
     await publisher.flush()
     assert list(created.houses_without_chat) == []
@@ -223,12 +221,10 @@ async def test_direct_channel_reaches_active_residents_only(
     active = await _add_resident(session, data.house_id)
     await _add_resident(session, data.house_id, ResidentStatus.BLOCKED)
 
-    created = await _service(session, publisher).create(
-        data.org_id,
-        data.user_id,
-        [data.house_id],
-        TEXT,
-        [AnnouncementChannel.DIRECT],
+    created = await _create(
+        _service(session, publisher),
+        data,
+        channels=[AnnouncementChannel.DIRECT],
     )
 
     await publisher.flush()
@@ -249,12 +245,10 @@ async def test_both_channels_record_an_event_each(
     await _bind_chat(session, data.house_id)
     await _add_resident(session, data.house_id)
 
-    created = await _service(session, publisher).create(
-        data.org_id,
-        data.user_id,
-        [data.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT, AnnouncementChannel.DIRECT],
+    created = await _create(
+        _service(session, publisher),
+        data,
+        channels=[AnnouncementChannel.CHAT, AnnouncementChannel.DIRECT],
     )
 
     assert created.announcement.recipients_count == 2
@@ -275,20 +269,8 @@ async def test_resident_sees_only_announcements_of_own_house(
     mine = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     other = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     service = _service(session)
-    await service.create(
-        mine.org_id,
-        mine.user_id,
-        [mine.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT],
-    )
-    await service.create(
-        other.org_id,
-        other.user_id,
-        [other.house_id],
-        "Чужое объявление",
-        [AnnouncementChannel.CHAT],
-    )
+    await _create(service, mine)
+    await _create(service, other, text="Чужое объявление")
 
     items, total = await service.list_for_resident(mine.house_id, 20, 0)
 
@@ -304,13 +286,7 @@ async def test_org_list_filters_by_house_of_the_same_org(
     mine = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     foreign = await make_org_house_flat_user()
     service = _service(session)
-    await service.create(
-        mine.org_id,
-        mine.user_id,
-        [mine.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT],
-    )
+    await _create(service, mine)
 
     items, total = await service.list_for_org(mine.org_id, mine.house_id, 20, 0)
     assert total == 1
@@ -336,14 +312,7 @@ async def test_urgent_mark_reaches_the_feed_and_the_message(
     await _bind_chat(session, data.house_id)
     service = _service(session, publisher)
 
-    await service.create(
-        data.org_id,
-        data.user_id,
-        [data.house_id],
-        TEXT,
-        [AnnouncementChannel.CHAT],
-        urgent=urgent,
-    )
+    await _create(service, data, urgent=urgent)
 
     await publisher.flush()
     items, _ = await service.list_for_resident(data.house_id, 20, 0)
@@ -351,28 +320,31 @@ async def test_urgent_mark_reaches_the_feed_and_the_message(
     assert broker.enqueued(TaskName.BROADCAST_TO_CHATS)[0]["text"].startswith(heading)
 
 
-async def test_text_over_the_limit_is_rejected(
+async def test_text_of_the_limit_is_accepted(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
-    publisher: TaskPublisher,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
-    service = _service(session, publisher)
 
-    with pytest.raises(InvalidRequest):
-        await service.create(
-            data.org_id,
-            data.user_id,
-            [data.house_id],
-            "я" * (ANNOUNCEMENT_TEXT_LIMIT + 1),
-            [AnnouncementChannel.CHAT],
-        )
+    text = "я" * ANNOUNCEMENT_TEXT_LIMIT
+    created = await _create(_service(session), data, text=text)
 
-    created = await service.create(
+    assert created.announcement.text == text
+
+
+async def _create(
+    service: AnnouncementsService,
+    data: OrgHouseFlatUser,
+    *,
+    text: str = TEXT,
+    channels: Sequence[AnnouncementChannel] = (AnnouncementChannel.CHAT,),
+    urgent: bool = False,
+) -> AnnouncementData:
+    return await service.create(
         data.org_id,
         data.user_id,
         [data.house_id],
-        "я" * ANNOUNCEMENT_TEXT_LIMIT,
-        [AnnouncementChannel.CHAT],
+        text,
+        channels,
+        urgent=urgent,
     )
-    assert len(created.announcement.text) == ANNOUNCEMENT_TEXT_LIMIT

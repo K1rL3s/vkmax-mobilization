@@ -16,7 +16,6 @@ from zheka.api.schemas.orgs import (
 )
 from zheka.core.deeplinks import org_invite_payload
 from zheka.core.ids import UserId
-from zheka.core.roles import can_remove_member
 from zheka.core.services.orgs import OrgsService
 
 router = APIRouter(tags=["Админка: организация"], route_class=DishkaRoute)
@@ -66,7 +65,7 @@ async def list_org_members(
     return [
         OrgMemberItem.of(
             view,
-            can_remove=can_remove_member(current_org.role, view.member.role),
+            can_remove=current_org.role.can_remove_member(view.member.role),
         )
         for view in members
     ]

@@ -136,24 +136,18 @@ class PollsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
-    async def voted_flat_ids(
-        self,
-        poll_id: PollId,
-        *,
-        verified_only: bool,
-    ) -> Sequence[FlatId]:
+    async def voted_flat_ids(self, poll_id: PollId) -> Sequence[FlatId]:
         stmt = (
             select(poll_votes_table.c.flat_id)
             .where(
                 poll_votes_table.c.poll_id == poll_id,
                 poll_votes_table.c.flat_id.is_not(None),
+                poll_votes_table.c.counted_by_area.is_(True),
             )
             .distinct()
         )
-        if verified_only:
-            stmt = stmt.where(poll_votes_table.c.counted_by_area.is_(True))
         result = await self._session.execute(stmt)
-        return [FlatId(flat_id) for flat_id in result.scalars().all()]
+        return result.scalars().all()
 
     async def close(self, poll: Poll) -> None:
         poll.status = PollStatus.CLOSED
@@ -193,4 +187,4 @@ class PollsRepo(BaseAlchemyRepo):
             .distinct()
         )
         result = await self._session.execute(stmt)
-        return [UserId(user_id) for user_id in result.scalars().all()]
+        return result.scalars().all()

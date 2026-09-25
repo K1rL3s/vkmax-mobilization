@@ -28,8 +28,7 @@ def _admin_item(row: AdminReadingRow, files_service: FilesService) -> AdminReadi
         values=row.values,
         consumption=row.consumption,
         photos=[
-            FileRef(name=name, url=files_service.sign(name))
-            for name in row.reading.photo_paths
+            FileRef.signed(name, files_service) for name in row.reading.photo_paths
         ],
         is_below_previous=row.reading.is_below_previous,
         ocr_used=row.reading.ocr_used,

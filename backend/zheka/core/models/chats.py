@@ -1,16 +1,12 @@
 from datetime import datetime
-from typing import cast
 
-from zheka.base import ZhekaMutableType
+from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.ids import ChatPinId, HouseId, MaxChatId, UserId
-
-_UNSET_AT = cast(datetime, None)
-_UNSET_PIN_ID = cast(ChatPinId, None)
 
 
 class Chat(ZhekaMutableType):
     chat_id: MaxChatId
-    created_at: datetime = _UNSET_AT
+    created_at: datetime = UNSET
     house_id: HouseId | None = None
     title: str | None = None
     bound_by: UserId | None = None
@@ -21,8 +17,8 @@ class Chat(ZhekaMutableType):
 
 
 class ChatPin(ZhekaMutableType):
-    id: ChatPinId = _UNSET_PIN_ID
-    created_at: datetime = _UNSET_AT
+    id: ChatPinId = UNSET
+    created_at: datetime = UNSET
     chat_id: MaxChatId
     mid: str
     seq: int

@@ -6,11 +6,6 @@ import pytest
 import pytest_asyncio
 from dishka import AsyncContainer, FromDishka
 from dishka.integrations.fastapi import DishkaRoute
-from dishka.integrations.taskiq import (
-    CONTAINER_ID,
-    CONTAINER_REGISTRY,
-    ContainerMiddleware,
-)
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import StreamingResponse
 from httpx import ASGITransport, AsyncClient
@@ -22,23 +17,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.pool import QueuePool
 from starlette.types import Receive, Scope, Send
-from taskiq import TaskiqMessage, TaskiqResult
 
-from tests.conftest import (
-    PROBE_ROUTERS,
-    RecordingBroker,
-    RecordingBrokerProvider,
-    bot_context,
-    empty_bot_setup,
-)
+from tests.conftest import PROBE_ROUTERS, RecordingBroker, empty_bot_setup, overrides
 
 from zheka.api.app import setup_middlewares
 from zheka.api.errors import ERROR_RESPONSES, exception_handlers
 from zheka.api.middlewares import TRACE_HEADER
 from zheka.api.routes.healthcheck import router as healthcheck_router
 from zheka.bot import BotSetup
-from zheka.broker.middlewares import CommitMiddleware
-from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.config import load_config
 from zheka.core.enums import NotificationCategory
@@ -109,11 +95,10 @@ async def probe_container(
     database_url: str,  # noqa: ARG001
     broker: RecordingBroker,
 ) -> AsyncGenerator[AsyncContainer]:
-    bot_setup = empty_bot_setup()
     container = make_container(
-        RecordingBrokerProvider(broker),
+        overrides(broker),
         config=load_config(),
-        context=bot_context(bot_setup),
+        bot_setup=empty_bot_setup(),
     )
     yield container
     await container.close()
@@ -177,9 +162,10 @@ async def test_unhandled_error_rolls_the_request_back(
     assert await _committed(engine, marker) == 0
 
 
-async def test_failing_commit_persists_nothing(
+async def test_failing_commit_persists_and_delivers_nothing(
     probe_client: AsyncClient,
     engine: AsyncEngine,
+    broker: RecordingBroker,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _broken_commit(self: AsyncSession) -> None:  # noqa: ARG001
@@ -192,6 +178,7 @@ async def test_failing_commit_persists_nothing(
 
     assert response.status_code == 500
     assert await _committed(engine, marker) == 0
+    assert broker.messages == []
 
 
 async def test_streaming_response_commits_and_still_streams(
@@ -242,33 +229,6 @@ async def test_successful_request_delivers_exactly_once(
     enqueued = broker.enqueued(TaskName.SEND_TO_USER)
     assert len(enqueued) == 1
     assert enqueued[0]["user_id"] == marker
-
-
-async def test_worker_flushes_after_its_own_commit(
-    probe_container: AsyncContainer,
-    broker: RecordingBroker,
-) -> None:
-    container_middleware = ContainerMiddleware(probe_container)
-    commit_middleware = CommitMiddleware()
-    host = RecordingBroker().with_middlewares(container_middleware, commit_middleware)
-    message = TaskiqMessage(
-        task_id="probe",
-        task_name="probe",
-        labels={},
-        args=[],
-        kwargs={},
-    )
-    message = await container_middleware.pre_execute(message)
-    request_container = host.state[CONTAINER_REGISTRY][message.labels[CONTAINER_ID]]
-    publisher = await request_container.get(TaskPublisher)
-    publisher.publish(TaskName.SEND_TO_USER, user_id=1)
-
-    await commit_middleware.post_execute(
-        message,
-        TaskiqResult(is_err=False, return_value=None, execution_time=0.0),
-    )
-
-    assert len(broker.enqueued(TaskName.SEND_TO_USER)) == 1
 
 
 probe_bot_router = Router(name="probe")

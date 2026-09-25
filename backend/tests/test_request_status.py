@@ -7,8 +7,6 @@ from zheka.core.services.request_status import check_transition
 ALLOWED = (
     (Status.NEW, Status.ACCEPTED, Role.STAFF, True),
     (Status.NEW, Status.ACCEPTED, Role.EXECUTOR, True),
-    (Status.ACCEPTED, Status.IN_PROGRESS, Role.EXECUTOR, True),
-    (Status.IN_PROGRESS, Status.ON_REVIEW, Role.EXECUTOR, True),
     (Status.ON_REVIEW, Status.DONE, Role.RESIDENT, True),
     (Status.ON_REVIEW, Status.DONE, Role.SYSTEM, True),
     (Status.ON_REVIEW, Status.DONE, Role.STAFF, False),

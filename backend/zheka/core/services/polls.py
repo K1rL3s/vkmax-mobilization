@@ -14,7 +14,6 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, PollId, PollOptionId, UserId
 from zheka.core.models import Flat, Poll, PollOption, PollVote, Resident
-from zheka.core.roles import is_staff
 from zheka.core.services.events import EventsService
 from zheka.core.services.quorum import QuorumForecast, forecast
 from zheka.infra.database.repos.houses import HousesRepo
@@ -81,12 +80,6 @@ class PollResultsData(ZhekaType):
 class AdminPollListItemData(ZhekaType):
     item: PollListItemData
     address: str
-
-
-def _effective_status(poll: Poll, now: datetime) -> PollStatus:
-    if poll.status is PollStatus.CLOSED or poll.ends_at <= now:
-        return PollStatus.CLOSED
-    return PollStatus.ACTIVE
 
 
 def _clean_options(options: Sequence[str]) -> list[str]:
@@ -220,14 +213,13 @@ class PollsService:
             )
         }
 
-        result = [
+        return [
             AdminPollListItemData(
                 item=await self._list_item(poll, user_id, effective),
                 address=houses[poll.house_id].address,
             )
             for poll, effective in page
-        ]
-        return result, total
+        ], total
 
     async def vote(
         self,
@@ -240,7 +232,7 @@ class PollsService:
         if resident is None:
             raise EntityNotFound(POLL_NOT_FOUND)
 
-        if _effective_status(poll, datetime.now(UTC)) is PollStatus.CLOSED:
+        if poll.effective_status(datetime.now(UTC)) is PollStatus.CLOSED:
             raise InvalidState(POLL_ENDED)
         if resident.status is ResidentStatus.BLOCKED:
             raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
@@ -250,18 +242,16 @@ class PollsService:
         options = await self._polls.list_options(poll.id)
         chosen = _validated_option_ids(poll, options, option_ids)
 
-        existing = await self._polls.get_vote(poll.id, user_id)
-        if existing:
+        if await self._polls.get_vote(poll.id, user_id):
             raise InvalidState(ALREADY_VOTED)
 
-        counted_by_area = await self._counted_by_area(poll, resident)
         inserted = await self._polls.add_vote(
             poll.id,
             chosen,
             user_id,
             resident.id,
             resident.flat_id,
-            counted_by_area=counted_by_area,
+            counted_by_area=await self._counted_by_area(poll, resident),
         )
         if len(inserted) != len(chosen):
             raise InvalidState(ALREADY_VOTED)
@@ -281,13 +271,12 @@ class PollsService:
         poll = await self._get_poll(poll_id)
         await self._require_initiator_or_staff(poll, user_id)
 
-        voted_ids = set(await self._polls.voted_flat_ids(poll.id, verified_only=True))
+        voted_ids = set(await self._polls.voted_flat_ids(poll.id))
         flats = await self._house_flats(poll.house_id)
-        non_voters = [flat for flat in flats if flat.id not in voted_ids]
-        non_voters.sort(
+        return sorted(
+            [flat for flat in flats if flat.id not in voted_ids],
             key=lambda flat: (flat.entrance is None, flat.entrance or 0, flat.number),
         )
-        return non_voters
 
     async def close(self, poll_id: PollId, user_id: UserId) -> PollCardData:
         poll = await self._get_poll(poll_id)
@@ -296,10 +285,9 @@ class PollsService:
         return await self._card(poll, user_id)
 
     async def _card(self, poll: Poll, user_id: UserId) -> PollCardData:
-        status = _effective_status(poll, datetime.now(UTC))
+        status = poll.effective_status(datetime.now(UTC))
         options = await self._polls.list_options(poll.id)
         votes = await self._polls.get_vote(poll.id, user_id)
-        voted_flats = await self._voted_flats_count(poll.id)
         resident = await self._residents.get_for_house(user_id, poll.house_id)
         can_vote = (
             resident is not None
@@ -313,9 +301,9 @@ class PollsService:
             options=options,
             can_vote=can_vote,
             can_manage=await self._can_manage(poll, user_id),
-            my_option_ids=[PollOptionId(vote.option_id) for vote in votes],
+            my_option_ids=[vote.option_id for vote in votes],
             voted=bool(votes),
-            voted_flats=voted_flats,
+            voted_flats=await self._voted_flats_count(poll.id),
         )
 
     async def _list_item(
@@ -324,13 +312,11 @@ class PollsService:
         user_id: UserId,
         status: PollStatus,
     ) -> PollListItemData:
-        votes = await self._polls.get_vote(poll.id, user_id)
-        voted_flats = await self._voted_flats_count(poll.id)
         return PollListItemData(
             poll=poll,
             status=status,
-            voted=bool(votes),
-            voted_flats=voted_flats,
+            voted=bool(await self._polls.get_vote(poll.id, user_id)),
+            voted_flats=await self._voted_flats_count(poll.id),
         )
 
     async def _results(self, poll: Poll) -> PollResultsData:
@@ -338,28 +324,25 @@ class PollsService:
         votes = await self._polls.count_votes(poll.id)
         flats = await self._house_flats(poll.house_id)
         areas_by_flat = {flat.id: flat.area for flat in flats}
-        flats_without_area = sum(1 for flat in flats if flat.area is None)
 
         weighted = [vote for vote in votes if vote.counted_by_area]
         voted_flat_ids = {vote.flat_id for vote in weighted if vote.flat_id is not None}
         unverified_flats = len(
             {vote.user_id for vote in votes if not vote.counted_by_area},
         )
-        poll_forecast = forecast(
-            [areas_by_flat.get(flat_id) for flat_id in voted_flat_ids],
-            list(areas_by_flat.values()),
-            unverified_flats,
-        )
-
-        option_counts = [
-            self._option_count(option, weighted, areas_by_flat) for option in options
-        ]
         return PollResultsData(
             poll=poll,
-            status=_effective_status(poll, datetime.now(UTC)),
-            forecast=poll_forecast,
-            options=option_counts,
-            flats_without_area=flats_without_area,
+            status=poll.effective_status(datetime.now(UTC)),
+            forecast=forecast(
+                [areas_by_flat.get(flat_id) for flat_id in voted_flat_ids],
+                list(areas_by_flat.values()),
+                unverified_flats,
+            ),
+            options=[
+                self._option_count(option, weighted, areas_by_flat)
+                for option in options
+            ],
+            flats_without_area=sum(1 for flat in flats if flat.area is None),
         )
 
     @staticmethod
@@ -383,11 +366,10 @@ class PollsService:
     async def _counted_by_area(self, poll: Poll, resident: Resident) -> bool:
         if resident.verified_at is None or resident.flat_id is None:
             return False
-        weighted_flats = await self._polls.voted_flat_ids(poll.id, verified_only=True)
-        return resident.flat_id not in weighted_flats
+        return resident.flat_id not in await self._polls.voted_flat_ids(poll.id)
 
     async def _voted_flats_count(self, poll_id: PollId) -> int:
-        return len(await self._polls.voted_flat_ids(poll_id, verified_only=True))
+        return len(await self._polls.voted_flat_ids(poll_id))
 
     async def _house_flats(self, house_id: HouseId) -> Sequence[Flat]:
         flats, _total = await self._houses.list_flats(
@@ -425,7 +407,7 @@ class PollsService:
         if poll.org_id is None:
             return False
         member = await self._orgs.get_member(poll.org_id, user_id)
-        return member is not None and is_staff(member.role)
+        return member is not None and member.role.is_staff
 
 
 def _by_status(
@@ -433,7 +415,7 @@ def _by_status(
     status: PollStatus | None,
 ) -> list[tuple[Poll, PollStatus]]:
     now = datetime.now(UTC)
-    dated = [(poll, _effective_status(poll, now)) for poll in polls]
+    dated = [(poll, poll.effective_status(now)) for poll in polls]
     if status is not None:
         dated = [pair for pair in dated if pair[1] is status]
     dated.sort(key=lambda pair: (pair[0].created_at, pair[0].id), reverse=True)

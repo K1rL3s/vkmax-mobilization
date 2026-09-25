@@ -170,15 +170,7 @@ async def create_phone_request(
 ) -> AdminRequestCard:
     data = await admin_requests_service.create_phone(
         current_org.org_id,
-        PhoneRequestDraft(
-            house_id=body.house_id,
-            category=body.category,
-            description=body.description,
-            flat_id=body.flat_id,
-            caller_name=body.caller_name,
-            caller_phone=body.caller_phone,
-            resident_id=body.resident_id,
-        ),
+        PhoneRequestDraft(**body.model_dump()),
         current_org.user_id,
     )
     return _card(data, files_service)

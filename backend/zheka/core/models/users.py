@@ -1,19 +1,14 @@
 from datetime import datetime
-from typing import cast
 
-from zheka.base import ZhekaMutableType
+from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import NotificationCategory, NotificationLevel
 from zheka.core.ids import MaxChatId, MaxUserId, NotificationSettingId, UserId
 
-_UNSET_AT = cast(datetime, None)
-_UNSET_USER_ID = cast(UserId, None)
-_UNSET_NOTIFICATION_SETTING_ID = cast(NotificationSettingId, None)
-
 
 class User(ZhekaMutableType):
-    id: UserId = _UNSET_USER_ID
-    created_at: datetime = _UNSET_AT
-    updated_at: datetime = _UNSET_AT
+    id: UserId = UNSET
+    created_at: datetime = UNSET
+    updated_at: datetime = UNSET
     max_user_id: MaxUserId
     name: str
     username: str | None = None
@@ -24,7 +19,7 @@ class User(ZhekaMutableType):
 
 
 class NotificationSetting(ZhekaMutableType):
-    id: NotificationSettingId = _UNSET_NOTIFICATION_SETTING_ID
+    id: NotificationSettingId = UNSET
     user_id: UserId
     category: NotificationCategory
     level: NotificationLevel

@@ -1,18 +1,13 @@
 from datetime import datetime
-from typing import cast
 
-from zheka.base import ZhekaMutableType, Zoned
+from zheka.base import UNSET, ZhekaMutableType, Zoned
 from zheka.core.enums import OrgRole
 from zheka.core.ids import OrgId, OrgMemberId, UserId
 
-_UNSET_AT = cast(datetime, None)
-_UNSET_ORG_ID = cast(OrgId, None)
-_UNSET_ORG_MEMBER_ID = cast(OrgMemberId, None)
-
 
 class Organization(ZhekaMutableType, Zoned):
-    id: OrgId = _UNSET_ORG_ID
-    created_at: datetime = _UNSET_AT
+    id: OrgId = UNSET
+    created_at: datetime = UNSET
     name: str
     inn: str
     license_no: str | None = None
@@ -26,7 +21,7 @@ class Organization(ZhekaMutableType, Zoned):
 
 class OrgSettings(ZhekaMutableType):
     org_id: OrgId
-    updated_at: datetime = _UNSET_AT
+    updated_at: datetime = UNSET
     meter_window_day_from: int = 15
     meter_window_day_to: int = 25
     meter_window_always_open: bool = False
@@ -35,8 +30,8 @@ class OrgSettings(ZhekaMutableType):
 
 
 class OrgMember(ZhekaMutableType):
-    id: OrgMemberId = _UNSET_ORG_MEMBER_ID
-    created_at: datetime = _UNSET_AT
+    id: OrgMemberId = UNSET
+    created_at: datetime = UNSET
     org_id: OrgId
     user_id: UserId
     role: OrgRole

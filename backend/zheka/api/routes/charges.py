@@ -48,10 +48,7 @@ async def list_house_tariffs(
             (
                 None
                 if tariff.document_url is None
-                else FileRef(
-                    name=tariff.document_url,
-                    url=files_service.sign(tariff.document_url),
-                )
+                else FileRef.signed(tariff.document_url, files_service)
             ),
         )
         for tariff in tariffs

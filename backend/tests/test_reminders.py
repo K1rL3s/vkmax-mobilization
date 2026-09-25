@@ -7,7 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import AsyncTaskiqDecoratedTask, InMemoryBroker
 
-from tests.conftest import RecordingBroker, freeze_now, make_notifications_service
+from tests.conftest import RecordingBroker, freeze_now, reminders_service
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -39,11 +39,9 @@ from zheka.core.ids import (
     PollId,
     UserId,
 )
-from zheka.core.services.events import EventsService
 from zheka.core.services.readings import current_period
 from zheka.core.services.reminders import (
     ReadingReminder,
-    RemindersService,
     reading_reminder,
 )
 from zheka.infra.database.models import (
@@ -62,14 +60,7 @@ from zheka.infra.database.models import (
     Resident,
     User,
 )
-from zheka.infra.database.repos.chats import ChatsRepo
-from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
-from zheka.infra.database.repos.meters import MetersRepo
-from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.infra.database.repos.polls import PollsRepo
-from zheka.infra.database.repos.reception import ReceptionRepo
-from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.meters import meters_table
@@ -295,14 +286,13 @@ async def _poll(
     author = User(max_user_id=MaxUserId(secrets.randbits(40)), name="Председатель")
     session.add(author)
     await session.flush()
-    now = NOW
     poll = Poll(
         house_id=house_id,
         created_by_user_id=author.id,
         created_by_role="chairman",
         title="Ремонт подъезда",
-        starts_at=now - timedelta(days=5),
-        ends_at=now + ends_in,
+        starts_at=NOW - timedelta(days=5),
+        ends_at=NOW + ends_in,
         status=status,
     )
     session.add(poll)
@@ -559,7 +549,7 @@ async def test_each_moment_of_each_window_is_reminded_once(
     )
     flat_id, user_id = await _resident(session, house_id)
     await _meter(session, flat_id)
-    service = _service(session, publisher)
+    service = reminders_service(session, publisher)
 
     for day in (date(2026, 9, 15), date(2026, 9, 23), date(2026, 10, 15)):
         await service.remind_readings(_noon(day))
@@ -567,21 +557,6 @@ async def test_each_moment_of_each_window_is_reminded_once(
     await publisher.flush()
 
     assert len(_to_users(broker, user_id)) == 3
-
-
-def _service(session: AsyncSession, publisher: TaskPublisher) -> RemindersService:
-    return RemindersService(
-        HousesRepo(session),
-        OrgsRepo(session),
-        MetersRepo(session),
-        ResidentsRepo(session),
-        PollsRepo(session),
-        ChatsRepo(session),
-        ReceptionRepo(session),
-        EventsRepo(session),
-        EventsService(EventsRepo(session)),
-        make_notifications_service(session, publisher),
-    )
 
 
 async def _wrapping(
@@ -606,7 +581,9 @@ async def test_a_reading_from_the_head_of_a_wrapping_window_closes_it(
 ) -> None:
     user_id = await _wrapping(session, 25, 5, date(2026, 9, 1))
 
-    await _service(session, publisher).remind_readings(_noon(date(2026, 10, 3)))
+    await reminders_service(session, publisher).remind_readings(
+        _noon(date(2026, 10, 3)),
+    )
     await publisher.flush()
 
     assert _to_users(broker, user_id) == []
@@ -618,7 +595,7 @@ async def test_a_reading_from_the_tail_of_a_wrapping_window_leaves_the_next_open
     broker: RecordingBroker,
 ) -> None:
     user_id = await _wrapping(session, 25, 1, date(2026, 9, 1))
-    service = _service(session, publisher)
+    service = reminders_service(session, publisher)
 
     await service.remind_readings(_noon(date(2026, 10, 25)))
     await service.remind_readings(_noon(date(2026, 10, 30)))
@@ -644,7 +621,7 @@ async def test_a_resident_of_two_houses_gets_each_window_of_each(
     second_flat, _ = await _resident(session, second, user_id=user_id)
     await _meter(session, first_flat)
     await _meter(session, second_flat)
-    service = _service(session, publisher)
+    service = reminders_service(session, publisher)
 
     await service.remind_readings(_noon(date(2026, 9, 15)))
     await service.remind_readings(_noon(date(2026, 9, 20)))
@@ -675,7 +652,9 @@ async def test_windows_opening_the_same_day_send_one_text_and_stamp_both(
     await _meter(session, first_flat)
     await _meter(session, second_flat)
 
-    await _service(session, publisher).remind_readings(_noon(date(2026, 9, 15)))
+    await reminders_service(session, publisher).remind_readings(
+        _noon(date(2026, 9, 15)),
+    )
     await publisher.flush()
 
     assert len(_to_users(broker, user_id)) == 1
@@ -693,7 +672,9 @@ async def test_a_house_without_an_org_gets_no_reading_reminder(
     flat_id, user_id = await _resident(session, house_id)
     await _meter(session, flat_id)
 
-    await _service(session, publisher).remind_readings(_noon(date(2026, 9, 1)))
+    await reminders_service(session, publisher).remind_readings(
+        _noon(date(2026, 9, 1)),
+    )
     await publisher.flush()
 
     assert _to_users(broker, user_id) == []
@@ -754,7 +735,7 @@ async def test_a_house_gets_the_reading_reminder_at_ten_of_its_own_day(
             await _house(session, window, zone),
         )
         await _meter(session, flat_id)
-    service = _service(session, publisher)
+    service = reminders_service(session, publisher)
 
     for now, reminded in (
         (datetime(2026, 9, 14, 22, tzinfo=UTC), {"Asia/Kamchatka"}),
@@ -776,22 +757,8 @@ async def test_the_poll_reminder_waits_for_ten_and_prints_the_local_end_date(
 ) -> None:
     house_id = await _house(session)
     _, user_id = await _resident(session, house_id)
-    author = User(max_user_id=MaxUserId(secrets.randbits(40)), name="Председатель")
-    session.add(author)
-    await session.flush()
-    session.add(
-        Poll(
-            house_id=house_id,
-            created_by_user_id=author.id,
-            created_by_role="chairman",
-            title="Ремонт подъезда",
-            starts_at=datetime(2026, 9, 10, tzinfo=UTC),
-            ends_at=datetime(2026, 9, 16, 22, tzinfo=UTC),
-            status=PollStatus.ACTIVE,
-        ),
-    )
-    await session.commit()
-    service = _service(session, publisher)
+    await _poll(session, house_id, datetime(2026, 9, 16, 22, tzinfo=UTC) - NOW)
+    service = reminders_service(session, publisher)
 
     await service.remind_polls(datetime(2026, 9, 15, 6, tzinfo=UTC))
     await publisher.flush()
@@ -813,7 +780,7 @@ async def test_the_verification_warning_waits_for_nine_of_the_local_day(
         await _house(session, timezone="Asia/Vladivostok"),
     )
     await _meter(session, flat_id, due=date(2026, 10, 15))
-    service = _service(session, publisher)
+    service = reminders_service(session, publisher)
 
     await service.warn_verification(datetime(2026, 9, 14, 22, tzinfo=UTC))
     await publisher.flush()
@@ -837,7 +804,7 @@ async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(
     )
     _, user_id = await _resident(session, house_id)
     await _appointment(session, house_id, user_id, date(2026, 9, 15), at=time(23))
-    service = _service(session, publisher)
+    service = reminders_service(session, publisher)
 
     await service.remind_appointments(datetime(2026, 9, 15, 8, tzinfo=UTC))
     await publisher.flush()
@@ -867,7 +834,7 @@ async def test_the_manual_reading_reminder_counts_the_day_in_local_time(
     )
     await session.commit()
 
-    await _service(session, publisher).remind_reading_laggards(
+    await reminders_service(session, publisher).remind_reading_laggards(
         [house_id],
         date(2026, 9, 1),
         datetime(2026, 9, 15, 15, tzinfo=UTC),

@@ -17,12 +17,7 @@ from zheka.core.enums import (
     RequestChannel,
     ServiceType,
 )
-from zheka.core.errors import (
-    FLAT_NOT_FOUND,
-    EntityNotFound,
-    InvalidState,
-    NotEnoughRights,
-)
+from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
 from zheka.core.ids import ChargeId, FlatId, HouseId, MeterId, RequestId, UserId
 from zheka.core.models import Charge, Flat, House, Tariff
 from zheka.core.services.events import EventsService
@@ -30,7 +25,6 @@ from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService
 from zheka.core.services.requests import RequestDraft, RequestsService
 from zheka.infra.database.repos.charges import ChargesRepo
-from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 
 NOT_VERIFIED = "Подтвердите квартиру, чтобы видеть начисления"
@@ -113,7 +107,6 @@ class ChargesService:
         "_access",
         "_charges",
         "_events",
-        "_houses",
         "_meters",
         "_readings",
         "_requests",
@@ -123,7 +116,6 @@ class ChargesService:
         self,
         charges_repo: ChargesRepo,
         meters_repo: MetersRepo,
-        houses_repo: HousesRepo,
         access: MeterAccess,
         readings_service: ReadingsService,
         requests_service: RequestsService,
@@ -131,7 +123,6 @@ class ChargesService:
     ) -> None:
         self._charges = charges_repo
         self._meters = meters_repo
-        self._houses = houses_repo
         self._access = access
         self._readings = readings_service
         self._requests = requests_service
@@ -150,14 +141,10 @@ class ChargesService:
 
     async def card(self, charge_id: ChargeId, user_id: UserId) -> ChargeCardData:
         charge = await self._verified_charge(charge_id, user_id)
-        flat = await self._access.get_flat(charge.flat_id)
-        house = await self._houses.get(flat.house_id)
-        if house is None:
-            raise EntityNotFound(FLAT_NOT_FOUND)
         return ChargeCardData(
             charge=charge,
-            house=house,
-            flat=flat,
+            house=await self._access.house_of_flat(charge.flat_id),
+            flat=await self._access.get_flat(charge.flat_id),
             lines=parse_lines(charge.lines),
         )
 

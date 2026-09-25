@@ -1,6 +1,5 @@
 from collections.abc import Mapping
 from enum import StrEnum
-from types import MappingProxyType
 
 
 class MeterType(StrEnum):
@@ -30,21 +29,19 @@ class ServiceType(StrEnum):
     RECALCULATION = "recalculation"
 
 
-SERVICE_LABELS: Mapping[ServiceType, str] = MappingProxyType(
-    {
-        ServiceType.COLD_WATER: "Холодная вода",
-        ServiceType.HOT_WATER: "Горячая вода",
-        ServiceType.ELECTRICITY: "Электроэнергия",
-        ServiceType.GAS: "Газ",
-        ServiceType.HEATING: "Отопление",
-        ServiceType.MAINTENANCE: "Содержание жилья",
-        ServiceType.OVERHAUL: "Капитальный ремонт",
-        ServiceType.WASTE: "Обращение с ТКО",
-        ServiceType.PENALTY: "Пени",
-        ServiceType.RECALCULATION: "Перерасчет",
-    },
-)
+SERVICE_LABELS: Mapping[ServiceType, str] = {
+    ServiceType.COLD_WATER: "Холодная вода",
+    ServiceType.HOT_WATER: "Горячая вода",
+    ServiceType.ELECTRICITY: "Электроэнергия",
+    ServiceType.GAS: "Газ",
+    ServiceType.HEATING: "Отопление",
+    ServiceType.MAINTENANCE: "Содержание жилья",
+    ServiceType.OVERHAUL: "Капитальный ремонт",
+    ServiceType.WASTE: "Обращение с ТКО",
+    ServiceType.PENALTY: "Пени",
+    ServiceType.RECALCULATION: "Перерасчет",
+}
 
-SERVICE_OF_METER: Mapping[MeterType, ServiceType] = MappingProxyType(
-    {meter_type: ServiceType(meter_type) for meter_type in MeterType},
-)
+SERVICE_OF_METER: Mapping[MeterType, ServiceType] = {
+    meter_type: ServiceType(meter_type) for meter_type in MeterType
+}

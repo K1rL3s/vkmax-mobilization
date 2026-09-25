@@ -23,13 +23,13 @@ class Deeplink(ZhekaType):
 
     @property
     def source(self) -> EventSource:
-        if self.kind is DeeplinkKind.HOUSE:
-            return EventSource.CHAT
-        if self.kind is DeeplinkKind.ENTRANCE_QR:
-            return EventSource.QR
-        return EventSource.DEEPLINK
+        return _SOURCES.get(self.kind, EventSource.DEEPLINK)
 
 
+_SOURCES = {
+    DeeplinkKind.HOUSE: EventSource.CHAT,
+    DeeplinkKind.ENTRANCE_QR: EventSource.QR,
+}
 _DEMO = (DeeplinkKind.DEMO_ADMIN, DeeplinkKind.DEMO_STAFF, DeeplinkKind.DEMO_RESIDENT)
 _DEMO_NUMBERS = frozenset(str(number) for number in range(1, len(DEMO_INNS) + 1))
 _BY_PREFIX = {kind.value: kind for kind in DeeplinkKind if kind not in _DEMO}

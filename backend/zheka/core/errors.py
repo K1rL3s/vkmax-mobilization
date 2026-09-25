@@ -2,26 +2,22 @@ from typing import ClassVar
 
 
 class ZhekaError(Exception):
-    title: ClassVar[str] = "ZhekaError"
+    message: ClassVar[str]
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        cls.title = cls.__name__
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(self.message if message is None else message)
 
 
 class Unauthorized(ZhekaError):
-    def __init__(self, message: str = "Требуется авторизация") -> None:
-        super().__init__(message)
+    message = "Требуется авторизация"
 
 
-class NotEnoughRights(ZhekaError, PermissionError):
-    def __init__(self, message: str = "Недостаточно прав") -> None:
-        super().__init__(message)
+class NotEnoughRights(ZhekaError):
+    message = "Недостаточно прав"
 
 
-class EntityNotFound(ZhekaError, LookupError):
-    def __init__(self, message: str = "Сущность не найдена") -> None:
-        super().__init__(message)
+class EntityNotFound(ZhekaError):
+    message = "Сущность не найдена"
 
 
 HOUSE_NOT_FOUND = "Дом не найден"
@@ -33,15 +29,12 @@ INVITE_NOT_FOUND = "Приглашение не найдено"
 
 
 class InvalidValue(ZhekaError, ValueError):
-    def __init__(self, message: str = "Некорректное значение") -> None:
-        super().__init__(message)
+    message = "Некорректное значение"
 
 
 class InvalidState(InvalidValue):
-    def __init__(self, message: str = "Недопустимое состояние") -> None:
-        super().__init__(message)
+    message = "Недопустимое состояние"
 
 
 class InvalidRequest(ZhekaError):
-    def __init__(self, message: str = "Некорректный запрос") -> None:
-        super().__init__(message)
+    message = "Некорректный запрос"

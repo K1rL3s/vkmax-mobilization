@@ -1,11 +1,15 @@
-import secrets
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, RecordingBroker, make_notifications_service
+from tests.conftest import (
+    Fixture,
+    OrgHouseFlatUser,
+    RecordingBroker,
+    add_user,
+    make_notifications_service,
+)
 
 from zheka.api.schemas.flats import FlatCard
 from zheka.broker.publisher import TaskPublisher
@@ -17,11 +21,11 @@ from zheka.core.errors import (
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
+from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.flats import ALREADY_VERIFIED_DETAIL, FlatsService
 from zheka.core.services.houses import NOT_CONNECTED
-from zheka.infra.database.models import Flat, Resident, User, VerificationRequest
+from zheka.infra.database.models import Flat, Resident, VerificationRequest
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -31,8 +35,6 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 ACCOUNT = "ЛС-0042 7781"
-
-Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 
 def _make_service(
@@ -49,13 +51,6 @@ def _make_service(
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
     )
-
-
-async def _add_user(session: AsyncSession) -> UserId:
-    user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Житель")
-    session.add(user)
-    await session.flush()
-    return user.id
 
 
 async def _add_flat(
@@ -123,7 +118,7 @@ async def _pending_request(
     staff = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
     resident = await _add_resident(
         session,
-        await _add_user(session),
+        await add_user(session),
         staff.house_id,
         None,
     )
@@ -457,7 +452,7 @@ async def test_activated_invite_makes_a_tenant_without_charges_and_votes(
     own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
-    tenant_id = await _add_user(session)
+    tenant_id = await add_user(session)
 
     view = await service.activate_invite(tenant_id, invite.code)
 
@@ -476,8 +471,8 @@ async def test_single_use_flat_invite_is_not_activated_twice(
     own = await _verified_owner(session, make_org_house_flat_user)
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
-    first = await _add_user(session)
-    second = await _add_user(session)
+    first = await add_user(session)
+    second = await add_user(session)
     await service.activate_invite(first, invite.code)
 
     with pytest.raises(InvalidState):
@@ -513,7 +508,7 @@ async def test_activation_refuses_a_resident_of_another_flat_in_the_house(
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
     neighbour_flat = await _add_flat(session, own.house_id, "2")
-    neighbour = await _add_user(session)
+    neighbour = await add_user(session)
     await _add_resident(session, neighbour, own.house_id, neighbour_flat, verified=True)
 
     with pytest.raises(InvalidState):
@@ -534,7 +529,7 @@ async def test_revoked_invite_is_dead_for_a_newcomer_and_for_the_flat(
     await service.revoke_invite(own.user_id, invite.code)
 
     with pytest.raises(InvalidState):
-        await service.activate_invite(await _add_user(session), invite.code)
+        await service.activate_invite(await add_user(session), invite.code)
     with pytest.raises(InvalidState):
         await service.activate_invite(own.user_id, invite.code)
 
@@ -547,7 +542,7 @@ async def test_invite_is_not_revoked_by_a_stranger(
     service = _make_service(session)
     invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
     neighbour_flat = await _add_flat(session, own.house_id, "2")
-    neighbour = await _add_user(session)
+    neighbour = await add_user(session)
     await _add_resident(session, neighbour, own.house_id, neighbour_flat, verified=True)
 
     with pytest.raises(EntityNotFound):
@@ -564,7 +559,7 @@ async def test_flat_card_shows_the_account_tail_only_to_a_verified_owner(
 ) -> None:
     own = await _verified_owner(session, make_org_house_flat_user)
     await _set_account(session, own.flat_id, ACCOUNT)
-    tenant = await _add_user(session)
+    tenant = await add_user(session)
     await _add_resident(
         session,
         tenant,
@@ -573,28 +568,19 @@ async def test_flat_card_shows_the_account_tail_only_to_a_verified_owner(
         ResidentRole.TENANT,
         verified=True,
     )
+    unverified = await add_user(session)
+    await _add_resident(session, unverified, own.house_id, own.flat_id)
     service = _make_service(session)
 
     owner_card = FlatCard.of(await service.flat_card(own.user_id, own.flat_id))
     tenant_card = FlatCard.of(await service.flat_card(tenant, own.flat_id))
+    unverified_card = FlatCard.of(await service.flat_card(unverified, own.flat_id))
 
     assert owner_card.account_no == ACCOUNT[-4:]
-    assert owner_card.residents_count == 2
+    assert owner_card.residents_count == 3
     assert tenant_card.account_no is None
-
-
-async def test_flat_card_hides_the_account_from_an_unverified_owner(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _set_account(session, own.flat_id, ACCOUNT)
-    await _add_resident(session, own.user_id, own.house_id, own.flat_id)
-
-    card = FlatCard.of(await _make_service(session).flat_card(own.user_id, own.flat_id))
-
-    assert card.verified is False
-    assert card.account_no is None
+    assert unverified_card.verified is False
+    assert unverified_card.account_no is None
 
 
 async def test_flat_card_carries_the_latest_verification_status(
@@ -620,7 +606,7 @@ async def test_flat_card_is_refused_to_a_resident_of_another_flat(
 ) -> None:
     own = await make_org_house_flat_user()
     neighbour_flat = await _add_flat(session, own.house_id, "2")
-    neighbour = await _add_user(session)
+    neighbour = await add_user(session)
     await _add_resident(session, neighbour, own.house_id, neighbour_flat, verified=True)
 
     with pytest.raises(NotEnoughRights):

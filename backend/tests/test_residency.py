@@ -1,6 +1,4 @@
 import inspect
-import secrets
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -8,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser
+from tests.conftest import Fixture
 
 from zheka.api.dependencies.current_account import CurrentAccount
 from zheka.api.dependencies.current_residency import (
@@ -28,7 +26,7 @@ from zheka.core.enums import (
     VerificationStatus,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
+from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.profile import ProfileService
 from zheka.core.texts import BLOCKED
@@ -44,8 +42,6 @@ from zheka.infra.database.tables.events import events_table
 BLOCK_REASON = "Задолженность по коммунальным услугам"
 REJECT_REASON = "Лицевой счет принадлежит другой квартире"
 
-Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
-
 
 def _profile_service(session: AsyncSession) -> ProfileService:
     return ProfileService(
@@ -59,12 +55,7 @@ def _profile_service(session: AsyncSession) -> ProfileService:
 
 
 def _account(user_id: UserId) -> CurrentAccount:
-    return CurrentAccount(
-        user_id=user_id,
-        max_user_id=MaxUserId(secrets.randbits(48)),
-        name="Житель",
-        consent_at=None,
-    )
+    return CurrentAccount(user_id=user_id, consent_at=None)
 
 
 async def _resolve(

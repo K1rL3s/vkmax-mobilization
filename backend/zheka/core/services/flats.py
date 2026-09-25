@@ -67,7 +67,7 @@ class FlatCardData(ZhekaType):
 class VerifyResult(ZhekaType):
     verified: bool
     detail: str
-    verification_status: VerificationStatus | None
+    verification_status: VerificationStatus | None = None
 
 
 class VerificationRequestView(ZhekaType):
@@ -140,11 +140,7 @@ class FlatsService:
         self._ensure_not_moving(resident, flat_id)
 
         if resident.verified_at is not None:
-            return VerifyResult(
-                verified=True,
-                detail=ALREADY_VERIFIED_DETAIL,
-                verification_status=None,
-            )
+            return VerifyResult(verified=True, detail=ALREADY_VERIFIED_DETAIL)
 
         matched = flat.account_no is not None and normalize_account(
             flat.account_no,
@@ -179,11 +175,7 @@ class FlatsService:
             flat_id=flat_id,
             by="account",
         )
-        return VerifyResult(
-            verified=True,
-            detail="Квартира подтверждена",
-            verification_status=None,
-        )
+        return VerifyResult(verified=True, detail="Квартира подтверждена")
 
     async def request_verification(
         self,
@@ -209,7 +201,7 @@ class FlatsService:
             flat_id,
             user_id,
             stated,
-            None if comment is None or not comment.strip() else comment.strip(),
+            (comment or "").strip() or None,
         )
         if request is None:
             raise InvalidState("Заявка на подтверждение уже отправлена")

@@ -42,29 +42,15 @@ BOT_COMMANDS = [
 ]
 
 
-@router.bot_started()
-async def bot_start_handler(
-    _: BotStarted,
+@router.bot_started()  # type: ignore[arg-type]
+@router.message_created(CommandStart())
+async def start_handler(
+    _: BotStarted | MessageCreated,
     dialog_manager: DialogManager,
     user: User,
     events_service: FromDishka[EventsService],
 ) -> None:
     dialog_manager.show_mode = ShowMode.SEND
-    await events_service.record(
-        EventType.BOT_START,
-        user_id=user.id,
-        source=EventSource.DIRECT.value,
-    )
-    await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)
-
-
-@router.message_created(CommandStart())
-async def start_message_handler(
-    _: MessageCreated,
-    dialog_manager: DialogManager,
-    user: User,
-    events_service: FromDishka[EventsService],
-) -> None:
     await events_service.record(
         EventType.BOT_START,
         user_id=user.id,

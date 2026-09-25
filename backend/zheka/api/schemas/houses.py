@@ -12,7 +12,7 @@ from zheka.core.enums import (
     VerificationStatus,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
-from zheka.core.models import Flat, Organization
+from zheka.core.models import Flat
 from zheka.core.services.houses import (
     AdminHouseCardData,
     AdminHouseRow,
@@ -39,10 +39,6 @@ class OrgContacts(BaseSchema):
     timezone: str = Field(
         description="Часовой пояс IANA: в нем приемные часы и слоты записи",
     )
-
-    @classmethod
-    def of(cls, org: Organization) -> Self:
-        return cls.model_validate(org)
 
 
 class HouseListItem(BaseSchema):
@@ -169,7 +165,7 @@ class HouseCard(BaseSchema):
             area=house.area,
             lat=None if house.lat is None else float(house.lat),
             lon=None if house.lon is None else float(house.lon),
-            org=None if card.org is None else OrgContacts.of(card.org),
+            org=None if card.org is None else OrgContacts.model_validate(card.org),
             my_residency=(
                 None if residency is None else ResidencySummary.of(residency)
             ),
@@ -195,7 +191,7 @@ class FlatListItem(BaseSchema):
     @classmethod
     def of(cls, flat: Flat, is_taken: bool) -> Self:
         return cls(
-            id=FlatId(flat.id),
+            id=flat.id,
             number=flat.number,
             entrance=flat.entrance,
             area=flat.area,
@@ -229,7 +225,7 @@ class AdminHouseListItem(BaseSchema):
     @classmethod
     def of(cls, row: AdminHouseRow) -> Self:
         return cls(
-            id=HouseId(row.house.id),
+            id=row.house.id,
             address=row.house.address,
             entrances=row.house.entrances,
             flats_count=row.flats_count,
@@ -275,7 +271,7 @@ class AdminHouseCard(BaseSchema):
     def of(cls, card: AdminHouseCardData, entrance_qrs: list[EntranceQr]) -> Self:
         house = card.house
         return cls(
-            id=HouseId(house.id),
+            id=house.id,
             address=house.address,
             region=house.region,
             city=house.city,

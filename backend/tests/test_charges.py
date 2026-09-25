@@ -1,30 +1,35 @@
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime
+from datetime import date
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, make_config, make_notifications_service
-from tests.test_requests import _StubClassifier, _events, _photo
+from tests.conftest import (
+    Fixture,
+    OrgHouseFlatUser,
+    add_meter,
+    add_reading,
+    add_resident,
+    add_tariff,
+    events_of,
+    make_config,
+    requests_service,
+)
 
 from zheka.core.enums import (
     EventType,
-    MeterType,
     RequestCategory,
     ResidentRole,
     ServiceType,
-    TariffZone,
 )
 from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
-from zheka.core.ids import ChargeId, FlatId, HouseId, MeterId, UserId
+from zheka.core.ids import ChargeId, FlatId, UserId
 from zheka.core.services.charges import ChargesService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService
-from zheka.core.services.request_groups import GroupingService
-from zheka.core.services.requests import RequestsService
-from zheka.infra.database.models import Charge, Resident, Tariff
+from zheka.infra.database.models import Charge
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -32,9 +37,6 @@ from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
-from zheka.infra.database.repos.users import UsersRepo
-
-Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 
 def _make_service(session: AsyncSession) -> ChargesService:
@@ -44,78 +46,22 @@ def _make_service(session: AsyncSession) -> ChargesService:
     orgs_repo = OrgsRepo(session)
     events = EventsService(EventsRepo(session))
     access = MeterAccess(meters_repo, houses_repo, residents_repo, orgs_repo)
-    files_service = FilesService(make_config().files, "test-token")
     readings_service = ReadingsService(
         meters_repo,
         ChargesRepo(session),
         orgs_repo,
         access,
-        files_service,
+        FilesService(make_config().files, "test-token"),
         events,
-    )
-    requests_repo = RequestsRepo(session)
-    requests_service = RequestsService(
-        requests_repo,
-        houses_repo,
-        residents_repo,
-        UsersRepo(session),
-        orgs_repo,
-        files_service,
-        GroupingService(requests_repo, events),
-        make_notifications_service(session),
-        events,
-        _StubClassifier(None),
     )
     return ChargesService(
         ChargesRepo(session),
         meters_repo,
-        houses_repo,
         access,
         readings_service,
-        requests_service,
+        requests_service(session),
         events,
     )
-
-
-async def _add_resident(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-    *,
-    role: ResidentRole = ResidentRole.OWNER,
-    verified: bool = True,
-) -> None:
-    is_owner = role is ResidentRole.OWNER
-    session.add(
-        Resident(
-            user_id=own.user_id,
-            house_id=own.house_id,
-            flat_id=own.flat_id,
-            role=role,
-            can_see_charges=is_owner,
-            can_vote=is_owner,
-            verified_at=datetime.now(UTC) if verified else None,
-        ),
-    )
-    await session.flush()
-
-
-async def _add_tariff(
-    session: AsyncSession,
-    house_id: HouseId,
-    service: ServiceType,
-    value: int,
-    valid_from: date,
-) -> Tariff:
-    tariff = Tariff(
-        house_id=house_id,
-        service=service,
-        value=value,
-        unit="m3",
-        valid_from=valid_from,
-    )
-    session.add(tariff)
-    await session.flush()
-    return tariff
 
 
 async def _add_charge(
@@ -137,27 +83,6 @@ async def _add_charge(
     return charge
 
 
-async def _add_reading(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-    meter_id: MeterId,
-    period: date,
-    value: int,
-    photo: str,
-) -> None:
-    await MetersRepo(session).add_reading(
-        meter_id,
-        period,
-        {TariffZone.SINGLE: value},
-        [photo],
-        ocr_used=False,
-        ocr_accepted=False,
-        is_below_previous=False,
-        submitted_at=datetime.now(UTC),
-        submitted_by=own.user_id,
-    )
-
-
 async def _charge(
     session: AsyncSession,
     own: OrgHouseFlatUser,
@@ -174,66 +99,28 @@ async def _charge(
     return await _add_charge(session, own.flat_id, period, [line], amount)
 
 
-async def test_tariff_at_picks_the_row_with_the_greatest_valid_from_le_period(
+async def test_tariffs_come_newest_first_and_tariff_at_takes_the_one_in_force(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_tariff(
-        session,
-        own.house_id,
-        ServiceType.COLD_WATER,
-        100_000,
-        date(2025, 1, 1),
-    )
-    middle = await _add_tariff(
-        session,
-        own.house_id,
-        ServiceType.COLD_WATER,
-        150_000,
-        date(2025, 6, 1),
-    )
-    await _add_tariff(
-        session,
-        own.house_id,
-        ServiceType.COLD_WATER,
-        200_000,
-        date(2026, 1, 1),
-    )
+    service = ServiceType.COLD_WATER
+    starts = [date(2025, 1, 1), date(2026, 1, 1), date(2025, 6, 1)]
+    added = [
+        await add_tariff(session, own.house_id, 100_000, service, start)
+        for start in starts
+    ]
 
-    tariff = await ChargesRepo(session).tariff_at(
+    tariffs = await _make_service(session).tariffs(own.house_id)
+    in_force = await ChargesRepo(session).tariff_at(
         own.house_id,
-        ServiceType.COLD_WATER,
+        service,
         date(2025, 9, 1),
     )
 
-    assert tariff is not None
-    assert tariff.id == middle.id
-
-
-async def test_tariffs_list_newest_valid_from_first(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    await _add_tariff(
-        session,
-        own.house_id,
-        ServiceType.COLD_WATER,
-        100_000,
-        date(2025, 1, 1),
-    )
-    await _add_tariff(
-        session,
-        own.house_id,
-        ServiceType.HOT_WATER,
-        200_000,
-        date(2026, 1, 1),
-    )
-
-    tariffs = await _make_service(session).tariffs(own.house_id)
-
-    assert [t.valid_from for t in tariffs] == [date(2026, 1, 1), date(2025, 1, 1)]
+    assert [t.valid_from for t in tariffs] == sorted(starts, reverse=True)
+    assert in_force is not None
+    assert in_force.id == added[2].id
 
 
 _CALLS: dict[str, Callable[[ChargesService, ChargeId, UserId], Awaitable[object]]] = {
@@ -268,7 +155,14 @@ async def test_charges_need_a_verified_resident_with_can_see_charges(
     verified: bool,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own, role=role, verified=verified)
+    await add_resident(
+        session,
+        own.user_id,
+        own.house_id,
+        own.flat_id,
+        role=role,
+        verified=verified,
+    )
     charge = await _charge(session, own)
 
     with pytest.raises(NotEnoughRights):
@@ -282,7 +176,7 @@ async def test_a_foreign_charge_id_is_not_found(
     call: str,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own)
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
     other_charge = await _charge(session, await make_org_house_flat_user())
 
     with pytest.raises(EntityNotFound):
@@ -294,7 +188,7 @@ async def test_card_lists_the_charge_lines_with_address_and_flat_number(
     make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own)
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
     charge = await _charge(session, own)
 
     card = await _make_service(session).card(charge.id, own.user_id)
@@ -309,7 +203,7 @@ async def test_breakdown_diffs_against_the_charge_one_month_before(
     make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own)
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
     await _charge(session, own, date(2026, 2, 1), 900)
     charge = await _charge(session, own)
 
@@ -319,7 +213,7 @@ async def test_breakdown_diffs_against_the_charge_one_month_before(
     assert data.previous_charge.period == date(2026, 2, 1)
     assert data.delta == 100
     assert data.lines[0].delta.delta == 100
-    events = await _events(session, EventType.CHARGE_BREAKDOWN_OPENED)
+    events = await events_of(session, EventType.CHARGE_BREAKDOWN_OPENED)
     assert len(events) == 1
     assert events[0].payload["charge_id"] == charge.id
 
@@ -329,7 +223,7 @@ async def test_breakdown_has_no_previous_charge_for_the_first_period(
     make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own)
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
     charge = await _add_charge(
         session,
         own.flat_id,
@@ -350,17 +244,10 @@ async def test_breakdown_includes_the_resident_own_consumption_sparkline(
     make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own)
-    meter = await MetersRepo(session).add(
-        own.flat_id,
-        MeterType.COLD_WATER,
-        1,
-        "SN-1",
-        None,
-    )
-    assert meter is not None
-    await _add_reading(session, own, meter.id, date(2026, 2, 1), 0, _photo())
-    await _add_reading(session, own, meter.id, date(2026, 3, 1), 1_000, _photo())
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    meter_id = await add_meter(session, own.flat_id)
+    await add_reading(session, meter_id, date(2026, 2, 1), 0, own.user_id)
+    await add_reading(session, meter_id, date(2026, 3, 1), 1_000, own.user_id)
     charge = await _charge(session, own)
 
     data = await _make_service(session).breakdown(charge.id, own.user_id)
@@ -376,17 +263,9 @@ async def test_dispute_creates_a_charge_dispute_request_with_period_photos(
     make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own)
-    meter = await MetersRepo(session).add(
-        own.flat_id,
-        MeterType.COLD_WATER,
-        1,
-        "SN-1",
-        None,
-    )
-    assert meter is not None
-    photo = _photo()
-    await _add_reading(session, own, meter.id, date(2026, 3, 1), 1_000, photo)
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    meter_id = await add_meter(session, own.flat_id)
+    await add_reading(session, meter_id, date(2026, 3, 1), 1_000, own.user_id)
     charge = await _charge(session, own)
 
     request_id = await _make_service(session).dispute(
@@ -403,8 +282,9 @@ async def test_dispute_creates_a_charge_dispute_request_with_period_photos(
     assert "Почему так много?" in request.description
     assert request.flat_id == own.flat_id
     photos = await requests_repo.list_photos(request_id)
-    assert [p.path for p in photos] == [photo]
-    events = await _events(session, EventType.CHARGE_DISPUTED)
+    [reading] = await MetersRepo(session).list_readings(meter_id, 1)
+    assert [p.path for p in photos] == reading.photo_paths
+    events = await events_of(session, EventType.CHARGE_DISPUTED)
     assert len(events) == 1
     assert events[0].payload["charge_id"] == charge.id
     assert events[0].payload["request_id"] == request_id
@@ -415,7 +295,7 @@ async def test_pay_demo_sets_paid_at_and_refuses_a_second_payment(
     make_org_house_flat_user: Fixture,
 ) -> None:
     own = await make_org_house_flat_user()
-    await _add_resident(session, own)
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
     charge = await _charge(session, own)
     service = _make_service(session)
 

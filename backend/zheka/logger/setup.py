@@ -1,7 +1,6 @@
 import logging
 
 from zheka.config import LogConfig, LogFormat
-from zheka.logger.context import ContextFilter
 from zheka.logger.formatter import JsonFormatter
 
 
@@ -15,7 +14,6 @@ def setup_logger(config: LogConfig) -> None:
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
-    handler.addFilter(ContextFilter())
 
     root = logging.getLogger()
     root.handlers.clear()

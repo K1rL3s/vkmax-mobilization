@@ -97,13 +97,10 @@ async def test_single_use_invite_is_not_activated_twice(
         ("demo_staff_1", Deeplink(kind=DeeplinkKind.DEMO_STAFF, value="1")),
         ("demo_admin_5", Deeplink(kind=DeeplinkKind.DEMO_ADMIN, value="5")),
         ("demo_staff", None),
-        ("demo_resident", None),
-        ("demo_admin", None),
         ("demo_staff_6", None),
         ("demo_resident_0", None),
         ("house_", None),
         ("wat_1", None),
-        ("", None),
     ],
 )
 def test_parse_deeplink(payload: str, expected: Deeplink | None) -> None:

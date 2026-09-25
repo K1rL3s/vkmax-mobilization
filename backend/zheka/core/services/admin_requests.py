@@ -5,7 +5,6 @@ from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.enums import (
     EventType,
-    NotificationCategory,
     OrgRole,
     RequestActorRole,
     RequestCategory,
@@ -44,10 +43,12 @@ from zheka.core.services.request_groups import (
 )
 from zheka.core.services.request_status import check_transition, transition_path
 from zheka.core.services.requests import (
+    EMPTY_DESCRIPTION,
     RequestCardData,
     RequestRow,
     build_card,
     build_rows,
+    stated,
 )
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -58,7 +59,6 @@ from zheka.infra.database.repos.users import UsersRepo
 EXECUTOR_NOT_FOUND = "Исполнитель не найден"
 NOT_AN_EXECUTOR = "Заявку ведет исполнитель, а не сотрудник кабинета"
 EMPTY_REPLY = "Напишите ответ жителю"
-EMPTY_DESCRIPTION = "Опишите проблему"
 GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе"
 NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
 NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнитель"
@@ -172,17 +172,18 @@ class AdminRequestsService:
         actor: UserId,
     ) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
-        stated = text.strip()
-        if not stated:
-            raise InvalidRequest(EMPTY_REPLY)
+        reply = stated(text, EMPTY_REPLY)
 
         await self._requests.add_message(
             request.id,
             actor,
             RequestActorRole.STAFF.value,
-            stated,
+            reply,
         )
-        self._notify_author(request, texts.request_reply(request.id, stated))
+        self._notifications.notify_author(
+            request,
+            texts.request_reply(request.id, reply),
+        )
         return await self._card(request)
 
     async def assign(
@@ -255,9 +256,7 @@ class AdminRequestsService:
         house = await self._houses.get_for_org(draft.house_id, org_id)
         if house is None:
             raise EntityNotFound(HOUSE_NOT_FOUND)
-        description = draft.description.strip()
-        if not description:
-            raise InvalidRequest(EMPTY_DESCRIPTION)
+        description = stated(draft.description, EMPTY_DESCRIPTION)
         caller_name = (draft.caller_name or "").strip() or None
         caller_phone = (draft.caller_phone or "").strip() or None
         resident = await self._caller(draft)
@@ -349,9 +348,9 @@ class AdminRequestsService:
             by_role.value,
             at,
         )
-        stated = None if comment is None else comment.strip()
-        if stated:
-            await self._requests.add_message(request.id, actor, by_role.value, stated)
+        note = None if comment is None else comment.strip()
+        if note:
+            await self._requests.add_message(request.id, actor, by_role.value, note)
         await self._events.record(
             EventType.REQUEST_STATUS_CHANGED,
             user_id=actor,
@@ -364,20 +363,10 @@ class AdminRequestsService:
         if target is RequestStatus.ON_REVIEW and request.author_user_id is not None:
             self._notifications.open_review_card(request.id)
         else:
-            self._notify_author(
+            self._notifications.notify_author(
                 request,
-                texts.request_status_changed(request.id, target, stated),
+                texts.request_status_changed(request.id, target, note),
             )
-
-    def _notify_author(self, request: Request, text: str) -> None:
-        if request.author_user_id is None:
-            return
-        self._notifications.notify_user(
-            request.author_user_id,
-            text,
-            category=NotificationCategory.REQUESTS,
-            mandatory=True,
-        )
 
     async def _card(self, request: Request) -> AdminRequestCardData:
         return AdminRequestCardData(

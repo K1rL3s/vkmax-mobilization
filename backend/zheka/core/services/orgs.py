@@ -16,7 +16,6 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import OrgId, UserId
 from zheka.core.models import OrgInvite, OrgMember, OrgSettings, Organization, User
-from zheka.core.roles import can_invite, can_remove_member, higher_role
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseFound, is_connected
 from zheka.core.services.invites import issue_invite
@@ -138,7 +137,7 @@ class OrgsService:
         return await self.card(org_id)
 
     async def card(self, org_id: OrgId) -> OrgCardView:
-        org = await self._get_org(org_id)
+        org = await self._orgs.get_existing(org_id)
         houses = await self._houses.list_for_org(org_id)
         return OrgCardView(
             org=org,
@@ -147,7 +146,7 @@ class OrgsService:
         )
 
     async def settings(self, org_id: OrgId) -> OrgSettingsView:
-        org = await self._get_org(org_id)
+        org = await self._orgs.get_existing(org_id)
         settings = await self._orgs.get_settings(org_id)
         return OrgSettingsView(org=org, settings=settings or OrgSettings(org_id=org_id))
 
@@ -178,7 +177,7 @@ class OrgsService:
                 f"до {MAX_GROUP_WINDOW_HOURS} часов",
             )
 
-        org = await self._get_org(org_id)
+        org = await self._orgs.get_existing(org_id)
         settings = await self._orgs.get_settings(org_id)
         if settings is None:
             settings = await self._orgs.add_settings(org_id)
@@ -214,7 +213,7 @@ class OrgsService:
         member = await self._orgs.get_member(org_id, user_id)
         if member is None:
             raise EntityNotFound("Сотрудник не найден")
-        if not can_remove_member(actor_role, member.role):
+        if not actor_role.can_remove_member(member.role):
             raise NotEnoughRights("Этого сотрудника исключить нельзя")
         await self._orgs.remove_member(member)
 
@@ -230,7 +229,7 @@ class OrgsService:
         expires_in_hours: int,
         max_activations: int,
     ) -> OrgInvite:
-        if not can_invite(actor_role, role):
+        if not actor_role.can_invite(role):
             raise NotEnoughRights("Эту роль выдать нельзя")
         if expires_in_hours <= 0:
             raise InvalidRequest("Срок жизни кода - больше нуля часов")
@@ -268,7 +267,7 @@ class OrgsService:
             raise EntityNotFound(INVITE_NOT_FOUND)
 
         org_id = invite.org_id
-        org = await self._get_org(org_id)
+        org = await self._orgs.get_existing(org_id)
 
         member = await self._orgs.get_member(org_id, user_id)
         if member is not None:
@@ -276,7 +275,7 @@ class OrgsService:
                 raise InvalidState("Код приглашения истек или отозван")
             await self._orgs.set_member_role(
                 member,
-                higher_role(member.role, invite.role),
+                member.role.higher_role(invite.role),
             )
             return OrgMembershipView(member=member, org=org)
 
@@ -287,9 +286,3 @@ class OrgsService:
             member=await self._orgs.add_member(org_id, user_id, consumed.role),
             org=org,
         )
-
-    async def _get_org(self, org_id: OrgId) -> Organization:
-        org = await self._orgs.get(org_id)
-        if org is None:
-            raise EntityNotFound("Организация не найдена")
-        return org

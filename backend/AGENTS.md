@@ -29,10 +29,11 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   (`POSTGRES_*`, `REDIS_DB`, `LOG_LEVEL`).
 - An API change reruns `just openapi`, or a test fails on the stale root
   `openapi.yaml`.
-- Every entry point closes its APP container (api lifespan, worker
-  `WORKER_SHUTDOWN`, scheduler and seed in `finally`), which owns the database
-  pool, the bot session and the process's one `aiohttp.ClientSession`. The
-  Yandex clients pass their timeout per request, never on that shared session.
+- Every entry point with an APP container closes it (api lifespan, worker
+  `WORKER_SHUTDOWN`, seed in `finally`; the scheduler builds none), which owns
+  the database pool, the bot session and the process's one
+  `aiohttp.ClientSession`. The Yandex clients pass their timeout per request,
+  never on that shared session.
 
 ### Code conventions
 
@@ -40,9 +41,10 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   kw-only; `class Foo(ZhekaType, frozen=False)` opts out). Entities in
   `core/models/` use `ZhekaMutableType`, since `map_imperatively` cannot map a
   frozen or slotted class. Pydantic lives only in `api/schemas/`.
-- A domain error is an axis off `ZhekaError` (`zheka/core/errors.py`) with a
-  default message; a new axis joins the tuple of the `exception_handlers`
-  comprehension in `api/errors.py`, and `__init_subclass__` fills `title`.
+- A domain error is an axis off `ZhekaError` (`zheka/core/errors.py`) with its
+  default text in the `message` ClassVar; a new axis joins the tuple of the
+  `exception_handlers` comprehension in `api/errors.py`, which answers the class
+  name as `title`.
   `InvalidRequest` must not inherit `ValueError`, or it answers 409, not 400.
 - Events are `EventType` / `EventSource` members recorded in `core/services/`:
   a handler or route passes the service `source`, `method` or `entrance`, since

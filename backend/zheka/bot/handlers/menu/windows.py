@@ -1,9 +1,12 @@
+from typing import Any
+
 from magic_filter import F
+from maxo import Bot
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.kbd import Start, WebApp
 from maxo.dialogs.widgets.text import Const, Format
 
-from zheka.bot.handlers.menu.handlers import get_menu
+from zheka.bot.cards import web_app_name
 from zheka.bot.states import Menu, NewRequest, Onboarding
 
 MENU_TEXT = (
@@ -11,6 +14,11 @@ MENU_TEXT = (
     "Подаю заявки в УК, показываю начисления и собираю показания счетчиков. "
     "Начните с поиска своего дома - здесь или в приложении"
 )
+
+
+async def get_menu(bot: Bot, **_: Any) -> dict[str, Any]:
+    return {"bot_username": web_app_name(bot)}
+
 
 menu_dialog = Dialog(
     Window(

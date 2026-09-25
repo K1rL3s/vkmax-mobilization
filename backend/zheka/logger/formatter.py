@@ -18,6 +18,6 @@ class JsonFormatter(logging.Formatter):
             "exception": (
                 self.formatException(record.exc_info) if record.exc_info else None
             ),
-            **{name: getattr(record, name, None) for name in COLUMNS},
+            **{name: column.get() for name, column in COLUMNS.items()},
         }
         return json.dumps(payload, ensure_ascii=False)

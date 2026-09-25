@@ -5,7 +5,12 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import RecordingBroker, make_notifications_service
+from tests.conftest import (
+    RecordingBroker,
+    add_user,
+    admin_requests_service,
+    reminders_service,
+)
 
 from zheka.api.schemas.analytics import (
     BenchmarkResponse,
@@ -29,12 +34,9 @@ from zheka.core.enums import (
     ResidentRole,
 )
 from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
-from zheka.core.ids import HouseId, MaxUserId, OrgId, RequestId, UserId
-from zheka.core.services.admin_requests import AdminRequestsService
+from zheka.core.ids import HouseId, OrgId, RequestId, UserId
 from zheka.core.services.analytics import AnalyticsService, Benchmark, BenchmarkValue
-from zheka.core.services.events import EventsService
-from zheka.core.services.reminders import ReadingReminder, RemindersService
-from zheka.core.services.request_groups import GroupingService
+from zheka.core.services.reminders import ReadingReminder
 from zheka.infra.database.models import (
     DemandSignal,
     Event,
@@ -47,19 +49,10 @@ from zheka.infra.database.models import (
     Reading,
     Request,
     Resident,
-    User,
 )
 from zheka.infra.database.repos.analytics import AnalyticsRepo
-from zheka.infra.database.repos.chats import ChatsRepo
-from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
-from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.infra.database.repos.polls import PollsRepo
-from zheka.infra.database.repos.reception import ReceptionRepo
-from zheka.infra.database.repos.requests import RequestsRepo
-from zheka.infra.database.repos.residents import ResidentsRepo
-from zheka.infra.database.repos.users import UsersRepo
 
 NOW = datetime(2031, 3, 12, 12, tzinfo=UTC)
 REGION = "Аналитическая область"
@@ -69,23 +62,11 @@ def _service(
     session: AsyncSession,
     publisher: TaskPublisher | None = None,
 ) -> AnalyticsService:
-    reminders = RemindersService(
-        HousesRepo(session),
-        OrgsRepo(session),
-        MetersRepo(session),
-        ResidentsRepo(session),
-        PollsRepo(session),
-        ChatsRepo(session),
-        ReceptionRepo(session),
-        EventsRepo(session),
-        EventsService(EventsRepo(session)),
-        make_notifications_service(session, publisher),
-    )
     return AnalyticsService(
         AnalyticsRepo(session),
         HousesRepo(session),
         OrgsRepo(session),
-        reminders,
+        reminders_service(session, publisher),
     )
 
 
@@ -170,13 +151,6 @@ async def _request(
     session.add(request)
     await session.flush()
     return request.id
-
-
-async def _user(session: AsyncSession, name: str = "Житель") -> UserId:
-    user = User(max_user_id=MaxUserId(secrets.randbits(48)), name=name)
-    session.add(user)
-    await session.flush()
-    return user.id
 
 
 async def _peer(
@@ -443,8 +417,8 @@ async def test_the_executor_median_starts_at_the_last_assignment(
     session: AsyncSession,
 ) -> None:
     org_id, house_id = await _org(session)
-    first = await _user(session, "Первый")
-    second = await _user(session, "Второй")
+    first = await add_user(session, "Первый")
+    second = await add_user(session, "Второй")
     for user_id in (first, second):
         session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.EXECUTOR))
     request_id = await _request(
@@ -476,7 +450,7 @@ async def test_the_executor_table_counts_closed_ratings_and_repeats(
     session: AsyncSession,
 ) -> None:
     org_id, house_id = await _org(session)
-    executor = await _user(session, "Исполнитель")
+    executor = await add_user(session, "Исполнитель")
     session.add(OrgMember(org_id=org_id, user_id=executor, role=OrgRole.EXECUTOR))
     repeated = await _request(
         session,
@@ -553,7 +527,7 @@ async def _metered_resident(
     flat = Flat(house_id=house_id, number=secrets.token_hex(2))
     session.add(flat)
     await session.flush()
-    user_id = await _user(session)
+    user_id = await add_user(session)
     session.add(
         Resident(
             user_id=user_id,
@@ -624,8 +598,7 @@ async def test_the_season_counts_the_period_of_a_wrapping_window(
 
 
 async def test_the_reminder_refuses_outside_the_window(session: AsyncSession) -> None:
-    now = NOW
-    day = now.day % 28 + 1
+    day = NOW.day % 28 + 1
     org_id, house_id = await _org(
         session,
         settings={"meter_window_day_from": day, "meter_window_day_to": day},
@@ -633,7 +606,7 @@ async def test_the_reminder_refuses_outside_the_window(session: AsyncSession) ->
     await _metered_resident(session, house_id)
 
     with pytest.raises(InvalidState):
-        await _service(session).remind_not_submitted(org_id, [], None, now)
+        await _service(session).remind_not_submitted(org_id, [], None, NOW)
 
 
 async def test_the_reminder_refuses_another_period(session: AsyncSession) -> None:
@@ -711,7 +684,7 @@ async def test_unconnected_houses_list_their_waiting_residents(
     _, unregistered = await _org(session, registered=False)
     caller, connected = await _org(session)
     for house_id in (orphan, unregistered, unregistered, connected):
-        session.add(DemandSignal(house_id=house_id, user_id=await _user(session)))
+        session.add(DemandSignal(house_id=house_id, user_id=await add_user(session)))
     await session.flush()
 
     benchmark = await _service(session).benchmark(caller, NOW)
@@ -725,7 +698,7 @@ async def test_unconnected_houses_list_their_waiting_residents(
 async def test_another_organizations_requests_stay_out(session: AsyncSession) -> None:
     org_id, _ = await _org(session)
     other_org, other_house = await _org(session)
-    executor = await _user(session, "Исполнитель")
+    executor = await add_user(session, "Исполнитель")
     for org in (org_id, other_org):
         session.add(OrgMember(org_id=org, user_id=executor, role=OrgRole.EXECUTOR))
     await _request(
@@ -803,7 +776,7 @@ async def test_a_benchmark_with_only_unconnected_houses_is_not_empty(
 ) -> None:
     caller, _ = await _org(session)
     orphan = await _house(session, None)
-    session.add(DemandSignal(house_id=orphan, user_id=await _user(session)))
+    session.add(DemandSignal(house_id=orphan, user_id=await add_user(session)))
     await session.flush()
 
     benchmark = await _service(session).benchmark(caller, NOW)
@@ -831,8 +804,8 @@ async def test_an_executor_assigned_after_review_is_not_charged(
 ) -> None:
     now = datetime.now(UTC)
     org_id, house_id = await _org(session)
-    first = await _user(session, "Первый")
-    second = await _user(session, "Второй")
+    first = await add_user(session, "Первый")
+    second = await add_user(session, "Второй")
     for user_id in (first, second):
         session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.EXECUTOR))
     request_id = await _request(
@@ -851,18 +824,8 @@ async def test_an_executor_assigned_after_review_is_not_charged(
         ),
     )
     await session.flush()
-    admin = AdminRequestsService(
-        RequestsRepo(session),
-        HousesRepo(session),
-        UsersRepo(session),
-        OrgsRepo(session),
-        ResidentsRepo(session),
-        GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
-        make_notifications_service(session),
-        EventsService(EventsRepo(session)),
-    )
 
-    await admin.assign(org_id, request_id, second, first)
+    await admin_requests_service(session).assign(org_id, request_id, second, first)
     rows = await _service(session).executors(org_id, None, None, now)
 
     by_user = {row.user_id: row for row in rows}
@@ -896,3 +859,17 @@ async def test_the_readings_window_of_each_house_follows_its_own_clock(
     queued = await service.remind_not_submitted(org_id, [], None, now)
 
     assert (season.window_open, queued) == (True, 1)
+
+
+async def test_a_period_ending_before_it_starts_is_refused(
+    session: AsyncSession,
+) -> None:
+    org_id, _ = await _org(session)
+
+    with pytest.raises(InvalidRequest):
+        await _service(session).channels(
+            org_id,
+            date(2031, 3, 2),
+            date(2031, 3, 1),
+            NOW,
+        )

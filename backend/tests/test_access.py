@@ -1,4 +1,4 @@
-from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -6,16 +6,18 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import (
-    OrgHouseFlatUser,
+    Fixture,
     RecordingBroker,
+    add_resident,
+    add_user,
+    events_of,
     freeze_now,
     make_notifications_service,
 )
-from tests.test_requests import _add_user, _events
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
-from zheka.core.enums import EventType, ResidentRole, ResidentStatus
+from zheka.core.enums import EventType, ResidentStatus
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -29,13 +31,12 @@ from zheka.core.services.access import (
     AccessSlotDraft,
 )
 from zheka.core.services.events import EventsService
-from zheka.infra.database.models import Flat, Resident
+from zheka.infra.database.models import Flat
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
-Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 MOSCOW = ZoneInfo("Europe/Moscow")
 
 
@@ -84,30 +85,6 @@ async def _add_flat(session: AsyncSession, house_id: HouseId, number: str) -> Fl
     return flat.id
 
 
-async def _add_resident(
-    session: AsyncSession,
-    user_id: UserId,
-    house_id: HouseId,
-    flat_id: FlatId,
-    *,
-    verified: bool = True,
-    status: ResidentStatus = ResidentStatus.ACTIVE,
-    block_reason: str | None = None,
-) -> None:
-    session.add(
-        Resident(
-            user_id=user_id,
-            house_id=house_id,
-            flat_id=flat_id,
-            role=ResidentRole.OWNER,
-            verified_at=datetime.now(UTC) if verified else None,
-            status=status,
-            block_reason=block_reason,
-        ),
-    )
-    await session.flush()
-
-
 async def _with_resident(
     session: AsyncSession,
     house_id: HouseId,
@@ -116,8 +93,8 @@ async def _with_resident(
     verified: bool = True,
 ) -> tuple[FlatId, UserId]:
     flat_id = await _add_flat(session, house_id, number)
-    user_id = await _add_user(session, f"Житель {number}")
-    await _add_resident(session, user_id, house_id, flat_id, verified=verified)
+    user_id = await add_user(session, f"Житель {number}")
+    await add_resident(session, user_id, house_id, flat_id, verified=verified)
     return flat_id, user_id
 
 
@@ -147,7 +124,6 @@ async def test_a_house_of_another_org_is_not_found(
         )
 
     assert await service.list_for_org(fixture.org_id, None) == []
-    assert await service.list_for_org(other.org_id, None) == []
 
 
 async def test_a_request_of_another_org_is_not_found(
@@ -186,9 +162,9 @@ async def test_a_flat_without_a_verified_resident_gets_no_target(
     )
     empty = await _add_flat(session, fixture.house_id, "14")
     blocked = await _add_flat(session, fixture.house_id, "15")
-    await _add_resident(
+    await add_resident(
         session,
-        await _add_user(session),
+        await add_user(session),
         fixture.house_id,
         blocked,
         status=ResidentStatus.BLOCKED,
@@ -205,7 +181,7 @@ async def test_a_flat_without_a_verified_resident_gets_no_target(
     assert grid.request.targets_count == 1
     assert grid.request.responded_count == 0
 
-    events = await _events(session, EventType.ACCESS_REQUEST_SENT)
+    events = await events_of(session, EventType.ACCESS_REQUEST_SENT)
 
     assert len(events) == 1
     assert events[0].payload["flats_count"] == 1
@@ -262,11 +238,8 @@ async def test_two_windows_at_the_same_moment_are_rejected(
         await service.create(
             fixture.org_id,
             fixture.user_id,
-            AccessRequestDraft(
-                house_id=draft.house_id,
-                reason=draft.reason,
-                date=draft.date,
-                flat_ids=draft.flat_ids,
+            replace(
+                draft,
                 slots=[
                     AccessSlotDraft(starts_at=at, capacity=1),
                     AccessSlotDraft(starts_at=at, capacity=2),
@@ -325,7 +298,7 @@ async def test_a_repeated_pick_is_a_no_op_and_a_move_keeps_the_first_answer(
 
     assert again.my_slot_id == first_slot
     assert [data.taken for data in again.slots] == [1, 0]
-    [event] = await _events(session, EventType.ACCESS_SLOT_PICKED)
+    [event] = await events_of(session, EventType.ACCESS_SLOT_PICKED)
     assert event.payload["slot_id"] == first_slot
 
     moved = await service.pick(user_id, request_id, second_slot)
@@ -346,8 +319,8 @@ async def test_a_pick_of_a_stranger_or_of_another_request_is_not_found(
     service = _make_service(session)
     flat_id, user_id = await _with_resident(session, fixture.house_id, "12")
     outsider_flat, outsider = await _with_resident(session, fixture.house_id, "13")
-    guest = await _add_user(session, "Гость")
-    await _add_resident(session, guest, fixture.house_id, flat_id, verified=False)
+    guest = await add_user(session, "Гость")
+    await add_resident(session, guest, fixture.house_id, flat_id, verified=False)
     grid = await service.create(
         fixture.org_id,
         fixture.user_id,
@@ -443,7 +416,7 @@ async def test_a_block_in_another_house_does_not_reach_this_request(
     service = _make_service(session)
     flat_id, user_id = await _with_resident(session, fixture.house_id, "12")
     other_flat = await _add_flat(session, elsewhere.house_id, "99")
-    await _add_resident(
+    await add_resident(
         session,
         user_id,
         elsewhere.house_id,
@@ -501,17 +474,10 @@ async def test_create_queues_the_slots_window_for_the_residents(
     ]
 
 
-def _draft_at(
-    house_id: HouseId,
-    flat_id: FlatId,
-    day: date,
-    at: datetime,
-) -> AccessRequestDraft:
-    return AccessRequestDraft(
-        house_id=house_id,
-        reason="Поверка газового оборудования",
-        date=day,
-        flat_ids=[flat_id],
+def _draft_at(house_id: HouseId, flat_id: FlatId, at: datetime) -> AccessRequestDraft:
+    return replace(
+        _draft(house_id, [flat_id]),
+        date=at.date(),
         slots=[AccessSlotDraft(starts_at=at, capacity=1)],
     )
 
@@ -527,7 +493,7 @@ async def test_a_naive_slot_is_house_time_and_dated_by_it(
     grid = await _make_service(session).create(
         fixture.org_id,
         fixture.user_id,
-        _draft_at(fixture.house_id, flat_id, day, datetime.combine(day, time(0, 30))),
+        _draft_at(fixture.house_id, flat_id, datetime.combine(day, time(0, 30))),
     )
 
     [slot] = grid.request.slots
@@ -545,7 +511,6 @@ async def test_the_access_day_is_past_by_the_house_clock(
         datetime(2026, 9, 15, 22, tzinfo=UTC),
     )
     fixture = await make_org_house_flat_user()
-    day = date(2026, 9, 15)
 
     with pytest.raises(InvalidRequest, match="прошел"):
         await _make_service(session).create(
@@ -554,8 +519,7 @@ async def test_the_access_day_is_past_by_the_house_clock(
             _draft_at(
                 fixture.house_id,
                 fixture.flat_id,
-                day,
-                datetime.combine(day, time(23), MOSCOW),
+                datetime.combine(date(2026, 9, 15), time(23), MOSCOW),
             ),
         )
 

@@ -150,12 +150,8 @@ class ResidentsRepo(BaseAlchemyRepo):
                 ),
             )
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(residents_table.c.created_at).limit(limit).offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(residents_table.c.created_at)
+        return await self._page(stmt, limit, offset)
 
     async def count_by_house(
         self,

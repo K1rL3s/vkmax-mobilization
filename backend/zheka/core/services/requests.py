@@ -5,7 +5,6 @@ from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.enums import (
     EventType,
-    NotificationCategory,
     RequestActorRole,
     RequestCategory,
     RequestChannel,
@@ -18,6 +17,7 @@ from zheka.core.enums import (
 from zheka.core.errors import (
     FLAT_NOT_FOUND,
     GROUP_NOT_FOUND,
+    HOUSE_NOT_FOUND,
     REQUEST_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
@@ -59,7 +59,6 @@ MIN_RATING = 1
 MAX_RATING = 5
 
 BLOCKED = "Вы заблокированы в этом доме"
-NOT_A_RESIDENT = "Дом не найден"
 GROUP_CLOSED = "Группа заявок уже закрыта"
 GROUP_OTHER_CATEGORY = "Группа заявок собрана по другой категории"
 EMPTY_DESCRIPTION = "Опишите проблему"
@@ -162,7 +161,7 @@ class RequestsService:
         org = None if house.org_id is None else await self._orgs.get(house.org_id)
         if not is_connected(house, org):
             raise InvalidState(NOT_CONNECTED)
-        description = _stated(draft.description)
+        description = stated(draft.description, EMPTY_DESCRIPTION)
         if draft.flat_id is not None and resident.flat_id != draft.flat_id:
             raise EntityNotFound(FLAT_NOT_FOUND)
         photos = self._checked_photos(draft.photos)
@@ -219,11 +218,12 @@ class RequestsService:
         await self._active_resident(user_id, house_id)
         house = await self._get_house(house_id)
         if rejected_on_review:
-            text = (description or "").strip()
-            if not text:
-                raise InvalidRequest(REJECTION_COMMENT_REQUIRED)
+            text = stated(description or "", REJECTION_COMMENT_REQUIRED)
         else:
-            text = _stated(parent.description if description is None else description)
+            text = stated(
+                parent.description if description is None else description,
+                EMPTY_DESCRIPTION,
+            )
         checked = self._checked_photos(photos)
         if rejected_on_review:
             await self._complete_review(
@@ -309,13 +309,10 @@ class RequestsService:
                 RequestCompletionReason.AUTO_CLOSED,
                 now,
             )
-            if request.author_user_id is not None:
-                self._notifications.notify_user(
-                    request.author_user_id,
-                    texts.request_auto_closed(request.id),
-                    category=NotificationCategory.REQUESTS,
-                    mandatory=True,
-                )
+            self._notifications.notify_author(
+                request,
+                texts.request_auto_closed(request.id),
+            )
         return len(requests)
 
     async def _complete_review(
@@ -465,7 +462,7 @@ class RequestsService:
     async def _active_resident(self, user_id: UserId, house_id: HouseId) -> Resident:
         resident = await self._residents.get_for_house(user_id, house_id)
         if resident is None:
-            raise EntityNotFound(NOT_A_RESIDENT)
+            raise EntityNotFound(HOUSE_NOT_FOUND)
         if resident.status is ResidentStatus.BLOCKED:
             raise NotEnoughRights(BLOCKED)
         return resident
@@ -502,7 +499,7 @@ class RequestsService:
     async def _get_house(self, house_id: HouseId) -> House:
         house = await self._houses.get(house_id)
         if house is None:
-            raise EntityNotFound("Дом не найден")
+            raise EntityNotFound(HOUSE_NOT_FOUND)
         return house
 
     async def reject(
@@ -642,8 +639,8 @@ async def build_card(
     )
 
 
-def _stated(text: str) -> str:
+def stated(text: str, refusal: str) -> str:
     stripped = text.strip()
     if not stripped:
-        raise InvalidRequest(EMPTY_DESCRIPTION)
+        raise InvalidRequest(refusal)
     return stripped

@@ -13,7 +13,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import InvalidRequest, InvalidState
 from zheka.core.ids import FlatId, HouseId, MeterId, OrgId, UserId
-from zheka.core.models import House, Meter, OrgSettings, Reading
+from zheka.core.models import House, Meter, OrgSettings, Reading, Tariff
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess, MeterCard, zones_of
@@ -138,14 +138,7 @@ def is_spike(current: int, history: Sequence[int]) -> bool:
 
 
 def _kopecks(consumption_map: Mapping[TariffZone, int], tariff_value: int) -> int:
-    total = sum(value * tariff_value for value in consumption_map.values())
-    return to_kopecks(total)
-
-
-def _checked_values(meter: Meter, values: Mapping[TariffZone, int]) -> None:
-    expected = _ZONES_BY_COUNT.get(meter.tariff_zones)
-    if expected is None or set(values) != expected:
-        raise InvalidRequest("Показания не соответствуют тарифным зонам счетчика")
+    return to_kopecks(sum(consumption_map.values()) * tariff_value)
 
 
 class ReadingsService:
@@ -209,7 +202,7 @@ class ReadingsService:
         readings = await self._meters.list_readings(meter_id, HISTORY_LIMIT)
 
         previous_cache: dict[date, Reading | None] = {}
-        tariff_cache: dict[date, int | None] = {}
+        tariff_cache: dict[date, Tariff | None] = {}
         rows = []
         for reading in readings:
             if reading.period not in previous_cache:
@@ -225,17 +218,14 @@ class ReadingsService:
             amount = None
             if resident.can_see_charges:
                 if reading.period not in tariff_cache:
-                    tariff = await self._charges.tariff_at(
+                    tariff_cache[reading.period] = await self._charges.tariff_at(
                         house_id,
                         SERVICE_OF_METER[meter.type],
                         reading.period,
                     )
-                    tariff_cache[reading.period] = (
-                        None if tariff is None else tariff.value
-                    )
-                tariff_value = tariff_cache[reading.period]
-                if tariff_value is not None:
-                    amount = _kopecks(consumption_map, tariff_value)
+                tariff = tariff_cache[reading.period]
+                if tariff is not None:
+                    amount = _kopecks(consumption_map, tariff.value)
 
             rows.append(
                 ReadingRow(
@@ -260,7 +250,9 @@ class ReadingsService:
         house = await self._access.house_of_flat(flat_id)
         house_id = house.id
 
-        _checked_values(meter, draft.values)
+        expected = _ZONES_BY_COUNT.get(meter.tariff_zones)
+        if expected is None or set(draft.values) != expected:
+            raise InvalidRequest("Показания не соответствуют тарифным зонам счетчика")
         if not draft.photos:
             raise InvalidRequest("Приложите фото показаний")
         for name in draft.photos:

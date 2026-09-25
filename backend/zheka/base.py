@@ -3,6 +3,8 @@ from datetime import UTC, date, datetime, time
 from typing import Any, dataclass_transform
 from zoneinfo import ZoneInfo
 
+UNSET: Any = None
+
 _FROZEN_ATTR = "__zheka_frozen__"
 _SLOTS_ATTR = "__zheka_slots__"
 

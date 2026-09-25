@@ -44,7 +44,7 @@ def error_response(
 def _domain_handler(status_code: int) -> Callable[[Request, Any], Awaitable[Response]]:
     async def handler(request: Request, exc: ZhekaError) -> Response:
         logger.debug("%s", status_code, exc_info=exc)
-        return error_response(request, status_code, exc.title, str(exc))
+        return error_response(request, status_code, type(exc).__name__, str(exc))
 
     return handler
 

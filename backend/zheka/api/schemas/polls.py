@@ -15,10 +15,7 @@ from zheka.core.services.polls import (
     PollOptionCount,
     PollResultsData,
 )
-from zheka.core.services.quorum import (
-    QUORUM_PERCENT as QUORUM_PERCENT,  # noqa: PLC0414
-    area_percent_of,
-)
+from zheka.core.services.quorum import QUORUM_PERCENT, area_percent_of
 
 DISCLAIMER = (
     "предварительный сбор позиций собственников, "
@@ -49,7 +46,7 @@ class PollListItem(BaseSchema):
     def of(cls, data: PollListItemData | PollCardData) -> Self:
         poll = data.poll
         return cls(
-            id=PollId(poll.id),
+            id=poll.id,
             title=poll.title,
             status=data.status,
             starts_at=poll.starts_at,
@@ -80,10 +77,7 @@ class PollCard(PollListItem):
             created_by_role=poll.created_by_role,
             can_vote=data.can_vote,
             can_manage=data.can_manage,
-            options=[
-                PollOptionItem(id=option.id, text=option.text, position=option.position)
-                for option in data.options
-            ],
+            options=[PollOptionItem.model_validate(option) for option in data.options],
             description=poll.description,
             my_option_ids=data.my_option_ids,
         )
@@ -124,7 +118,7 @@ class PollOptionResult(BaseSchema):
     @classmethod
     def of(cls, count: PollOptionCount, total_area: int) -> Self:
         return cls(
-            option_id=PollOptionId(count.option.id),
+            option_id=count.option.id,
             text=count.option.text,
             flats_count=count.flats_count,
             area=count.area,
@@ -177,7 +171,7 @@ class PollNonVoterItem(BaseSchema):
     @classmethod
     def of(cls, flat: Flat) -> Self:
         return cls(
-            flat_id=FlatId(flat.id),
+            flat_id=flat.id,
             flat_number=flat.number,
             entrance=flat.entrance,
         )

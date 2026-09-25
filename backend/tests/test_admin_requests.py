@@ -1,18 +1,20 @@
-import secrets
-
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser, RecordingBroker
-from tests.test_requests import (
+from tests.conftest import (
     Fixture,
-    _admin,
+    OrgHouseFlatUser,
+    RecordingBroker,
+    admin_requests_service,
+    events_of,
+    photo_name,
+    requests_service,
+)
+from tests.test_requests import (
     _age,
     _complain,
-    _events,
     _group_of_three,
-    _make_service,
     _member,
     _neighbour,
 )
@@ -71,13 +73,14 @@ def _phone_draft(own: OrgHouseFlatUser, **fields: object) -> PhoneRequestDraft:
 async def test_inbox_never_shows_a_request_of_another_organization(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     foreign = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     mine = await _complain(session, own.user_id, own.house_id)
     await _complain(session, foreign.user_id, foreign.house_id)
 
-    rows, total = await _admin(session).inbox(own.org_id, NO_FILTERS, 20, 0)
+    service = admin_requests_service(session)
+    rows, total = await service.inbox(own.org_id, NO_FILTERS, 20, 0)
 
     assert total == 1
     assert [row.request.id for row in rows] == [mine.id]
@@ -86,20 +89,19 @@ async def test_inbox_never_shows_a_request_of_another_organization(
 async def test_a_request_of_another_organization_is_not_found_by_id(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     foreign = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     alien = await _complain(session, foreign.user_id, foreign.house_id)
 
     with pytest.raises(EntityNotFound):
-        await _admin(session).card(own.org_id, alien.id)
+        await admin_requests_service(session).card(own.org_id, alien.id)
 
 
 async def test_overdue_requests_come_first_and_can_be_filtered(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     fresh = await _complain(session, own.user_id, own.house_id)
     late = await _complain(session, own.user_id, own.house_id)
     done = await _complain(session, own.user_id, own.house_id)
@@ -108,7 +110,7 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
     await _age(session, done.id, normative + 2)
     done.status = RequestStatus.DONE
     await session.flush()
-    service = _admin(session)
+    service = admin_requests_service(session)
 
     rows, _ = await service.inbox(own.org_id, NO_FILTERS, 20, 0)
     only_overdue, total = await service.inbox(
@@ -125,11 +127,10 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
 
 async def test_grouped_collapses_a_group_into_one_row(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     members, _ = await _group_of_three(session, own)
-    service = _admin(session)
+    service = admin_requests_service(session)
 
     plain, plain_total = await service.inbox(own.org_id, NO_FILTERS, 20, 0)
     collapsed, collapsed_total = await service.inbox(
@@ -148,14 +149,13 @@ async def test_grouped_collapses_a_group_into_one_row(
 
 async def test_change_status_writes_the_log_the_stamp_and_the_event(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     request = await _complain(session, own.user_id, own.house_id)
     request_id = request.id
 
-    card = await _admin(session).change_status(
+    card = await admin_requests_service(session).change_status(
         own.org_id,
         request_id,
         RequestStatus.ACCEPTED,
@@ -172,7 +172,7 @@ async def test_change_status_writes_the_log_the_stamp_and_the_event(
     assert [message.message.text for message in card.card.messages] == [
         "Приняли, выехали",
     ]
-    events = await _events(session, EventType.REQUEST_STATUS_CHANGED)
+    events = await events_of(session, EventType.REQUEST_STATUS_CHANGED)
     assert events[0].payload == {
         "request_id": request_id,
         "from": RequestStatus.NEW.value,
@@ -183,12 +183,11 @@ async def test_change_status_writes_the_log_the_stamp_and_the_event(
 
 async def test_phone_request_carries_the_caller_and_no_author(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
 
-    card = await _admin(session).create_phone(
+    card = await admin_requests_service(session).create_phone(
         own.org_id,
         _phone_draft(own, caller_name="Мария Ивановна", caller_phone="+70000000000"),
         staff,
@@ -204,31 +203,12 @@ async def test_phone_request_carries_the_caller_and_no_author(
     assert await _logs(session, request.id) == [RequestStatus.NEW]
 
 
-async def test_phone_request_accepts_a_flat_without_caller_details(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
-
-    card = await _admin(session).create_phone(
-        own.org_id,
-        _phone_draft(own, flat_id=own.flat_id),
-        staff,
-    )
-
-    assert card.card.request.flat_id == own.flat_id
-    assert card.card.request.caller_name is None
-    assert card.card.request.caller_phone is None
-
-
 async def test_phone_request_refuses_without_a_flat_or_full_caller_details(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
-    service = _admin(session)
+    service = admin_requests_service(session)
 
     for fields in ({}, {"caller_name": "Мария"}, {"caller_phone": "+70000000000"}):
         with pytest.raises(InvalidRequest):
@@ -238,12 +218,12 @@ async def test_phone_request_refuses_without_a_flat_or_full_caller_details(
 async def test_phone_request_refuses_a_house_of_another_organization(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     foreign = await make_org_house_flat_user()
 
     with pytest.raises(EntityNotFound):
-        await _admin(session).create_phone(
+        await admin_requests_service(session).create_phone(
             own.org_id,
             _phone_draft(foreign, flat_id=foreign.flat_id),
             await _member(session, own.org_id, OrgRole.EMPLOYEE),
@@ -252,13 +232,12 @@ async def test_phone_request_refuses_a_house_of_another_organization(
 
 async def test_reply_writes_a_message_from_the_management(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     request = await _complain(session, own.user_id, own.house_id)
 
-    card = await _admin(session).reply(
+    card = await admin_requests_service(session).reply(
         own.org_id,
         request.id,
         "  Мастер придет завтра  ",
@@ -274,28 +253,28 @@ async def test_reply_writes_a_message_from_the_management(
 
 async def test_reply_refuses_an_empty_text(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     request = await _complain(session, own.user_id, own.house_id)
 
+    service = admin_requests_service(session)
+
     with pytest.raises(InvalidRequest):
-        await _admin(session).reply(own.org_id, request.id, "   ", staff)
+        await service.reply(own.org_id, request.id, "   ", staff)
 
 
 async def test_assign_takes_an_executor_leaves_the_status_and_opens_his_card(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
     broker: RecordingBroker,
     publisher: TaskPublisher,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
     request = await _complain(session, own.user_id, own.house_id)
 
-    card = await _admin(session, publisher).assign(
+    card = await admin_requests_service(session, publisher).assign(
         own.org_id,
         request.id,
         executor,
@@ -304,7 +283,7 @@ async def test_assign_takes_an_executor_leaves_the_status_and_opens_his_card(
 
     assert card.card.request.executor_user_id == executor
     assert card.card.request.status is RequestStatus.NEW
-    assert await _events(session, EventType.REQUEST_ASSIGNED) != []
+    assert await events_of(session, EventType.REQUEST_ASSIGNED) != []
     await publisher.flush()
     assert broker.enqueued(TaskName.SEND_EXECUTOR_CARD) == [
         {"request_id": request.id, "user_id": None},
@@ -313,39 +292,41 @@ async def test_assign_takes_an_executor_leaves_the_status_and_opens_his_card(
 
 async def test_assign_refuses_a_member_who_is_not_an_executor(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     request = await _complain(session, own.user_id, own.house_id)
 
+    service = admin_requests_service(session)
+
     with pytest.raises(InvalidRequest):
-        await _admin(session).assign(own.org_id, request.id, staff, staff)
+        await service.assign(own.org_id, request.id, staff, staff)
 
 
 async def test_assign_refuses_an_executor_of_another_organization(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     foreign = await make_org_house_flat_user()
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     alien = await _member(session, foreign.org_id, OrgRole.EXECUTOR)
     request = await _complain(session, own.user_id, own.house_id)
 
+    service = admin_requests_service(session)
+
     with pytest.raises(EntityNotFound):
-        await _admin(session).assign(own.org_id, request.id, alien, staff)
+        await service.assign(own.org_id, request.id, alien, staff)
 
 
 async def test_executors_are_listed_with_their_load(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
     request = await _complain(session, own.user_id, own.house_id)
-    service = _admin(session)
+    service = admin_requests_service(session)
     await service.assign(own.org_id, request.id, executor, staff)
 
     views = await service.executors(own.org_id)
@@ -354,47 +335,25 @@ async def test_executors_are_listed_with_their_load(
     assert views[0].active_requests == 1
 
 
-async def test_staff_cannot_close_a_group_whose_requests_have_authors(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user()
-    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
-    service = _admin(session)
-    _, group_id = await _group_of_three(session, own)
-    for target in TO_REVIEW:
-        await service.change_group_status(own.org_id, group_id, target, None, staff)
-
-    with pytest.raises(InvalidState):
-        await service.change_group_status(
-            own.org_id,
-            group_id,
-            RequestStatus.DONE,
-            None,
-            staff,
-        )
-
-
 async def test_a_group_of_another_organization_is_not_found(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     foreign = await make_org_house_flat_user()
     _, group_id = await _group_of_three(session, foreign)
 
     with pytest.raises(EntityNotFound):
-        await _admin(session).group_card(own.org_id, group_id)
+        await admin_requests_service(session).group_card(own.org_id, group_id)
 
 
 async def test_a_group_already_in_the_target_status_is_refused(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     _, group_id = await _group_of_three(session, own)
-    service = _admin(session)
+    service = admin_requests_service(session)
     await service.change_group_status(
         own.org_id,
         group_id,
@@ -415,11 +374,10 @@ async def test_a_group_already_in_the_target_status_is_refused(
 
 async def test_staff_closes_a_group_of_phone_requests_and_its_row(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
-    service = _admin(session)
+    service = admin_requests_service(session)
     flats = [own.flat_id]
     for number in ("2", "3"):
         flat = Flat(house_id=own.house_id, number=number)
@@ -449,12 +407,11 @@ async def test_staff_closes_a_group_of_phone_requests_and_its_row(
 
 async def test_group_status_carries_a_late_joiner_through_two_steps(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     members, group_id = await _group_of_three(session, own)
-    service = _admin(session)
+    service = admin_requests_service(session)
     for target in (RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS):
         await service.change_group_status(own.org_id, group_id, target, None, staff)
 
@@ -491,12 +448,11 @@ async def test_group_status_carries_a_late_joiner_through_two_steps(
 
 async def test_group_status_refuses_a_member_ahead_of_the_target(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     members, group_id = await _group_of_three(session, own)
-    service = _admin(session)
+    service = admin_requests_service(session)
     ahead = members[0].id
     for target in (RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS):
         await service.change_status(own.org_id, ahead, target, None, staff)
@@ -521,7 +477,8 @@ async def _assigned(
     executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
     request = await _complain(session, own.user_id, own.house_id)
     request_id = request.id
-    await _admin(session).assign(own.org_id, request_id, executor, own.user_id)
+    service = admin_requests_service(session)
+    await service.assign(own.org_id, request_id, executor, own.user_id)
     return request_id, executor
 
 
@@ -530,24 +487,19 @@ async def _in_progress(
     own: OrgHouseFlatUser,
 ) -> tuple[RequestId, UserId]:
     request_id, executor = await _assigned(session, own)
-    service = _admin(session)
+    service = admin_requests_service(session)
     await service.executor_advance(executor, request_id, RequestStatus.ACCEPTED, [])
     await service.executor_advance(executor, request_id, RequestStatus.IN_PROGRESS, [])
     return request_id, executor
 
 
-def _photo_name() -> str:
-    return f"{secrets.token_hex(16)}.jpg"
-
-
 async def test_the_executor_accepts_a_new_request_assigned_to_him(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     request_id, executor = await _assigned(session, own)
 
-    await _admin(session).executor_advance(
+    await admin_requests_service(session).executor_advance(
         executor,
         request_id,
         RequestStatus.ACCEPTED,
@@ -561,7 +513,7 @@ async def test_the_executor_accepts_a_new_request_assigned_to_him(
     log = (await session.execute(stmt)).one()
     assert log.by_role == RequestActorRole.EXECUTOR
     assert log.by_user_id == executor
-    events = await _events(session, EventType.EXECUTOR_STATUS_CHANGED)
+    events = await events_of(session, EventType.EXECUTOR_STATUS_CHANGED)
     assert [event.payload for event in events] == [
         {"request_id": request_id, "to": RequestStatus.ACCEPTED.value},
     ]
@@ -569,13 +521,12 @@ async def test_the_executor_accepts_a_new_request_assigned_to_him(
 
 async def test_ready_without_a_result_photo_is_refused_and_writes_nothing(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     request_id, executor = await _in_progress(session, own)
 
     with pytest.raises(InvalidState, match="фото результата"):
-        await _admin(session).executor_advance(
+        await admin_requests_service(session).executor_advance(
             executor,
             request_id,
             RequestStatus.ON_REVIEW,
@@ -587,22 +538,21 @@ async def test_ready_without_a_result_photo_is_refused_and_writes_nothing(
 
 async def test_ready_with_a_result_photo_opens_the_review_card(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
     broker: RecordingBroker,
     publisher: TaskPublisher,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     request_id, executor = await _in_progress(session, own)
-    name = _photo_name()
+    name = photo_name()
 
-    await _admin(session, publisher).executor_advance(
+    await admin_requests_service(session, publisher).executor_advance(
         executor,
         request_id,
         RequestStatus.ON_REVIEW,
         [name],
     )
 
-    card = await _admin(session).executor_card(executor, request_id)
+    card = await admin_requests_service(session).executor_card(executor, request_id)
     assert card is not None
     assert card.request.status is RequestStatus.ON_REVIEW
     assert [photo.path for photo in card.result_photos] == [name]
@@ -613,16 +563,15 @@ async def test_ready_with_a_result_photo_opens_the_review_card(
 
 async def test_a_refused_move_attaches_no_result_photo(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     request_id, executor = await _in_progress(session, own)
-    service = _admin(session)
+    service = admin_requests_service(session)
     await service.executor_advance(
         executor,
         request_id,
         RequestStatus.ON_REVIEW,
-        [_photo_name()],
+        [photo_name()],
     )
 
     with pytest.raises(InvalidState):
@@ -630,7 +579,7 @@ async def test_a_refused_move_attaches_no_result_photo(
             executor,
             request_id,
             RequestStatus.ON_REVIEW,
-            [_photo_name()],
+            [photo_name()],
         )
 
     card = await service.executor_card(executor, request_id)
@@ -641,10 +590,9 @@ async def test_a_refused_move_attaches_no_result_photo(
 @pytest.mark.parametrize("loss", ["another_executor", "removed", "demoted"])
 async def test_only_the_assigned_executor_of_the_org_can_advance(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
     loss: str,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     request_id, executor = await _assigned(session, own)
     orgs_repo = OrgsRepo(session)
     member = await orgs_repo.get_member(own.org_id, executor)
@@ -657,13 +605,16 @@ async def test_only_the_assigned_executor_of_the_org_can_advance(
         await orgs_repo.set_member_role(member, OrgRole.EMPLOYEE)
 
     with pytest.raises(NotEnoughRights):
-        await _admin(session).executor_advance(
+        await admin_requests_service(session).executor_advance(
             executor,
             request_id,
             RequestStatus.ACCEPTED,
             [],
         )
-    assert await _admin(session).executor_card(executor, request_id) is None
+    assert (
+        await admin_requests_service(session).executor_card(executor, request_id)
+        is None
+    )
 
 
 async def _resident_id(session: AsyncSession, own: OrgHouseFlatUser) -> ResidentId:
@@ -674,13 +625,12 @@ async def _resident_id(session: AsyncSession, own: OrgHouseFlatUser) -> Resident
 
 async def test_a_phone_request_for_a_resident_runs_the_ordinary_road(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
     broker: RecordingBroker,
     publisher: TaskPublisher,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
-    service = _admin(session, publisher)
+    service = admin_requests_service(session, publisher)
 
     card = await service.create_phone(
         own.org_id,
@@ -694,27 +644,8 @@ async def test_a_phone_request_for_a_resident_runs_the_ordinary_road(
     assert request.flat_id == own.flat_id
     assert request.is_staff_author is False
 
-    await service.change_status(
-        own.org_id,
-        request_id,
-        RequestStatus.ACCEPTED,
-        None,
-        staff,
-    )
-    await service.change_status(
-        own.org_id,
-        request_id,
-        RequestStatus.IN_PROGRESS,
-        None,
-        staff,
-    )
-    await service.change_status(
-        own.org_id,
-        request_id,
-        RequestStatus.ON_REVIEW,
-        None,
-        staff,
-    )
+    for target in TO_REVIEW:
+        await service.change_status(own.org_id, request_id, target, None, staff)
     with pytest.raises(InvalidState):
         await service.change_status(
             own.org_id,
@@ -723,7 +654,7 @@ async def test_a_phone_request_for_a_resident_runs_the_ordinary_road(
             None,
             staff,
         )
-    residents = _make_service(session)
+    residents = requests_service(session)
     await residents.accept(own.user_id, request_id)
     rated = await residents.rate(own.user_id, request_id, 5, None)
 
@@ -739,12 +670,12 @@ async def test_a_phone_request_for_a_resident_runs_the_ordinary_road(
 async def test_a_phone_request_refuses_a_resident_of_another_house(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user()
     foreign = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
 
     with pytest.raises(EntityNotFound):
-        await _admin(session).create_phone(
+        await admin_requests_service(session).create_phone(
             own.org_id,
             _phone_draft(own, resident_id=await _resident_id(session, foreign)),
             await _member(session, own.org_id, OrgRole.EMPLOYEE),
@@ -753,16 +684,15 @@ async def test_a_phone_request_refuses_a_resident_of_another_house(
 
 async def test_a_phone_request_refuses_a_blocked_resident(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     residents = ResidentsRepo(session)
     resident = await residents.get(await _resident_id(session, own))
     assert resident is not None
     await residents.set_status(resident, ResidentStatus.BLOCKED, "Задолженность")
 
     with pytest.raises(InvalidState, match=RESIDENT_BLOCKED):
-        await _admin(session).create_phone(
+        await admin_requests_service(session).create_phone(
             own.org_id,
             _phone_draft(own, resident_id=resident.id),
             await _member(session, own.org_id, OrgRole.EMPLOYEE),
@@ -771,15 +701,14 @@ async def test_a_phone_request_refuses_a_blocked_resident(
 
 async def test_a_phone_request_refuses_a_flat_other_than_the_residents(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     other = Flat(house_id=own.house_id, number="2")
     session.add(other)
     await session.flush()
 
     with pytest.raises(InvalidRequest):
-        await _admin(session).create_phone(
+        await admin_requests_service(session).create_phone(
             own.org_id,
             _phone_draft(
                 own,

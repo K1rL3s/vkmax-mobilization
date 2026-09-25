@@ -68,14 +68,8 @@ class HousesRepo(BaseAlchemyRepo):
             for word in query.split():
                 stmt = stmt.where(address.icontains(word, autoescape=True))
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(houses_table.c.street, houses_table.c.building)
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(houses_table.c.street, houses_table.c.building)
+        return await self._page(stmt, limit, offset)
 
     async def nearest(
         self,
@@ -166,14 +160,8 @@ class HousesRepo(BaseAlchemyRepo):
         if entrance is not None:
             stmt = stmt.where(flats_table.c.entrance == entrance)
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(func.length(flats_table.c.number), flats_table.c.number)
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(func.length(flats_table.c.number), flats_table.c.number)
+        return await self._page(stmt, limit, offset)
 
     async def count_demand(self, house_id: HouseId) -> int:
         stmt = (
@@ -236,14 +224,8 @@ class HousesRepo(BaseAlchemyRepo):
                 ),
             )
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(houses_table.c.street, houses_table.c.building)
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(houses_table.c.street, houses_table.c.building)
+        return await self._page(stmt, limit, offset)
 
     async def count_flats_by_house(
         self,

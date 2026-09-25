@@ -26,7 +26,7 @@ class OrgMembership(BaseSchema):
     @classmethod
     def of(cls, view: OrgMembershipView) -> Self:
         return cls(
-            org_id=OrgId(view.org.id),
+            org_id=view.org.id,
             name=view.org.name,
             role=view.member.role,
             is_demo=view.org.is_demo,
@@ -50,7 +50,7 @@ class OrgCard(BaseSchema):
     def of(cls, card: OrgCardView) -> Self:
         org = card.org
         return cls(
-            id=OrgId(org.id),
+            id=org.id,
             name=org.name,
             inn=org.inn,
             license_no=org.license_no,
@@ -147,7 +147,7 @@ class OrgMemberItem(BaseSchema):
     @classmethod
     def of(cls, view: OrgMemberView, can_remove: bool) -> Self:
         return cls(
-            user_id=UserId(view.user.id),
+            user_id=view.user.id,
             name=view.user.name,
             username=view.user.username,
             role=view.member.role,

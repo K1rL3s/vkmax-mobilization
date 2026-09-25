@@ -14,8 +14,6 @@ from zheka.infra.database.repos.users import UsersRepo
 
 class CurrentAccount(ZhekaType):
     user_id: UserId
-    max_user_id: MaxUserId
-    name: str
     consent_at: datetime | None
 
 
@@ -25,9 +23,9 @@ async def get_current_account(
     current_user: CurrentUserDep,
     users_repo: FromDishka[UsersRepo],
 ) -> CurrentAccount:
-    webapp_user = current_user.init_data.user
+    webapp_user = current_user.user
     user = await users_repo.upsert_by_max_id(
-        current_user.max_user_id,
+        MaxUserId(webapp_user.id),
         name=(
             f"{webapp_user.first_name} {webapp_user.last_name}"
             if webapp_user.last_name
@@ -35,12 +33,7 @@ async def get_current_account(
         ),
         username=webapp_user.username,
     )
-    return CurrentAccount(
-        user_id=UserId(user.id),
-        max_user_id=current_user.max_user_id,
-        name=user.name,
-        consent_at=user.consent_at,
-    )
+    return CurrentAccount(user_id=user.id, consent_at=user.consent_at)
 
 
 CurrentAccountDep = Annotated[CurrentAccount, Depends(get_current_account)]

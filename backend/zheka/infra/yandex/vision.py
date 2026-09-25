@@ -60,14 +60,11 @@ class VisionClient:
         except (EntityNotFound, OSError):
             return None
 
-        data = await self._call(content)
-        text = None if data is None else _full_text(data)
+        text = await self._call(content)
         value = None if text is None else parse_reading(text)
-        if value is None:
-            return None
-        return {TariffZone.SINGLE: value}
+        return None if value is None else {TariffZone.SINGLE: value}
 
-    async def _call(self, content: bytes) -> dict[str, Any] | None:
+    async def _call(self, content: bytes) -> str | None:
         headers = {
             "Authorization": f"Api-Key {self._config.api_key}",
             "x-folder-id": self._config.folder_id or "",
@@ -90,4 +87,4 @@ class VisionClient:
         except (aiohttp.ClientError, TimeoutError, ValueError):
             logger.warning("Не удалось распознать показание счетчика через OCR")
             return None
-        return data
+        return _full_text(data)

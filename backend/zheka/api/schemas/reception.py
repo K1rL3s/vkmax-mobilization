@@ -6,17 +6,12 @@ from pydantic import Field
 from zheka.api.schemas.base import BaseSchema
 from zheka.core.enums import AppointmentStatus
 from zheka.core.ids import AppointmentId, HouseId, OrgId, ReceptionWindowId, RequestId
-from zheka.core.models import ReceptionWindow
-from zheka.core.services.reception import AppointmentData, ReceptionSlot
+from zheka.core.services.reception import AppointmentData
 
 
 class ReceptionSlotItem(BaseSchema):
     starts_at: datetime
     is_free: bool
-
-    @classmethod
-    def of(cls, slot: ReceptionSlot) -> Self:
-        return cls(starts_at=slot.starts_at, is_free=slot.is_free)
 
 
 class AppointmentItem(BaseSchema):
@@ -73,17 +68,6 @@ class ReceptionWindowInput(BaseSchema):
 
 class ReceptionWindowItem(ReceptionWindowInput):
     id: ReceptionWindowId
-
-    @classmethod
-    def of(cls, window: ReceptionWindow) -> Self:
-        return cls(
-            id=ReceptionWindowId(window.id),
-            weekday=window.weekday,
-            time_from=window.time_from,
-            time_to=window.time_to,
-            slot_minutes=window.slot_minutes,
-            capacity=window.capacity,
-        )
 
 
 class SetReceptionWindowsRequest(BaseSchema):

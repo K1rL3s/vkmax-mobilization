@@ -1,19 +1,15 @@
 from dataclasses import field
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
-from zheka.base import ZhekaMutableType, Zoned
+from zheka.base import UNSET, ZhekaMutableType, Zoned
 from zheka.core.ids import FlatId, HouseId, OrgId
-
-_UNSET_AT = cast(datetime, None)
-_UNSET_HOUSE_ID = cast(HouseId, None)
-_UNSET_FLAT_ID = cast(FlatId, None)
 
 
 class House(ZhekaMutableType, Zoned):
-    id: HouseId = _UNSET_HOUSE_ID
-    created_at: datetime = _UNSET_AT
+    id: HouseId = UNSET
+    created_at: datetime = UNSET
     org_id: OrgId | None = None
     region: str
     city: str
@@ -37,7 +33,7 @@ class House(ZhekaMutableType, Zoned):
 
 
 class Flat(ZhekaMutableType):
-    id: FlatId = _UNSET_FLAT_ID
+    id: FlatId = UNSET
     house_id: HouseId
     number: str
     entrance: int | None = None

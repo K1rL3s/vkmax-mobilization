@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 import secrets
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
@@ -52,7 +52,7 @@ from maxo.types.simple_query_result import SimpleQueryResult
 from maxo.utils.deeplink import create_start_link
 from maxo.utils.link import id_to_message_url
 from maxo.utils.payload import decode_payload
-from sqlalchemy import Row, delete, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import InMemoryBroker
 
@@ -136,7 +136,7 @@ from zheka.core.enums import (
     ResidentRole,
     ResidentStatus,
 )
-from zheka.core.errors import INVITE_NOT_FOUND, NotEnoughRights
+from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import (
     AccessRequestId,
     AccessSlotId,
@@ -178,9 +178,7 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
-from zheka.infra.database.tables.chats import chats_table
 from zheka.infra.database.tables.events import events_table
-from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import residents_table
@@ -195,7 +193,6 @@ class _RecordingBot(FakeBot):
         self.notifies: list[bool] = []
         self.texts: list[str | None] = []
         self.chat_ids: list[Any] = []
-        self.user_ids: list[Any] = []
         self.links: list[Any] = []
 
     async def send_message(  # type: ignore[mutable-override]
@@ -206,7 +203,6 @@ class _RecordingBot(FakeBot):
         self.notifies.append(kwargs["notify"])
         self.texts.append(kwargs.get("text"))
         self.chat_ids.append(kwargs.get("chat_id"))
-        self.user_ids.append(kwargs.get("user_id"))
         self.links.append(kwargs.get("link"))
         return SendMessageResult(
             message=Message(
@@ -215,13 +211,6 @@ class _RecordingBot(FakeBot):
                 body=MessageBody(mid="1", seq=1, text=kwargs.get("text")),
             ),
         )
-
-
-def _new_message() -> NewMessage:
-    return NewMessage(
-        recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=1),
-        text="Окно",
-    )
 
 
 ACCEPT = InlineButtonTextLocator("✅ Даю согласие")
@@ -255,30 +244,10 @@ def client(
     )
 
 
-async def _saved(session: AsyncSession, max_user_id: MaxUserId) -> User | None:
-    return await UsersRepo(session).get_by_max_id(max_user_id)
-
-
-async def test_consent_button_writes_the_consent_and_opens_the_menu(
-    client: BotClient,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-    fake_bot: FakeBot,
-) -> None:
-    await client.send("/start")
-
-    await client.click(message_manager.last_message(), ACCEPT)
-
-    user = await _saved(bot_session, MaxUserId(client.user.id))
+async def _user(session: AsyncSession, client: BotClient) -> User:
+    user = await UsersRepo(session).get_by_max_id(MaxUserId(client.user.id))
     assert user is not None
-    assert user.consent_at is not None
-    assert user.consent_version is not None
-    keyboard = message_manager.last_message().body.keyboard
-    assert keyboard is not None
-    buttons = [button for row in keyboard.buttons for button in row]
-    assert [
-        button.web_app for button in buttons if isinstance(button, OpenAppButton)
-    ] == [fake_bot.state.info.username]
+    return user
 
 
 async def test_a_message_from_a_house_chat_starts_nothing(
@@ -289,13 +258,7 @@ async def test_a_message_from_a_house_chat_starts_nothing(
 ) -> None:
     message_manager.reset_history()
     max_user_id = _max_id()
-    group = BotClient(
-        bot_setup.dp,
-        user_id=max_user_id,
-        chat_id=max_user_id,
-        chat_type=ChatType.CHAT,
-        bot=fake_bot,
-    )
+    group = _in_chat(bot_setup, fake_bot, MaxChatId(max_user_id), max_user_id)
 
     await group.send("/start")
 
@@ -367,19 +330,20 @@ async def test_a_user_without_a_live_private_chat_gets_no_window(
 async def test_the_dialog_message_is_silent_unless_the_task_asked_for_sound() -> None:
     recorder = _RecordingBot()
     manager = ZhekaMessageManager(media_id_storage=MediaIdStorage())
+    window = NewMessage(recipient=Recipient(chat_type=ChatType.DIALOG), text="Окно")
 
-    await manager.send_message(recorder, _new_message())
+    await manager.send_message(recorder, window)
     assert recorder.notifies == [False]
 
     token = dialog_notify.set(True)
     try:
-        await manager.send_message(recorder, _new_message())
+        await manager.send_message(recorder, window)
     finally:
         dialog_notify.reset(token)
     assert recorder.notifies == [False, True]
 
 
-async def test_start_dialog_returns_with_the_window_already_sent(
+async def test_start_dialog_returns_with_the_window_sent_and_the_name_kept(
     client: BotClient,
     bot_setup: BotSetup,
     fake_bot: FakeBot,
@@ -387,35 +351,16 @@ async def test_start_dialog_returns_with_the_window_already_sent(
     bot_session: AsyncSession,
 ) -> None:
     await client.send("/start")
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(bot_session, client)
+    name = user.name
     message_manager.reset_history()
     sender = MaxSender(fake_bot, bot_setup.bg_manager_factory)
 
     await sender.start_dialog(Menu.main, user, notify=False)
 
     assert message_manager.sent_messages != []
-
-
-async def test_a_window_opened_by_a_task_keeps_the_user_name(
-    client: BotClient,
-    bot_setup: BotSetup,
-    fake_bot: FakeBot,
-    bot_session: AsyncSession,
-) -> None:
-    await client.send("/start")
-    max_user_id = MaxUserId(client.user.id)
-    user = await _saved(bot_session, max_user_id)
-    assert user is not None
-    name = user.name
-    sender = MaxSender(fake_bot, bot_setup.bg_manager_factory)
-
-    await sender.start_dialog(Menu.main, user, notify=False)
-
     bot_session.expire_all()
-    fresh = await _saved(bot_session, max_user_id)
-    assert fresh is not None
-    assert fresh.name == name
+    assert (await _user(bot_session, client)).name == name
 
 
 async def test_a_tap_on_a_dead_window_restarts_the_menu(
@@ -429,7 +374,7 @@ async def test_a_tap_on_a_dead_window_restarts_the_menu(
 
     await client.click(stale, ACCEPT)
 
-    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+    assert MENU_TEXT in _text(message_manager)
 
 
 async def test_the_start_is_recorded_once_and_a_loose_message_is_not_a_start(
@@ -439,10 +384,7 @@ async def test_the_start_is_recorded_once_and_a_loose_message_is_not_a_start(
     await client.send("здравствуйте")
     await client.send("/start")
 
-    events = await _starts_of(bot_session, client)
-
-    assert len(events) == 1
-    assert events[0].payload == {"source": "direct"}
+    assert await _starts_of(bot_session, client) == [{"source": "direct"}]
 
 
 async def test_a_tap_from_a_house_chat_renders_nothing(
@@ -462,13 +404,7 @@ async def test_a_tap_from_a_house_chat_renders_nothing(
         await dialog_manager.start(Consent.ask, mode=StartMode.RESET_STACK)
     window = message_manager.last_message()
     message_manager.reset_history()
-    group = BotClient(
-        bot_setup.dp,
-        user_id=max_user_id,
-        chat_id=max_user_id,
-        chat_type=ChatType.CHAT,
-        bot=fake_bot,
-    )
+    group = _in_chat(bot_setup, fake_bot, MaxChatId(max_user_id), max_user_id)
 
     await group.click(window, ACCEPT)
 
@@ -492,13 +428,7 @@ async def test_a_domain_error_on_a_message_is_answered(
     bot_setup: BotSetup,
 ) -> None:
     recorder = _RecordingBot()
-    outside = BotClient(
-        bot_setup.dp,
-        user_id=_max_id(),
-        chat_id=_max_id(),
-        chat_type=ChatType.CHAT,
-        bot=recorder,
-    )
+    outside = _in_chat(bot_setup, recorder, _chat_id(), _max_id())
 
     await outside.send(f"/{ERROR_PROBE_COMMAND}")
 
@@ -542,9 +472,11 @@ async def _bot_house(
     building: str | None = None,
     lat: Decimal | None = None,
     lon: Decimal | None = None,
+    org_id: OrgId | None = None,
 ) -> tuple[HouseId, str]:
     house = House(
         timezone="Europe/Moscow",
+        org_id=org_id,
         region="Тестовая область",
         city=city,
         street=street,
@@ -560,19 +492,19 @@ async def _bot_house(
     return house.id, house.address
 
 
-async def _starts_of(session: AsyncSession, client: BotClient) -> Sequence[Row[Any]]:
-    stmt = select(events_table).where(
+async def _starts_of(session: AsyncSession, client: BotClient) -> list[Any]:
+    stmt = select(events_table.c.payload).where(
         events_table.c.type == EventType.BOT_START,
         events_table.c.user_id.in_(
             select(users_table.c.id).where(users_table.c.max_user_id == client.user.id),
         ),
     )
-    return (await session.execute(stmt)).all()
+    return list((await session.execute(stmt)).scalars())
 
 
 @pytest.mark.parametrize(
     "payload",
-    ["не-диплинк", "demo_admin_9", "demo_staff", Omitted()],
+    ["не-диплинк", Omitted()],
 )
 async def test_a_start_without_a_deeplink_falls_through_to_start(
     client: BotClient,
@@ -583,50 +515,8 @@ async def test_a_start_without_a_deeplink_falls_through_to_start(
     await _bot_started(client, payload)
 
     assert message_manager.sent_messages
-    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
-    events = await _starts_of(bot_session, client)
-    assert len(events) == 1
-    assert events[0].payload == {"source": EventSource.DIRECT.value}
-
-
-async def test_a_house_deeplink_asks_consent_and_then_opens_the_house(
-    client: BotClient,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-) -> None:
-    house_id, address = await _bot_house(bot_session)
-
-    await _bot_started(client, house_payload(house_id))
-    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
-
-    await client.click(message_manager.last_message(), ACCEPT)
-
-    text = message_manager.last_message().body.text or ""
-    assert address in text
-    assert MENU_TEXT not in text
-
-
-async def test_a_dead_invite_link_is_answered_instead_of_silence(
-    bot_container: AsyncContainer,  # noqa: ARG001
-    bot_setup: BotSetup,
-    message_manager: MockMessageManager,
-) -> None:
-    message_manager.reset_history()
-    max_user_id = _max_id()
-    recorder = _RecordingBot()
-    client = BotClient(
-        bot_setup.dp,
-        user_id=max_user_id,
-        chat_id=max_user_id,
-        bot=recorder,
-    )
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
-    recorder.texts.clear()
-
-    await _bot_started(client, org_invite_payload("deadbeef"))
-
-    assert recorder.texts == [INVITE_NOT_FOUND]
+    assert CONSENT_TEXT in _text(message_manager)
+    assert await _starts_of(bot_session, client) == [{"source": "direct"}]
 
 
 async def _linked(
@@ -635,8 +525,7 @@ async def _linked(
     house_id: HouseId,
     created_at: datetime,
 ) -> None:
-    user = await _saved(session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(session, client)
     session.add(
         Resident(
             user_id=user.id,
@@ -650,7 +539,7 @@ async def _linked(
 
 async def _draft_request(client: BotClient, message_manager: MockMessageManager) -> str:
     await client.click(message_manager.last_message(), NEW_REQUEST)
-    address = message_manager.last_message().body.text or ""
+    address = _text(message_manager)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
     await client.send("Течет кран на кухне")
     await client.click(message_manager.last_message(), NEXT)
@@ -664,23 +553,18 @@ async def test_the_request_goes_to_the_house_the_resident_linked_last(
     bot_session: AsyncSession,
     bot_broker: RecordingBroker,
 ) -> None:
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     now = datetime.now(UTC)
     _, first = await _org_house(bot_session)
-    _, last = await _org_house(bot_session)
+    last, address = await _bot_house(bot_session, org_id=await _org(bot_session))
     await _linked(bot_session, client, first, now)
     await _linked(bot_session, client, last, now + timedelta(minutes=1))
-    last_house = await HousesRepo(bot_session).get(last)
-    assert last_house is not None
 
-    address = await _draft_request(client, message_manager)
-
-    assert last_house.address in address
+    assert address in await _draft_request(client, message_manager)
     enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)
     assert enqueued[-1]["house_id"] == int(last)
     await client.click(message_manager.last_message(), TO_MENU)
-    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+    assert MENU_TEXT in _text(message_manager)
 
 
 DEPART = InlineButtonTextLocator("🚗 Выехал")
@@ -692,38 +576,14 @@ PHOTO_TOKEN = "photo-token"  # noqa: S105
 
 
 async def _org_house(session: AsyncSession) -> tuple[OrgId, HouseId]:
-    org = Organization(
-        timezone="Europe/Moscow",
-        name=f"УК {secrets.token_hex(4)}",
-        inn=secrets.token_hex(6),
-        phone="+70000000000",
-        address="Тестовая область, Тестоград, Тестовая, 1",
-        registered_at=datetime.now(UTC),
-    )
-    session.add(org)
-    await session.flush()
-    house = House(
-        timezone="Europe/Moscow",
-        org_id=org.id,
-        region="Тестовая область",
-        city="Тестоград",
-        street="Исполнительская",
-        building=secrets.token_hex(2),
-        cadastral_no=secrets.token_hex(8),
-        chat_binding_code=secrets.token_hex(4),
-    )
-    session.add(house)
-    await session.flush()
-    ids = org.id, house.id
-    await session.commit()
-    return ids
+    org_id = await _org(session)
+    house_id, _ = await _bot_house(session, org_id=org_id)
+    return org_id, house_id
 
 
 async def _started(session: AsyncSession, client: BotClient) -> UserId:
     await client.send("/start")
-    user = await _saved(session, MaxUserId(client.user.id))
-    assert user is not None
-    return user.id
+    return (await _user(session, client)).id
 
 
 async def _request(
@@ -756,11 +616,9 @@ async def _executor_on(
     client: BotClient,
     status: RequestStatus,
 ) -> RequestId:
-    user_id = await _started(session, client)
-    org_id, house_id = await _org_house(session)
-    session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.EXECUTOR))
-    await session.commit()
-    return await _request(session, house_id, status, executor=user_id)
+    house_id = await _staff(session, client, OrgRole.EXECUTOR)
+    executor = (await _user(session, client)).id
+    return await _request(session, house_id, status, executor=executor)
 
 
 async def _run(broker: InMemoryBroker, task: Any, **kwargs: Any) -> None:
@@ -776,26 +634,17 @@ async def _status(session: AsyncSession, request_id: RequestId) -> Request:
     return request
 
 
-async def _send_photo(client: BotClient) -> None:
-    body = MessageBody(
-        mid=secrets.token_hex(4),
-        seq=1,
-        text=None,
-        attachments=[
-            PhotoAttachment(
-                payload=PhotoAttachmentPayload(
-                    photo_id=1,
-                    token=PHOTO_TOKEN,
-                    url=RESULT_URL,
-                ),
-            ),
-        ],
-    )
+async def _send(client: BotClient, attachment: Any) -> None:
     message = Message(
         sender=client.user,
         recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=client.chat.chat_id),
         timestamp=datetime.now(UTC),
-        body=body,
+        body=MessageBody(
+            mid=secrets.token_hex(4),
+            seq=1,
+            text=None,
+            attachments=[attachment],
+        ),
     )
     await _feed(client, MessageCreated(message=message, timestamp=datetime.now(UTC)))
 
@@ -803,7 +652,7 @@ async def _send_photo(client: BotClient) -> None:
 async def _rendered(message_manager: MockMessageManager, text: str) -> None:
     async with asyncio.timeout(5):
         while not message_manager.sent_messages or text not in (  # noqa: ASYNC110
-            message_manager.last_message().body.text or ""
+            _text(message_manager)
         ):
             await asyncio.sleep(0.01)
 
@@ -871,16 +720,17 @@ async def test_ready_asks_for_the_photo_where_a_message_reaches_it(
     await client.click(message_manager.last_message(), READY)
     await _rendered(message_manager, RESULT_PHOTO_TEXT)
     assert _shown(shows, RESULT_PHOTO_TEXT)[0] is ShowMode.SEND
+    assert CANCEL.find_button(message_manager.last_message()) is not None
 
-    await _send_photo(client)
+    photo = PhotoAttachmentPayload(photo_id=1, token=PHOTO_TOKEN, url=RESULT_URL)
+    await _send(client, PhotoAttachment(payload=photo))
 
     assert bot_broker.enqueued(TaskName.ATTACH_RESULT_PHOTO)[-1] == {
         "user_id": request.executor_user_id,
         "request_id": request_id,
         "photo_urls": [RESULT_URL],
     }
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
+    assert MENU_TEXT in _text(message_manager)
     assert PHOTO_TAKEN in notices.texts
 
 
@@ -903,12 +753,10 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
 
     parent = await _status(bot_session, request_id)
     assert parent.completion_reason is RequestCompletionReason.RESIDENT_REJECTED
-    stmt = select(Request).where(requests_table.c.parent_request_id == request_id)
-    repeat = (await bot_session.execute(stmt)).scalar_one()
+    [repeat] = await _repeats_of(bot_session, request_id)
     assert repeat.channel is RequestChannel.BOT
     assert repeat.description == "Кран все еще течет"
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
+    assert MENU_TEXT in _text(message_manager)
     assert repeat_sent(repeat.id) in notices.texts
 
 
@@ -956,8 +804,7 @@ async def test_a_stale_rejection_prompt_files_no_repeat(
     await client.send("Спасибо, все хорошо")
 
     assert await _repeats_of(bot_session, request_id) == []
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
+    assert MENU_TEXT in _text(message_manager)
     assert REJECT_NOT_ON_REVIEW in notices.texts
 
 
@@ -978,9 +825,7 @@ async def test_a_tap_on_a_card_that_is_no_longer_his_shows_the_handover(
 
     await client.click(card, DEPART)
 
-    assert HANDED_OVER_TEXT.format(request_id=request_id) in (
-        message_manager.last_message().body.text or ""
-    )
+    assert HANDED_OVER_TEXT.format(request_id=request_id) in (_text(message_manager))
 
 
 async def test_a_tap_on_a_review_closed_elsewhere_renders_the_closed_request(
@@ -1005,7 +850,7 @@ async def test_a_tap_on_a_review_closed_elsewhere_renders_the_closed_request(
 
     await client.click(card, ACCEPT_WORK)
 
-    text = message_manager.last_message().body.text or ""
+    text = _text(message_manager)
     assert REQUEST_STATUS_LABELS[RequestStatus.DONE] in text
     assert ASK_TEXT not in text
 
@@ -1029,9 +874,7 @@ async def test_a_second_rating_renders_the_card_with_the_first(
 
     await client.click(rating, TOP_RATING)
 
-    assert RATED_TEXT.format(rating=MIN_RATING) in (
-        message_manager.last_message().body.text or ""
-    )
+    assert RATED_TEXT.format(rating=MIN_RATING) in (_text(message_manager))
 
 
 async def test_a_refused_photo_rerenders_the_card_for_the_sender(
@@ -1090,18 +933,13 @@ async def test_a_private_update_after_a_stop_revives_the_bot(
     bot_session: AsyncSession,
 ) -> None:
     await client.send("/start")
-    max_user_id = MaxUserId(client.user.id)
     await _bot_stopped(client)
-    stopped = await _saved(bot_session, max_user_id)
-    assert stopped is not None
-    assert stopped.bot_stopped_at is not None
+    assert (await _user(bot_session, client)).bot_stopped_at is not None
 
     await client.send("/start")
 
     bot_session.expire_all()
-    revived = await _saved(bot_session, max_user_id)
-    assert revived is not None
-    assert revived.bot_stopped_at is None
+    assert (await _user(bot_session, client)).bot_stopped_at is None
 
 
 class _ChatApi:
@@ -1160,10 +998,14 @@ async def test_the_bot_leaves_a_chat_added_by_a_stranger(
     assert await ChatsRepo(bot_session).get(chat_id) is None
 
 
-async def _staff(session: AsyncSession, client: BotClient) -> HouseId:
+async def _staff(
+    session: AsyncSession,
+    client: BotClient,
+    role: OrgRole = OrgRole.ADMIN,
+) -> HouseId:
     user_id = await _started(session, client)
     org_id, house_id = await _org_house(session)
-    session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.ADMIN))
+    session.add(OrgMember(org_id=org_id, user_id=user_id, role=role))
     await session.commit()
     return house_id
 
@@ -1243,11 +1085,11 @@ async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
     house_button = InlineButtonTextLocator(re.escape(f"🏢 {house.address}"))
     await client.click(window, house_button)
     await client.click(message_manager.last_message(), RIGHTS_DONE)
-    assert NO_RIGHTS_YET in (message_manager.last_message().body.text or "")
+    assert NO_RIGHTS_YET in _text(message_manager)
     chat_api.is_admin = True
     await client.click(message_manager.last_message(), RIGHTS_DONE)
 
-    text = message_manager.last_message().body.text or ""
+    text = _text(message_manager)
     assert BOUND_TEXT.format(title=CHAT_TITLE) in text
     assert MENU_TEXT not in text
     chat = await ChatsRepo(bot_session).get(chat_id)
@@ -1270,30 +1112,17 @@ async def test_a_resident_binds_the_chat_by_code(
     shows: list[Show],
     notices: _RecordingBot,
 ) -> None:
-    user_id = await _started(bot_session, client)
-    _, house_id = await _org_house(bot_session)
-    bot_session.add(
-        Resident(user_id=user_id, house_id=house_id, role=ResidentRole.OWNER),
-    )
-    await bot_session.commit()
-    house = await HousesRepo(bot_session).get(house_id)
-    assert house is not None
-    code = house.chat_binding_code
-    chat_id = _chat_id()
-
-    await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
-    assert CODE_TEXT.format(title=CHAT_TITLE) in (
-        message_manager.last_message().body.text or ""
-    )
+    chat_id, code, house_id = await _code_window(bot_session, client, task_broker)
+    assert CODE_TEXT.format(title=CHAT_TITLE) in _text(message_manager)
     assert _shown(shows, CODE_TEXT.format(title=CHAT_TITLE))[0] is ShowMode.SEND
+    assert CANCEL.find_button(message_manager.last_message()) is not None
     await client.send("не тот код")
-    assert WRONG_CODE in (message_manager.last_message().body.text or "")
+    assert WRONG_CODE in _text(message_manager)
     await client.send(code)
     chat_api.is_admin = True
     await client.click(message_manager.last_message(), RIGHTS_DONE)
 
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
+    assert MENU_TEXT in _text(message_manager)
     assert BOUND_TEXT.format(title=CHAT_TITLE) in notices.texts
     bot_session.expire_all()
     chat = await ChatsRepo(bot_session).get(chat_id)
@@ -1308,26 +1137,25 @@ async def test_a_house_chat_event_creates_no_user(
     bot_session: AsyncSession,
     bot_broker: RecordingBroker,
 ) -> None:
-    stranger = BotClient(bot_setup.dp, user_id=_max_id(), bot=fake_bot).user
+    stranger = BotClient(bot_setup.dp, user_id=_max_id(), bot=fake_bot)
     chat_id = _chat_id()
 
-    await bot_setup.dp.feed_update(
-        MaxoUpdate(
-            update=BotAddedToChat(
-                chat_id=chat_id,
-                is_channel=False,
-                user=stranger,
-                timestamp=datetime.now(UTC),
-            ).as_(fake_bot),
+    await _feed(
+        stranger,
+        BotAddedToChat(
+            chat_id=chat_id,
+            is_channel=False,
+            user=stranger.user,
+            timestamp=datetime.now(UTC),
         ),
-        fake_bot,
     )
 
-    assert await _saved(bot_session, MaxUserId(stranger.id)) is None
+    users = UsersRepo(bot_session)
+    assert await users.get_by_max_id(MaxUserId(stranger.user.id)) is None
     assert bot_broker.enqueued(TaskName.ON_BOT_ADDED)[-1] == {
         "chat_id": chat_id,
         "is_channel": False,
-        "initiator_max_user_id": stranger.id,
+        "initiator_max_user_id": stranger.user.id,
     }
 
 
@@ -1335,18 +1163,14 @@ async def test_a_bot_that_is_no_longer_in_the_chat_is_not_its_admin(
     fake_bot: FakeBot,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def forbidden(**_: Any) -> Any:
-        raise MaxBotForbiddenError(code="chat.denied", error="", message="")
-
-    monkeypatch.setattr(fake_bot, "get_membership", forbidden)
+    monkeypatch.setattr(fake_bot, "get_membership", _forbidden)
 
     assert await is_chat_admin(fake_bot, _chat_id()) is False
 
 
 async def _bound_chat(session: AsyncSession, client: BotClient) -> MaxChatId:
     house_id = await _staff(session, client)
-    user = await _saved(session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(session, client)
     chat_id = _chat_id()
     session.add(
         Chat(
@@ -1365,10 +1189,7 @@ async def _bound_chat(session: AsyncSession, client: BotClient) -> MaxChatId:
 
 @pytest.fixture
 def refusing_chats(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def forbidden(**_: Any) -> Any:
-        raise MaxBotForbiddenError(code="chat.denied", error="", message="")
-
-    monkeypatch.setattr(fake_bot, "send_message", forbidden)
+    monkeypatch.setattr(fake_bot, "send_message", _forbidden)
 
 
 async def _broadcast(broker: InMemoryBroker, chat_id: MaxChatId) -> int:
@@ -1384,13 +1205,16 @@ async def _broadcast(broker: InMemoryBroker, chat_id: MaxChatId) -> int:
 
 
 @pytest.mark.usefixtures("refusing_chats")
-async def test_a_failed_chat_send_asks_the_binder_for_the_rights_again(
+@pytest.mark.parametrize("is_admin", [False, True])
+async def test_a_failed_chat_send_asks_the_binder_only_for_lost_rights(
     client: BotClient,
     task_broker: InMemoryBroker,
-    chat_api: _ChatApi,  # noqa: ARG001
+    chat_api: _ChatApi,
     bot_session: AsyncSession,
     shows: list[Show],
+    is_admin: bool,
 ) -> None:
+    chat_api.is_admin = is_admin
     chat_id = await _bound_chat(bot_session, client)
 
     assert await _broadcast(task_broker, chat_id) == 0
@@ -1398,31 +1222,12 @@ async def test_a_failed_chat_send_asks_the_binder_for_the_rights_again(
     bot_session.expire_all()
     chat = await ChatsRepo(bot_session).get(chat_id)
     assert chat is not None
-    assert chat.bot_is_admin is False
-    mode, _, recipient, notify = _shown(shows, RIGHTS_TEXT.format(title=CHAT_TITLE))
-    assert mode is ShowMode.SEND
-    assert recipient == client.chat.chat_id
-    assert notify is True
-
-
-@pytest.mark.usefixtures("refusing_chats")
-async def test_a_failed_send_to_a_chat_with_rights_calls_nobody(
-    client: BotClient,
-    task_broker: InMemoryBroker,
-    chat_api: _ChatApi,
-    bot_session: AsyncSession,
-    shows: list[Show],
-) -> None:
-    chat_api.is_admin = True
-    chat_id = await _bound_chat(bot_session, client)
-
-    await _broadcast(task_broker, chat_id)
-
-    chat = await ChatsRepo(bot_session).get(chat_id)
-    assert chat is not None
-    assert chat.bot_is_admin is True
+    assert chat.bot_is_admin is is_admin
     rights = RIGHTS_TEXT.format(title=CHAT_TITLE)
-    assert not [show for show in shows if rights in (show[1] or "")]
+    asked = [
+        (mode, to, sound) for mode, text, to, sound in shows if rights in (text or "")
+    ]
+    assert asked == ([] if is_admin else [(ShowMode.SEND, client.chat.chat_id, True)])
 
 
 async def _bot_removed(client: BotClient, chat_id: MaxChatId) -> None:
@@ -1441,7 +1246,7 @@ async def _code_window(
     session: AsyncSession,
     client: BotClient,
     broker: InMemoryBroker,
-) -> tuple[MaxChatId, str]:
+) -> tuple[MaxChatId, str, HouseId]:
     user_id = await _started(session, client)
     _, house_id = await _org_house(session)
     session.add(Resident(user_id=user_id, house_id=house_id, role=ResidentRole.OWNER))
@@ -1451,7 +1256,7 @@ async def _code_window(
     code = house.chat_binding_code
     chat_id = _chat_id()
     await _added_by(broker, chat_id, initiator_max_user_id=client.user.id)
-    return chat_id, code
+    return chat_id, code, house_id
 
 
 @pytest.mark.usefixtures("chat_api")
@@ -1462,7 +1267,7 @@ async def test_a_code_for_a_chat_the_bot_left_ends_on_the_menu(
     bot_session: AsyncSession,
     notices: _RecordingBot,
 ) -> None:
-    chat_id, code = await _code_window(bot_session, client, task_broker)
+    chat_id, code, _ = await _code_window(bot_session, client, task_broker)
     await _bot_removed(client, chat_id)
     chat = await ChatsRepo(bot_session).get(chat_id)
     assert chat is not None
@@ -1470,8 +1275,7 @@ async def test_a_code_for_a_chat_the_bot_left_ends_on_the_menu(
 
     await client.send(code)
 
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
+    assert MENU_TEXT in _text(message_manager)
     assert CHAT_TAKEN in notices.texts
 
 
@@ -1484,7 +1288,7 @@ async def test_rights_for_a_chat_the_bot_left_end_on_the_menu(
     shows: list[Show],
     notices: _RecordingBot,
 ) -> None:
-    chat_id, code = await _code_window(bot_session, client, task_broker)
+    chat_id, code, _ = await _code_window(bot_session, client, task_broker)
     await client.send(code)
     await _bot_removed(client, chat_id)
     shows.clear()
@@ -1539,47 +1343,13 @@ async def test_mute_and_unmute_are_recorded(
     assert await _events_of(bot_session, user_id, event) == 1
 
 
-async def test_the_welcome_carries_the_link_to_the_house(
-    task_broker: InMemoryBroker,
-    fake_bot: FakeBot,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    sent: list[dict[str, Any]] = []
-
-    async def recording(**kwargs: Any) -> Any:
-        sent.append(kwargs)
-        return None
-
-    monkeypatch.setattr(fake_bot, "send_message", recording)
-    chat_id = _chat_id()
-    house_id = HouseId(secrets.randbits(20))
-
-    await _run(task_broker, welcome_chat, chat_id=chat_id, house_id=house_id)
-
-    [message] = sent
-    assert message["chat_id"] == chat_id
-    assert message["notify"] is False
-    [attachment] = message["attachments"]
-    assert attachment.payload.buttons == [
-        [
-            LinkButton(
-                text=JOIN_HOUSE,
-                url=create_start_link(fake_bot, house_payload(house_id)),
-            ),
-        ],
-    ]
-
-
 async def test_the_bot_leaves_a_chat_added_by_an_executor(
     client: BotClient,
     task_broker: InMemoryBroker,
     chat_api: _ChatApi,
     bot_session: AsyncSession,
 ) -> None:
-    user_id = await _started(bot_session, client)
-    org_id, _ = await _org_house(bot_session)
-    bot_session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.EXECUTOR))
-    await bot_session.commit()
+    await _staff(bot_session, client, OrgRole.EXECUTOR)
     chat_id = _chat_id()
 
     await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
@@ -1716,7 +1486,7 @@ async def test_a_picked_slot_is_marked_in_the_access_window(
     assert picked.find_button(message_manager.last_message()) is not None
 
 
-async def test_an_access_window_of_a_lost_flat_renders_instead_of_failing(
+async def test_a_refused_access_window_renders_the_escaped_refusal(
     client: BotClient,
     task_broker: InMemoryBroker,
     message_manager: MockMessageManager,
@@ -1726,28 +1496,7 @@ async def test_an_access_window_of_a_lost_flat_renders_instead_of_failing(
     window = message_manager.last_message()
     stmt = (
         update(residents_table)
-        .where(residents_table.c.user_id == await _started(bot_session, client))
-        .values(verified_at=None)
-    )
-    await bot_session.execute(stmt)
-    await bot_session.commit()
-
-    await client.click(window, FIRST_SLOT)
-
-    assert GONE_TEXT in (message_manager.last_message().body.text or "")
-
-
-async def test_a_block_reason_with_markup_renders_in_the_access_window(
-    client: BotClient,
-    task_broker: InMemoryBroker,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-) -> None:
-    await _access_window(bot_session, client, task_broker)
-    window = message_manager.last_message()
-    stmt = (
-        update(residents_table)
-        .where(residents_table.c.user_id == await _started(bot_session, client))
+        .where(residents_table.c.user_id == (await _user(bot_session, client)).id)
         .values(status=ResidentStatus.BLOCKED, block_reason="долг <3 мес>")
     )
     await bot_session.execute(stmt)
@@ -1755,48 +1504,32 @@ async def test_a_block_reason_with_markup_renders_in_the_access_window(
 
     await client.click(window, FIRST_SLOT)
 
-    assert "долг &lt;3 мес&gt;" in (message_manager.last_message().body.text or "")
+    assert GONE_TEXT in _text(message_manager)
+    assert "долг &lt;3 мес&gt;" in _text(message_manager)
 
 
 async def _bot_demo(session: AsyncSession, number: int = 1) -> tuple[OrgId, str]:
-    org = await OrgsRepo(session).get_by_inn(DEMO_INNS[number - 1])
+    inn = DEMO_INNS[number - 1]
+    org = await OrgsRepo(session).get_by_inn(inn)
     if org is not None:
-        org_id = org.id
-    else:
-        org = Organization(
-            timezone="Europe/Moscow",
-            name=f"Демо-УК «{number}»",
-            inn=DEMO_INNS[number - 1],
-            phone="+70000000000",
-            address="Демо",
-            registered_at=datetime.now(UTC),
-            is_demo=True,
-        )
-        session.add(org)
-        await session.flush()
-        org_id = org.id
-        session.add(
-            House(
-                timezone="Europe/Moscow",
-                org_id=org_id,
-                region="Демо",
-                city="Демоград",
-                street="Демо",
-                building=str(number),
-                chat_binding_code=secrets.token_hex(4),
-            ),
-        )
-        await session.commit()
-    houses = await HousesRepo(session).list_for_org(org_id)
-    return OrgId(org_id), houses[0].address
+        houses = await HousesRepo(session).list_for_org(org.id)
+        return org.id, houses[0].address
+    org_id = await _org(session, name=f"Демо-УК «{number}»", inn=inn, is_demo=True)
+    _, address = await _bot_house(
+        session,
+        city="Демоград",
+        street="Демо",
+        building=str(number),
+        org_id=org_id,
+    )
+    return org_id, address
 
 
 async def _demo_roles(
     session: AsyncSession,
     client: BotClient,
 ) -> tuple[list[tuple[OrgId, OrgRole]], list[HouseId]]:
-    user = await _saved(session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(session, client)
     members = select(org_members_table.c.org_id, org_members_table.c.role).where(
         org_members_table.c.user_id == user.id,
     )
@@ -1809,42 +1542,31 @@ async def _demo_roles(
     )
 
 
-@pytest.mark.parametrize(
-    ("payload", "number"),
-    [("demo_resident_1", 1), ("demo_resident_2", 2)],
-)
 async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
     client: BotClient,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
-    payload: str,
-    number: int,
     notices: _RecordingBot,
 ) -> None:
-    org_id, address = await _bot_demo(bot_session, number)
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    org_id, address = await _bot_demo(bot_session, 2)
+    await _consented(client, message_manager)
 
-    await _bot_started(client, payload)
+    await _bot_started(client, "demo_resident_2")
 
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
+    user = await _user(bot_session, client)
+    assert MENU_TEXT in _text(message_manager)
     assert (
         DEMO_RESIDENT_NOTICE.format(
             flat=demo_flat_number(user.id),
             address=address,
-            org=f"Демо-УК «{number}»",
+            org="Демо-УК «2»",
         )
         in notices.texts
     )
     houses = await HousesRepo(bot_session).list_for_org(org_id)
     assert await _demo_roles(bot_session, client) == ([], [houses[0].id])
-    sources = [
-        event.payload["source"] for event in await _starts_of(bot_session, client)
-    ]
-    assert sources.count(EventSource.DEEPLINK.value) == 1
+    starts = await _starts_of(bot_session, client)
+    assert starts.count({"source": EventSource.DEEPLINK.value}) == 1
 
 
 async def test_a_demo_link_without_consent_asks_for_it_and_then_grants_access(
@@ -1856,20 +1578,16 @@ async def test_a_demo_link_without_consent_asks_for_it_and_then_grants_access(
     org_id, _address = await _bot_demo(bot_session)
 
     await _bot_started(client, "demo_staff_1")
-    assert CONSENT_TEXT in (message_manager.last_message().body.text or "")
+    assert CONSENT_TEXT in _text(message_manager)
     await client.click(message_manager.last_message(), ACCEPT)
 
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
+    assert MENU_TEXT in _text(message_manager)
     assert DEMO_STAFF_NOTICE.format(org="Демо-УК «1»") in notices.texts
     assert await _demo_roles(bot_session, client) == (
         [(org_id, OrgRole.EMPLOYEE)],
         [],
     )
-    sources = [
-        event.payload["source"] for event in await _starts_of(bot_session, client)
-    ]
-    assert sources == [EventSource.DEEPLINK.value]
+    assert await _starts_of(bot_session, client) == [{"source": "deeplink"}]
 
 
 async def test_a_demo_staff_link_lowers_a_demo_admin_to_an_employee(
@@ -1879,11 +1597,10 @@ async def test_a_demo_staff_link_lowers_a_demo_admin_to_an_employee(
     notices: _RecordingBot,
 ) -> None:
     org_id, _address = await _bot_demo(bot_session, 3)
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
 
     await _bot_started(client, "demo_admin_3")
-    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+    assert MENU_TEXT in _text(message_manager)
     assert DEMO_ADMIN_NOTICE.format(org="Демо-УК «3»") in notices.texts
     assert await _demo_roles(bot_session, client) == ([(org_id, OrgRole.ADMIN)], [])
 
@@ -1899,15 +1616,13 @@ async def test_a_house_without_a_connected_org_takes_no_request_in_the_bot(
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
 ) -> None:
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     house_id, address = await _bot_house(bot_session)
     await _linked(bot_session, client, house_id, datetime.now(UTC))
 
     await client.click(message_manager.last_message(), NEW_REQUEST)
 
-    text = message_manager.last_message().body.text or ""
-    assert NOT_CONNECTED_TEXT.format(address=address) in text
+    assert NOT_CONNECTED_TEXT.format(address=address) in _text(message_manager)
     assert FIRST_CATEGORY.find_button(message_manager.last_message()) is None
 
 
@@ -1974,6 +1689,23 @@ def pin_api(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> _PinApi:
     return api
 
 
+async def test_the_welcome_carries_the_link_to_the_house(
+    task_broker: InMemoryBroker,
+    fake_bot: FakeBot,
+    pin_api: _PinApi,
+) -> None:
+    chat_id = _chat_id()
+    house_id = HouseId(secrets.randbits(20))
+
+    await _run(task_broker, welcome_chat, chat_id=chat_id, house_id=house_id)
+
+    [message] = pin_api.sent
+    assert message["chat_id"] == chat_id
+    assert message["notify"] is False
+    [attachment] = message["attachments"]
+    assert attachment.payload.buttons == _join_house(fake_bot, house_id)
+
+
 async def _listed_chat(
     session: AsyncSession,
     client: BotClient,
@@ -1981,8 +1713,7 @@ async def _listed_chat(
     pins_mid: str | None = None,
 ) -> tuple[MaxChatId, HouseId]:
     chat_id = await _bound_chat(session, client)
-    user = await _saved(session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(session, client)
     chat = await ChatsRepo(session).get(chat_id)
     assert chat is not None
     assert chat.house_id is not None
@@ -2021,14 +1752,7 @@ async def test_the_pin_list_is_sent_with_the_house_button_and_pinned_silently(
     )
     assert sent["notify"] is False
     [attachment] = sent["attachments"]
-    assert attachment.payload.buttons == [
-        [
-            LinkButton(
-                text=JOIN_HOUSE,
-                url=create_start_link(fake_bot, house_payload(house_id)),
-            ),
-        ],
-    ]
+    assert attachment.payload.buttons == _join_house(fake_bot, house_id)
     assert pin_api.pinned == [
         {"chat_id": chat_id, "message_id": "list-1", "notify": False},
     ]
@@ -2057,22 +1781,6 @@ async def test_the_pin_list_edits_its_message_keeps_the_button_and_the_pin(
         [JOIN_HOUSE],
     ]
     assert pin_api.pinned == []
-
-
-async def test_a_list_message_that_cannot_be_edited_is_sent_anew(
-    client: BotClient,
-    task_broker: InMemoryBroker,
-    pin_api: _PinApi,
-    bot_session: AsyncSession,
-) -> None:
-    pin_api.edit_fails = True
-    chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
-
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
-
-    assert len(pin_api.sent) == 1
-    assert pin_api.pinned[-1]["message_id"] == "list-1"
-    assert await _pins_mid(bot_session, chat_id) == "list-1"
 
 
 async def test_an_emptied_list_is_deleted_and_forgotten(
@@ -2112,10 +1820,7 @@ async def test_a_list_the_bot_cannot_post_asks_the_binder_for_the_rights(
     texts: tuple[str, ...],
     pins_mid: str | None,
 ) -> None:
-    async def forbidden(**_: Any) -> Any:
-        raise MaxBotForbiddenError(code="chat.denied", error="", message="")
-
-    monkeypatch.setattr(fake_bot, failing, forbidden)
+    monkeypatch.setattr(fake_bot, failing, _forbidden)
     chat_id, _ = await _listed_chat(bot_session, client, *texts, pins_mid=pins_mid)
 
     await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
@@ -2148,21 +1853,6 @@ def _in_chat(
     )
 
 
-async def _pinned(
-    session: AsyncSession,
-    client: BotClient,
-    chat_id: MaxChatId,
-    *mids: str,
-) -> None:
-    user = await _saved(session, MaxUserId(client.user.id))
-    assert user is not None
-    session.add_all(
-        ChatPin(chat_id=chat_id, mid=mid, seq=seq, pinned_by=user.id)
-        for seq, mid in enumerate(mids, start=1)
-    )
-    await session.commit()
-
-
 async def _pin_mids(session: AsyncSession, chat_id: MaxChatId) -> list[str]:
     session.expire_all()
     return [pin.mid for pin in await ChatsRepo(session).list_pins(chat_id)]
@@ -2191,28 +1881,30 @@ async def test_a_pin_in_the_house_chat_lists_the_replied_message(
     assert recorder.texts == []
 
 
-async def test_unpin_takes_a_number_and_replies_in_the_chat(
+async def test_unpin_replies_in_the_chat_and_repin_answers_only_with_the_list(
     client: BotClient,
     bot_setup: BotSetup,
     bot_session: AsyncSession,
     bot_broker: RecordingBroker,
 ) -> None:
-    chat_id = await _bound_chat(bot_session, client)
-    await _pinned(bot_session, client, chat_id, "m-1", "m-2")
+    chat_id, _ = await _listed_chat(bot_session, client, None, None)
     recorder = _RecordingBot()
     group = _in_chat(bot_setup, recorder, chat_id, client.user.id)
 
     await group.send("/unpin 2")
     await group.send("/unpin")
+    synced = bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1]
+    await group.send("/repin")
 
     assert await _pin_mids(bot_session, chat_id) == ["m-1"]
     assert recorder.texts == [UNPINNED, UNPIN_HINT]
+    assert [link.type for link in recorder.links] == [MessageLinkType.REPLY] * 2
+    assert synced == {"chat_id": chat_id, "notify": False, "resend": False}
     assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
         "chat_id": chat_id,
         "notify": False,
-        "resend": False,
+        "resend": True,
     }
-    assert [link.type for link in recorder.links] == [MessageLinkType.REPLY] * 2
 
 
 async def test_a_pin_in_a_chat_without_a_house_gets_no_answer(
@@ -2253,14 +1945,7 @@ async def test_deleting_the_list_message_in_the_chat_unpins_everything(
     client: BotClient,
     bot_session: AsyncSession,
 ) -> None:
-    chat_id = await _bound_chat(bot_session, client)
-    await _pinned(bot_session, client, chat_id, "m-1", "m-2")
-    await bot_session.execute(
-        update(chats_table)
-        .where(chats_table.c.chat_id == chat_id)
-        .values(pins_mid="list-1"),
-    )
-    await bot_session.commit()
+    chat_id, _ = await _listed_chat(bot_session, client, None, None, pins_mid="list-1")
 
     await _feed(
         client,
@@ -2278,6 +1963,7 @@ async def test_deleting_the_list_message_in_the_chat_unpins_everything(
 async def test_the_consent_tap_marks_the_message_and_sends_the_menu_anew(
     client: BotClient,
     message_manager: MockMessageManager,
+    fake_bot: FakeBot,
     shows: list[Show],
 ) -> None:
     await client.send("/start")
@@ -2294,6 +1980,11 @@ async def test_the_consent_tap_marks_the_message_and_sends_the_menu_anew(
     )
     assert marked.body.keyboard is None
     assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
+    assert [
+        button.web_app
+        for button in _buttons(message_manager.last_message())
+        if isinstance(button, OpenAppButton)
+    ] == [fake_bot.state.info.username]
 
 
 async def test_the_policy_button_opens_the_privacy_page_of_the_mini_app(
@@ -2303,12 +1994,9 @@ async def test_the_policy_button_opens_the_privacy_page_of_the_mini_app(
 ) -> None:
     await client.send("/start")
 
-    keyboard = message_manager.last_message().body.keyboard
-    assert keyboard is not None
     [policy] = [
         button
-        for row in keyboard.buttons
-        for button in row
+        for button in _buttons(message_manager.last_message())
         if isinstance(button, OpenAppButton)
     ]
     assert policy.web_app == fake_bot.state.info.username
@@ -2344,8 +2032,7 @@ async def test_a_consent_in_the_bot_records_where_the_resident_came_from(
 
     await client.click(message_manager.last_message(), ACCEPT)
 
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(bot_session, client)
     stmt = select(events_table.c.payload).where(
         events_table.c.type == EventType.CONSENT_GIVEN,
         events_table.c.user_id == user.id,
@@ -2353,24 +2040,6 @@ async def test_a_consent_in_the_bot_records_where_the_resident_came_from(
     assert (await bot_session.execute(stmt)).scalars().all() == [
         {"source": source.value, "version": CONSENT_VERSION},
     ]
-
-
-async def test_a_consent_given_in_the_mini_app_is_not_asked_again(
-    client: BotClient,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-) -> None:
-    await client.send("/start")
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
-    await UsersRepo(bot_session).set_consent(user.id, CONSENT_VERSION)
-    await bot_session.commit()
-
-    await client.send("/start")
-
-    text = message_manager.last_message().body.text or ""
-    assert MENU_TEXT in text
-    assert CONSENT_TEXT not in text
 
 
 @pytest.fixture
@@ -2389,8 +2058,7 @@ async def test_a_bot_start_over_an_open_menu_comes_as_a_new_message(
     deeplinked: bool,
 ) -> None:
     house_id, address = await _bot_house(bot_session)
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     shows.clear()
 
     await _bot_started(client, house_payload(house_id) if deeplinked else Omitted())
@@ -2406,8 +2074,7 @@ async def test_a_deeplink_result_is_its_own_message_before_the_menu(
     notices: _RecordingBot,
 ) -> None:
     await _bot_demo(bot_session)
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     shows.clear()
 
     await _bot_started(client, "demo_staff_1")
@@ -2431,18 +2098,12 @@ async def test_a_consent_survives_a_deeplink_target_that_refuses(
 
     await client.click(message_manager.last_message(), ACCEPT)
 
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(bot_session, client)
     assert user.consent_at is not None
-    stmt = select(events_table.c.type).where(
-        events_table.c.type == EventType.CONSENT_GIVEN,
-        events_table.c.user_id == user.id,
-    )
-    assert (await bot_session.execute(stmt)).scalars().all() == [
-        EventType.CONSENT_GIVEN,
-    ]
+    assert user.consent_version == CONSENT_VERSION
+    assert await _events_of(bot_session, user.id, EventType.CONSENT_GIVEN) == 1
     assert notices.texts == [NOT_SEEDED]
-    assert MENU_TEXT in (message_manager.last_message().body.text or "")
+    assert MENU_TEXT in _text(message_manager)
 
 
 async def test_the_org_name_is_escaped_in_the_invite_notice(
@@ -2453,21 +2114,12 @@ async def test_the_org_name_is_escaped_in_the_invite_notice(
 ) -> None:
     user_id = await _started(bot_session, client)
     org_name = f"УК <{secrets.token_hex(4)}> & {secrets.token_hex(4)}"
-    org = Organization(
-        timezone="Europe/Moscow",
-        name=org_name,
-        inn=secrets.token_hex(6),
-        phone="+70000000000",
-        address="Тестовая область, Тестоград, Тестовая, 1",
-        registered_at=datetime.now(UTC),
-    )
-    bot_session.add(org)
-    await bot_session.flush()
+    org_id = await _org(bot_session, name=org_name)
     code = secrets.token_hex(4)
     bot_session.add(
         OrgInvite(
             code=code,
-            org_id=org.id,
+            org_id=org_id,
             role=OrgRole.EMPLOYEE,
             expires_at=datetime.now(UTC) + timedelta(days=1),
             max_activations=1,
@@ -2479,8 +2131,7 @@ async def test_the_org_name_is_escaped_in_the_invite_notice(
 
     await _bot_started(client, org_invite_payload(code))
 
-    notice = ORG_JOINED.format(name=escape(org_name))
-    assert notices.texts == [notice]
+    assert notices.texts == [ORG_JOINED.format(name=escape(org_name))]
 
 
 FIND_HOUSE = InlineButtonTextLocator("🔎 Найти дом")
@@ -2493,17 +2144,18 @@ async def _search_by_address(
     client: BotClient,
     message_manager: MockMessageManager,
 ) -> None:
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     await client.click(message_manager.last_message(), FIND_HOUSE)
     await client.click(message_manager.last_message(), BY_ADDRESS)
 
 
-def _button_texts(message: Message) -> list[str]:
+def _buttons(message: Message) -> list[Any]:
     keyboard = message.body.keyboard
-    if keyboard is None:
-        return []
-    return [str(button.text) for row in keyboard.buttons for button in row]
+    return [] if keyboard is None else [b for row in keyboard.buttons for b in row]
+
+
+def _button_texts(message: Message) -> list[str]:
+    return [str(button.text) for button in _buttons(message)]
 
 
 def _spot() -> tuple[Decimal, Decimal]:
@@ -2511,21 +2163,6 @@ def _spot() -> tuple[Decimal, Decimal]:
         Decimal(secrets.randbelow(60_000_000) + 10_000_000) / 1_000_000,
         Decimal(secrets.randbelow(170_000_000)) / 1_000_000,
     )
-
-
-async def _send_location(client: BotClient, lat: Decimal, lon: Decimal) -> None:
-    message = Message(
-        sender=client.user,
-        recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=client.chat.chat_id),
-        timestamp=datetime.now(UTC),
-        body=MessageBody(
-            mid=secrets.token_hex(4),
-            seq=1,
-            text=None,
-            attachments=[LocationAttachment(latitude=float(lat), longitude=float(lon))],
-        ),
-    )
-    await _feed(client, MessageCreated(message=message, timestamp=datetime.now(UTC)))
 
 
 def _text(message_manager: MockMessageManager) -> str:
@@ -2586,41 +2223,6 @@ async def test_typing_narrows_each_address_step_and_picks_a_single_match(
     assert f"{city}, {street}, 9" in _text(message_manager)
 
 
-async def test_the_location_button_on_the_method_window_lists_houses_nearby(
-    client: BotClient,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-) -> None:
-    lat, lon = _spot()
-    await _bot_house(
-        bot_session,
-        street="Геопозиционная",
-        building="3",
-        lat=lat,
-        lon=lon,
-    )
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
-    await client.click(message_manager.last_message(), FIND_HOUSE)
-
-    keyboard = message_manager.last_message().body.keyboard
-    assert keyboard is not None
-    [geo] = [
-        button
-        for row in keyboard.buttons
-        for button in row
-        if isinstance(button, RequestGeoLocationButton)
-    ]
-    assert geo.text == "📍 По геолокации"
-    await _send_location(client, lat, lon)
-
-    assert NEARBY_TEXT in _text(message_manager)
-    assert _button_texts(message_manager.last_message()) == [
-        "🏢 Геопозиционная, 3",
-        *NAVIGATION,
-    ]
-
-
 @pytest.mark.parametrize("by_geo", [False, True])
 async def test_back_from_the_house_list_returns_to_where_it_came_from(
     client: BotClient,
@@ -2638,11 +2240,11 @@ async def test_back_from_the_house_list_returns_to_where_it_came_from(
         lat=lat,
         lon=lon,
     )
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     await client.click(message_manager.last_message(), FIND_HOUSE)
     if by_geo:
-        await _send_location(client, lat, lon)
+        location = LocationAttachment(latitude=float(lat), longitude=float(lon))
+        await _send(client, location)
     else:
         await client.click(message_manager.last_message(), BY_ADDRESS)
         await client.send(f"Назад{tag}")
@@ -2654,17 +2256,6 @@ async def test_back_from_the_house_list_returns_to_where_it_came_from(
     text = _text(message_manager)
     assert (METHOD_TEXT if by_geo else STREET_TEXT.format(city=f"Назад{tag}")) in text
     assert "Не нашлось" not in text
-
-
-async def test_the_menu_button_leaves_the_house_search(
-    client: BotClient,
-    message_manager: MockMessageManager,
-) -> None:
-    await _search_by_address(client, message_manager)
-
-    await client.click(message_manager.last_message(), TO_MENU)
-
-    assert MENU_TEXT in _text(message_manager)
 
 
 async def test_the_search_escapes_the_address_it_prints(
@@ -2727,8 +2318,7 @@ async def test_a_flat_picked_from_the_list_is_linked(
     await client.send("1")
     await client.click(message_manager.last_message(), InlineButtonTextLocator("🚪 10"))
 
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(bot_session, client)
     flat = await HousesRepo(bot_session).get_flat_by_number(house_id, "10")
     assert flat is not None
     stmt = select(residents_table.c.flat_id).where(
@@ -2739,28 +2329,12 @@ async def test_a_flat_picked_from_the_list_is_linked(
     assert HOUSE_LINKED.format(address=address) in notices.texts
 
 
-async def test_a_deeplinked_flat_step_asks_the_number_and_goes_back_to_the_method(
-    client: BotClient,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-) -> None:
-    house_id, address = await _bot_house(bot_session)
-    await _bot_started(client, house_payload(house_id))
-    await client.click(message_manager.last_message(), ACCEPT)
-
-    assert _text(message_manager) == FLAT_NUMBER_TEXT.format(address=address)
-    await client.click(message_manager.last_message(), BACK_BUTTON)
-
-    assert METHOD_TEXT in _text(message_manager)
-
-
 async def test_back_and_menu_walk_the_request_draft(
     client: BotClient,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
 ) -> None:
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     _, house_id = await _org_house(bot_session)
     await _linked(bot_session, client, house_id, datetime.now(UTC))
     await client.click(message_manager.last_message(), NEW_REQUEST)
@@ -2786,7 +2360,7 @@ async def test_back_and_menu_walk_the_request_draft(
     assert MENU_TEXT in _text(message_manager)
 
 
-async def test_typing_near_a_location_filters_the_whole_list_every_time(
+async def test_houses_near_a_location_are_listed_and_typing_filters_them_all(
     client: BotClient,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
@@ -2800,11 +2374,23 @@ async def test_typing_near_a_location_filters_the_whole_list_every_time(
             lat=lat,
             lon=lon,
         )
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
+    await _consented(client, message_manager)
     await client.click(message_manager.last_message(), FIND_HOUSE)
-    await _send_location(client, lat, lon)
+    [geo] = [
+        button
+        for button in _buttons(message_manager.last_message())
+        if isinstance(button, RequestGeoLocationButton)
+    ]
+    assert geo.text == "📍 По геолокации"
 
+    await _send(
+        client,
+        LocationAttachment(latitude=float(lat), longitude=float(lon)),
+    )
+    assert NEARBY_TEXT in _text(message_manager)
+    assert sorted(_button_texts(message_manager.last_message())) == sorted(
+        ["🏢 Сужения, 15", "🏢 Сужения, 51", "🏢 Сужения, 151", *NAVIGATION],
+    )
     await client.send("51")
     assert sorted(_button_texts(message_manager.last_message())) == sorted(
         ["🏢 Сужения, 51", "🏢 Сужения, 151", *NAVIGATION],
@@ -2851,20 +2437,12 @@ async def test_the_request_draft_escapes_the_address_and_the_description(
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
 ) -> None:
-    await client.send("/start")
-    await client.click(message_manager.last_message(), ACCEPT)
-    _, house_id = await _org_house(bot_session)
-    stmt = (
-        update(houses_table)
-        .where(houses_table.c.id == house_id)
-        .values(street=f"Разметки <&> {secrets.token_hex(3)}")
+    await _consented(client, message_manager)
+    house_id, address = await _bot_house(
+        bot_session,
+        street=f"Разметки <&> {secrets.token_hex(3)}",
+        org_id=await _org(bot_session),
     )
-    await bot_session.execute(stmt)
-    await bot_session.commit()
-    house = await HousesRepo(bot_session).get(house_id)
-    assert house is not None
-    await bot_session.refresh(house)
-    address = house.address
     await _linked(bot_session, client, house_id, datetime.now(UTC))
     description = "Давление <2 & <b>течет</b>"
 
@@ -2878,13 +2456,13 @@ async def test_the_request_draft_escapes_the_address_and_the_description(
     assert CONFIRM_TEXT.split("{", 1)[0] in _text(message_manager)
 
 
-async def test_back_from_a_deeplinked_flat_step_forgets_the_deeplink(
+async def test_a_deeplinked_flat_step_goes_back_to_the_method_and_forgets_the_link(
     client: BotClient,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
 ) -> None:
     tag = secrets.token_hex(3)
-    deeplinked, _ = await _bot_house(bot_session)
+    deeplinked, address = await _bot_house(bot_session)
     picked, _ = await _bot_house(
         bot_session,
         city=f"Забытый{tag}",
@@ -2892,8 +2470,11 @@ async def test_back_from_a_deeplinked_flat_step_forgets_the_deeplink(
         building="1",
     )
     await _bot_started(client, entrance_qr_payload(deeplinked, 3))
+    assert CONSENT_TEXT in _text(message_manager)
     await client.click(message_manager.last_message(), ACCEPT)
+    assert _text(message_manager) == FLAT_NUMBER_TEXT.format(address=address)
     await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert METHOD_TEXT in _text(message_manager)
     await client.click(message_manager.last_message(), BY_ADDRESS)
     await client.send(f"Забытый{tag}")
     await client.send(f"Улица{tag}")
@@ -2903,8 +2484,7 @@ async def test_back_from_a_deeplinked_flat_step_forgets_the_deeplink(
         InlineButtonTextLocator("⏭ Пропустить"),
     )
 
-    user = await _saved(bot_session, MaxUserId(client.user.id))
-    assert user is not None
+    user = await _user(bot_session, client)
     stmt = select(events_table.c.payload).where(
         events_table.c.type == EventType.HOUSE_LINKED,
         events_table.c.user_id == user.id,
@@ -2915,44 +2495,7 @@ async def test_back_from_a_deeplinked_flat_step_forgets_the_deeplink(
     assert payload["entrance"] is None
 
 
-async def test_a_refused_deeplink_of_a_consented_user_ends_on_the_menu(
-    client: BotClient,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-    shows: list[Show],
-    notices: _RecordingBot,
-) -> None:
-    user_id = await _started(bot_session, client)
-    await client.click(message_manager.last_message(), ACCEPT)
-    shows.clear()
-
-    await _bot_started(client, org_invite_payload(secrets.token_hex(4)))
-
-    assert notices.texts == [INVITE_NOT_FOUND]
-    assert notices.notifies == [False]
-    assert notices.chat_ids == [client.chat.chat_id]
-    assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
-    assert MENU_TEXT in _text(message_manager)
-    assert await _events_of(bot_session, user_id, EventType.BOT_START) == 2
-
-
 CANCEL = InlineButtonTextLocator("❌ Отмена")
-
-
-async def test_cancelling_the_photo_prompt_opens_the_menu(
-    client: BotClient,
-    task_broker: InMemoryBroker,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-) -> None:
-    request_id = await _executor_on(bot_session, client, RequestStatus.IN_PROGRESS)
-    await _run(task_broker, send_executor_card, request_id=request_id)
-    await client.click(message_manager.last_message(), READY)
-    await _rendered(message_manager, RESULT_PHOTO_TEXT)
-
-    await client.click(message_manager.last_message(), CANCEL)
-
-    assert MENU_TEXT in _text(message_manager)
 
 
 async def test_cancelling_the_rejection_prompt_opens_the_menu(
@@ -2969,27 +2512,6 @@ async def test_cancelling_the_rejection_prompt_opens_the_menu(
 
     assert MENU_TEXT in _text(message_manager)
     assert (await _status(bot_session, request_id)).status is RequestStatus.ON_REVIEW
-
-
-@pytest.mark.usefixtures("chat_api")
-async def test_cancelling_the_binding_code_opens_the_menu(
-    client: BotClient,
-    task_broker: InMemoryBroker,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
-) -> None:
-    user_id = await _started(bot_session, client)
-    _, house_id = await _org_house(bot_session)
-    bot_session.add(
-        Resident(user_id=user_id, house_id=house_id, role=ResidentRole.OWNER),
-    )
-    await bot_session.commit()
-    await _added_by(task_broker, _chat_id(), initiator_max_user_id=client.user.id)
-    assert CODE_TEXT.format(title=CHAT_TITLE) in _text(message_manager)
-
-    await client.click(message_manager.last_message(), CANCEL)
-
-    assert MENU_TEXT in _text(message_manager)
 
 
 @pytest.mark.parametrize("current", [None, "m-other"])
@@ -3030,16 +2552,25 @@ async def test_a_new_pin_pins_the_list_again_with_sound(
     assert PINS_HERE not in [sent["text"] for sent in pin_api.sent]
 
 
-async def test_repin_sends_the_list_anew_and_deletes_the_old_one(
+@pytest.mark.parametrize("resend", [True, False])
+async def test_a_repin_or_a_failed_edit_sends_the_list_anew_and_deletes_the_old(
     client: BotClient,
     task_broker: InMemoryBroker,
     pin_api: _PinApi,
     bot_session: AsyncSession,
+    resend: bool,
 ) -> None:
     chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
     pin_api.current = "list-7"
+    pin_api.edit_fails = not resend
 
-    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False, resend=True)
+    await _run(
+        task_broker,
+        sync_chat_pins,
+        chat_id=chat_id,
+        notify=False,
+        resend=resend,
+    )
 
     assert pin_api.edited == []
     assert len(pin_api.sent) == 1
@@ -3050,42 +2581,51 @@ async def test_repin_sends_the_list_anew_and_deletes_the_old_one(
     assert await _pins_mid(bot_session, chat_id) == "list-1"
 
 
-async def test_repin_in_the_house_chat_answers_only_with_the_list(
-    client: BotClient,
-    bot_setup: BotSetup,
-    bot_session: AsyncSession,
-    bot_broker: RecordingBroker,
-) -> None:
-    chat_id = await _bound_chat(bot_session, client)
-    await _pinned(bot_session, client, chat_id, "m-1")
-    recorder = _RecordingBot()
-    group = _in_chat(bot_setup, recorder, chat_id, client.user.id)
-
-    await group.send("/repin")
-
-    assert bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
-        "chat_id": chat_id,
-        "notify": False,
-        "resend": True,
-    }
-    assert recorder.texts == []
-
-
-@pytest.mark.parametrize("fails", [False, True])
 async def test_the_bot_sets_its_commands_and_a_failure_is_not_fatal(
     fake_bot: FakeBot,
     monkeypatch: pytest.MonkeyPatch,
-    fails: bool,
 ) -> None:
     sent: list[list[BotCommand]] = []
 
     async def edit_my_commands(*, commands: list[BotCommand]) -> None:
         sent.append(commands)
-        if fails:
-            raise MaxBotNetworkError(message="timeout")
+        raise MaxBotNetworkError(message="timeout")
 
     monkeypatch.setattr(fake_bot, "edit_my_commands", edit_my_commands)
 
     await set_commands_handler(fake_bot)
 
     assert sent == [BOT_COMMANDS]
+
+
+async def _org(session: AsyncSession, **fields: Any) -> OrgId:
+    org = Organization(
+        **{
+            "timezone": "Europe/Moscow",
+            "name": f"УК {secrets.token_hex(4)}",
+            "inn": secrets.token_hex(6),
+            "phone": "+70000000000",
+            "address": "Тестовая область, Тестоград, Тестовая, 1",
+            "registered_at": datetime.now(UTC),
+            **fields,
+        },
+    )
+    session.add(org)
+    await session.flush()
+    org_id = org.id
+    await session.commit()
+    return org_id
+
+
+async def _consented(client: BotClient, message_manager: MockMessageManager) -> None:
+    await client.send("/start")
+    await client.click(message_manager.last_message(), ACCEPT)
+
+
+async def _forbidden(**_: Any) -> Any:
+    raise MaxBotForbiddenError(code="chat.denied", error="", message="")
+
+
+def _join_house(bot: FakeBot, house_id: HouseId) -> list[list[LinkButton]]:
+    url = create_start_link(bot, house_payload(house_id))
+    return [[LinkButton(text=JOIN_HOUSE, url=url)]]

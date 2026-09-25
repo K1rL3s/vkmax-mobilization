@@ -161,14 +161,8 @@ class MetersRepo(BaseAlchemyRepo):
         if only_below_previous:
             stmt = stmt.where(readings_table.c.is_below_previous.is_(True))
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(readings_table.c.submitted_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(readings_table.c.submitted_at.desc())
+        return await self._page(stmt, limit, offset)
 
     async def flats_without_reading(
         self,

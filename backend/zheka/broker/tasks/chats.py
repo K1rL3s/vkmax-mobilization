@@ -51,10 +51,9 @@ async def on_bot_added(
         await bot.leave_chat(chat_id=chat_id)
         return
 
-    user_id = user.id
-    if await chats_service.bindable_houses(user_id):
+    if await chats_service.bindable_houses(user.id):
         state, stack_id = ChatBinding.house, chat_stack(chat_id)
-    elif await chats_service.is_resident(user_id):
+    elif await chats_service.is_resident(user.id):
         state, stack_id = ChatBinding.code, None
     else:
         await bot.leave_chat(chat_id=chat_id)
@@ -85,14 +84,7 @@ async def welcome_chat(
         WELCOME_TEXT,
         chat_id=chat_id,
         notify=False,
-        keyboard=[
-            [
-                LinkButton(
-                    text=JOIN_HOUSE,
-                    url=create_start_link(bot, house_payload(house_id)),
-                ),
-            ],
-        ],
+        keyboard=_join_keyboard(bot, house_id),
     )
 
 
@@ -114,27 +106,15 @@ async def sync_chat_pins(
     chat = listed.chat
     mid = chat.pins_mid
     if not listed.pins:
-        if mid is not None:
-            await chats_repo.set_pins_mid(chat, None)
-            if not await sender.delete_message(chat_id, mid):
-                await recheck_chat_rights(
-                    chat_id,
-                    bot,
-                    chats_service,
-                    users_repo,
-                    sender,
-                )
+        if mid is None:
+            return
+        await chats_repo.set_pins_mid(chat, None)
+        if not await sender.delete_message(chat_id, mid):
+            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
         return
 
     text = pins_text(chat_id, listed.pins)
-    keyboard = [
-        [
-            LinkButton(
-                text=JOIN_HOUSE,
-                url=create_start_link(bot, house_payload(listed.house_id)),
-            ),
-        ],
-    ]
+    keyboard = _join_keyboard(bot, listed.house_id)
     if (
         mid is not None
         and not resend
@@ -190,3 +170,8 @@ async def recheck_chat_rights(
         stack_id=chat_stack(chat_id),
         show_mode=ShowMode.SEND,
     )
+
+
+def _join_keyboard(bot: Bot, house_id: HouseId) -> list[list[LinkButton]]:
+    url = create_start_link(bot, house_payload(house_id))
+    return [[LinkButton(text=JOIN_HOUSE, url=url)]]

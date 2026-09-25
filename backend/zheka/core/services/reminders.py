@@ -149,7 +149,7 @@ class RemindersService:
             if house is None or house.local(now).hour < POLL_HOUR:
                 continue
             ends_at = house.local(poll.ends_at)
-            voted = set(await self._polls.voted_flat_ids(poll.id, verified_only=True))
+            voted = set(await self._polls.voted_flat_ids(poll.id))
             voters = set(await self._polls.voter_ids(poll.id))
             user_ids = [
                 resident.user_id

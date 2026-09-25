@@ -39,7 +39,7 @@ async def list_reception_slots(
     on_date: date | None = None,
 ) -> list[ReceptionSlotItem]:
     slots = await reception_service.slots(house_id, on_date)
-    return [ReceptionSlotItem.of(slot) for slot in slots]
+    return [ReceptionSlotItem.model_validate(slot) for slot in slots]
 
 
 @router.get("/appointments", summary="Мои записи на прием")

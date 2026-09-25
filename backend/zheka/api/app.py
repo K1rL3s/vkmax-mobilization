@@ -1,15 +1,14 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncGenerator, Callable, Sequence
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from collections.abc import AsyncGenerator, Sequence
+from contextlib import asynccontextmanager
 
 from dishka import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from maxo import Bot, Dispatcher
-from maxo.dialogs import BgManagerFactory
+from maxo import Bot
 from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
 from maxo.routing.utils import collect_used_updates
 
@@ -87,11 +86,32 @@ def app_factory(
 
     bot_setup = bot_setup or make_dispatcher(config.redis)
     dp = bot_setup.dp
-    container = make_container(
-        config=config,
-        context={Dispatcher: dp, BgManagerFactory: bot_setup.bg_manager_factory},
-    )
+    container = make_container(config=config, bot_setup=bot_setup)
     setup_maxo_dishka(container, dp, auto_inject=True)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        bot = await container.get(Bot)
+
+        if config.max.mode is BotMode.WEBHOOK:
+            engine = make_engine(dp, bot, config.max)
+            engine.register(app)
+            await engine.on_startup(app)
+            await engine.set_webhook(update_types=list(collect_used_updates(dp)))
+            logger.info("Вебхук зарегистрирован на %s", config.max.webhook_url)
+            yield
+            await engine.on_shutdown(app)
+        else:
+            polling = asyncio.create_task(
+                dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True),
+            )
+            logger.info("Бот работает лонг-поллингом")
+            yield
+            polling.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await polling
+
+        await container.close()
 
     app = FastAPI(
         title="Жэка Коммуналкин",
@@ -106,7 +126,7 @@ def app_factory(
         exception_handlers=exception_handlers,
         separate_input_output_schemas=False,
         generate_unique_id_function=lambda route: route.name,
-        lifespan=_lifespan(config, dp, container),
+        lifespan=lifespan,
     )
 
     for module in (
@@ -160,35 +180,3 @@ def setup_middlewares(
 
     setup_dishka(container, app)
     app.add_middleware(RequestStateMiddleware)
-
-
-def _lifespan(
-    config: Config,
-    dp: Dispatcher,
-    container: AsyncContainer,
-) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        bot = await container.get(Bot)
-
-        if config.max.mode is BotMode.WEBHOOK:
-            engine = make_engine(dp, bot, config.max)
-            engine.register(app)
-            await engine.on_startup(app)
-            await engine.set_webhook(update_types=list(collect_used_updates(dp)))
-            logger.info("Вебхук зарегистрирован на %s", config.max.webhook_url)
-            yield
-            await engine.on_shutdown(app)
-        else:
-            polling = asyncio.create_task(
-                dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True),
-            )
-            logger.info("Бот работает лонг-поллингом")
-            yield
-            polling.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await polling
-
-        await container.close()
-
-    return lifespan

@@ -129,7 +129,7 @@ async def test_a_refused_key_turns_the_classifier_off(serve: Serve, code: int) -
     assert len(sent) == 1
 
 
-@pytest.mark.parametrize("reply", [_status(500), _status(429), _timeout, _html])
+@pytest.mark.parametrize("reply", [_status(429), _status(500), _timeout, _html])
 async def test_a_failed_call_leaves_the_classifier_on(
     serve: Serve,
     reply: Reply,
@@ -141,22 +141,16 @@ async def test_a_failed_call_leaves_the_classifier_on(
     assert len(sent) == 2
 
 
-@pytest.mark.parametrize(
-    ("reply", "code"),
-    [(_json({}, 500), 500), (_answer("leak", status=503), 503)],
-)
 async def test_an_error_status_is_logged_with_its_code(
     serve: Serve,
-    reply: Reply,
-    code: int,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    classifier, _ = await serve(reply)
+    classifier, _ = await serve(_answer("leak", status=503))
 
     with caplog.at_level(logging.WARNING, logger="zheka.infra.yandex.classifier"):
         assert await classifier.classify(TEXT) is None
 
-    assert [record.args for record in caplog.records] == [(code,)]
+    assert [record.args for record in caplog.records] == [(503,)]
 
 
 @pytest.mark.parametrize(

@@ -6,13 +6,12 @@ from zheka.base import ZhekaType
 from zheka.core.enums import CATEGORY_RULES, AnalyticsMetric, MetricUnit, RequestChannel
 from zheka.core.errors import (
     HOUSE_NOT_FOUND,
-    ORG_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
 )
 from zheka.core.ids import HouseId, OrgId
-from zheka.core.models import House, OrgSettings, Organization
+from zheka.core.models import House, OrgSettings
 from zheka.core.services.readings import window_accepts, window_period
 from zheka.core.services.reminders import RemindersService
 from zheka.infra.database.repos.analytics import (
@@ -167,17 +166,13 @@ class Benchmark(ZhekaType):
     is_empty: bool
 
 
-def _start_of(day: date) -> datetime:
-    return datetime.combine(day, time(), UTC)
-
-
 def _range(
     date_from: date | None,
     date_to: date | None,
     now: datetime,
 ) -> tuple[date, date]:
-    period_to = now.date() if date_to is None else date_to
-    period_from = period_to - DEFAULT_PERIOD if date_from is None else date_from
+    period_to = date_to or now.date()
+    period_from = date_from or period_to - DEFAULT_PERIOD
     if period_from > period_to:
         raise InvalidRequest("Начало периода позже его конца")
     return period_from, period_to
@@ -220,7 +215,7 @@ class AnalyticsService:
     ) -> Dashboard:
         if house_id is not None:
             await self._own_houses(org_id, [house_id])
-        org = await self._org(org_id)
+        org = await self._orgs.get_existing(org_id)
         local = org.local(now)
         period_from, period_to = _range(date_from, date_to, local)
         since = org.day_start(period_from)
@@ -293,7 +288,7 @@ class AnalyticsService:
     async def season(self, org_id: OrgId, period: date | None, now: datetime) -> Season:
         settings = await self._orgs.get_settings(org_id)
         if period is None:
-            today = (await self._org(org_id)).local(now).date()
+            today = (await self._orgs.get_existing(org_id)).local(now).date()
             period = window_period(today, settings)
         period = period.replace(day=1)
         counts = await self._analytics.season(org_id, period)
@@ -362,7 +357,7 @@ class AnalyticsService:
         date_to: date | None,
         now: datetime,
     ) -> list[ExecutorRow]:
-        org = await self._org(org_id)
+        org = await self._orgs.get_existing(org_id)
         period_from, period_to = _range(date_from, date_to, org.local(now))
         return await self._analytics.by_executor(
             org_id,
@@ -377,7 +372,7 @@ class AnalyticsService:
         date_to: date | None,
         now: datetime,
     ) -> Channels:
-        org = await self._org(org_id)
+        org = await self._orgs.get_existing(org_id)
         period_from, period_to = _range(date_from, date_to, org.local(now))
         rows = {
             row.channel: row
@@ -395,8 +390,8 @@ class AnalyticsService:
         return Channels(total=total, items=items, is_empty=total == 0)
 
     async def benchmark(self, org_id: OrgId, now: datetime) -> Benchmark:
-        org = await self._org(org_id)
-        since = _start_of(now.date() - DEFAULT_PERIOD)
+        org = await self._orgs.get_existing(org_id)
+        since = datetime.combine(now.date() - DEFAULT_PERIOD, time(), UTC)
         metrics = []
         for spec in BENCHMARK:
             rank = await self._analytics.org_rank(
@@ -455,12 +450,6 @@ class AnalyticsService:
     async def _own_houses(self, org_id: OrgId, house_ids: Sequence[HouseId]) -> None:
         if await self._houses.ids_for_org(house_ids, org_id) != set(house_ids):
             raise EntityNotFound(HOUSE_NOT_FOUND)
-
-    async def _org(self, org_id: OrgId) -> Organization:
-        org = await self._orgs.get(org_id)
-        if org is None:
-            raise EntityNotFound(ORG_NOT_FOUND)
-        return org
 
 
 def _open_periods(

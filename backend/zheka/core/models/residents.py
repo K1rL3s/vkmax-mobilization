@@ -1,7 +1,6 @@
 from datetime import datetime
-from typing import cast
 
-from zheka.base import ZhekaMutableType
+from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import ResidentRole, ResidentStatus, VerificationStatus
 from zheka.core.ids import (
     DemandSignalId,
@@ -12,15 +11,10 @@ from zheka.core.ids import (
     VerificationRequestId,
 )
 
-_UNSET_AT = cast(datetime, None)
-_UNSET_RESIDENT_ID = cast(ResidentId, None)
-_UNSET_VERIFICATION_REQUEST_ID = cast(VerificationRequestId, None)
-_UNSET_DEMAND_SIGNAL_ID = cast(DemandSignalId, None)
-
 
 class Resident(ZhekaMutableType):
-    id: ResidentId = _UNSET_RESIDENT_ID
-    created_at: datetime = _UNSET_AT
+    id: ResidentId = UNSET
+    created_at: datetime = UNSET
     user_id: UserId
     house_id: HouseId
     flat_id: FlatId | None = None
@@ -36,8 +30,8 @@ class Resident(ZhekaMutableType):
 
 
 class VerificationRequest(ZhekaMutableType):
-    id: VerificationRequestId = _UNSET_VERIFICATION_REQUEST_ID
-    created_at: datetime = _UNSET_AT
+    id: VerificationRequestId = UNSET
+    created_at: datetime = UNSET
     flat_id: FlatId
     user_id: UserId
     account_no: str
@@ -49,7 +43,7 @@ class VerificationRequest(ZhekaMutableType):
 
 
 class DemandSignal(ZhekaMutableType):
-    id: DemandSignalId = _UNSET_DEMAND_SIGNAL_ID
-    created_at: datetime = _UNSET_AT
+    id: DemandSignalId = UNSET
+    created_at: datetime = UNSET
     house_id: HouseId
     user_id: UserId

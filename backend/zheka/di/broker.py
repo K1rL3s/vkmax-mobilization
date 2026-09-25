@@ -1,15 +1,13 @@
 from typing import NewType
 
 from dishka import BaseScope, Provider, Scope, provide
-from taskiq import AsyncBroker, ScheduleSource, TaskiqScheduler, async_shared_broker
-from taskiq.schedule_sources import LabelScheduleSource
-from taskiq_redis import ListRedisScheduleSource, RedisStreamBroker
+from taskiq import AsyncBroker
+from taskiq_redis import RedisStreamBroker
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.config import RedisConfig
 
 ZhekaBroker = NewType("ZhekaBroker", AsyncBroker)
-ZhekaScheduleSource = NewType("ZhekaScheduleSource", ScheduleSource)
 
 
 class BrokerProvider(Provider):
@@ -22,23 +20,6 @@ class BrokerProvider(Provider):
     @provide(scope=Scope.REQUEST)
     def publisher(self, broker: ZhekaBroker) -> TaskPublisher:
         return TaskPublisher(broker)
-
-    @provide
-    def schedule_source(self, config: RedisConfig) -> ZhekaScheduleSource:
-        return ZhekaScheduleSource(
-            ListRedisScheduleSource(url=config.url, prefix="zheka-schedule"),
-        )
-
-    @provide
-    def scheduler(
-        self,
-        broker: ZhekaBroker,
-        schedule_source: ZhekaScheduleSource,
-    ) -> TaskiqScheduler:
-        return TaskiqScheduler(
-            broker=broker,
-            sources=[schedule_source, LabelScheduleSource(async_shared_broker)],
-        )
 
 
 def make_broker(config: RedisConfig) -> RedisStreamBroker:

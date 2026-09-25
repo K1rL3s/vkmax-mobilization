@@ -43,7 +43,7 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         stmt = select(Announcement).where(
             announcements_table.c.house_ids.contains([house_id]),
         )
-        return await self._page(stmt, limit, offset)
+        return await self._newest_first(stmt, limit, offset)
 
     async def list_for_org(
         self,
@@ -55,22 +55,16 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         stmt = select(Announcement).where(announcements_table.c.org_id == org_id)
         if house_id is not None:
             stmt = stmt.where(announcements_table.c.house_ids.contains([house_id]))
-        return await self._page(stmt, limit, offset)
+        return await self._newest_first(stmt, limit, offset)
 
-    async def _page(
+    async def _newest_first(
         self,
         stmt: Select[tuple[Announcement]],
         limit: int,
         offset: int,
     ) -> tuple[Sequence[Announcement], int]:
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(
-                announcements_table.c.created_at.desc(),
-                announcements_table.c.id.desc(),
-            )
-            .limit(limit)
-            .offset(offset)
+        stmt = stmt.order_by(
+            announcements_table.c.created_at.desc(),
+            announcements_table.c.id.desc(),
         )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        return await self._page(stmt, limit, offset)

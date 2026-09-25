@@ -95,10 +95,7 @@ async def get_house_card(
     files_service: FromDishka[FilesService],
 ) -> HouseCard:
     card = await houses_service.house_card(house_id, current_account.user_id)
-    documents = [
-        FileRef(name=name, url=files_service.sign(name))
-        for name in card.house.documents
-    ]
+    documents = [FileRef.signed(name, files_service) for name in card.house.documents]
     return HouseCard.of(card, documents)
 
 

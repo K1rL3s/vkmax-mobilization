@@ -19,8 +19,6 @@ BOUND_CHAT = and_(
 
 class ChatsRepo(BaseAlchemyRepo):
     async def list_for_houses(self, house_ids: Collection[HouseId]) -> Sequence[Chat]:
-        if not house_ids:
-            return []
         stmt = select(Chat).where(
             chats_table.c.house_id.in_(house_ids),
             BOUND_CHAT,

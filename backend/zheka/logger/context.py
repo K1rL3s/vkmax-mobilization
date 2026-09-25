@@ -1,4 +1,3 @@
-import logging
 from contextvars import ContextVar
 from typing import Any
 
@@ -12,10 +11,3 @@ COLUMNS: dict[str, ContextVar[Any]] = {
     column.name: column
     for column in (trace_id, update_id, max_user_id, task_id, task_name)
 }
-
-
-class ContextFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        for name, column in COLUMNS.items():
-            setattr(record, name, column.get())
-        return True

@@ -12,7 +12,6 @@ from zheka.infra.database.tables.users import notification_settings_table, users
 
 
 class Recipient(ZhekaType):
-    user_id: UserId
     max_user_id: MaxUserId
     level: NotificationLevel
 
@@ -64,11 +63,7 @@ class NotificationsRepo(BaseAlchemyRepo):
             ),
         )
         stmt = (
-            select(
-                users_table.c.id,
-                users_table.c.max_user_id,
-                notification_settings_table.c.level,
-            )
+            select(users_table.c.max_user_id, notification_settings_table.c.level)
             .select_from(joined)
             .where(
                 users_table.c.id.in_(user_ids),
@@ -78,9 +73,8 @@ class NotificationsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return [
             Recipient(
-                user_id=UserId(user_id),
-                max_user_id=MaxUserId(max_user_id),
+                max_user_id=max_user_id,
                 level=DEFAULT_LEVEL if level is None else level,
             )
-            for user_id, max_user_id, level in result.tuples().all()
+            for max_user_id, level in result.tuples().all()
         ]

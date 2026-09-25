@@ -1,5 +1,4 @@
 import secrets
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -9,7 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import BrokerMessage
 
-from tests.conftest import OrgHouseFlatUser, RecordingBroker, make_notifications_service
+from tests.conftest import (
+    Fixture,
+    OrgHouseFlatUser,
+    RecordingBroker,
+    make_notifications_service,
+)
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -26,7 +30,7 @@ from zheka.core.enums import (
     ResidentRole,
 )
 from zheka.core.ids import MaxUserId, RequestGroupId, UserId
-from zheka.core.notifications import DEFAULT_LEVEL, resolve_notify
+from zheka.core.notifications import DEFAULT_LEVEL
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.request_groups import GroupingService
@@ -41,8 +45,6 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.max import MaxSender
-
-Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
 
 TEXT = "Проверка связи"
 
@@ -88,7 +90,7 @@ def test_resolve_notify(
     mandatory: bool,
     expected: bool | None,
 ) -> None:
-    assert resolve_notify(level, mandatory=mandatory) is expected
+    assert level.resolve_notify(mandatory=mandatory) is expected
 
 
 async def test_levels_fill_missing_categories_with_default(
@@ -99,8 +101,7 @@ async def test_levels_fill_missing_categories_with_default(
 
     levels = await make_notifications_service(session).levels(data.user_id)
 
-    assert levels == dict.fromkeys(NotificationCategory, DEFAULT_LEVEL)
-    assert DEFAULT_LEVEL is NotificationLevel.SILENT
+    assert levels == dict.fromkeys(NotificationCategory, NotificationLevel.SILENT)
 
 
 async def test_update_records_event_only_for_a_real_change(
@@ -129,11 +130,9 @@ async def test_update_records_event_only_for_a_real_change(
     assert len(result.scalars().all()) == 1
 
 
-async def test_recipients_drop_bot_stopped_and_keep_muted(
+async def test_recipients_drop_bot_stopped_keep_muted_and_default_to_silent(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
 ) -> None:
-    data = await make_org_house_flat_user()
     muted = await _add_user(session, "Заглушивший")
     stopped = await _add_user(session, "Остановивший")
     stopped.bot_stopped_at = datetime.now(UTC)
@@ -141,25 +140,13 @@ async def test_recipients_drop_bot_stopped_and_keep_muted(
     await session.flush()
 
     recipients = await NotificationsRepo(session).recipients(
-        [data.user_id, muted.id, stopped.id],
+        [muted.id, stopped.id],
         NotificationCategory.ANNOUNCEMENTS,
     )
 
-    assert {recipient.user_id for recipient in recipients} == {data.user_id, muted.id}
-
-
-async def test_recipient_without_settings_row_is_silent(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    data = await make_org_house_flat_user()
-
-    recipients = await NotificationsRepo(session).recipients(
-        [data.user_id],
-        NotificationCategory.REQUESTS,
-    )
-
-    assert [recipient.level for recipient in recipients] == [NotificationLevel.SILENT]
+    assert [(r.max_user_id, r.level) for r in recipients] == [
+        (muted.max_user_id, NotificationLevel.SILENT),
+    ]
 
 
 @pytest.mark.parametrize(

@@ -15,7 +15,6 @@ from zheka.core.enums import (
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import HouseId, MaxChatId, UserId
 from zheka.core.models import Chat, ChatPin, House
-from zheka.core.roles import is_staff
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.chats import ChatsRepo
@@ -94,7 +93,7 @@ class ChatsService:
     async def bindable_houses(self, user_id: UserId) -> list[House]:
         houses: list[House] = []
         for member in await self._orgs.list_for_user(user_id):
-            if is_staff(member.role):
+            if member.role.is_staff:
                 houses.extend(await self._houses.list_for_org(member.org_id))
         known = {house.id for house in houses}
         chaired = [
@@ -125,8 +124,7 @@ class ChatsService:
         house_id: HouseId,
     ) -> None:
         chat = await self._free_chat(chat_id)
-        house = await self._houses.get(house_id)
-        binder = None if house is None else await self._binder(user_id, house)
+        binder = await self._binder(user_id, house_id)
         if binder is None:
             raise NotEnoughRights("Привязать этот чат к дому вы не можете")
         await self._bind(chat, house_id, user_id, binder)
@@ -170,12 +168,13 @@ class ChatsService:
             raise NotEnoughRights(CHAT_TAKEN)
         return chat
 
-    async def _binder(self, user_id: UserId, house: House) -> ChatBinder | None:
-        if house.org_id is not None:
+    async def _binder(self, user_id: UserId, house_id: HouseId) -> ChatBinder | None:
+        house = await self._houses.get(house_id)
+        if house is not None and house.org_id is not None:
             member = await self._orgs.get_member(house.org_id, user_id)
-            if member is not None and is_staff(member.role):
+            if member is not None and member.role.is_staff:
                 return ChatBinder.STAFF
-        resident = await self._residents.get_for_house(user_id, house.id)
+        resident = await self._residents.get_for_house(user_id, house_id)
         if (
             resident is not None
             and resident.is_chairman
@@ -332,12 +331,7 @@ class ChatsService:
         chat: Chat,
         house_id: HouseId,
     ) -> tuple[UserId, ChatBinder]:
-        house = await self._houses.get(house_id)
-        binder = (
-            None
-            if user_id is None or house is None
-            else await self._binder(user_id, house)
-        )
+        binder = None if user_id is None else await self._binder(user_id, house_id)
         if user_id is None or binder is None:
             raise NotEnoughRights(PIN_DENIED)
         if not chat.bot_is_admin:

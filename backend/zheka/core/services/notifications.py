@@ -4,6 +4,7 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
 from zheka.core.ids import AccessRequestId, HouseId, MaxChatId, RequestId, UserId
+from zheka.core.models import Request
 from zheka.core.notifications import DEFAULT_LEVEL
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
@@ -130,3 +131,12 @@ class NotificationsService:
             notify=notify,
             resend=resend,
         )
+
+    def notify_author(self, request: Request, text: str) -> None:
+        if request.author_user_id is not None:
+            self.notify_user(
+                request.author_user_id,
+                text,
+                category=NotificationCategory.REQUESTS,
+                mandatory=True,
+            )

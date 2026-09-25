@@ -401,7 +401,6 @@ class Seeder:
     async def _resident(
         self,
         user: User,
-        house: House,
         flat: Flat,
         role: ResidentRole,
         staff: Staff,
@@ -409,7 +408,7 @@ class Seeder:
         is_owner = role is ResidentRole.OWNER
         resident = Resident(
             user_id=user.id,
-            house_id=house.id,
+            house_id=flat.house_id,
             flat_id=flat.id,
             role=role,
             can_see_charges=is_owner,
@@ -431,7 +430,7 @@ class Seeder:
         authors = []
         for flat in rng.sample(list(flats), RESIDENTS_PER_HOUSE):
             user = await self._user()
-            await self._resident(user, house, flat, ResidentRole.OWNER, staff)
+            await self._resident(user, flat, ResidentRole.OWNER, staff)
             authors.append(Author(user_id=user.id, flat_id=flat.id))
         return authors
 
@@ -475,13 +474,7 @@ class Seeder:
             strict=True,
         ):
             user = await self._user()
-            resident = await self._resident(
-                user,
-                house,
-                flat,
-                ResidentRole.OWNER,
-                staff,
-            )
+            resident = await self._resident(user, flat, ResidentRole.OWNER, staff)
             owners.append((user, resident))
             await self._demo.furnish(
                 flat,
@@ -491,13 +484,7 @@ class Seeder:
                 below=scenario == "below",
                 verification_soon=scenario == "verification",
             )
-        await self._resident(
-            await self._user(),
-            house,
-            main[0],
-            ResidentRole.TENANT,
-            staff,
-        )
+        await self._resident(await self._user(), main[0], ResidentRole.TENANT, staff)
 
         total = sum(flat.area or 0 for flat in flats)
         voted = sum(flat.area or 0 for flat in main)
@@ -507,12 +494,8 @@ class Seeder:
                 continue
             voted += area
             user = await self._user()
-            owners.append(
-                (
-                    user,
-                    await self._resident(user, house, flat, ResidentRole.OWNER, staff),
-                ),
-            )
+            resident = await self._resident(user, flat, ResidentRole.OWNER, staff)
+            owners.append((user, resident))
         await self._poll(house, org, staff, owners)
         await self._reception(house, org, owners)
         await self._announcements(house, org, staff, len(owners) + 1)

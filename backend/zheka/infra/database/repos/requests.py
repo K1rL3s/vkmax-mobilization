@@ -121,12 +121,8 @@ class RequestsRepo(BaseAlchemyRepo):
         if status is not None:
             stmt = stmt.where(requests_table.c.status == status)
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(requests_table.c.id.desc()).limit(limit).offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(requests_table.c.id.desc())
+        return await self._page(stmt, limit, offset)
 
     async def set_rating(
         self,
@@ -291,14 +287,8 @@ class RequestsRepo(BaseAlchemyRepo):
                 ),
             )
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(overdue.desc(), requests_table.c.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(overdue.desc(), requests_table.c.created_at.desc())
+        return await self._page(stmt, limit, offset)
 
     async def set_status(
         self,

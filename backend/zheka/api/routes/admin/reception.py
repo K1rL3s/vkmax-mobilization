@@ -32,7 +32,7 @@ async def list_reception_windows(
     reception_service: FromDishka[ReceptionService],
 ) -> list[ReceptionWindowItem]:
     windows = await reception_service.windows(current_org.org_id)
-    return [ReceptionWindowItem.of(window) for window in windows]
+    return [ReceptionWindowItem.model_validate(window) for window in windows]
 
 
 @router.put(
@@ -51,18 +51,9 @@ async def set_reception_windows(
 ) -> list[ReceptionWindowItem]:
     windows = await reception_service.set_windows(
         current_org.org_id,
-        [
-            ReceptionWindowDraft(
-                weekday=window.weekday,
-                time_from=window.time_from,
-                time_to=window.time_to,
-                slot_minutes=window.slot_minutes,
-                capacity=window.capacity,
-            )
-            for window in body.windows
-        ],
+        [ReceptionWindowDraft(**window.model_dump()) for window in body.windows],
     )
-    return [ReceptionWindowItem.of(window) for window in windows]
+    return [ReceptionWindowItem.model_validate(window) for window in windows]
 
 
 @router.get(
@@ -97,14 +88,8 @@ async def create_access_request(
         current_org.org_id,
         current_org.user_id,
         AccessRequestDraft(
-            house_id=body.house_id,
-            reason=body.reason,
-            date=body.date,
-            flat_ids=body.flat_ids,
-            slots=[
-                AccessSlotDraft(starts_at=slot.starts_at, capacity=slot.capacity)
-                for slot in body.slots
-            ],
+            **body.model_dump(exclude={"slots"}),
+            slots=[AccessSlotDraft(**slot.model_dump()) for slot in body.slots],
         ),
     )
     return AccessRequestGrid.of(grid)

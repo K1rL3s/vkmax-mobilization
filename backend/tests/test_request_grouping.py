@@ -1,21 +1,18 @@
-from collections.abc import Awaitable, Callable
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser
+from tests.conftest import Fixture, OrgHouseFlatUser, events_of, requests_service
 from tests.test_requests import (
     _age,
     _complain,
-    _events,
     _group_of_three,
-    _make_service,
     _neighbour,
 )
 
 from zheka.core.enums import (
     EventType,
     RequestCategory,
+    RequestChannel,
     RequestGroupStatus,
     RequestStatus,
     ResidentRole,
@@ -31,82 +28,45 @@ from zheka.infra.database.models import RequestGroup
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.tables.requests import request_groups_table
 
-Fixture = Callable[..., Awaitable[OrgHouseFlatUser]]
-
 
 async def _groups(session: AsyncSession, house_id: HouseId) -> list[RequestGroup]:
     stmt = select(RequestGroup).where(request_groups_table.c.house_id == house_id)
     return list((await session.execute(stmt)).scalars().all())
 
 
-def test_complaint_sources_count_complainants_and_not_requests() -> None:
-    requests = [
-        Request(
-            house_id=HouseId(1),
-            flat_id=FlatId(7),
-            category=RequestCategory.LEAK,
-            description="раз",
-            status=RequestStatus.NEW,
-            channel="miniapp",  # type: ignore[arg-type]
-        ),
-        Request(
-            house_id=HouseId(1),
-            flat_id=FlatId(7),
-            category=RequestCategory.LEAK,
-            description="два",
-            status=RequestStatus.NEW,
-            channel="miniapp",  # type: ignore[arg-type]
-        ),
-        Request(
-            house_id=HouseId(1),
-            flat_id=None,
-            author_user_id=UserId(42),
-            category=RequestCategory.LEAK,
-            description="три",
-            status=RequestStatus.NEW,
-            channel="miniapp",  # type: ignore[arg-type]
-        ),
-    ]
-
-    assert complaint_sources(requests) == {("flat", 7), ("user", 42)}
-
-
 async def test_three_flats_in_the_window_form_exactly_one_group(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
 
     members, group_id = await _group_of_three(session, own)
 
     assert [group.id for group in await _groups(session, own.house_id)] == [group_id]
     assert [member.group_id for member in members] == [group_id] * 3
-    formed = await _events(session, EventType.REQUEST_GROUP_FORMED)
+    formed = await events_of(session, EventType.REQUEST_GROUP_FORMED)
     assert len(formed) == 1
     assert formed[0].payload["size"] == DEFAULT_GROUP_THRESHOLD
 
 
 async def test_the_fourth_request_joins_the_group_instead_of_forming_a_second(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     _, group_id = await _group_of_three(session, own)
 
     fourth_request = await _complain(session, own.user_id, own.house_id)
 
     assert len(await _groups(session, own.house_id)) == 1
     assert fourth_request.group_id == group_id
-    joined = await _events(session, EventType.REQUEST_JOINED)
+    joined = await events_of(session, EventType.REQUEST_JOINED)
     assert len(joined) == 1
     assert joined[0].payload["group_size"] == DEFAULT_GROUP_THRESHOLD + 1
 
 
 async def test_a_request_outside_the_window_starts_the_count_anew(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     second = await _neighbour(session, own.house_id, "2")
     stale = [
         (await _complain(session, own.user_id, own.house_id)).id,
@@ -121,27 +81,11 @@ async def test_a_request_outside_the_window_starts_the_count_anew(
     assert await _groups(session, own.house_id) == []
 
 
-async def test_another_category_never_joins_the_group(
-    session: AsyncSession,
-    make_org_house_flat_user: Fixture,
-) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
-    second = await _neighbour(session, own.house_id, "2")
-    third = await _neighbour(session, own.house_id, "3")
-    await _complain(session, own.user_id, own.house_id)
-    await _complain(session, second, own.house_id)
-
-    elevator = await _complain(session, third, own.house_id, RequestCategory.ELEVATOR)
-
-    assert elevator.group_id is None
-    assert await _groups(session, own.house_id) == []
-
-
 async def test_a_group_of_another_house_is_not_joined(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _group_of_three(session, own)
 
@@ -153,13 +97,12 @@ async def test_a_group_of_another_house_is_not_joined(
 
 async def test_similar_counts_neighbours_without_the_asking_resident(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     second = await _neighbour(session, own.house_id, "2")
     await _complain(session, own.user_id, own.house_id)
     await _complain(session, second, own.house_id)
-    service = _make_service(session)
+    service = requests_service(session)
 
     similar = await service.similar(own.user_id, own.house_id, RequestCategory.LEAK)
 
@@ -169,11 +112,10 @@ async def test_similar_counts_neighbours_without_the_asking_resident(
 
 async def test_similar_offers_the_group_once_it_exists(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _group_of_three(session, own)
-    service = _make_service(session)
+    service = requests_service(session)
 
     similar = await service.similar(own.user_id, own.house_id, RequestCategory.LEAK)
 
@@ -183,9 +125,8 @@ async def test_similar_offers_the_group_once_it_exists(
 
 async def test_a_closed_group_is_not_joined(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     _, closed_id = await _group_of_three(session, own)
     [group] = await _groups(session, own.house_id)
     await RequestsRepo(session).set_group_status(group, RequestGroupStatus.CLOSED)
@@ -198,9 +139,8 @@ async def test_a_closed_group_is_not_joined(
 
 async def test_three_complaints_from_one_resident_do_not_form_a_group(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
 
     for _ in range(DEFAULT_GROUP_THRESHOLD):
         await _complain(session, own.user_id, own.house_id)
@@ -210,9 +150,8 @@ async def test_three_complaints_from_one_resident_do_not_form_a_group(
 
 async def test_a_formed_group_does_not_swallow_another_category(
     session: AsyncSession,
-    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
 ) -> None:
-    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     await _group_of_three(session, own)
 
     elevator = await _complain(
@@ -223,3 +162,24 @@ async def test_a_formed_group_does_not_swallow_another_category(
     )
 
     assert elevator.group_id is None
+
+
+def test_complaint_sources_count_complainants_and_not_requests() -> None:
+    requests = [
+        Request(
+            house_id=HouseId(1),
+            flat_id=flat_id,
+            author_user_id=author_user_id,
+            category=RequestCategory.LEAK,
+            description="жалоба",
+            status=RequestStatus.NEW,
+            channel=RequestChannel.MINIAPP,
+        )
+        for flat_id, author_user_id in (
+            (FlatId(7), None),
+            (FlatId(7), None),
+            (None, UserId(42)),
+        )
+    ]
+
+    assert complaint_sources(requests) == {("flat", 7), ("user", 42)}

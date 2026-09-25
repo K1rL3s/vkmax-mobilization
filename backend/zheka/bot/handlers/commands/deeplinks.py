@@ -57,7 +57,7 @@ async def deeplink_handler(
     demo_service: FromDishka[DemoService],
 ) -> Any:
     payload = update.payload
-    if is_not_defined(payload) or not payload:
+    if is_not_defined(payload):
         return UNHANDLED
 
     deeplink = parse_deeplink(payload)
@@ -65,11 +65,10 @@ async def deeplink_handler(
         return UNHANDLED
 
     dialog_manager.show_mode = ShowMode.SEND
-    source = deeplink.source
     await events_service.record(
         EventType.BOT_START,
         user_id=user.id,
-        source=source.value,
+        source=deeplink.source.value,
     )
     await open_deeplink(
         deeplink,

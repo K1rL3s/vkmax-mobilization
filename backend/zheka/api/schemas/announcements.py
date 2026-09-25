@@ -40,19 +40,11 @@ class AnnouncementItem(BaseSchema):
 
     @classmethod
     def of(cls, data: AnnouncementData) -> Self:
-        announcement = data.announcement
-        return cls(
-            id=announcement.id,
-            created_at=announcement.created_at,
-            text=announcement.text,
-            house_ids=list(announcement.house_ids),
-            channels=[
-                AnnouncementChannel(channel) for channel in announcement.channels
-            ],
-            org_name=data.org_name,
-            recipients_count=announcement.recipients_count,
-            houses_without_chat=list(data.houses_without_chat),
-            urgent=announcement.urgent,
+        return cls.model_validate(data.announcement).model_copy(
+            update={
+                "org_name": data.org_name,
+                "houses_without_chat": list(data.houses_without_chat),
+            },
         )
 
 

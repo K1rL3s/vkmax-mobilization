@@ -8,30 +8,25 @@ from fastapi import Depends, Header
 from zheka.api.dependencies.current_account import CurrentAccountDep
 from zheka.base import ZhekaType
 from zheka.core import texts
-from zheka.core.enums import ResidentRole, ResidentStatus
+from zheka.core.enums import ResidentStatus
 from zheka.core.errors import (
     FLAT_NOT_FOUND,
     HOUSE_NOT_FOUND,
     EntityNotFound,
     NotEnoughRights,
 )
-from zheka.core.ids import FlatId, HouseId, ResidentId, UserId
+from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.infra.database.models import Resident
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
 
 class CurrentResidency(ZhekaType):
-    resident_id: ResidentId
     user_id: UserId
     house_id: HouseId
     flat_id: FlatId | None
-    role: ResidentRole
     can_see_charges: bool
-    can_vote: bool
-    status: ResidentStatus
     verified: bool
-    is_chairman: bool
 
 
 def residency_of(resident: Resident | None, not_found: str) -> CurrentResidency:
@@ -40,16 +35,11 @@ def residency_of(resident: Resident | None, not_found: str) -> CurrentResidency:
     if resident.status is ResidentStatus.BLOCKED:
         raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
     return CurrentResidency(
-        resident_id=resident.id,
         user_id=resident.user_id,
         house_id=resident.house_id,
         flat_id=resident.flat_id,
-        role=resident.role,
         can_see_charges=resident.can_see_charges,
-        can_vote=resident.can_vote,
-        status=resident.status,
         verified=resident.verified_at is not None,
-        is_chairman=resident.is_chairman,
     )
 
 
@@ -59,16 +49,13 @@ def resolve_residency(
 ) -> CurrentResidency:
     if not residencies:
         raise NotEnoughRights("Вы не житель ни одного дома")
-    resident: Resident
+    resident = next((r for r in residencies if r.house_id == house_id_header), None)
     if house_id_header is None:
         if len(residencies) > 1:
             raise NotEnoughRights("Укажите X-House-Id: вы житель нескольких домов")
         resident = residencies[0]
-    else:
-        found = next((r for r in residencies if r.house_id == house_id_header), None)
-        if found is None:
-            raise NotEnoughRights("Нет доступа к этому дому")
-        resident = found
+    elif resident is None:
+        raise NotEnoughRights("Нет доступа к этому дому")
     return residency_of(resident, HOUSE_NOT_FOUND)
 
 

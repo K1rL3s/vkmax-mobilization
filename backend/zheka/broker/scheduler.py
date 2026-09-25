@@ -2,16 +2,14 @@ import asyncio
 import logging
 import sys
 
-from dishka.integrations.taskiq import setup_dishka
-from taskiq import TaskiqScheduler
+from taskiq import TaskiqScheduler, async_shared_broker
 from taskiq.cli.common_args import LogLevel
 from taskiq.cli.scheduler.args import SchedulerArgs
 from taskiq.cli.scheduler.run import run_scheduler
+from taskiq.schedule_sources import LabelScheduleSource
 
-from zheka.broker.tasks import *  # noqa: F403
 from zheka.config import load_config
-from zheka.di import make_container
-from zheka.di.broker import ZhekaBroker
+from zheka.di.broker import make_broker
 from zheka.logger import setup_logger
 
 logger = logging.getLogger(__name__)
@@ -21,11 +19,10 @@ async def main() -> None:
     config = load_config()
     setup_logger(config.log)
 
-    container = make_container(config=config)
-    broker = await container.get(ZhekaBroker)
-    scheduler = await container.get(TaskiqScheduler)
-
-    setup_dishka(container, broker)
+    scheduler = TaskiqScheduler(
+        make_broker(config.redis),
+        [LabelScheduleSource(async_shared_broker)],
+    )
 
     logger.info("Старт шедулера")
     try:
@@ -45,7 +42,6 @@ async def main() -> None:
         await scheduler.shutdown()
         for source in scheduler.sources:
             await source.shutdown()
-        await container.close()
 
 
 if __name__ == "__main__":

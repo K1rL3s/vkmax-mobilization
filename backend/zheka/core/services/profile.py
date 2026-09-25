@@ -3,7 +3,7 @@ from zheka.core.consent import CONSENT_VERSION
 from zheka.core.enums import EventSource, EventType, VerificationStatus
 from zheka.core.errors import EntityNotFound, InvalidRequest
 from zheka.core.ids import UserId
-from zheka.core.models import OrgMember, Organization, User, VerificationRequest
+from zheka.core.models import OrgMember, Organization, User
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import ResidencyView, is_connected
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -11,12 +11,6 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
-
-
-def reject_reason(request: VerificationRequest | None) -> str | None:
-    if request is None or request.status is not VerificationStatus.REJECTED:
-        return None
-    return request.reason
 
 
 class OrgMembershipView(ZhekaType):
@@ -99,7 +93,12 @@ class ProfileService:
                     flat=None if resident.flat_id is None else flats[resident.flat_id],
                     is_connected=is_connected(house, org),
                     verification_status=None if latest is None else latest.status,
-                    verification_reject_reason=reject_reason(latest),
+                    verification_reject_reason=(
+                        latest.reason
+                        if latest is not None
+                        and latest.status is VerificationStatus.REJECTED
+                        else None
+                    ),
                 ),
             )
         memberships = [

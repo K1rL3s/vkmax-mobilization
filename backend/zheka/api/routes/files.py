@@ -20,7 +20,7 @@ async def upload_file(
     files_service: FromDishka[FilesService],
 ) -> FileRef:
     name = await files_service.save(file)
-    return FileRef(name=name, url=files_service.sign(name))
+    return FileRef.signed(name, files_service)
 
 
 @router.get(

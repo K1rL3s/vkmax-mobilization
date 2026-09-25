@@ -6,7 +6,6 @@ from zheka.core.enums import ResidentStatus, TariffZone
 from zheka.core.errors import FLAT_NOT_FOUND, EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, MeterId, UserId
 from zheka.core.models import Flat, House, Meter, Resident
-from zheka.core.roles import is_staff
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -80,11 +79,10 @@ class MeterAccess:
             if resident.verified_at is not None and resident.can_see_charges:
                 return
 
-        flat = await self.get_flat(flat_id)
-        house = await self._houses.get(flat.house_id)
-        if house is not None and house.org_id is not None:
+        house = await self.house_of_flat(flat_id)
+        if house.org_id is not None:
             member = await self._orgs.get_member(house.org_id, user_id)
-            if member is not None and is_staff(member.role):
+            if member is not None and member.role.is_staff:
                 return
 
         if resident is not None:

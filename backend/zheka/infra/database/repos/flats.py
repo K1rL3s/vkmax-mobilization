@@ -90,14 +90,8 @@ class FlatsRepo(BaseAlchemyRepo):
         if house_id is not None:
             stmt = stmt.where(flats_table.c.house_id == house_id)
 
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(flat_verification_requests_table.c.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(flat_verification_requests_table.c.created_at.desc())
+        return await self._page(stmt, limit, offset)
 
     async def add_verification_request(
         self,

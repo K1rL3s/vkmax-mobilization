@@ -22,7 +22,7 @@ class AccessSlotItem(BaseSchema):
     @classmethod
     def of(cls, data: AccessSlotData) -> Self:
         return cls(
-            id=AccessSlotId(data.slot.id),
+            id=data.slot.id,
             starts_at=data.slot.starts_at,
             capacity=data.slot.capacity,
             taken=data.taken,

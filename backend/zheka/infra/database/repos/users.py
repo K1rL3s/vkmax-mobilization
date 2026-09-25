@@ -75,8 +75,6 @@ class UsersRepo(BaseAlchemyRepo):
         user.bot_stopped_at = at
 
     async def list_by_ids(self, user_ids: Collection[UserId]) -> Sequence[User]:
-        if not user_ids:
-            return []
         stmt = select(User).where(users_table.c.id.in_(user_ids))
         result = await self._session.execute(stmt)
         return result.scalars().all()

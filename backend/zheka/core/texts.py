@@ -15,8 +15,6 @@ REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
     RequestStatus.DONE: "Выполнена",
 }
 
-_plain = escape
-
 
 def request_status_changed(
     request_id: RequestId,
@@ -25,39 +23,39 @@ def request_status_changed(
 ) -> str:
     text = f"🔔 Заявка №{request_id}: {REQUEST_STATUS_LABELS[status]}"
     if comment:
-        text = f"{text}\n\n{_plain(comment)}"
+        text = f"{text}\n\n{escape(comment)}"
     return text
 
 
 def request_reply(request_id: RequestId, text: str) -> str:
-    return f"💬 Ответ УК по заявке №{request_id}\n\n{_plain(text)}"
+    return f"💬 Ответ УК по заявке №{request_id}\n\n{escape(text)}"
 
 
 def flat_verified(flat_number: str, address: str) -> str:
-    return f"✅ УК подтвердила вашу квартиру {_plain(flat_number)}, {_plain(address)}"
+    return f"✅ УК подтвердила вашу квартиру {escape(flat_number)}, {escape(address)}"
 
 
 def flat_verification_rejected(flat_number: str, address: str, reason: str) -> str:
     return (
-        f"❌ УК отклонила подтверждение квартиры {_plain(flat_number)}, "
-        f"{_plain(address)}\n\nПричина: {_plain(reason)}"
+        f"❌ УК отклонила подтверждение квартиры {escape(flat_number)}, "
+        f"{escape(address)}\n\nПричина: {escape(reason)}"
     )
 
 
 def resident_blocked(address: str, reason: str, contact: str) -> str:
     return (
-        f"⛔ УК закрыла вам доступ к дому {_plain(address)}\n\n"
-        f"Причина: {_plain(reason)}\n\n{contact}"
+        f"⛔ УК закрыла вам доступ к дому {escape(address)}\n\n"
+        f"Причина: {escape(reason)}\n\n{contact}"
     )
 
 
 def resident_unblocked(address: str) -> str:
-    return f"✅ УК вернула вам доступ к дому {_plain(address)}"
+    return f"✅ УК вернула вам доступ к дому {escape(address)}"
 
 
 def announcement(org_name: str, text: str, *, urgent: bool) -> str:
     heading = "🚨 Срочное объявление" if urgent else "📢 Объявление"
-    return f"{heading} от {_plain(org_name)}\n\n{_plain(text)}"
+    return f"{heading} от {escape(org_name)}\n\n{escape(text)}"
 
 
 def blocked_detail(reason: str | None) -> str:
@@ -84,28 +82,28 @@ def reading_window_closing(days: int) -> str:
 
 def poll_reminder(title: str, ends_at: datetime) -> str:
     return (
-        f"🗳 Идет опрос «{_plain(title)}», голосование закончится "
+        f"🗳 Идет опрос «{escape(title)}», голосование закончится "
         f"{ends_at:%d.%m.%Y}. От вашей квартиры голоса еще нет"
     )
 
 
 def poll_chat_reminder(title: str, ends_at: datetime) -> str:
     return (
-        f"🗳 Идет опрос «{_plain(title)}», голосование закончится "
+        f"🗳 Идет опрос «{escape(title)}», голосование закончится "
         f"{ends_at:%d.%m.%Y}. Проголосовать можно в мини-приложении"
     )
 
 
 def verification_soon(meter: str, serial: str, due: date) -> str:
     return (
-        f"⏰ {due:%d.%m.%Y} истекает поверка счетчика «{meter}» №{_plain(serial)}. "
+        f"⏰ {due:%d.%m.%Y} истекает поверка счетчика «{meter}» №{escape(serial)}. "
         "После этого начисление пойдет по нормативу"
     )
 
 
 def verification_expired(meter: str, serial: str) -> str:
     return (
-        f"⚠️ Истекла поверка счетчика «{meter}» №{_plain(serial)}: начисление "
+        f"⚠️ Истекла поверка счетчика «{meter}» №{escape(serial)}: начисление "
         "пойдет по нормативу, пока счетчик не поверят"
     )
 
@@ -113,7 +111,7 @@ def verification_expired(meter: str, serial: str) -> str:
 def appointment_reminder(starts_at: datetime, address: str) -> str:
     return (
         f"📅 Напоминаем: завтра в {starts_at:%H:%M} вы записаны на прием в УК "
-        f"по дому {_plain(address)}"
+        f"по дому {escape(address)}"
     )
 
 
@@ -139,14 +137,14 @@ REQUEST_EXPORT_DISCLAIMER = (
 
 
 def org_contact(name: str, phone: str) -> str:
-    contact = _plain(name)
+    contact = escape(name)
     if phone.strip():
-        contact = f"{contact}, {_plain(phone)}"
+        contact = f"{contact}, {escape(phone)}"
     return f"Связаться с УК: {contact}"
 
 
 def flat_verification_revoked(address: str, reason: str, contact: str) -> str:
     return (
-        f"⚠️ УК отозвала подтверждение вашей квартиры в доме {_plain(address)}\n\n"
-        f"Причина: {_plain(reason)}\n\n{contact}"
+        f"⚠️ УК отозвала подтверждение вашей квартиры в доме {escape(address)}\n\n"
+        f"Причина: {escape(reason)}\n\n{contact}"
     )

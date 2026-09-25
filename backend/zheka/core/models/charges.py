@@ -1,17 +1,13 @@
 from datetime import date, datetime
-from typing import Any, cast
+from typing import Any
 
-from zheka.base import ZhekaMutableType
+from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import ServiceType
 from zheka.core.ids import ChargeId, FlatId, HouseId, TariffId
 
-_UNSET_AT = cast(datetime, None)
-_UNSET_TARIFF_ID = cast(TariffId, None)
-_UNSET_CHARGE_ID = cast(ChargeId, None)
-
 
 class Tariff(ZhekaMutableType):
-    id: TariffId = _UNSET_TARIFF_ID
+    id: TariffId = UNSET
     house_id: HouseId
     service: ServiceType
     value: int
@@ -21,8 +17,8 @@ class Tariff(ZhekaMutableType):
 
 
 class Charge(ZhekaMutableType):
-    id: ChargeId = _UNSET_CHARGE_ID
-    created_at: datetime = _UNSET_AT
+    id: ChargeId = UNSET
+    created_at: datetime = UNSET
     flat_id: FlatId
     period: date
     lines: Any

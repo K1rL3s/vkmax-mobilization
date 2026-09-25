@@ -239,12 +239,12 @@ class DemoService:
         house_id = house.id
 
         now = datetime.now(UTC)
-        rng = Random(f"demo-flat:{user_id}")
+        flat_number = demo_flat_number(user_id)
         flat, created = await self._houses.add_flat_or_get(
             house_id,
-            demo_flat_number(user_id),
-            area=rng.randint(3_800, 7_800),
-            account_no=f"ДЕМО-{house_id}-{demo_flat_number(user_id)}",
+            flat_number,
+            area=Random(f"demo-flat:{user_id}").randint(3_800, 7_800),
+            account_no=f"ДЕМО-{house_id}-{flat_number}",
         )
         if created:
             await self.furnish(

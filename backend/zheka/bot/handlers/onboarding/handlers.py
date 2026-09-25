@@ -128,16 +128,10 @@ async def on_location(
     houses_service: FromDishka[HousesService],
 ) -> None:
     location = next(
-        (
-            attach
-            for attach in update.message.body.attachments or []
-            if isinstance(attach, LocationAttachment)
-        ),
-        None,
+        attach
+        for attach in update.message.body.attachments or []
+        if isinstance(attach, LocationAttachment)
     )
-    if location is None:
-        return
-
     found = await houses_service.nearest(
         dialog_user_id(dialog_manager),
         location.latitude,

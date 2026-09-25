@@ -1,17 +1,14 @@
 from dataclasses import field
 from datetime import date, datetime
-from typing import Any, cast
+from typing import Any
 
-from zheka.base import ZhekaMutableType
+from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import MeterType
 from zheka.core.ids import FlatId, MeterId, ReadingId, UserId
 
-_UNSET_METER_ID = cast(MeterId, None)
-_UNSET_READING_ID = cast(ReadingId, None)
-
 
 class Meter(ZhekaMutableType):
-    id: MeterId = _UNSET_METER_ID
+    id: MeterId = UNSET
     flat_id: FlatId
     type: MeterType
     tariff_zones: int = 1
@@ -21,7 +18,7 @@ class Meter(ZhekaMutableType):
 
 
 class Reading(ZhekaMutableType):
-    id: ReadingId = _UNSET_READING_ID
+    id: ReadingId = UNSET
     meter_id: MeterId
     period: date
     values: Any

@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import OrgRole
-from zheka.core.errors import EntityNotFound
+from zheka.core.errors import ORG_NOT_FOUND, EntityNotFound
 from zheka.core.ids import OrgId, UserId
 from zheka.infra.database.models import OrgMember, OrgSettings, Organization
 from zheka.infra.database.repos.base import BaseAlchemyRepo
@@ -122,3 +122,9 @@ class OrgsRepo(BaseAlchemyRepo):
         if member is None:
             raise EntityNotFound("Сотрудник не найден")
         return member
+
+    async def get_existing(self, org_id: OrgId) -> Organization:
+        org = await self.get(org_id)
+        if org is None:
+            raise EntityNotFound(ORG_NOT_FOUND)
+        return org

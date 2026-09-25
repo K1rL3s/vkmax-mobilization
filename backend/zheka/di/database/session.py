@@ -21,10 +21,9 @@ class DbProvider(Provider):
             max_overflow=10,
             pool_recycle=3600,
             pool_timeout=30,
-            echo=False,
         )
         yield engine
-        await engine.dispose(close=True)
+        await engine.dispose()
 
     @provide(scope=Scope.APP)
     async def sessionmaker(
@@ -34,7 +33,6 @@ class DbProvider(Provider):
         maker = async_sessionmaker(
             bind=engine,
             autoflush=False,
-            future=True,
             expire_on_commit=False,
         )
         yield maker

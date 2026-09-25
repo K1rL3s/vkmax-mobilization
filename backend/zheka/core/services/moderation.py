@@ -157,9 +157,7 @@ class ModerationService:
         return HouseResidentView(resident=resident, user=user, flat=flat)
 
     async def _contact(self, org_id: OrgId) -> str:
-        org = await self._orgs.get(org_id)
-        if org is None:
-            raise EntityNotFound("Организация не найдена")
+        org = await self._orgs.get_existing(org_id)
         return texts.org_contact(org.name, org.phone)
 
 

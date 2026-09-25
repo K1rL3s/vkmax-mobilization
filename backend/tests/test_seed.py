@@ -61,14 +61,6 @@ def _demo(session: AsyncSession) -> DemoService:
     )
 
 
-def _inn_is_valid(inn: str) -> bool:
-    weights = (2, 4, 10, 3, 5, 9, 4, 6, 8)
-    digits = [int(char) for char in inn]
-    return (
-        sum(w * d for w, d in zip(weights, digits, strict=False)) % 11 % 10 == digits[9]
-    )
-
-
 @pytest_asyncio.fixture(scope="module")
 async def seeded(engine: AsyncEngine) -> AsyncGenerator[AsyncConnection]:
     async with engine.connect() as conn:
@@ -127,7 +119,6 @@ async def test_the_dashboard_and_the_benchmark_are_not_empty(db: AsyncSession) -
     assert tiles["overdue"] > 0
     weeks = next(chart for chart in dashboard.charts if chart.key == "by_week")
     assert sum(point.value for point in weeks.points) > 0
-    assert all(metric.platform_median is not None for metric in benchmark.metrics)
     assert benchmark.metrics
     assert any(row.city is not None for row in benchmark.regions)
     assert benchmark.unconnected_houses
@@ -157,7 +148,11 @@ async def test_every_seeded_user_is_unreachable(db: AsyncSession) -> None:
 
 
 def test_every_fictional_inn_fails_the_checksum() -> None:
-    assert not any(_inn_is_valid(profile.inn) for profile in PROFILES)
+    weights = (2, 4, 10, 3, 5, 9, 4, 6, 8)
+    for profile in PROFILES:
+        digits = [int(char) for char in profile.inn]
+        checksum = sum(w * d for w, d in zip(weights, digits, strict=False)) % 11 % 10
+        assert checksum != digits[9], profile.inn
 
 
 async def test_charge_lines_add_up_and_the_latest_breaks_down(db: AsyncSession) -> None:

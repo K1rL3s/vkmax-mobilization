@@ -105,14 +105,12 @@ class AccessRepo(BaseAlchemyRepo):
         self,
         access_request_id: AccessRequestId,
         flat_ids: Sequence[FlatId],
-    ) -> Sequence[AccessTarget]:
-        rows = [
+    ) -> None:
+        self._session.add_all(
             AccessTarget(access_request_id=access_request_id, flat_id=flat_id)
             for flat_id in flat_ids
-        ]
-        self._session.add_all(rows)
+        )
         await self._session.flush()
-        return rows
 
     async def list_slots(
         self,

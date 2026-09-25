@@ -28,8 +28,6 @@ class EventsRepo(BaseAlchemyRepo):
         payload: dict[str, Any],
         since: datetime | None = None,
     ) -> set[UserId]:
-        if not user_ids:
-            return set()
         stmt = select(events_table.c.user_id).where(
             events_table.c.type == type.value,
             events_table.c.user_id.in_(user_ids),

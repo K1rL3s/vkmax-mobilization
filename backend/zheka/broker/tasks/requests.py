@@ -15,7 +15,6 @@ from zheka.broker.tasks.bot_requests import save_photos
 from zheka.core.enums import NotificationCategory, RequestStatus
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import RequestId, UserId
-from zheka.core.notifications import resolve_notify
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.notifications import NotificationsService
@@ -128,7 +127,7 @@ async def open_card(
     if user is None:
         return
     levels = await notifications_service.levels(user_id)
-    notify = bool(resolve_notify(levels[NotificationCategory.REQUESTS], mandatory=True))
+    notify = bool(levels[NotificationCategory.REQUESTS].resolve_notify(mandatory=True))
     await sender.start_dialog(
         state,
         user,

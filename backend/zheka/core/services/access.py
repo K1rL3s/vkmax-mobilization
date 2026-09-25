@@ -175,10 +175,7 @@ class AccessService:
         return AccessGridData(
             request=row,
             targets=[
-                AccessTargetData(
-                    target=target,
-                    flat_number=numbers[FlatId(target.flat_id)],
-                )
+                AccessTargetData(target=target, flat_number=numbers[target.flat_id])
                 for target in targets
             ],
         )
@@ -267,7 +264,7 @@ class AccessService:
                     responded_count=responded,
                     targets_count=total,
                     my_flat_id=None if target is None else target.flat_id,
-                    my_slot_id=(None if target is None else target.slot_id),
+                    my_slot_id=None if target is None else target.slot_id,
                 ),
             )
         return rows

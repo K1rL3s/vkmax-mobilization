@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.conftest import OrgHouseFlatUser
 
 from zheka.api.schemas.houses import ResidencySummary
+from zheka.core.consent import CONSENT_VERSION
 from zheka.core.enums import ChatStatus, EventSource, OrgRole, ResidentRole
 from zheka.core.errors import (
     EntityNotFound,
@@ -61,10 +62,7 @@ async def _link(
 
 
 async def _consent(session: AsyncSession, fixture: OrgHouseFlatUser) -> None:
-    user = await UsersRepo(session).get_by_id(fixture.user_id)
-    assert user is not None
-    user.consent_at = datetime.now(UTC)
-    await session.flush()
+    await UsersRepo(session).set_consent(fixture.user_id, CONSENT_VERSION)
 
 
 async def _count(session: AsyncSession, column: Column[int], value: int) -> int:
@@ -225,6 +223,7 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
 
     north_id = await _add_house(session, fixture.org_id, lat=lat + north, lon=lon)
     east_id = await _add_house(session, fixture.org_id, lat=lat, lon=lon + east)
+    far_id = await _add_house(session, fixture.org_id, lat=lat + north * 10, lon=lon)
 
     found = await _make_service(session).nearest(
         fixture.user_id,
@@ -239,7 +238,6 @@ async def test_nearby_measures_longitude_in_metres_not_in_degrees(
     assert distances[north_id] == pytest.approx(200, abs=10)
     assert distances[east_id] == pytest.approx(200, abs=10)
 
-    far_id = await _add_house(session, fixture.org_id, lat=lat + north * 10, lon=lon)
     far = await _make_service(session).nearest(
         fixture.user_id,
         float(lat),

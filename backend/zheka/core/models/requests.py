@@ -1,7 +1,6 @@
 from datetime import datetime
-from typing import cast
 
-from zheka.base import ZhekaMutableType
+from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
@@ -21,17 +20,10 @@ from zheka.core.ids import (
     UserId,
 )
 
-_UNSET_AT = cast(datetime, None)
-_UNSET_REQUEST_ID = cast(RequestId, None)
-_UNSET_REQUEST_GROUP_ID = cast(RequestGroupId, None)
-_UNSET_REQUEST_PHOTO_ID = cast(RequestPhotoId, None)
-_UNSET_REQUEST_STATUS_LOG_ID = cast(RequestStatusLogId, None)
-_UNSET_REQUEST_MESSAGE_ID = cast(RequestMessageId, None)
-
 
 class Request(ZhekaMutableType):
-    id: RequestId = _UNSET_REQUEST_ID
-    created_at: datetime = _UNSET_AT
+    id: RequestId = UNSET
+    created_at: datetime = UNSET
     house_id: HouseId
     flat_id: FlatId | None = None
     author_user_id: UserId | None = None
@@ -54,7 +46,7 @@ class Request(ZhekaMutableType):
 
 
 class RequestGroup(ZhekaMutableType):
-    id: RequestGroupId = _UNSET_REQUEST_GROUP_ID
+    id: RequestGroupId = UNSET
     house_id: HouseId
     category: RequestCategory
     window_started_at: datetime
@@ -62,8 +54,8 @@ class RequestGroup(ZhekaMutableType):
 
 
 class RequestPhoto(ZhekaMutableType):
-    id: RequestPhotoId = _UNSET_REQUEST_PHOTO_ID
-    created_at: datetime = _UNSET_AT
+    id: RequestPhotoId = UNSET
+    created_at: datetime = UNSET
     request_id: RequestId
     path: str
     kind: RequestPhotoKind
@@ -71,7 +63,7 @@ class RequestPhoto(ZhekaMutableType):
 
 
 class RequestStatusLog(ZhekaMutableType):
-    id: RequestStatusLogId = _UNSET_REQUEST_STATUS_LOG_ID
+    id: RequestStatusLogId = UNSET
     request_id: RequestId
     from_status: RequestStatus | None = None
     to_status: RequestStatus
@@ -81,8 +73,8 @@ class RequestStatusLog(ZhekaMutableType):
 
 
 class RequestMessage(ZhekaMutableType):
-    id: RequestMessageId = _UNSET_REQUEST_MESSAGE_ID
-    created_at: datetime = _UNSET_AT
+    id: RequestMessageId = UNSET
+    created_at: datetime = UNSET
     request_id: RequestId
     author_user_id: UserId
     author_role: str

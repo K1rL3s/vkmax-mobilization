@@ -31,18 +31,6 @@ from zheka.seed.demo import SEED_LOCK, seed
 WAITER_TIMEOUT = 30.0
 
 
-def _recording(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> list[Any]:
-    sent: list[dict[str, Any]] = []
-    original = fake_bot.send_message
-
-    async def recording(**kwargs: Any) -> Any:
-        sent.append(kwargs)
-        return await original(**kwargs)
-
-    monkeypatch.setattr(fake_bot, "send_message", recording)
-    return sent
-
-
 async def test_seed_command_queues_the_task_and_answers_at_once(
     bot_container: AsyncContainer,  # noqa: ARG001
     bot_session: AsyncSession,
@@ -51,7 +39,14 @@ async def test_seed_command_queues_the_task_and_answers_at_once(
     fake_bot: FakeBot,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sent = _recording(fake_bot, monkeypatch)
+    sent: list[dict[str, Any]] = []
+    original = fake_bot.send_message
+
+    async def recording(**kwargs: Any) -> Any:
+        sent.append(kwargs)
+        return await original(**kwargs)
+
+    monkeypatch.setattr(fake_bot, "send_message", recording)
     max_user_id = MaxUserId(secrets.randbits(40))
     client = BotClient(
         bot_setup.dp,

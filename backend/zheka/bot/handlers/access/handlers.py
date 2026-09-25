@@ -48,10 +48,8 @@ async def get_slots(
     slots = [
         SlotItem(
             id=slot.slot.id,
-            label=(
-                PICKED.format(time=f"{view.house.local(slot.slot.starts_at):%H:%M}")
-                if slot.slot.id == view.my_slot_id
-                else f"🕐 {view.house.local(slot.slot.starts_at):%H:%M}"
+            label=(PICKED if slot.slot.id == view.my_slot_id else "🕐 {time}").format(
+                time=f"{view.house.local(slot.slot.starts_at):%H:%M}",
             ),
         )
         for slot in view.slots

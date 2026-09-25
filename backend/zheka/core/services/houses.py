@@ -133,12 +133,7 @@ class HousesService:
         limit: int,
         offset: int,
     ) -> tuple[list[HouseFound], int]:
-        city, street, building, query = (
-            stated(city),
-            stated(street),
-            stated(building),
-            stated(query),
-        )
+        city, street, building, query = map(stated, (city, street, building, query))
         if city is None and query is None:
             raise InvalidRequest("Укажите адрес или город")
 
@@ -338,9 +333,7 @@ class HousesService:
         return house
 
     async def _org_of(self, house: House) -> Organization | None:
-        if house.org_id is None:
-            return None
-        return await self._orgs.get(OrgId(house.org_id))
+        return None if house.org_id is None else await self._orgs.get(house.org_id)
 
     async def _view(
         self,

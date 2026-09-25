@@ -406,10 +406,8 @@ class AnalyticsRepo(BaseAlchemyRepo):
         now: datetime,
     ) -> list[CutRow]:
         rows: list[CutRow] = []
-        for by_city in (False, True):
-            cut = [houses_table.c.region]
-            if by_city:
-                cut.append(houses_table.c.city)
+        by_region = [houses_table.c.region]
+        for cut in (by_region, [*by_region, houses_table.c.city]):
             peers = _peers(metric, is_demo, since, now, *cut)
             orgs_count = func.count()
             keys = [peers.c[column.name] for column in cut]

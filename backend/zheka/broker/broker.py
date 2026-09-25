@@ -1,8 +1,6 @@
 import logging
 
 from dishka.integrations.taskiq import ContainerMiddleware
-from maxo import Dispatcher
-from maxo.dialogs import BgManagerFactory
 from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
 from taskiq import AsyncBroker, SmartRetryMiddleware, TaskiqEvents
 
@@ -22,13 +20,7 @@ def main() -> AsyncBroker:
     setup_logger(config.log)
 
     bot_setup = make_dispatcher(config.redis)
-    container = make_container(
-        config=config,
-        context={
-            Dispatcher: bot_setup.dp,
-            BgManagerFactory: bot_setup.bg_manager_factory,
-        },
-    )
+    container = make_container(config=config, bot_setup=bot_setup)
     setup_maxo_dishka(container, bot_setup.dp, auto_inject=True)
 
     logger.debug("Инициализирую брокер")

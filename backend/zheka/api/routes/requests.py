@@ -33,9 +33,7 @@ def signed(
     photos: Sequence[RequestPhoto],
     files_service: FilesService,
 ) -> list[FileRef]:
-    return [
-        FileRef(name=photo.path, url=files_service.sign(photo.path)) for photo in photos
-    ]
+    return [FileRef.signed(photo.path, files_service) for photo in photos]
 
 
 def _card(card: RequestCardData, files_service: FilesService) -> RequestCard:
@@ -99,13 +97,8 @@ async def create_request(
         residency.user_id,
         residency.house_id,
         RequestDraft(
-            category=body.category,
-            description=body.description,
-            flat_id=body.flat_id,
-            photos=body.photos,
+            **body.model_dump(exclude={"join_group_id"}),
             group_id=body.join_group_id,
-            llm_suggested=body.llm_suggested,
-            llm_accepted=body.llm_accepted,
         ),
     )
     return _card(card, files_service)

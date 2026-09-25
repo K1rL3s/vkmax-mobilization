@@ -1,18 +1,18 @@
 from collections.abc import Sequence
+from dataclasses import asdict
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 
 from zheka.base import ZhekaType
 from zheka.core.enums import AppointmentStatus, EventType
 from zheka.core.errors import (
     HOUSE_NOT_FOUND,
-    ORG_NOT_FOUND,
     REQUEST_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
     InvalidState,
 )
 from zheka.core.ids import AppointmentId, HouseId, OrgId, RequestId, UserId
-from zheka.core.models import Appointment, Organization, ReceptionWindow
+from zheka.core.models import Appointment, ReceptionWindow
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -59,18 +59,6 @@ class ReceptionWindowDraft(ZhekaType):
     capacity: int = 1
 
 
-def expand_slots(window: ReceptionWindow, day: date, zone: tzinfo) -> list[datetime]:
-    if window.slot_minutes <= 0:
-        return []
-    step = timedelta(minutes=window.slot_minutes)
-    starts_at = datetime.combine(day, window.time_from, tzinfo=zone)
-    ends_at = datetime.combine(day, window.time_to, tzinfo=zone)
-    return [
-        (starts_at + step * number).astimezone(UTC)
-        for number in range((ends_at - starts_at) // step)
-    ]
-
-
 def slot_capacities(
     windows: Sequence[ReceptionWindow],
     date_from: date,
@@ -83,7 +71,7 @@ def slot_capacities(
         for window in windows:
             if window.weekday != day.weekday():
                 continue
-            for moment in expand_slots(window, day, zone):
+            for moment in window.expand_slots(day, zone):
                 capacities[moment] = max(capacities.get(moment, 0), window.capacity)
         day += timedelta(days=1)
     return capacities
@@ -128,7 +116,7 @@ class ReceptionService:
             raise EntityNotFound(HOUSE_NOT_FOUND)
         if house.org_id is None:
             return []
-        org = await self._org(house.org_id)
+        org = await self._orgs.get_existing(house.org_id)
         now = datetime.now(UTC)
         date_from = date_to = on_date or org.local(now).date()
         if on_date is None:
@@ -159,18 +147,17 @@ class ReceptionService:
             raise EntityNotFound(HOUSE_NOT_FOUND)
         if house.org_id is None:
             raise InvalidState(SLOT_UNKNOWN)
-        org_id = house.org_id
-        org = await self._org(org_id)
+        org = await self._orgs.get_existing(house.org_id)
 
         moment = org.to_utc(starts_at)
         day = org.local(moment).date()
-        windows = await self._reception.lock_windows(org_id, day.weekday())
+        windows = await self._reception.lock_windows(org.id, day.weekday())
         capacity = slot_capacities(windows, day, day, org.zone).get(moment)
         if capacity is None or moment <= datetime.now(UTC):
             raise InvalidState(SLOT_UNKNOWN)
-        if await self._reception.has_booking(org_id, user_id, moment):
+        if await self._reception.has_booking(org.id, user_id, moment):
             raise InvalidState(ALREADY_BOOKED)
-        if await self._reception.count_booked(org_id, moment) >= capacity:
+        if await self._reception.count_booked(org.id, moment) >= capacity:
             raise InvalidState(SLOT_TAKEN)
 
         if request_id is not None:
@@ -183,7 +170,7 @@ class ReceptionService:
                 raise EntityNotFound(REQUEST_NOT_FOUND)
 
         appointment = await self._reception.create_appointment(
-            org_id,
+            org.id,
             house_id,
             user_id,
             moment,
@@ -204,8 +191,6 @@ class ReceptionService:
             raise EntityNotFound(APPOINTMENT_NOT_FOUND)
         if appointment.status is AppointmentStatus.DONE:
             raise InvalidState(ALREADY_DONE)
-        if appointment.status is AppointmentStatus.CANCELLED:
-            return
         await self._reception.cancel_appointment(appointment)
 
     async def mine(self, user_id: UserId) -> list[AppointmentData]:
@@ -223,7 +208,7 @@ class ReceptionService:
             and await self._houses.get_for_org(house_id, org_id) is None
         ):
             raise EntityNotFound(HOUSE_NOT_FOUND)
-        org = await self._org(org_id)
+        org = await self._orgs.get_existing(org_id)
         day = on_date or org.local(datetime.now(UTC)).date()
         appointments = await self._reception.list_appointments(
             org_id,
@@ -252,17 +237,7 @@ class ReceptionService:
                 raise InvalidRequest(BAD_CAPACITY)
         return await self._reception.replace_windows(
             org_id,
-            [
-                ReceptionWindow(
-                    org_id=org_id,
-                    weekday=draft.weekday,
-                    time_from=draft.time_from,
-                    time_to=draft.time_to,
-                    slot_minutes=draft.slot_minutes,
-                    capacity=draft.capacity,
-                )
-                for draft in drafts
-            ],
+            [ReceptionWindow(org_id=org_id, **asdict(draft)) for draft in drafts],
         )
 
     async def _decorate(
@@ -271,8 +246,6 @@ class ReceptionService:
         *,
         with_people: bool,
     ) -> list[AppointmentData]:
-        if not appointments:
-            return []
         house_ids = {row.house_id for row in appointments}
         houses = {
             house.id: house for house in await self._houses.list_by_ids(house_ids)
@@ -287,22 +260,17 @@ class ReceptionService:
             await self._people(appointments) if with_people else ({}, {})
         )
 
-        rows = []
-        for appointment in appointments:
-            house = houses[appointment.house_id]
-            org = orgs[appointment.org_id]
-            user_id = appointment.user_id
-            rows.append(
-                AppointmentData(
-                    appointment=appointment,
-                    address=house.address,
-                    org_address=org.address,
-                    org_phone=org.phone,
-                    user_name=names.get(user_id),
-                    flat_number=flat_numbers.get((user_id, appointment.house_id)),
-                ),
+        return [
+            AppointmentData(
+                appointment=row,
+                address=houses[row.house_id].address,
+                org_address=orgs[row.org_id].address,
+                org_phone=orgs[row.org_id].phone,
+                user_name=names.get(row.user_id),
+                flat_number=flat_numbers.get((row.user_id, row.house_id)),
             )
-        return rows
+            for row in appointments
+        ]
 
     async def _people(
         self,
@@ -331,9 +299,3 @@ class ReceptionService:
             for resident in residents
         }
         return names, flat_numbers
-
-    async def _org(self, org_id: OrgId) -> Organization:
-        org = await self._orgs.get(org_id)
-        if org is None:
-            raise EntityNotFound(ORG_NOT_FOUND)
-        return org

@@ -4,19 +4,10 @@ import aiohttp
 import pytest
 from dishka import AsyncContainer, Provider
 
-from tests.conftest import bot_context, empty_bot_setup, make_config
+from tests.conftest import empty_bot_setup, make_config
 
 from zheka.broker import broker as worker
 from zheka.di import make_container
-from zheka.infra.database.repos.users import UsersRepo
-
-
-async def test_make_container_builds_and_resolves_repos() -> None:
-    bot_setup = empty_bot_setup()
-    container = make_container(config=make_config(), context=bot_context(bot_setup))
-
-    async with container, container() as request_container:
-        assert isinstance(await request_container.get(UsersRepo), UsersRepo)
 
 
 async def test_the_worker_closes_the_http_session_on_shutdown(

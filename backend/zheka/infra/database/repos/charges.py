@@ -60,12 +60,8 @@ class ChargesRepo(BaseAlchemyRepo):
         offset: int,
     ) -> tuple[Sequence[Charge], int]:
         stmt = select(Charge).where(charges_table.c.flat_id == flat_id)
-        total = await self._count(stmt)
-        page_stmt = (
-            stmt.order_by(charges_table.c.period.desc()).limit(limit).offset(offset)
-        )
-        result = await self._session.execute(page_stmt)
-        return result.scalars().all(), total
+        stmt = stmt.order_by(charges_table.c.period.desc())
+        return await self._page(stmt, limit, offset)
 
     async def mark_paid(self, charge: Charge, paid_at: datetime) -> None:
         charge.paid_at = paid_at

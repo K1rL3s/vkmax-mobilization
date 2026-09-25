@@ -9,7 +9,6 @@ from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import recheck_chat_rights
 from zheka.core.enums import NotificationCategory
 from zheka.core.ids import MaxChatId, UserId
-from zheka.core.notifications import resolve_notify
 from zheka.core.services.chats import ChatsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -20,21 +19,18 @@ logger = logging.getLogger(__name__)
 
 async def _fan_out(
     sender: MaxSender,
-    notifications_repo: NotificationsRepo,
+    repo: NotificationsRepo,
     user_ids: Sequence[UserId],
     text: str,
     category: str,
     mandatory: bool,
 ) -> int:
-    recipients = await notifications_repo.recipients(
-        user_ids,
-        NotificationCategory(category),
-    )
+    recipients = await repo.recipients(user_ids, NotificationCategory(category))
     logger.info("Рассылка %s: получателей %s", category, len(recipients))
 
     sent = 0
     for recipient in recipients:
-        notify = resolve_notify(recipient.level, mandatory=mandatory)
+        notify = recipient.level.resolve_notify(mandatory=mandatory)
         if notify is None:
             continue
         await sender.send_message(text, user_id=recipient.max_user_id, notify=notify)
@@ -52,16 +48,9 @@ async def send_to_user(
     category: str,
     mandatory: bool,
     sender: FromDishka[MaxSender],
-    notifications_repo: FromDishka[NotificationsRepo],
+    repo: FromDishka[NotificationsRepo],
 ) -> int:
-    return await _fan_out(
-        sender,
-        notifications_repo,
-        [user_id],
-        text,
-        category,
-        mandatory,
-    )
+    return await _fan_out(sender, repo, [user_id], text, category, mandatory)
 
 
 @async_shared_broker.task(task_name=TaskName.BROADCAST_TO_USERS.value)
@@ -72,16 +61,9 @@ async def broadcast_to_users(
     category: str,
     mandatory: bool,
     sender: FromDishka[MaxSender],
-    notifications_repo: FromDishka[NotificationsRepo],
+    repo: FromDishka[NotificationsRepo],
 ) -> int:
-    return await _fan_out(
-        sender,
-        notifications_repo,
-        user_ids,
-        text,
-        category,
-        mandatory,
-    )
+    return await _fan_out(sender, repo, user_ids, text, category, mandatory)
 
 
 @async_shared_broker.task(task_name=TaskName.BROADCAST_TO_CHATS.value)
