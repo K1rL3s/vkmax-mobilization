@@ -61,11 +61,15 @@ async def _logs(session: AsyncSession, request_id: RequestId) -> list[RequestSta
     return list((await session.execute(stmt)).scalars().all())
 
 
-def _phone_draft(own: OrgHouseFlatUser, **fields: object) -> PhoneRequestDraft:
+def _phone_draft(
+    own: OrgHouseFlatUser,
+    description: str = "Течет",
+    **fields: object,
+) -> PhoneRequestDraft:
     return PhoneRequestDraft(
         house_id=own.house_id,
         category=RequestCategory.LEAK,
-        description="Течет",
+        description=description,
         **fields,  # type: ignore[arg-type]
     )
 
@@ -113,6 +117,7 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
     service = admin_requests_service(session)
 
     rows, _ = await service.inbox(own.org_id, NO_FILTERS, 20, 0)
+    second, _ = await service.inbox(own.org_id, NO_FILTERS, 1, 1)
     only_overdue, total = await service.inbox(
         own.org_id,
         RequestFilters(overdue=True),
@@ -121,6 +126,7 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
     )
 
     assert [row.request.id for row in rows] == [late.id, fresh.id, done.id]
+    assert [row.request.id for row in second] == [fresh.id]
     assert total == 1
     assert [row.request.id for row in only_overdue] == [late.id]
 
@@ -184,10 +190,13 @@ async def test_change_status_writes_the_log_the_stamp_and_the_event(
 async def test_phone_request_carries_the_caller_and_no_author(
     session: AsyncSession,
     own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
 ) -> None:
     staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    service = admin_requests_service(session, publisher)
 
-    card = await admin_requests_service(session).create_phone(
+    card = await service.create_phone(
         own.org_id,
         _phone_draft(own, caller_name="Мария Ивановна", caller_phone="+70000000000"),
         staff,
@@ -201,6 +210,9 @@ async def test_phone_request_carries_the_caller_and_no_author(
     assert request.caller_name == "Мария Ивановна"
     assert request.caller_phone == "+70000000000"
     assert await _logs(session, request.id) == [RequestStatus.NEW]
+    await service.reply(own.org_id, request.id, "Мастер придет завтра", staff)
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_TO_USER) == []
 
 
 async def test_phone_request_refuses_without_a_flat_or_full_caller_details(
@@ -213,21 +225,30 @@ async def test_phone_request_refuses_without_a_flat_or_full_caller_details(
     for fields in ({}, {"caller_name": "Мария"}, {"caller_phone": "+70000000000"}):
         with pytest.raises(InvalidRequest):
             await service.create_phone(own.org_id, _phone_draft(own, **fields), staff)
+    with pytest.raises(InvalidRequest):
+        await service.create_phone(
+            own.org_id,
+            _phone_draft(own, "   ", flat_id=own.flat_id),
+            staff,
+        )
 
 
-async def test_phone_request_refuses_a_house_of_another_organization(
+async def test_phone_request_refuses_a_house_or_flat_of_another_organization(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
     own: OrgHouseFlatUser,
 ) -> None:
     foreign = await make_org_house_flat_user()
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    service = admin_requests_service(session)
 
-    with pytest.raises(EntityNotFound):
-        await admin_requests_service(session).create_phone(
-            own.org_id,
-            _phone_draft(foreign, flat_id=foreign.flat_id),
-            await _member(session, own.org_id, OrgRole.EMPLOYEE),
-        )
+    for house in (foreign, own):
+        with pytest.raises(EntityNotFound):
+            await service.create_phone(
+                own.org_id,
+                _phone_draft(house, flat_id=foreign.flat_id),
+                staff,
+            )
 
 
 async def test_reply_writes_a_message_from_the_management(
@@ -283,7 +304,10 @@ async def test_assign_takes_an_executor_leaves_the_status_and_opens_his_card(
 
     assert card.card.request.executor_user_id == executor
     assert card.card.request.status is RequestStatus.NEW
-    assert await events_of(session, EventType.REQUEST_ASSIGNED) != []
+    assigned = await events_of(session, EventType.REQUEST_ASSIGNED)
+    assert [(event.user_id, event.payload) for event in assigned] == [
+        (staff, {"request_id": request.id, "executor_user_id": executor}),
+    ]
     await publisher.flush()
     assert broker.enqueued(TaskName.SEND_EXECUTOR_CARD) == [
         {"request_id": request.id, "user_id": None},

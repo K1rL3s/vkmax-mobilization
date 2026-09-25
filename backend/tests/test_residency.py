@@ -115,6 +115,19 @@ def test_resolve_residency_refuses_a_blocked_resident(
     assert str(refused.value) == detail
 
 
+@pytest.mark.parametrize("header", [None, HouseId(3)], ids=["no-header", "foreign"])
+def test_resolve_residency_refuses_an_unchosen_or_foreign_house(
+    header: HouseId | None,
+) -> None:
+    residencies = [
+        Resident(user_id=UserId(1), house_id=HouseId(house), role=ResidentRole.OWNER)
+        for house in (1, 2)
+    ]
+
+    with pytest.raises(NotEnoughRights):
+        resolve_residency(residencies, header)
+
+
 DEPENDENCIES = [residency_for, residency_for_flat, residency_for_flat_house]
 
 

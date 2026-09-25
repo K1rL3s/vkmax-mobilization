@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import Fixture, add_user, events_of, freeze_now
 
+from zheka.api.schemas.reception import AppointmentItem
 from zheka.core.enums import (
     AppointmentStatus,
     EventType,
@@ -239,14 +240,16 @@ async def test_a_linked_request_travels_to_the_record(
     await _open_every_day(service, fixture.org_id)
     request_id = await _add_request(session, fixture.house_id, fixture.user_id)
 
-    booked = await service.book(
-        fixture.user_id,
-        fixture.house_id,
-        _moment(_some_day()),
-        request_id,
+    booked = AppointmentItem.of(
+        await service.book(
+            fixture.user_id,
+            fixture.house_id,
+            _moment(_some_day()),
+            request_id,
+        ),
     )
 
-    assert booked.appointment.request_id == request_id
+    assert booked.request_id == request_id
     assert booked.org_phone == "+70000000000"
     assert booked.user_name is None
 
@@ -254,7 +257,7 @@ async def test_a_linked_request_travels_to_the_record(
 
     assert len(events) == 1
     assert events[0].payload["has_request"] is True
-    assert events[0].payload["appointment_id"] == booked.appointment.id
+    assert events[0].payload["appointment_id"] == booked.id
 
 
 async def test_a_resident_cancels_only_their_own_record_and_frees_the_slot(
@@ -270,6 +273,12 @@ async def test_a_resident_cancels_only_their_own_record_and_frees_the_slot(
     booked = await service.book(fixture.user_id, fixture.house_id, starts_at, None)
     with pytest.raises(InvalidState, match="уже записаны"):
         await service.book(fixture.user_id, fixture.house_id, starts_at, None)
+    later = await service.book(
+        fixture.user_id,
+        fixture.house_id,
+        _moment(day, time(10, 30)),
+        None,
+    )
 
     appointment_id = booked.appointment.id
     stranger = await add_user(session)
@@ -289,6 +298,7 @@ async def test_a_resident_cancels_only_their_own_record_and_frees_the_slot(
 
     assert {row.appointment.id for row in await service.mine(fixture.user_id)} == {
         appointment_id,
+        later.appointment.id,
         again.appointment.id,
     }
     assert await service.mine(stranger) == []
@@ -311,10 +321,14 @@ async def test_the_office_list_carries_the_resident_and_the_flat(
     await service.book(fixture.user_id, fixture.house_id, _moment(day), None)
 
     [row] = await service.today(fixture.org_id, day, fixture.house_id)
+    item = AppointmentItem.of(row)
 
-    assert row.user_name == "Тест Тестов"
-    assert row.flat_number == "1"
-    assert row.address.endswith("Тестовая, 1")
+    assert (item.user_name, item.flat_number) == ("Тест Тестов", "1")
+    assert (item.address, item.org_address) == (
+        "Тестоград, Тестовая, 1",
+        "Тестовая область, Тестоград, Тестовая, 1",
+    )
+    assert (item.org_id, item.house_id) == (fixture.org_id, fixture.house_id)
     for other_day in (day - timedelta(days=1), day + timedelta(days=1)):
         assert await service.today(fixture.org_id, other_day, None) == []
 

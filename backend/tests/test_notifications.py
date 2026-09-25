@@ -138,8 +138,14 @@ async def test_recipients_drop_bot_stopped_keep_muted_and_default_to_silent(
     stopped.bot_stopped_at = datetime.now(UTC)
     session.add(Event(user_id=muted.id, type=EventType.BOT_MUTED.value, payload={}))
     await session.flush()
+    repo = NotificationsRepo(session)
+    await repo.set_level(
+        muted.id,
+        NotificationCategory.REQUESTS,
+        NotificationLevel.SOUND,
+    )
 
-    recipients = await NotificationsRepo(session).recipients(
+    recipients = await repo.recipients(
         [muted.id, stopped.id],
         NotificationCategory.ANNOUNCEMENTS,
     )

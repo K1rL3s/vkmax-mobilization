@@ -679,6 +679,8 @@ async def test_repeat_copies_the_parent_and_starts_from_scratch(
     assert [event.payload["is_repeat"] for event in events] == [False, True]
     again = await service.repeat(own.user_id, parent_id, None, [])
     assert again.request.description == DESCRIPTION
+    with pytest.raises(InvalidRequest):
+        await service.repeat(own.user_id, parent_id, "   ", [])
 
 
 async def test_repeat_refuses_a_blocked_resident(

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import Fixture, OrgHouseFlatUser, add_resident, add_user
 
-from zheka.api.schemas.polls import PollResults
+from zheka.api.schemas.polls import AdminPollListItem, PollCard, PollResults
 from zheka.core.enums import OrgRole, PollStatus, ResidentRole, ResidentStatus
 from zheka.core.errors import (
     EntityNotFound,
@@ -105,13 +106,22 @@ async def test_create_poll_allows_the_house_chairman(
     assert card.poll.org_id == base.org_id
 
 
-async def test_create_poll_refuses_a_plain_resident(
+@pytest.mark.parametrize(
+    "resident",
+    [
+        {},
+        {"is_chairman": True, "status": ResidentStatus.BLOCKED, "block_reason": "долг"},
+    ],
+    ids=["plain", "blocked-chairman"],
+)
+async def test_create_poll_refuses_a_plain_resident_and_a_blocked_chairman(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    resident: dict[str, Any],
 ) -> None:
     base = await make_org_house_flat_user()
     resident_id = await add_user(session, "Просто житель")
-    await add_resident(session, resident_id, base.house_id, base.flat_id)
+    await add_resident(session, resident_id, base.house_id, base.flat_id, **resident)
     service = _make_service(session)
 
     with pytest.raises(NotEnoughRights):
@@ -214,7 +224,10 @@ async def test_multiple_choice_vote_stores_one_row_per_option(
     card = await service.create(
         chairman_id,
         base.house_id,
-        _draft(options=["Свет", "Вода", "Лифт"], is_multiple=True),
+        replace(
+            _draft(options=["Свет", "Вода", "Лифт"], is_multiple=True),
+            description="Смета в чате",
+        ),
         org_id=None,
     )
     chosen = [card.options[0].id, card.options[2].id]
@@ -224,6 +237,12 @@ async def test_multiple_choice_vote_stores_one_row_per_option(
     rows = await PollsRepo(session).get_vote(card.poll.id, chairman_id)
     assert {row.option_id for row in rows} == set(chosen)
     assert results.forecast.voted_flats == 1
+
+    schema = PollCard.of_card(await service.get_card(card.poll.id, chairman_id))
+
+    assert sorted(schema.my_option_ids) == sorted(chosen)
+    assert [option.text for option in schema.options] == ["Свет", "Вода", "Лифт"]
+    assert schema.description == "Смета в чате"
 
 
 async def test_vote_refuses_a_bad_option_choice(
@@ -346,6 +365,13 @@ async def test_non_voters_are_for_the_initiator_and_drop_a_weighted_vote(
     make_org_house_flat_user: Fixture,
 ) -> None:
     base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
+    session.add_all(
+        [
+            Flat(house_id=base.house_id, number="2", entrance=2),
+            Flat(house_id=base.house_id, number="3", entrance=1),
+        ],
+    )
+    await session.flush()
     service = _make_service(session)
     card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
 
@@ -356,7 +382,7 @@ async def test_non_voters_are_for_the_initiator_and_drop_a_weighted_vote(
         await service.non_voters(card.poll.id, stranger_id)
 
     non_voters = await service.non_voters(card.poll.id, chairman_id)
-    assert any(flat.id == base.flat_id for flat in non_voters)
+    assert [flat.number for flat in non_voters] == ["3", "2", "1"]
 
     await service.vote(card.poll.id, chairman_id, [card.options[0].id])
 
@@ -435,6 +461,8 @@ async def test_org_staff_list_and_close_a_chairmans_poll(
     )
     assert [item.item.poll.id for item in items] == [card.poll.id]
     assert total == 1
+    row = AdminPollListItem.of_admin(items[0])
+    assert (row.house_id, row.address) == (base.house_id, "Тестоград, Тестовая, 1")
     with pytest.raises(EntityNotFound):
         await service.list_org_polls(
             base.org_id,
@@ -446,8 +474,10 @@ async def test_org_staff_list_and_close_a_chairmans_poll(
         )
 
     assert await service.non_voters(card.poll.id, base.user_id)
-    closed = await service.close(card.poll.id, base.user_id)
+    closed = PollCard.of_card(await service.close(card.poll.id, base.user_id))
     assert closed.status is PollStatus.CLOSED
+    assert (closed.can_vote, closed.can_manage) == (False, True)
+    assert (closed.house_id, closed.created_by_role) == (base.house_id, "chairman")
     with pytest.raises(NotEnoughRights):
         await service.close(foreign_card.poll.id, base.user_id)
 

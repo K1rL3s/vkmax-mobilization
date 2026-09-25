@@ -8,11 +8,25 @@ import pytest
 from sqlalchemy import Column, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import OrgHouseFlatUser
+from tests.conftest import OrgHouseFlatUser, add_user
 
-from zheka.api.schemas.houses import ResidencySummary
+from zheka.api.schemas.houses import (
+    AdminHouseCard,
+    AdminHouseListItem,
+    EntranceQr,
+    HouseCard,
+    ResidencySummary,
+)
 from zheka.core.consent import CONSENT_VERSION
-from zheka.core.enums import ChatStatus, EventSource, OrgRole, ResidentRole
+from zheka.core.enums import (
+    ChatStatus,
+    EventSource,
+    OrgRole,
+    RequestCategory,
+    RequestChannel,
+    RequestStatus,
+    ResidentRole,
+)
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -22,7 +36,7 @@ from zheka.core.errors import (
 from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService, ResidencyView
-from zheka.infra.database.models import Chat, Flat, House
+from zheka.infra.database.models import Chat, Flat, House, Request
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -63,6 +77,16 @@ async def _link(
 
 async def _consent(session: AsyncSession, fixture: OrgHouseFlatUser) -> None:
     await UsersRepo(session).set_consent(fixture.user_id, CONSENT_VERSION)
+
+
+async def _make_chairman(session: AsyncSession, fixture: OrgHouseFlatUser) -> None:
+    resident = await ResidentsRepo(session).get_for_house(
+        fixture.user_id,
+        fixture.house_id,
+    )
+    assert resident is not None
+    resident.is_chairman = True
+    await session.flush()
 
 
 async def _count(session: AsyncSession, column: Column[int], value: int) -> int:
@@ -134,8 +158,8 @@ async def test_demand_signal_counts_a_user_once(
 
     assert (first, second) == (1, 1)
     assert await _count(session, demand_signals_table.c.house_id, house.id) == 1
-    card = await service.house_card(fixture.house_id, fixture.user_id)
-    assert (card.demand_count, card.demand_sent) == (1, True)
+    card = HouseCard.of(await service.house_card(fixture.house_id, fixture.user_id), [])
+    assert (card.demand_count, card.demand_sent, card.org) == (1, True, None)
 
 
 async def test_search_by_query_or_by_address_parts(
@@ -332,19 +356,34 @@ async def test_admin_house_surface(
         resident_role=ResidentRole.OWNER,
     )
     other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    session.add(Flat(house_id=own.house_id, number="2"))
+    session.add(
+        Request(
+            house_id=own.house_id,
+            flat_id=own.flat_id,
+            author_user_id=own.user_id,
+            category=RequestCategory.LEAK,
+            description="Течет",
+            status=RequestStatus.NEW,
+            channel=RequestChannel.MINIAPP,
+        ),
+    )
+    await _make_chairman(session, own)
     houses_service = _make_service(session)
 
     rows, total = await houses_service.org_houses(own.org_id, None, 50, 0)
     assert total == 1
-    assert rows[0].flats_count == 1
-    assert rows[0].residents_count == 1
-    assert rows[0].open_requests == 0
-    assert rows[0].chat_bound is False
+    item = AdminHouseListItem.of(rows[0])
+    assert (item.id, item.flats_count, item.residents_count) == (own.house_id, 2, 1)
+    assert (item.open_requests, item.chat_bound) == (1, False)
 
     card = await houses_service.admin_card(own.org_id, own.house_id)
-    assert card.verified_residents_count == 0
-    assert card.pending_verifications == 0
-    assert card.chairman_name is None
+    qrs = [EntranceQr(entrance=1, code="qr", deeplink="https://max.ru/qr")]
+    admin = AdminHouseCard.of(card, qrs)
+    assert (admin.flats_count, admin.residents_count, admin.open_requests) == (2, 1, 1)
+    assert (admin.verified_residents_count, admin.pending_verifications) == (0, 0)
+    assert (admin.chairman_name, admin.entrance_qrs) == ("Тест Тестов", qrs)
+    assert admin.chat_binding_code == card.house.chat_binding_code
 
     residents, total = await houses_service.house_residents(
         own.org_id,
@@ -446,3 +485,27 @@ async def test_a_wildcard_in_a_search_is_a_plain_character(
     assert (await houses.search_for_org(fixture.org_id, "%", 50, 0))[1] == 0
     residents = ResidentsRepo(session)
     assert (await residents.search_for_house(fixture.house_id, "%", 50, 0))[1] == 0
+
+
+async def test_house_card_gives_the_binding_code_to_the_chairman_alone(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    stranger = await add_user(session)
+    house = await HousesRepo(session).get(own.house_id)
+    assert house is not None
+    house.lat = Decimal("55.751244")
+    await _make_chairman(session, own)
+    service = _make_service(session)
+
+    card = HouseCard.of(await service.house_card(own.house_id, own.user_id), [])
+    seen = HouseCard.of(await service.house_card(own.house_id, stranger), [])
+
+    assert card.chat_binding_code == house.chat_binding_code
+    assert card.lat == 55.751244
+    assert card.org is not None
+    assert card.org.id == own.org_id
+    assert card.my_residency is not None
+    assert card.my_residency.flat_id == own.flat_id
+    assert (seen.chat_binding_code, seen.my_residency) == (None, None)

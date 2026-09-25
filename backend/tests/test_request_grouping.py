@@ -179,7 +179,8 @@ def test_complaint_sources_count_complainants_and_not_requests() -> None:
             (FlatId(7), None),
             (FlatId(7), None),
             (None, UserId(42)),
+            (FlatId(8), UserId(43)),
         )
     ]
 
-    assert complaint_sources(requests) == {("flat", 7), ("user", 42)}
+    assert complaint_sources(requests) == {("flat", 7), ("user", 42), ("flat", 8)}

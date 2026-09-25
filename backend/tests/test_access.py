@@ -15,6 +15,7 @@ from tests.conftest import (
     make_notifications_service,
 )
 
+from zheka.api.schemas.access import AccessRequestGrid
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventType, ResidentStatus
@@ -176,10 +177,14 @@ async def test_a_flat_without_a_verified_resident_gets_no_target(
         _draft(fixture.house_id, [with_resident, unverified, empty, blocked]),
     )
 
-    assert [cell.target.flat_id for cell in grid.targets] == [with_resident]
-    assert list(grid.flats_without_residents) == [unverified, empty, blocked]
-    assert grid.request.targets_count == 1
-    assert grid.request.responded_count == 0
+    schema = AccessRequestGrid.of(grid)
+
+    assert [(cell.flat_id, cell.flat_number) for cell in schema.targets] == [
+        (with_resident, "12"),
+    ]
+    assert schema.flats_without_residents == [unverified, empty, blocked]
+    assert schema.access_request.targets_count == 1
+    assert schema.access_request.responded_count == 0
 
     events = await events_of(session, EventType.ACCESS_REQUEST_SENT)
 
@@ -487,10 +492,11 @@ async def test_a_naive_slot_is_house_time_and_dated_by_it(
     make_org_house_flat_user: Fixture,
 ) -> None:
     fixture = await make_org_house_flat_user()
+    service = _make_service(session)
     flat_id, _ = await _with_resident(session, fixture.house_id, "12")
     day = datetime.now(MOSCOW).date() + timedelta(days=2)
 
-    grid = await _make_service(session).create(
+    grid = await service.create(
         fixture.org_id,
         fixture.user_id,
         _draft_at(fixture.house_id, flat_id, datetime.combine(day, time(0, 30))),
@@ -498,6 +504,13 @@ async def test_a_naive_slot_is_house_time_and_dated_by_it(
 
     [slot] = grid.request.slots
     assert slot.slot.starts_at == datetime.combine(day, time(0, 30), MOSCOW)
+
+    with pytest.raises(InvalidRequest, match="тот же день"):
+        await service.create(
+            fixture.org_id,
+            fixture.user_id,
+            _draft_at(fixture.house_id, flat_id, datetime.combine(day, time(23), UTC)),
+        )
 
 
 async def test_the_access_day_is_past_by_the_house_clock(

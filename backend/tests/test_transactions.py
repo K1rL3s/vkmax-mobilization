@@ -1,11 +1,14 @@
 import secrets
 from collections.abc import AsyncGenerator
+from contextlib import nullcontext
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 import pytest_asyncio
 from dishka import AsyncContainer, FromDishka
 from dishka.integrations.fastapi import DishkaRoute
+from dishka.integrations.taskiq import inject as taskiq_inject
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import StreamingResponse
 from httpx import ASGITransport, AsyncClient
@@ -17,6 +20,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.pool import QueuePool
 from starlette.types import Receive, Scope, Send
+from taskiq import InMemoryBroker, async_shared_broker
+from taskiq.exceptions import SendTaskError
+from taskiq.kicker import AsyncKicker
 
 from tests.conftest import PROBE_ROUTERS, RecordingBroker, empty_bot_setup, overrides
 
@@ -168,9 +174,6 @@ async def test_failing_commit_persists_and_delivers_nothing(
     broker: RecordingBroker,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _broken_commit(self: AsyncSession) -> None:  # noqa: ARG001
-        raise RuntimeError("коммит не прошел")
-
     monkeypatch.setattr(AsyncSession, "commit", _broken_commit)
     marker = _marker()
 
@@ -283,15 +286,25 @@ async def test_bot_handler_commits_and_delivers(
     assert _delivered(bot_broker, marker) == 1
 
 
+async def _broken_commit(self: AsyncSession) -> None:  # noqa: ARG001
+    raise RuntimeError("коммит не прошел")
+
+
+@pytest.mark.parametrize("failure", ["handler", "commit"])
 async def test_failed_bot_handler_leaves_nothing(
     bot_container: AsyncContainer,  # noqa: ARG001
     bot_setup: BotSetup,
     bot_engine: AsyncEngine,
     bot_broker: RecordingBroker,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
 ) -> None:
     marker = _marker()
+    if failure == "commit":
+        monkeypatch.setattr(AsyncSession, "commit", _broken_commit)
 
-    await bot_setup.dp.feed_max_update(_bot_update(marker, FAIL_TITLE))
+    title = FAIL_TITLE if failure == "handler" else "Дом на Тестовой"
+    await bot_setup.dp.feed_max_update(_bot_update(marker, title))
 
     assert await _committed(bot_engine, marker) == 0
     assert _delivered(bot_broker, marker) == 0
@@ -316,3 +329,46 @@ async def test_a_request_leaves_the_worker_state_alone(
 
     assert response.json() == {"ok": True}
     assert worker_state == {}
+
+
+@async_shared_broker.task(task_name="probe_task")
+@taskiq_inject(patch_module=True)
+async def probe_task(
+    marker: int,
+    fail: bool,
+    session: FromDishka[AsyncSession],
+    notifications: FromDishka[NotificationsService],
+) -> None:
+    await _write(session, MaxUserId(marker))
+    notifications.notify_user(
+        UserId(marker),
+        "Уведомление из пробной задачи",
+        category=NotificationCategory.REQUESTS,
+        mandatory=True,
+    )
+    if fail:
+        raise RuntimeError("задача упала")
+
+
+@pytest.mark.parametrize(
+    ("failure", "delivered"),
+    [(None, 1), ("task", 0), ("commit", 0)],
+)
+async def test_task_delivers_only_after_its_commit(
+    task_broker: InMemoryBroker,
+    bot_engine: AsyncEngine,
+    bot_broker: RecordingBroker,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str | None,
+    delivered: int,
+) -> None:
+    marker = _marker()
+    if failure == "commit":
+        monkeypatch.setattr(AsyncSession, "commit", _broken_commit)
+
+    kicker: AsyncKicker[..., Any] = probe_task.kicker().with_broker(task_broker)
+    with pytest.raises(SendTaskError) if failure == "commit" else nullcontext():
+        await kicker.kiq(marker=marker, fail=failure == "task")
+
+    assert await _committed(bot_engine, marker) == delivered
+    assert _delivered(bot_broker, marker) == delivered

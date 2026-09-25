@@ -7,7 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import AsyncTaskiqDecoratedTask, InMemoryBroker
 
-from tests.conftest import RecordingBroker, freeze_now, reminders_service
+from tests.conftest import RecordingBroker, events_of, freeze_now, reminders_service
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -30,6 +30,7 @@ from zheka.core.enums import (
     ResidentStatus,
 )
 from zheka.core.ids import (
+    AppointmentId,
     FlatId,
     HouseId,
     MaxChatId,
@@ -291,7 +292,7 @@ async def _poll(
         created_by_user_id=author.id,
         created_by_role="chairman",
         title="Ремонт подъезда",
-        starts_at=NOW - timedelta(days=5),
+        starts_at=NOW + ends_in - timedelta(days=7),
         ends_at=NOW + ends_in,
         status=status,
     )
@@ -481,20 +482,22 @@ async def _appointment(
     day: date,
     status: AppointmentStatus = AppointmentStatus.BOOKED,
     at: time = time(10),
-) -> None:
+) -> AppointmentId:
     house = await HousesRepo(session).get(house_id)
     assert house is not None
     assert house.org_id is not None
-    session.add(
-        Appointment(
-            org_id=house.org_id,
-            house_id=house_id,
-            user_id=user_id,
-            starts_at=datetime.combine(day, at, tzinfo=UTC),
-            status=status,
-        ),
+    appointment = Appointment(
+        org_id=house.org_id,
+        house_id=house_id,
+        user_id=user_id,
+        starts_at=datetime.combine(day, at, tzinfo=UTC),
+        status=status,
     )
+    session.add(appointment)
+    await session.flush()
+    appointment_id = appointment.id
     await session.commit()
+    return appointment_id
 
 
 def _to_user(bot_broker: RecordingBroker, user_id: UserId) -> list[dict[str, Any]]:
@@ -803,7 +806,13 @@ async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(
         house_timezone="Europe/Moscow",
     )
     _, user_id = await _resident(session, house_id)
-    await _appointment(session, house_id, user_id, date(2026, 9, 15), at=time(23))
+    appointment_id = await _appointment(
+        session,
+        house_id,
+        user_id,
+        date(2026, 9, 15),
+        at=time(23),
+    )
     service = reminders_service(session, publisher)
 
     await service.remind_appointments(datetime(2026, 9, 15, 8, tzinfo=UTC))
@@ -814,6 +823,11 @@ async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(
     await publisher.flush()
     [queued] = _to_user(broker, user_id)
     assert "завтра в 09:00" in queued["text"]
+    [event] = await events_of(session, EventType.APPOINTMENT_REMINDER_SENT)
+    assert (event.user_id, event.payload) == (
+        user_id,
+        {"appointment_id": appointment_id},
+    )
 
 
 async def test_the_manual_reading_reminder_counts_the_day_in_local_time(
