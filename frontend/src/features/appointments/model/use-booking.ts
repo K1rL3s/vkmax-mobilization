@@ -4,10 +4,10 @@ import { useHouseCard } from "@/features/house";
 import { isFinished } from "@/features/request";
 import { isConflict } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
 import { houseParams, useSession } from "@/shared/model/session";
 
 import { createSchedule, deviceTimeZone } from "../domain/schedule";
+import { refetchAppointments } from "./use-my-appointments";
 
 export const useBooking = () => {
   const { currentResidency } = useSession();
@@ -23,7 +23,6 @@ export const useBooking = () => {
   );
 
   const requests = rqClient.useQuery("get", "/api/requests", {
-    // тот же запрос, что у ленты заявок: кеш общий, лента грузится одной пачкой
     params: { ...houseParams(), query: { limit: 100 } },
   });
 
@@ -39,8 +38,6 @@ export const useBooking = () => {
     days.find((item) => item.key === chosenDay) ??
     days.find((item) => item.slots.some((slot) => slot.is_free)) ??
     days.find((item) => item.slots.length > 0);
-  // выбранный слот мог занять сосед, пока экран был открыт: после перечитывания
-  // он пропадает из выбора сам
   const slot = day?.slots.find(
     (item) => item.starts_at === chosenSlot && item.is_free,
   );
@@ -53,11 +50,7 @@ export const useBooking = () => {
     onSuccess: async () => {
       setChosenSlot(null);
       setRequestId(null);
-      await Promise.all(
-        ["/api/appointments", "/api/houses/{house_id}/reception-slots"].map(
-          (path) => queryClient.invalidateQueries({ queryKey: ["get", path] }),
-        ),
-      );
+      await refetchAppointments();
     },
     onError: async (error) => {
       if (isConflict(error)) {

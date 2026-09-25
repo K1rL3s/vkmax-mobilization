@@ -16,6 +16,7 @@ import {
   STATUS_LABEL,
   STATUS_TONE,
 } from "./domain/status";
+import { buildTimeline } from "./domain/timeline";
 import { useRequest } from "./model/use-request";
 import { ReviewPanel } from "./review";
 import { Answers } from "./ui/answers";
@@ -27,7 +28,7 @@ import { RequestTimeline } from "./ui/request-timeline";
 import styles from "./request.module.css";
 
 const RequestPage = () => {
-  const { request, zone, timeline, isPending, isError, retry } = useRequest();
+  const { request, zone, isPending, isError, retry } = useRequest();
 
   if (isPending) {
     return <LoadingState fill title="Загружаем заявку" />;
@@ -38,10 +39,7 @@ const RequestPage = () => {
   }
 
   const tone = STATUS_TONE[request.status];
-  // срок идёт, пока заявка в работе: на приёмке и после неё считать нечего
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
-  // на приёмке ход за жителем, а не за УК: предлагать жалобу на бездействие,
-  // когда работа сдана, не за что
   const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
 
   return (
@@ -150,7 +148,7 @@ const RequestPage = () => {
           <Typography.Text asChild variant="title" color="primary">
             <h2>Ход заявки</h2>
           </Typography.Text>
-          <RequestTimeline steps={timeline} />
+          <RequestTimeline steps={buildTimeline(request)} />
         </section>
       </Flex>
 

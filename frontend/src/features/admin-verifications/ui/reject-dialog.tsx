@@ -5,7 +5,7 @@ import { useWatch } from "react-hook-form";
 import { cn } from "@/shared/lib/css";
 
 import { verificationFormConstraints } from "../domain/verification-form-constraints";
-import { REJECT_PRESETS, useRejectForm } from "../model/use-reject-form";
+import { useRejectForm } from "../model/use-reject-form";
 import type { VerificationRequest } from "../model/use-verification-list";
 
 import styles from "./reject-dialog.module.css";
@@ -75,7 +75,17 @@ export const RejectDialog = ({
           </Typography.Text>
 
           <Flex align="center" gap={8} wrap="wrap">
-            {REJECT_PRESETS.map((preset) => (
+            {[
+              {
+                label: "Счёт не совпал",
+                text: "Лицевой счёт не совпал с данными УК",
+              },
+              {
+                label: "Счёт собственника",
+                text: "Квитанция оформлена на собственника",
+              },
+              { label: "Нет в данных УК", text: "Квартиры нет в данных УК" },
+            ].map((preset) => (
               <Button
                 key={preset.label}
                 type="button"

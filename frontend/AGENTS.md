@@ -51,17 +51,17 @@ src/
 
 The only place that knows about every feature. **Nothing may import from `app`.**
 
-- `main.tsx` — mounts `Router`.
-- `router.tsx` — the `react-router-dom` v7 route tree; wires paths from `shared/model/routes.ts` to lazily-imported page modules. Cross-cutting chrome lives in layout routes, not in pages: one renders the `TabBar` under the root tab screens, and `PushedScreen` turns on the MAX header back button for everything opened on top of a root (its `fallback` is where back goes when the screen was opened with no history behind it). A screen never wires the back button itself — it is placed under the right layout instead.
-- `protected-loader.ts` — the access rule. `protectedLoader` sits on the pathless route that wraps every in-app screen and redirects to `Routes.OUTSIDE_MAX` when the app was not opened from MAX (`isInsideMax`); `outsideMaxLoader` bounces the other way, so a MAX user can never get stuck on the stub. It is deliberately inert in dev builds (`import.meta.env.DEV`) — otherwise `pnpm dev` in a browser would redirect on every route and local work would be impossible.
-- `providers.tsx` — wraps the tree in `MaxUI` (`@maxhub/max-ui`) and `QueryClientProvider`.
+- `main.tsx` - mounts `Router`.
+- `router.tsx` - the `react-router-dom` v7 route tree, wrapped in `MaxUI` (`@maxhub/max-ui`) and `QueryClientProvider`; wires paths from `shared/model/routes.ts` to lazily-imported page modules. Cross-cutting chrome lives in layout routes, not in pages: one renders the `TabBar` under the root tab screens, and `PushedPage` turns on the MAX header back button for everything opened on top of a root (its `fallback` is where back goes when the screen was opened with no history behind it). A screen never wires the back button itself - it is placed under the right layout instead.
+- `protected-loader.ts` - the access rule. `protectedLoader` sits on the pathless route that wraps every in-app screen and redirects to `Routes.OUTSIDE_MAX` when the app was not opened from MAX (`isInsideMax`); the stub route sits outside it.
+- `session-loader.ts` and `deeplink-loader.ts` - the route loaders that read the session and send a launch to its start screen or run a deeplink.
 - `app.tsx` — the root layout (`<Outlet />`).
 
 ### `src/features/<feature>/` — business features
 
 A feature is **a piece of product value**, named the way the product is discussed: `onboarding`, `home`, `tab-bar`. It is not a technical bucket (`components`, `hooks`, `utils`) and not an FSD-style use-case slice. The test: could a non-developer name it?
 
-Every feature owns everything it needs — pages, components, state, mocks, styles. When something outside needs the feature, it gets an `index.ts` barrel and is imported as `@/features/<feature>`, never by a deep path. A feature with no external consumer has no barrel: an empty `index.ts` is worse than none, and re-exporting a page from one would pull it out of its lazy chunk.
+Every feature owns everything it needs - pages, components, state, styles. When something outside needs the feature, it gets an `index.ts` barrel and is imported as `@/features/<feature>`, never by a deep path. A feature with no external consumer has no barrel: an empty `index.ts` is worse than none, and re-exporting a page from one would pull it out of its lazy chunk.
 
 A feature grows through ED's evolution stages, and no further than it currently needs:
 
@@ -74,7 +74,7 @@ A unit is one thing you can name, not one file on disk: a component and its colo
 | group     | what belongs in it                                           |
 | --------- | ------------------------------------------------------------ |
 | `ui/`     | components, presentation, styles                             |
-| `model/`  | state and data flow: stores, react-query hooks, mocks        |
+| `model/`  | state and data flow: stores, react-query hooks               |
 | `domain/` | pure business rules and types — no React, no I/O, no network |
 | `lib/`    | technical helpers used only inside this feature              |
 | `api/`    | this feature's requests and contracts                        |
@@ -85,32 +85,15 @@ A group only organizes files; a module is an abstraction with a public API. A gr
 
 **Sub-features.** A feature that outgrew its groups splits into nested features underneath itself, each with its own `index.ts`, recursively following the same rules. The parent composes them and re-exports what the outside world needs.
 
-Where the features stand today — all three flat, well inside the threshold:
-
-```
-features/
-  home/          home.page.tsx + css, demand-card.tsx, home.mock.ts   3 units
-  onboarding/    three pages + css in the root, hooks and types
-                 grouped in model/                        3 + 6 units
-  error/         error.page.tsx + css                                  1 unit
-  tab-bar/       tab-bar.tsx + css, index.ts                          2 units
-  outside-max/   outside-max.page.tsx + css                            1 unit
-```
-
-`onboarding/model/` is the first place the grouping rule bit: the feature holds a
-page per screen plus a hook per job — house search, flat search, linking, the
-view model composing them, and the consent hook — which is past six units in one
-folder.
-
 ### `src/shared/` — infrastructure
 
 `shared` is the **last resort**: code lands here only when it is genuinely feature-agnostic and needed in more than one place. It uses the same group vocabulary as a feature:
 
-- `shared/api/` — `instance.ts` is the typed API client (`openapi-fetch` as `fetchClient`, wrapped by `openapi-react-query` as `rqClient`); `query-client.ts` holds the `QueryClient`. `schema/generated.ts` is written by `pnpm api`, which points `openapi-typescript` straight at the running backend (`http://localhost/api/openapi.json`) — the tool fetches the URL itself, so no copy of the spec is kept in the repository and the backend has to be up to regenerate. Never edit the file by hand. It is committed even though it is generated, because the Docker build runs `pnpm build` with no backend in reach; `.gitattributes` marks it `linguist-generated` so review collapses it.
-- `shared/model/` — `routes.ts` is the single source of truth for route paths (`Routes.HOME`, …); never hardcode a path string. `config.ts` reads build-time env into `CONFIG`. `session.ts` holds `/me` plus what the app is currently showing: which cabinet (resident or utility-company), which residency, and which organization. The three live in one `localStorage` value, normalized by comparison on every read — anything that is not the admin cabinet reads as the resident one, a bad id reads as absent — so `houseParams()` and `orgParams()`, which run outside React, and the screens all see the same choice. Switching the residency or the organization invalidates the whole query cache, because both change a request header; switching the cabinet does not. `startTarget(session)` is the one rule for where a launch lands — the semantic target (`admin`, `home`, `onboarding`), never a route: the caller maps it, so the session model knows nothing about routing.
-- `shared/lib/` — technical utilities: `css.ts` (`cn`) and `max/`, the MAX Bridge module — a typed `window.WebApp`, launch data (`useMaxLaunch`, `useMaxUser`, and `getInitData` for the auth header), and the header back button (`useBackButton`, `useBackNavigation`). The bridge itself is the CDN script loaded in `index.html`; outside MAX every value degrades to `null` and the back button is a no-op, so the app stays runnable in a plain browser.
+- `shared/api/` - `instance.ts` is the typed API client (`openapi-fetch` as `fetchClient`, wrapped by `openapi-react-query` as `rqClient`); `query-client.ts` holds the `QueryClient` and `invalidatePaths`; `errors.ts` reads the API error envelope (`errorDetail`, `isForbidden`, `isConflict`, `retryUnlessForbidden`); `next-offset.ts` is the `getNextPageParam` of offset pagination. `schema/generated.ts` is written by `pnpm api`, which points `openapi-typescript` straight at the running backend (`http://localhost/api/openapi.json`) - the tool fetches the URL itself, so no copy of the spec is kept in the repository and the backend has to be up to regenerate. Never edit the file by hand. It is committed even though it is generated, because the Docker build runs `pnpm build` with no backend in reach; `.gitattributes` marks it `linguist-generated` so review collapses it.
+- `shared/model/` - `routes.ts` is the single source of truth for route paths (`Routes.HOME`, …); never hardcode a path string. `session.ts` holds `/me` plus what the app is currently showing: which cabinet (resident or utility-company), which residency, and which organization. The three live in one `localStorage` value, parsed with `zod` on every read - anything that is not the admin cabinet reads as the resident one, a bad id reads as absent - so `houseParams()` and `orgParams()`, which run outside React, and the screens all see the same choice. Switching the residency or the organization invalidates the whole query cache, because both change a request header; switching the cabinet does not. `startTarget(session)` is the one rule for where a launch lands - the semantic target (`admin`, `home`, `onboarding`), never a route: the caller maps it, so the session model knows nothing about routing.
+- `shared/lib/` - technical utilities: `css.ts` (`cn`), `format.ts` (dates, numbers, `plural`), `router.ts` (`useRouteParams`, route params parsed with `zod`), `analytics/` (`useTrack`, product events posted to `/api/events`) and `max/`, the MAX Bridge module - a typed `window.WebApp` (`getWebApp`), launch data (`getMaxLaunch`: `isInsideMax`, `initData` for the auth header, `startParam`), and the header back button (`useBackNavigation`). The bridge itself is the CDN script loaded in `index.html`; outside MAX `getWebApp()` is `null`, the launch reads as not inside MAX and the back button is a no-op.
 - `shared/ui/` — the kit on top of `@maxhub/max-ui`: `autocomplete/`, `card/`, `checkbox/`, `chevron/`, `confirm-dialog/`, `field-error/`, `icon/`, `icon-tile/`, `state/`, `status-pill/`. `StatusPill` is the one status badge of both cabinets — a rounded label whose `tone` (`themed`, `promo`, `neutral`, `positive`, `negative`) is a subset of `IconTileTone`, so one tone map feeds a row's tile and its badge. A screen never re-rolls that pill in its own CSS module.
-- `shared/env.d.ts` — declares `ImportMetaEnv`; add every new `VITE_*` var here alongside `config.ts`.
+- `shared/env.d.ts` - declares `ImportMetaEnv`; add every new `VITE_*` var here.
 
 There is no `assets` segment, by design: static files live next to the component that uses them. The icon SVGs sit in `shared/ui/icon/` and are exported from its barrel together with `Icon`, so a consumer writes a single import:
 
@@ -147,7 +130,7 @@ Three rules are deliberately **not** automated, because they need a view of a wh
 
 ## Conventions
 
-- Files and folders are `kebab-case`. Pages are `<name>.page.tsx` and end with `export const Component = <Name>Page` so the router can lazy-load them. Mocks are `<name>.mock.ts` inside `model/`.
+- Files and folders are `kebab-case`. Pages are `<name>.page.tsx` and end with `export const Component = <Name>Page` so the router can lazy-load them.
 - A module that is imported from outside has an `index.ts` barrel — that barrel is its public API and the only thing outsiders may import. No consumer, no barrel.
 - CSS Modules only, colocated as `<name>.module.css` (`camelCase` locals, scoped names — see `vite.config.ts`). Block classes are `PascalCase` (`styles.TabBar`); variant classes are lowercase so they can be looked up dynamically (`styles[tone]`). No global stylesheets beyond what `@maxhub/max-ui` ships.
 - The app only ever runs on a phone, inside MAX: the target viewport is **320-400px wide**, and every screen is checked there. Nothing is designed for a desktop width — a layout that only works wider is broken, not "fine on big screens". Two practical consequences: a row of two buttons rarely fits (give them content width and let them wrap), and a label that fits at 560px says nothing about 393px, where the kit silently truncates it with an ellipsis. Check at 360 and 393 before calling a screen done.

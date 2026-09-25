@@ -5,8 +5,7 @@ import { authParams, rqClient } from "@/shared/api/instance";
 import { queryClient } from "@/shared/api/query-client";
 import { megaphoneIcon, meterIcon, wrenchIcon } from "@/shared/ui/icon";
 
-export type NotificationCategory =
-  components["schemas"]["NotificationCategory"];
+type NotificationCategory = components["schemas"]["NotificationCategory"];
 
 export type NotificationLevel = components["schemas"]["NotificationLevel"];
 
@@ -44,7 +43,6 @@ export const useNotificationSettings = () => {
       queryClient.setQueryData(settingsQueryOptions().queryKey, data),
   });
 
-  // пока запрос в пути, радиокнопки показывают выбранное, а не сохранённое
   const current: Setting[] =
     (update.isPending ? update.variables.body.settings : null) ??
     settings.data?.settings ??

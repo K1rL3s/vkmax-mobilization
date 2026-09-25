@@ -37,7 +37,6 @@ export const QuorumPanel = ({ results }: { results: PollResults }) => {
             width: `${Math.min(results.voted_area_percent / 100, 100)}%`,
           }}
         />
-        {/* засечка порога: он приходит в ответе и по дому может отличаться */}
         <div
           className={styles.Mark}
           style={{ left: `${Math.min(results.quorum_percent / 100, 100)}%` }}

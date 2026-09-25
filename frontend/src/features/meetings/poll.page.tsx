@@ -47,8 +47,6 @@ const PollPage = () => {
         </Typography.Text>
       )}
 
-      {/* текст дисклеймера берём из ответа: он одинаков у карточки и
-          результатов, и менять его фронту не положено */}
       <Typography.Text className={styles.Disclaimer} variant="description">
         Это {poll.disclaimer}
       </Typography.Text>
@@ -123,8 +121,6 @@ const PollPage = () => {
 
       <QuorumPanel results={results} />
 
-      {/* вход открыт только организатору опроса: бэк проверяет то же право,
-          фронт узнаёт о нём из can_manage */}
       {poll.can_manage && (
         <div className={styles.Panel}>
           <CellSimple

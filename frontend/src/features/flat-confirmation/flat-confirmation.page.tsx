@@ -34,8 +34,6 @@ const PageLayout = ({ children, footer }: PageLayoutProps) => (
 const FlatConfirmationPage = () => {
   const confirmation = useFlatConfirmation();
 
-  // привязка могла исчезнуть, пока экран открыт: УК отвязывает жителя из
-  // админки, и обновленная сессия приезжает сюда без нее
   if (!confirmation.residency) {
     return <Navigate to={Routes.HOME} replace />;
   }
@@ -96,8 +94,6 @@ const FlatConfirmationPage = () => {
     />
   );
 
-  // квартиры нет в данных УК: сверять нечего, и способы подтверждения здесь
-  // были бы обманом
   if (view === "no-flat") {
     return (
       <PageLayout footer={later}>

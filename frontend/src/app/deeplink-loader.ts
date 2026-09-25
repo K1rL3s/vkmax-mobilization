@@ -6,7 +6,6 @@ import {
   parseStartParam,
   runDeeplinkOnce,
   shouldHandleDeeplink,
-  waitForDeeplinkConsent,
   type DeeplinkPageState,
 } from "@/features/deeplink";
 import { getMaxLaunch } from "@/shared/lib/max";
@@ -23,8 +22,6 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
   }
 
   if (session.consent_at === null) {
-    waitForDeeplinkConsent(raw);
-
     return { status: "consent" };
   }
 

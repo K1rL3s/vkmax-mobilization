@@ -32,43 +32,26 @@ export const ZONE_LABEL: Record<TariffZone, string> = {
   night: "Ночь",
 };
 
-// контракт держит показания и расход в тысячных долях единицы измерения
 const MILLI = 1000;
 
-const readingFormat = new Intl.NumberFormat("ru-RU", {
-  maximumFractionDigits: 3,
-});
-
-const amountFormat = new Intl.NumberFormat("ru-RU", {
-  style: "currency",
-  currency: "RUB",
-  maximumFractionDigits: 0,
-});
-
-const periodFormat = new Intl.DateTimeFormat("ru-RU", {
-  month: "long",
-  year: "numeric",
-});
-
-/** Зоны счётчика в том порядке, в котором житель видит их на приборе. */
 export const zonesOf = (meter: Meter): TariffZone[] =>
   meter.tariff_zones === 2 ? ["day", "night"] : ["single"];
 
 export const formatReading = (milli: number): string =>
-  readingFormat.format(milli / MILLI);
+  (milli / MILLI).toLocaleString("ru-RU", { maximumFractionDigits: 3 });
 
 export const formatAmount = (kopecks: number): string =>
-  amountFormat.format(kopecks / 100);
+  (kopecks / 100).toLocaleString("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    maximumFractionDigits: 0,
+  });
 
-// Intl всегда приписывает к месяцу с годом «г.», а в макете её нет
 export const formatPeriod = (iso: string): string =>
-  periodFormat.format(new Date(iso)).replace(" г.", "");
+  new Date(iso)
+    .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
+    .replace(" г.", "");
 
-/**
- * Разбирает введённое показание в тысячные доли. `null` - значение, с которым
- * счётчик нельзя отправить: пустое, с буквами или с лишними знаками после
- * запятой.
- */
 export const parseReading = (input: string): number | null => {
   const normalized = input.replace(/\s/g, "").replace(",", ".");
 

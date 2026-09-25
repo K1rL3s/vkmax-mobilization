@@ -18,7 +18,6 @@ export const ROLE_ORDER: OrgRole[] = [
   "executor",
 ];
 
-// создателя не приглашают: он один, тот, кто зарегистрировал организацию
 export type InvitableRole = Exclude<OrgRole, "creator">;
 
 export const INVITABLE_ROLES: InvitableRole[] = [
@@ -27,29 +26,18 @@ export const INVITABLE_ROLES: InvitableRole[] = [
   "executor",
 ];
 
-// причины повторяют can_invite из core/roles.py бэка: кнопка гаснет ровно
-// там, где бэк ответил бы 403
 export const inviteBlock = (actor: OrgRole, target: OrgRole): string | null => {
-  if (actor !== "creator" && actor !== "admin") {
+  if (actor !== "creator" && actor !== "admin")
     return "Приглашают создатель и администраторы";
-  }
-
-  if (actor === "admin" && target === "admin") {
+  if (actor === "admin" && target === "admin")
     return "Администратора приглашает только создатель";
-  }
-
   return null;
 };
 
-// can_remove считает бэк, здесь только объяснение отказа
 export const removeBlock = (member: OrgMember): string | null => {
-  if (member.can_remove) {
-    return null;
-  }
-
-  if (member.role === "creator") {
+  if (member.can_remove) return null;
+  if (member.role === "creator")
     return "Создателя организации исключить нельзя";
-  }
 
   return member.role === "admin"
     ? "Администратора исключает только создатель"

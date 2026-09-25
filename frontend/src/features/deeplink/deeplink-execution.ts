@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import { activateFlatInvite } from "@/features/flat-invite";
 import { errorDetail } from "@/shared/api/errors";
 import { authParams, fetchClient } from "@/shared/api/instance";
@@ -15,16 +13,12 @@ import {
 
 import type { StartParam } from "./start-param";
 
-type HouseCommand = Extract<StartParam, { kind: "house" | "qr" }>;
-type FlatCommand = Extract<StartParam, { kind: "flat" }>;
-type DemoCommand = Extract<StartParam, { kind: "demo" }>;
-type ExecutableCommand = Exclude<StartParam, { kind: "invite" | "register" }>;
+type DeeplinkExecution = { target: "resident" | "admin" };
 
-export type DeeplinkTarget = "resident" | "admin";
-
-export type DeeplinkExecution = {
-  target: DeeplinkTarget;
-};
+type DeeplinkAttempt =
+  | { status: "succeeded"; value: DeeplinkExecution }
+  | { status: "failed" }
+  | { status: "ignored" };
 
 export type DeeplinkPageState =
   | { status: "consent" }
@@ -33,31 +27,10 @@ export type DeeplinkPageState =
 
 class ExpectedDeeplinkError extends Error {}
 
-const residencySchema = z.object({ resident_id: z.number().int().positive() });
-const demoActivationSchema = z.object({
-  org: z.object({ org_id: z.number().int().positive() }),
-  residency: residencySchema,
-});
-
 const attempts = new Map<
   string,
-  | { status: "waiting-consent" }
-  | { status: "running"; promise: Promise<DeeplinkAttempt> }
-  | { status: "succeeded"; value: DeeplinkExecution }
-  | { status: "failed"; error: ExpectedDeeplinkError }
-  | { status: "ignored" }
+  { status: "running"; promise: Promise<DeeplinkAttempt> } | DeeplinkAttempt
 >();
-
-export type DeeplinkAttempt =
-  | { status: "succeeded"; value: DeeplinkExecution }
-  | { status: "failed"; error: ExpectedDeeplinkError }
-  | { status: "ignored" };
-
-export const waitForDeeplinkConsent = (raw: string) => {
-  if (!attempts.has(raw)) {
-    attempts.set(raw, { status: "waiting-consent" });
-  }
-};
 
 export const runDeeplinkOnce = (
   raw: string,
@@ -69,30 +42,25 @@ export const runDeeplinkOnce = (
     return attempt.promise;
   }
 
-  if (attempt?.status === "succeeded" || attempt?.status === "failed") {
+  if (attempt) {
     return Promise.resolve(attempt);
   }
 
-  if (attempt?.status === "ignored") {
-    return Promise.resolve({ status: "ignored" });
-  }
-
   const promise = execute()
-    .then((value): DeeplinkAttempt => {
-      const succeeded = { status: "succeeded" as const, value };
-      attempts.set(raw, succeeded);
+    .then(
+      (value): DeeplinkAttempt => ({ status: "succeeded", value }),
+      (error: unknown): DeeplinkAttempt => {
+        if (!(error instanceof ExpectedDeeplinkError)) {
+          throw error;
+        }
 
-      return succeeded;
-    })
-    .catch((error: unknown): DeeplinkAttempt => {
-      if (!(error instanceof ExpectedDeeplinkError)) {
-        throw error;
-      }
+        return { status: "failed" };
+      },
+    )
+    .then((settled) => {
+      attempts.set(raw, settled);
 
-      const failed = { status: "failed" as const, error };
-      attempts.set(raw, failed);
-
-      return failed;
+      return settled;
     });
 
   attempts.set(raw, { status: "running", promise });
@@ -113,69 +81,42 @@ export const ignoreDeeplink = (raw: string) => {
 export const shouldHandleDeeplink = (raw: string): boolean =>
   attempts.get(raw)?.status !== "ignored";
 
-const linkHouse = async (command: HouseCommand) => {
-  try {
-    const { data, error } = await fetchClient.POST(
-      "/api/houses/{house_id}/link",
-      {
-        params: {
-          ...authParams(),
-          path: { house_id: command.houseId },
-        },
-        body: {
-          role: "owner",
-          source: command.kind === "qr" ? "qr" : "chat",
-          ...(command.kind === "qr" ? { entrance: command.entrance } : {}),
-        },
+const expectedFailure = (error: unknown): never => {
+  throw error instanceof TypeError || errorDetail(error) !== undefined
+    ? new ExpectedDeeplinkError()
+    : error;
+};
+
+const executeHouseDeeplink = async (
+  command: Extract<StartParam, { kind: "house" | "qr" }>,
+): Promise<DeeplinkExecution> => {
+  const { data, error } = await fetchClient
+    .POST("/api/houses/{house_id}/link", {
+      params: { ...authParams(), path: { house_id: command.houseId } },
+      body: {
+        role: "owner",
+        source: command.kind === "qr" ? "qr" : "chat",
+        ...(command.kind === "qr" ? { entrance: command.entrance } : {}),
       },
-    );
+    })
+    .catch(expectedFailure);
 
-    if (error) {
-      throw new ExpectedDeeplinkError("Не получилось привязать дом");
-    }
-
-    return residencySchema.parse(data);
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new ExpectedDeeplinkError("Нет связи с сервером");
-    }
-
-    throw error;
+  if (error) {
+    throw new ExpectedDeeplinkError();
   }
-};
 
-export const executeHouseDeeplink = async (
-  command: HouseCommand,
-): Promise<DeeplinkExecution> => {
-  const residency = await linkHouse(command);
   await reloadSession();
-  await selectResidency(residency.resident_id);
+  await selectResidency(data.resident_id);
 
   return { target: "resident" };
 };
 
-export const executeFlatDeeplink = async (
-  command: FlatCommand,
+const executeFlatDeeplink = async (
+  command: Extract<StartParam, { kind: "flat" }>,
 ): Promise<DeeplinkExecution> => {
-  let residency;
-
-  try {
-    residency = residencySchema.parse(await activateFlatInvite(command.code));
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new ExpectedDeeplinkError("Нет связи с сервером");
-    }
-
-    // activateFlatInvite бросает конверт API: 404 - кода нет, 409 - истёк,
-    // отозван, исчерпан или житель уже в другой квартире
-    const detail = errorDetail(error);
-
-    if (detail === undefined) {
-      throw error;
-    }
-
-    throw new ExpectedDeeplinkError(detail);
-  }
+  const residency = await activateFlatInvite(command.code).catch(
+    expectedFailure,
+  );
 
   await reloadSession();
   await selectResidency(residency.resident_id);
@@ -183,46 +124,34 @@ export const executeFlatDeeplink = async (
   return { target: "resident" };
 };
 
-export const executeDemoDeeplink = async (
-  command: DemoCommand,
+const executeDemoDeeplink = async (
+  command: Extract<StartParam, { kind: "demo" }>,
 ): Promise<DeeplinkExecution> => {
-  let access;
+  const { data, error } = await fetchClient
+    .POST("/api/demo/activate", { params: authParams() })
+    .catch(expectedFailure);
 
-  try {
-    const { data, error } = await fetchClient.POST("/api/demo/activate", {
-      params: authParams(),
-    });
-
-    if (error) {
-      throw new ExpectedDeeplinkError("Демо-данные пока не готовы");
-    }
-
-    access = demoActivationSchema.parse(data);
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new ExpectedDeeplinkError("Нет связи с сервером");
-    }
-
-    throw error;
+  if (error) {
+    throw new ExpectedDeeplinkError();
   }
 
   await reloadSession();
 
   if (command.cabinet === "resident") {
-    await selectResidency(access.residency.resident_id);
+    await selectResidency(data.residency.resident_id);
     selectCabinet("resident");
 
     return { target: "resident" };
   }
 
-  await selectOrg(access.org.org_id);
+  await selectOrg(data.org.org_id);
   selectCabinet("admin");
 
   return { target: "admin" };
 };
 
 export const executeDeeplink = (
-  command: ExecutableCommand,
+  command: Exclude<StartParam, { kind: "invite" | "register" }>,
 ): Promise<DeeplinkExecution> => {
   switch (command.kind) {
     case "flat":

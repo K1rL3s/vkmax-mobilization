@@ -22,7 +22,6 @@ export const PhotoStrip = ({
 }: PhotoStripProps) => {
   const pick = (event: ChangeEvent<HTMLInputElement>) => {
     onAdd([...(event.target.files ?? [])]);
-    // один и тот же файл должен выбираться повторно, поэтому input очищается
     event.target.value = "";
   };
 

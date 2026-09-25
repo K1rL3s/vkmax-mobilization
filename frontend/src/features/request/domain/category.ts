@@ -13,7 +13,6 @@ import {
 
 import type { RequestCategory, ResponsibilityZone } from "./types";
 
-// подпись категории приезжает из справочника бэка, за фронтом только иконка
 export const CATEGORY_ICON: Record<RequestCategory, string> = {
   leak: dropletIcon,
   water_supply: dropletIcon,
@@ -28,8 +27,6 @@ export const CATEGORY_ICON: Record<RequestCategory, string> = {
   other: wrenchIcon,
 };
 
-// зона ответственности приезжает справочником категорий; названий поставщиков
-// в контракте нет, поэтому вне зоны УК называется роль, а не организация
 export const ZONE_LABEL: Record<ResponsibilityZone, string> = {
   management: "Управляющая компания",
   utility: "Ресурсоснабжающая организация",

@@ -1,12 +1,8 @@
 import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
-import {
-  CATEGORY_ICON,
-  useRequestCategories,
-  type RequestCategory,
-} from "@/features/request";
-import { isForbidden } from "@/shared/api/errors";
+import { useRequestCategories, type RequestCategory } from "@/features/request";
+import { isForbidden, retryUnlessForbidden } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { orgParams } from "@/shared/model/session";
 
@@ -16,6 +12,7 @@ import {
   toSections,
   type FilterId,
 } from "../domain/request-filters";
+import { isCategory } from "../domain/request-workflow";
 
 const PAGE_SIZE = 100;
 
@@ -23,13 +20,7 @@ const filterSchema = z.object({
   filter: z
     .custom<FilterId>((value) => FILTERS.some(({ id }) => id === value))
     .catch("all"),
-  category: z
-    .custom<RequestCategory>(
-      (value) =>
-        typeof value === "string" && Object.hasOwn(CATEGORY_ICON, value),
-    )
-    .optional()
-    .catch(undefined),
+  category: z.custom<RequestCategory>(isCategory).optional().catch(undefined),
 });
 
 export const useAdminRequestList = () => {
@@ -45,14 +36,14 @@ export const useAdminRequestList = () => {
         query: { limit: PAGE_SIZE, grouped: true },
       },
     },
-    { retry: (count, error) => !isForbidden(error) && count < 3 },
+    { retry: retryUnlessForbidden },
   );
 
   const updateFilter = (name: "filter" | "category", value: string) => {
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous);
-        if (value && value !== "all") next.set(name, value);
+        if (value !== "all") next.set(name, value);
         else next.delete(name);
         return next;
       },

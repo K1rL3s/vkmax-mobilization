@@ -1,6 +1,5 @@
 .Scroll {
   overflow-x: auto;
-  /* таблица доезжает до краёв карточки, а не до её отступов */
   margin: 0 -12px;
   padding: 0 12px;
   scrollbar-width: none;

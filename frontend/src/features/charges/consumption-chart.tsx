@@ -33,8 +33,6 @@ export const ConsumptionChart = ({
 
   const unit = SERVICE_UNIT[current.service] ?? "";
   const average = current.house_average ?? null;
-  // среднее по дому приходит одним числом за период: на графике это ровная
-  // линия, с которой сравнивается каждый свой месяц
   const data = current.points.map((point) => ({
     month: formatMonth(point.period),
     own: point.consumption / 1000,

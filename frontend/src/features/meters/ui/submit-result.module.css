@@ -45,7 +45,8 @@
   }
 }
 
-.Comparison {
+.Comparison,
+.Suggest {
   padding: 12px;
   border-radius: 16px;
   background-color: var(--background-tertiary);
@@ -74,12 +75,6 @@
 
 .Alert {
   color: var(--icon-negative);
-}
-
-.Suggest {
-  padding: 12px;
-  border-radius: 16px;
-  background-color: var(--background-tertiary);
 }
 
 .Note {

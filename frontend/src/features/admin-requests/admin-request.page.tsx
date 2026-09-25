@@ -12,6 +12,7 @@ import {
   STATUS_LABEL,
   STATUS_TONE,
 } from "@/features/request";
+import { isForbidden } from "@/shared/api/errors";
 import { formatDayTime, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { Card } from "@/shared/ui/card";
@@ -30,8 +31,8 @@ import { RequestStatusAction } from "./ui/request-status-action";
 import styles from "./admin-requests.module.css";
 
 const AdminRequestPage = () => {
-  const model = useAdminRequest();
-  if (!model.valid)
+  const { valid, query } = useAdminRequest();
+  if (!valid)
     return (
       <EmptyState
         fill
@@ -44,18 +45,11 @@ const AdminRequestPage = () => {
         }
       />
     );
-  if (model.isForbidden) return <NoOrgAccess />;
-  if (model.isPending) return <LoadingState fill title="Загружаем заявку…" />;
-  if (model.isError) return <ErrorState fill onRetry={model.retry} />;
-  const request = model.request;
-  if (!request)
-    return (
-      <EmptyState
-        fill
-        title="Заявка не найдена"
-        description="Вернитесь к списку заявок."
-      />
-    );
+  if (isForbidden(query.error)) return <NoOrgAccess />;
+  if (query.isPending) return <LoadingState fill title="Загружаем заявку…" />;
+  if (query.isError)
+    return <ErrorState fill onRetry={() => void query.refetch()} />;
+  const request = query.data;
 
   const tone = STATUS_TONE[request.status];
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
@@ -63,36 +57,6 @@ const AdminRequestPage = () => {
     request.status === "accepted" ||
     request.status === "in_progress" ||
     request.status === "on_review";
-
-  const facts: { label: string; value: ReactNode }[] = [
-    {
-      label: request.author_name ? "Житель" : "Звонил в УК",
-      value: request.author_name ?? request.caller_name ?? "не записан",
-    },
-    ...(request.caller_phone
-      ? [
-          {
-            label: "Телефон",
-            value: (
-              <a className={styles.Link} href={`tel:${request.caller_phone}`}>
-                {request.caller_phone}
-              </a>
-            ),
-          },
-        ]
-      : []),
-    {
-      label: "Квартира",
-      value: request.flat_number ?? "не указана",
-    },
-    { label: "Подана", value: formatDayTime(request.created_at) },
-    ...(request.channel === "miniapp"
-      ? []
-      : [{ label: "Как поступила", value: CHANNEL_LABEL[request.channel] }]),
-    ...(request.executor_name
-      ? [{ label: "Исполнитель", value: request.executor_name }]
-      : []),
-  ];
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -151,16 +115,24 @@ const AdminRequestPage = () => {
 
       <Card>
         <dl className={styles.Facts}>
-          {facts.map((fact) => (
-            <div key={fact.label}>
-              <Typography.Text asChild variant="description" color="secondary">
-                <dt>{fact.label}</dt>
-              </Typography.Text>
-              <Typography.Text asChild variant="description-strong">
-                <dd>{fact.value}</dd>
-              </Typography.Text>
-            </div>
-          ))}
+          <Fact label={request.author_name ? "Житель" : "Звонил в УК"}>
+            {request.author_name ?? request.caller_name ?? "не записан"}
+          </Fact>
+          {request.caller_phone && (
+            <Fact label="Телефон">
+              <a className={styles.Link} href={`tel:${request.caller_phone}`}>
+                {request.caller_phone}
+              </a>
+            </Fact>
+          )}
+          <Fact label="Квартира">{request.flat_number ?? "не указана"}</Fact>
+          <Fact label="Подана">{formatDayTime(request.created_at)}</Fact>
+          {request.channel !== "miniapp" && (
+            <Fact label="Как поступила">{CHANNEL_LABEL[request.channel]}</Fact>
+          )}
+          {request.executor_name && (
+            <Fact label="Исполнитель">{request.executor_name}</Fact>
+          )}
         </dl>
       </Card>
 
@@ -202,5 +174,16 @@ const AdminRequestPage = () => {
     </Panel>
   );
 };
+
+const Fact = ({ label, children }: { label: string; children: ReactNode }) => (
+  <div>
+    <Typography.Text asChild variant="description" color="secondary">
+      <dt>{label}</dt>
+    </Typography.Text>
+    <Typography.Text asChild variant="description-strong">
+      <dd>{children}</dd>
+    </Typography.Text>
+  </div>
+);
 
 export const Component = AdminRequestPage;

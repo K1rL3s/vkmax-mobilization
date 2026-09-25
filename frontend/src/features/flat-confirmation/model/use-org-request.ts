@@ -4,24 +4,19 @@ import type { Residency } from "@/shared/model/session";
 
 import type { VerifyInput } from "../domain/verify-method";
 
-type Done = () => Promise<void>;
-
-export const useOrgRequest = (flatId: Residency["flat_id"], done: Done) => {
+export const useOrgRequest = (
+  flatId: Residency["flat_id"],
+  done: () => Promise<void>,
+) => {
   const mutation = rqClient.useMutation(
     "post",
     "/api/flats/{flat_id}/verification-request",
     {
-      onSuccess: async () => {
-        await done();
-      },
+      onSuccess: () => done(),
       onError: async (error) => {
-        // 409 значит, что запрос уже висит. Это не сбой, а состояние, и
-        // показать его должен экран подтверждения
-        if (!isConflict(error)) {
-          return;
+        if (isConflict(error)) {
+          await done();
         }
-
-        await done();
       },
     },
   );
@@ -40,7 +35,7 @@ export const useOrgRequest = (flatId: Residency["flat_id"], done: Done) => {
         },
       });
     },
-    reset: () => mutation.reset(),
+    reset: mutation.reset,
     mismatched: false,
     isPending: mutation.isPending,
     isFailed: mutation.isError && !isConflict(mutation.error),

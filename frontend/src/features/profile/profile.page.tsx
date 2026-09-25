@@ -48,7 +48,6 @@ const WARNING: Record<
     action: "Подтвердить квартиру",
     alert: true,
   },
-  // запрос на рассмотрении не ошибка, поэтому плашка нейтральная
   pending: {
     title: "Запрос на подтверждение у УК",
     action: "Открыть запрос",
@@ -84,7 +83,6 @@ const ProfilePage = () => {
   };
 
   const view = confirmationView(residency);
-  // подтверждать нечего, пока УК не подключена или не завела квартиру
   const warning =
     residency.is_connected && view !== "verified" && view !== "no-flat"
       ? WARNING[view]
@@ -108,7 +106,6 @@ const ProfilePage = () => {
               {residency.address}
               {residency.flat_number && `, кв. ${residency.flat_number}`}
             </Typography.Text>
-            {/* о неподтверждённой квартире говорит плашка ниже */}
             {!warning && (
               <Typography.Text variant="description" color="secondary">
                 {residency.is_connected

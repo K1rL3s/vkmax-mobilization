@@ -2,7 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { authParams, rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { useRouteParams } from "@/shared/lib/router";
 import { useSession } from "@/shared/model/session";
 
@@ -13,18 +13,13 @@ export const usePoll = () => {
   const { currentResidency: residency } = useSession();
   const [chosen, setChosen] = useState<number[]>([]);
 
-  const params = {
-    ...authParams(),
-    path: { poll_id: route?.pollId ?? 0 },
-  };
+  const params = { ...authParams(), path: { poll_id: route?.pollId ?? 0 } };
 
   const card = rqClient.useQuery(
     "get",
     "/api/polls/{poll_id}",
     { params },
-    {
-      enabled: route !== null,
-    },
+    { enabled: route !== null },
   );
 
   const results = rqClient.useQuery(
@@ -35,19 +30,7 @@ export const usePoll = () => {
   );
 
   const vote = rqClient.useMutation("post", "/api/polls/{poll_id}/vote", {
-    // готовые результаты из ответа выбрасываем: состояние экрана приезжает
-    // инвалидацией, как у всех мутаций проекта
-    onSuccess: async () => {
-      await Promise.all(
-        [
-          "/api/polls/{poll_id}",
-          "/api/polls/{poll_id}/results",
-          "/api/houses/{house_id}/polls",
-        ].map((path) =>
-          queryClient.invalidateQueries({ queryKey: ["get", path] }),
-        ),
-      );
-    },
+    onSuccess: refreshPoll,
   });
 
   const poll = card.data;
@@ -61,12 +44,6 @@ export const usePoll = () => {
       return poll?.is_multiple ? [...current, optionId] : [optionId];
     });
 
-  const send = () => {
-    if (chosen.length > 0) {
-      vote.mutate({ params, body: { option_ids: chosen } });
-    }
-  };
-
   return {
     poll,
     results: results.data,
@@ -76,7 +53,7 @@ export const usePoll = () => {
     isVoting: vote.isPending,
     isVoteFailed: vote.isError,
     canSend: chosen.length > 0 && !vote.isPending,
-    send,
+    send: () => vote.mutate({ params, body: { option_ids: chosen } }),
     isPending: card.isPending || results.isPending,
     isError: route === null || card.isError || results.isError,
     retry: () => {
@@ -85,3 +62,10 @@ export const usePoll = () => {
     },
   };
 };
+
+export const refreshPoll = () =>
+  invalidatePaths(
+    "/api/polls/{poll_id}",
+    "/api/polls/{poll_id}/results",
+    "/api/houses/{house_id}/polls",
+  );

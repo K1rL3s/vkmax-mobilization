@@ -5,15 +5,10 @@
 }
 
 .Chart {
-  /* ResponsiveContainer меряет родителя: без min-width flex не даст ему сжаться */
   min-width: 0;
 }
 
-.Axis {
-  font-size: 11px;
-  fill: var(--text-secondary);
-}
-
+.Axis,
 .BarValue {
   font-size: 11px;
   fill: var(--text-secondary);

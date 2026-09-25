@@ -1,4 +1,3 @@
-import type { ChangeEvent } from "react";
 import { Button, Input, Textarea, Typography } from "@maxhub/max-ui";
 import { Navigate } from "react-router-dom";
 
@@ -12,17 +11,14 @@ import styles from "./verify-method.module.css";
 const VerifyMethodPage = () => {
   const form = useVerifyMethod();
 
-  // маршрут матчится на любой способ в адресе, а привязка могла исчезнуть,
-  // пока экран открыт
   if (form.method === undefined || !form.residency) {
     return <Navigate to={Routes.HOME} replace />;
   }
 
   const isOrg = form.method === "org";
-  const submitLabel = isOrg ? "Отправить запрос" : "Подтвердить";
   const action = form.mismatched
     ? { label: "Отправить запрос в УК", run: form.askOrg }
-    : { label: submitLabel, run: form.submit };
+    : { label: isOrg ? "Отправить запрос" : "Подтвердить", run: form.submit };
 
   const hint = () => {
     if (isOrg) {
@@ -43,9 +39,7 @@ const VerifyMethodPage = () => {
           placeholder="Лицевой счёт"
           inputMode="numeric"
           value={form.accountNo}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            form.setAccountNo(event.target.value)
-          }
+          onChange={(event) => form.setAccountNo(event.target.value)}
         />
 
         {isOrg && (
@@ -53,9 +47,7 @@ const VerifyMethodPage = () => {
             mode="secondary"
             placeholder="Комментарий (необязательно)"
             value={form.comment}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) =>
-              form.setComment(event.target.value)
-            }
+            onChange={(event) => form.setComment(event.target.value)}
           />
         )}
 

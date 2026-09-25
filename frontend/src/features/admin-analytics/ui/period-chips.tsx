@@ -1,6 +1,6 @@
 import { Button } from "@maxhub/max-ui";
 
-import { PERIODS, type PeriodDays } from "../domain/period";
+import type { PeriodDays } from "../domain/period";
 
 import styles from "./period-chips.module.css";
 
@@ -11,7 +11,7 @@ type PeriodChipsProps = {
 
 export const PeriodChips = ({ value, onChange }: PeriodChipsProps) => (
   <div className={styles.Chips}>
-    {PERIODS.map((days) => (
+    {([30, 90] as const).map((days) => (
       <Button
         key={days}
         size="small"

@@ -1,6 +1,6 @@
 import { isConflict } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { houseParams } from "@/shared/model/session";
 
 export const useAccessRequests = () => {
@@ -12,11 +12,7 @@ export const useAccessRequests = () => {
     "post",
     "/api/access-requests/{access_request_id}/slots/{slot_id}",
     {
-      // занятое окно тоже перечитываем: счётчики мест на экране устарели
-      onSettled: () =>
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/access-requests"],
-        }),
+      onSettled: () => invalidatePaths("/api/access-requests"),
     },
   );
 
@@ -33,8 +29,6 @@ export const useAccessRequests = () => {
     pendingSlotId: pick.isPending
       ? pick.variables.params.path.slot_id
       : undefined,
-    // список запросов бэк отдаёт по квартире без проверки подтверждения, а
-    // выбор окна требует подтверждённую квартиру и отвечает 404
     needsConfirmation: (accessRequestId: number) =>
       failedFor(accessRequestId) && pick.error?.status === 404,
     errorOf: (accessRequestId: number) => {

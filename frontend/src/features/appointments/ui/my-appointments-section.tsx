@@ -6,7 +6,7 @@ import { clockIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
-import { createSchedule } from "../domain/schedule";
+import { appointmentSubject, createSchedule } from "../domain/schedule";
 import { useMyAppointments } from "../model/use-my-appointments";
 
 import styles from "./my-appointments-section.module.css";
@@ -15,7 +15,6 @@ type MyAppointmentsSectionProps = {
   timeZone: string;
 };
 
-// без записей секции нет: кнопка записи над ней уже говорит, что делать
 export const MyAppointmentsSection = ({
   timeZone,
 }: MyAppointmentsSectionProps) => {
@@ -52,11 +51,7 @@ export const MyAppointmentsSection = ({
             separator={index > 0}
             before={<IconTile icon={clockIcon} tone="themed" />}
             title={schedule.appointmentTitle(item.starts_at)}
-            subtitle={
-              item.request_id
-                ? `Обсудить заявку №${item.request_id} · офис УК`
-                : "Общий вопрос · офис УК"
-            }
+            subtitle={appointmentSubject(item)}
             showChevron
             asChild
           >

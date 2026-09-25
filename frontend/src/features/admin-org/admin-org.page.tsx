@@ -35,23 +35,18 @@ const AdminOrgPage = () => {
   const card = useOrgCard();
   const settings = useOrgSettings();
 
-  // карточку бэк отдаёт только создателю и администраторам, как и правку
-  // настроек: сотрудник видит настройки, но менять их не может
   const readOnly = isForbidden(card.error);
   const isReady = settings.isSuccess && (card.isSuccess || readOnly);
 
-  // «Окно подачи показаний» из карточки дома ведёт сюда с #meter-window
   useEffect(() => {
-    if (isReady && hash) {
+    if (isReady && hash)
       document.getElementById(hash.slice(1))?.scrollIntoView();
-    }
   }, [isReady, hash]);
 
-  if (settings.isPending || card.isPending) {
+  if (settings.isPending || card.isPending)
     return <LoadingState fill title="Загружаем организацию" />;
-  }
 
-  if (!isReady) {
+  if (!isReady)
     return (
       <ErrorState
         fill
@@ -61,7 +56,6 @@ const AdminOrgPage = () => {
         }}
       />
     );
-  }
 
   const org = card.data;
   const isDemo = org?.is_demo ?? currentOrg?.is_demo;

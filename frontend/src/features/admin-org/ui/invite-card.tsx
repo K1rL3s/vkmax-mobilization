@@ -59,7 +59,6 @@ export const InviteCard = ({
     link.copy(invite.deeplink).catch(() => setCopyFailed(true));
   };
 
-  // отказ от шеринга - тоже отказ промиса, сообщать о нём нечего
   const share = () =>
     void webApp
       ?.shareMaxContent({

@@ -21,15 +21,10 @@ import { useUnlink } from "./use-unlink";
 
 import styles from "./residencies.module.css";
 
-const flatOf = (residency: Residency) => {
-  const caption = confirmationCaption(residency);
-
-  if (residency.flat_number === null || residency.flat_number === undefined) {
-    return caption;
-  }
-
-  return `кв. ${residency.flat_number} · ${caption}`;
-};
+const flatOf = (residency: Residency) =>
+  residency.flat_number == null
+    ? confirmationCaption(residency)
+    : `кв. ${residency.flat_number} · ${confirmationCaption(residency)}`;
 
 const ResidenciesPage = () => {
   const navigate = useNavigate();

@@ -29,8 +29,6 @@ const residentCaption = (resident: FlatResident) =>
     .filter(Boolean)
     .join(" · ");
 
-// что закрыто арендатору, решают флаги привязки, а не роль: бэк может открыть
-// арендатору что-то одно
 const restrictions = (residency: Residency) => {
   const closed = [
     !residency.can_see_charges && "не видите начисления",
@@ -182,8 +180,6 @@ export const FlatResidentsSection = () => {
   const { session, currentResidency: residency } = useSession();
   const flatId = residency?.flat_id;
 
-  // без квартиры жителей не у кого спрашивать: «О квартире» выше объясняет,
-  // чего не хватает
   if (!session || !residency || flatId == null) {
     return null;
   }

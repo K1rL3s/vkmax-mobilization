@@ -7,8 +7,6 @@
   background-color: var(--background-card);
 }
 
-/* текст остаётся выделяемым: если копирование в webview MAX не сработает,
-   житель выделит его руками */
 .Appeal {
   margin: 0;
   padding: 12px;

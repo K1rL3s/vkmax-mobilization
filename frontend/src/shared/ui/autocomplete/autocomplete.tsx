@@ -32,7 +32,6 @@ type AutocompleteProps = {
   emptyDescription?: string;
   emptyAction?: ReactNode;
   onRetry?: () => void;
-  className?: string;
 };
 
 export const Autocomplete = ({
@@ -50,12 +49,11 @@ export const Autocomplete = ({
   emptyDescription,
   emptyAction,
   onRetry,
-  className,
 }: AutocompleteProps) => {
   const isEmpty = status === "ready" && options.length === 0;
 
   return (
-    <Flex className={className} align="stretch" direction="column" gap={8}>
+    <Flex align="stretch" direction="column" gap={8}>
       <Input
         placeholder={placeholder}
         inputMode={inputMode}

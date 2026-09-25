@@ -1,6 +1,6 @@
 import { Button, Typography } from "@maxhub/max-ui";
 
-import { STATUS_LABEL, type RequestStatus } from "@/features/request";
+import { STATUS_LABEL } from "@/features/request";
 import { FieldError } from "@/shared/ui/field-error";
 
 import { STATUS_ACTION, type StatusTarget } from "../domain/request-workflow";
@@ -16,7 +16,7 @@ export const RequestStatusAction = ({ target }: { target: StatusTarget }) => {
 
   const isChoice = model.choices.length > 1;
   const submit = (
-    <Button stretched loading={model.isPending} onClick={() => model.submit()}>
+    <Button stretched loading={model.isPending} onClick={model.submit}>
       {isChoice ? "Применить ко всем" : STATUS_ACTION[model.choices[0]]}
     </Button>
   );
@@ -39,7 +39,7 @@ export const RequestStatusAction = ({ target }: { target: StatusTarget }) => {
             }))}
             value={model.status}
             disabled={model.isPending}
-            onChange={(choice) => model.setStatus(choice as RequestStatus)}
+            onChange={model.setStatus}
           />
         </>
       )}

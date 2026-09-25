@@ -6,15 +6,11 @@ import {
 
 export type FilterId = "all" | "new" | "in_progress" | "on_review" | "done";
 
-type Filter = {
+export const FILTERS: {
   id: FilterId;
   label: string;
   statuses: RequestStatus[] | null;
-};
-
-// «Новые» собирает и принятые: для жителя принятая заявка - всё ещё новая, до
-// работ. Серверный фильтр так не умеет, это второй довод считать его у себя
-export const FILTERS: Filter[] = [
+}[] = [
   { id: "all", label: "Все", statuses: null },
   { id: "new", label: "Новые", statuses: ["new", "accepted"] },
   { id: "in_progress", label: "В работе", statuses: ["in_progress"] },
@@ -22,15 +18,7 @@ export const FILTERS: Filter[] = [
   { id: "done", label: "Выполнены", statuses: ["done"] },
 ];
 
-export type RequestGroup = {
-  title: string;
-  items: RequestListItem[];
-};
-
-export const groupRequests = (
-  items: RequestListItem[],
-  filterId: FilterId,
-): RequestGroup[] => {
+export const groupRequests = (items: RequestListItem[], filterId: FilterId) => {
   const statuses = FILTERS.find(({ id }) => id === filterId)?.statuses;
   const visible = statuses
     ? items.filter((item) => statuses.includes(item.status))

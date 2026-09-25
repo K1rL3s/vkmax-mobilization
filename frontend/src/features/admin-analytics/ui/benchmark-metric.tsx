@@ -3,7 +3,6 @@ import { Flex, Typography } from "@maxhub/max-ui";
 import type { components } from "@/shared/api/schema/generated";
 import { StatusPill } from "@/shared/ui/status-pill";
 
-import { rankTone } from "../domain/benchmark";
 import { formatMetric } from "../domain/metric";
 
 type BenchmarkMetric = components["schemas"]["BenchmarkMetric"];
@@ -33,7 +32,9 @@ export const BenchmarkMetricRow = ({ metric }: { metric: BenchmarkMetric }) => {
             медиана {formatMetric(median, metric.unit)}
           </Typography.Text>
 
-          <StatusPill tone={rankTone(rank, total)}>
+          <StatusPill
+            tone={rank <= Math.ceil(total / 3) ? "positive" : "neutral"}
+          >
             {rank} место из {total}
           </StatusPill>
         </Flex>

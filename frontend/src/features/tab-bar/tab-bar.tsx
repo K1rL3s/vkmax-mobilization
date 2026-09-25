@@ -13,17 +13,15 @@ import {
 
 import styles from "./tab-bar.module.css";
 
-const TABS = [
-  { to: Routes.HOME, label: "Главная", icon: navHomeIcon },
-  { to: Routes.REQUESTS, label: "Заявки", icon: navRequestsIcon },
-  { to: Routes.MEETINGS, label: "Собрания", icon: navMeetingsIcon },
-  { to: Routes.PROFILE, label: "Профиль", icon: navProfileIcon },
-];
-
 export const TabBar = () => {
   return (
     <nav className={styles.TabBar}>
-      {TABS.map((tab) => (
+      {[
+        { to: Routes.HOME, label: "Главная", icon: navHomeIcon },
+        { to: Routes.REQUESTS, label: "Заявки", icon: navRequestsIcon },
+        { to: Routes.MEETINGS, label: "Собрания", icon: navMeetingsIcon },
+        { to: Routes.PROFILE, label: "Профиль", icon: navProfileIcon },
+      ].map((tab) => (
         <NavLink
           key={tab.to}
           to={tab.to}

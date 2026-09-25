@@ -5,7 +5,7 @@ export type Channel = components["schemas"]["AnnouncementChannel"];
 
 type House = { id: number; address: string };
 
-export const CHANNEL_LABELS: Record<Channel, string> = {
+const CHANNEL_LABELS: Record<Channel, string> = {
   chat: "Чат дома",
   direct: "Личные сообщения",
 };
@@ -19,7 +19,6 @@ export const housesCount = (count: number) =>
 export const recipientsCount = (count: number) =>
   `${count} ${plural(count, ["адресат", "адресата", "адресатов"])}`;
 
-// houses - все дома организации: без них адрес и «Все дома» не узнать
 export const addressees = (houseIds: number[], houses: House[]) => {
   if (houseIds.length === 1) {
     const house = houses.find(({ id }) => id === houseIds[0]);

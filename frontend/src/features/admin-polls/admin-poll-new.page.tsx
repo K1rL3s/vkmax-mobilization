@@ -20,8 +20,6 @@ import { useAdminPollForm, type AdminPollDraft } from "./use-admin-poll-form";
 
 import styles from "./admin-poll-new.module.css";
 
-// счётчик подписан на поле сам: иначе весь экран перерисовывался бы на
-// каждое нажатие клавиши
 const DescriptionCounter = ({
   control,
 }: {
@@ -122,8 +120,6 @@ const AdminPollNewPage = () => {
               {...form.register("title")}
             />
 
-            {/* secondary у Textarea - это цвет default у Input: у кита шкалы
-                режимов не совпадают */}
             <Textarea
               rows={3}
               mode="secondary"

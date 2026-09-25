@@ -27,8 +27,6 @@ const FlatPage = () => {
   const navigate = useNavigate();
   const flat = useFlat();
 
-  // привязка могла исчезнуть, пока экран открыт: УК отвязывает жителя из
-  // админки, и обновленная сессия приезжает сюда без нее
   if (!flat.residency) {
     return <Navigate to={Routes.HOME} replace />;
   }

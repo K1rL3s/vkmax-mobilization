@@ -50,12 +50,7 @@ export const pushBackHandler = (handler: BackHandler) => {
   scheduleSync();
 
   return () => {
-    const index = handlers.lastIndexOf(handler);
-
-    if (index !== -1) {
-      handlers.splice(index, 1);
-    }
-
+    handlers.splice(handlers.lastIndexOf(handler), 1);
     scheduleSync();
   };
 };

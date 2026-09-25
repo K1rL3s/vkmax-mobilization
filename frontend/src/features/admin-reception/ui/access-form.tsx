@@ -61,7 +61,7 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
 
           {houses.length === 1 ? (
             <Typography.Text variant="body" color="secondary">
-              {houses[0]?.address}
+              {houses[0].address}
             </Typography.Text>
           ) : (
             <div className={styles.Cells}>

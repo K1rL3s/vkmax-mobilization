@@ -6,9 +6,6 @@ export type Appointment = components["schemas"]["AppointmentItem"];
 
 export type AccessRequest = components["schemas"]["AccessRequestItem"];
 
-// календарный день приёма: полночь UTC этой даты, а не момент времени. Его
-// подписи считаются в UTC, поэтому не зависят ни от пояса телефона, ни от
-// пояса УК
 export type ReceptionDay = {
   key: string;
   date: Date;
@@ -17,18 +14,7 @@ export type ReceptionDay = {
 
 export type Schedule = ReturnType<typeof createSchedule>;
 
-// перерыв длиннее этого - уже не обед, а, например, вечерний приём: такой
-// разрыв делит слоты, но подписью «обед» не называется
-const MAX_LUNCH_MINUTES = 120;
-
 const MINUTE = 60 * 1000;
-
-const calendarKeyFormat = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "UTC",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
 
 const weekdayFormat = new Intl.DateTimeFormat("ru-RU", {
   timeZone: "UTC",
@@ -56,14 +42,11 @@ export const weekdayLabel = (day: Date) =>
 
 export const monthLabel = (day: Date) => capitalize(monthFormat.format(day));
 
-export const dateLabel = (day: Date) => dateFormat.format(day);
+const dateLabel = (day: Date) => dateFormat.format(day);
 
 export const dayTitle = (day: Date) =>
   `${weekdayLabel(day)}, ${dateLabel(day)}`;
 
-// сегодняшний день пуст и тогда, когда приём уже закончился, поэтому в
-// подпись о выходных он не попадает. Дни недели идут с понедельника, с какого
-// бы дня ни начиналась лента
 export const closedDaysCaption = (days: ReceptionDay[]) => {
   const closed = new Map(
     days
@@ -87,8 +70,6 @@ export const closedDaysCaption = (days: ReceptionDay[]) => {
   return `${listed}: приёма нет`;
 };
 
-// всё, что зависит от момента времени, считается в поясе УК: житель в другом
-// городе видит часы приёма такими, какими их видит офис
 export const createSchedule = (timeZone: string) => {
   const keyFormat = new Intl.DateTimeFormat("en-CA", {
     timeZone,
@@ -96,8 +77,6 @@ export const createSchedule = (timeZone: string) => {
     month: "2-digit",
     day: "2-digit",
   });
-  // «9:00», а не «09:00»: в сетке из четырёх слотов на узком экране ведущий
-  // ноль не помещается в кнопку
   const timeFormat = new Intl.DateTimeFormat("ru-RU", {
     timeZone,
     hour: "numeric",
@@ -115,13 +94,7 @@ export const createSchedule = (timeZone: string) => {
     appointmentTitle: (iso: string) =>
       `${dayTitle(dayOf(iso))}, ${slotTime(iso)}`,
 
-    // лента дней идёт подряд от сегодня до последнего дня со слотами: дни без
-    // приёма остаются в ней неактивными, чтобы житель видел, что это выходной,
-    // а не пропуск в календаре
-    receptionDays: (
-      slots: ReceptionSlot[],
-      now = new Date(),
-    ): ReceptionDay[] => {
+    receptionDays: (slots: ReceptionSlot[]): ReceptionDay[] => {
       const last = slots.at(-1);
 
       if (!last) {
@@ -139,19 +112,17 @@ export const createSchedule = (timeZone: string) => {
       const days: ReceptionDay[] = [];
 
       for (
-        let date = calendarDay(dayKey(now));
-        calendarKeyFormat.format(date) <= lastKey;
+        let date = calendarDay(dayKey(new Date()));
+        date.toISOString().slice(0, 10) <= lastKey;
         date = new Date(date.getTime() + 24 * 60 * MINUTE)
       ) {
-        const key = calendarKeyFormat.format(date);
+        const key = date.toISOString().slice(0, 10);
         days.push({ key, date, slots: byDay.get(key) ?? [] });
       }
 
       return days;
     },
 
-    // обед виден в самих данных: занятые слоты бэк тоже присылает, поэтому
-    // разрыв шире обычного шага между соседями - это перерыв в окнах приёма
     splitDay: (slots: ReceptionSlot[]) => {
       const times = slots.map((slot) => Date.parse(slot.starts_at));
       const steps = times.slice(1).map((time, index) => time - times[index]);
@@ -159,17 +130,19 @@ export const createSchedule = (timeZone: string) => {
       const gapAt = steps.findIndex((gap) => gap > step);
 
       if (gapAt === -1) {
-        return { morning: slots, afternoon: [], lunch: null };
+        return { groups: [{ title: null, slots }], lunch: null };
       }
 
       const lunchFrom = new Date(times[gapAt] + step).toISOString();
       const lunchTo = slots[gapAt + 1].starts_at;
 
       return {
-        morning: slots.slice(0, gapAt + 1),
-        afternoon: slots.slice(gapAt + 1),
+        groups: [
+          { title: "До обеда", slots: slots.slice(0, gapAt + 1) },
+          { title: "После обеда", slots: slots.slice(gapAt + 1) },
+        ],
         lunch:
-          steps[gapAt] - step <= MAX_LUNCH_MINUTES * MINUTE
+          steps[gapAt] - step <= 120 * MINUTE
             ? `обед ${slotTime(lunchFrom)}-${slotTime(lunchTo)}`
             : null,
       };
@@ -177,6 +150,10 @@ export const createSchedule = (timeZone: string) => {
   };
 };
 
-// у дома без УК пояса нет: подписи тогда в поясе телефона
 export const deviceTimeZone = () =>
   Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+export const appointmentSubject = (appointment: Appointment) =>
+  appointment.request_id
+    ? `Обсудить заявку №${appointment.request_id} · офис УК`
+    : "Общий вопрос · офис УК";

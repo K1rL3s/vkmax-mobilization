@@ -14,7 +14,6 @@
   min-width: 0;
 }
 
-/* заголовок опроса длиннее строки: на 360px он занимает две и обрезается */
 .Title {
   display: -webkit-box;
   overflow: hidden;

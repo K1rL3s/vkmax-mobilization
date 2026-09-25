@@ -1,5 +1,4 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
-import { useLocation } from "react-router-dom";
 
 import { usersIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
@@ -12,7 +11,6 @@ import styles from "./admin-verifications.module.css";
 
 const AdminVerificationsPage = () => {
   const list = useVerificationList();
-  const { search } = useLocation();
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -79,7 +77,6 @@ const AdminVerificationsPage = () => {
           key={request.id}
           request={request}
           showAddress={list.houseId === null}
-          search={search}
         />
       ))}
 

@@ -11,11 +11,11 @@ import { useConsent } from "./model/use-consent";
 
 import styles from "./onboarding.module.css";
 
-type ConsentProps = {
-  onContinue: () => void | Promise<void>;
-};
-
-export const Consent = ({ onContinue }: ConsentProps) => {
+export const Consent = ({
+  onContinue,
+}: {
+  onContinue: () => Promise<void>;
+}) => {
   const consent = useConsent(onContinue);
 
   return (

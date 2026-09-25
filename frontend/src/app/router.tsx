@@ -1,3 +1,5 @@
+import { MaxUI } from "@maxhub/max-ui";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createBrowserRouter,
   Outlet,
@@ -10,7 +12,6 @@ import { Component as ErrorPage } from "@/features/error/error.page";
 
 import { protectedLoader } from "./protected-loader";
 import { deeplinkLoader } from "./deeplink-loader";
-import { Providers } from "./providers";
 import {
   adminLoader,
   onboardedLoader,
@@ -19,6 +20,7 @@ import {
 } from "./session-loader";
 import { AdminTabBar } from "@/features/admin-tab-bar";
 import { TabBar } from "@/features/tab-bar";
+import { queryClient } from "@/shared/api/query-client";
 import { useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { LoadingState } from "@/shared/ui/state";
@@ -32,9 +34,11 @@ const PushedPage = ({ fallback }: { fallback: To }) => {
 const router = createBrowserRouter([
   {
     element: (
-      <Providers>
-        <App />
-      </Providers>
+      <MaxUI resetBody>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </MaxUI>
     ),
     children: [
       {
@@ -373,6 +377,4 @@ const router = createBrowserRouter([
   },
 ]);
 
-export const Router = () => {
-  return <RouterProvider router={router} />;
-};
+export const Router = () => <RouterProvider router={router} />;

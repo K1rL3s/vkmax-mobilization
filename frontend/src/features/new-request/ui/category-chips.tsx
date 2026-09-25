@@ -14,20 +14,18 @@ export const CategoryChips = ({
   categories,
   value,
   onChange,
-}: CategoryChipsProps) => {
-  return (
-    <div className={styles.Chips}>
-      {categories.map((item) => (
-        <Button
-          key={item.category}
-          size="small"
-          variant={item.category === value ? "primary" : "secondary"}
-          aria-pressed={item.category === value}
-          onClick={() => onChange(item.category)}
-        >
-          {item.label}
-        </Button>
-      ))}
-    </div>
-  );
-};
+}: CategoryChipsProps) => (
+  <div className={styles.Chips}>
+    {categories.map((item) => (
+      <Button
+        key={item.category}
+        size="small"
+        variant={item.category === value ? "primary" : "secondary"}
+        aria-pressed={item.category === value}
+        onClick={() => onChange(item.category)}
+      >
+        {item.label}
+      </Button>
+    ))}
+  </div>
+);

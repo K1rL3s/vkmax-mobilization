@@ -1,24 +1,18 @@
 import { Flex, Tappable, Typography } from "@maxhub/max-ui";
-import { generatePath, useNavigate } from "react-router-dom";
+import { generatePath, useLocation, useNavigate } from "react-router-dom";
 
 import { cn } from "@/shared/lib/css";
 import { duration, formatDay } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { Chevron } from "@/shared/ui/chevron";
-import { StatusPill, type StatusPillTone } from "@/shared/ui/status-pill";
+import { StatusPill } from "@/shared/ui/status-pill";
 
-import type { VerificationRequest } from "../model/use-verification-list";
+import {
+  STATUS,
+  type VerificationRequest,
+} from "../model/use-verification-list";
 
 import styles from "./verification-row.module.css";
-
-const STATUS: Record<
-  VerificationRequest["status"],
-  { label: string; tone: StatusPillTone }
-> = {
-  pending: { label: "Ждёт решения", tone: "themed" },
-  approved: { label: "Подтверждён", tone: "positive" },
-  rejected: { label: "Отклонён", tone: "negative" },
-};
 
 const when = (request: VerificationRequest) =>
   request.status === "pending"
@@ -28,15 +22,14 @@ const when = (request: VerificationRequest) =>
 type VerificationRowProps = {
   request: VerificationRequest;
   showAddress: boolean;
-  search: string;
 };
 
 export const VerificationRow = ({
   request,
   showAddress,
-  search,
 }: VerificationRowProps) => {
   const navigate = useNavigate();
+  const { search } = useLocation();
   const status = STATUS[request.status];
 
   return (

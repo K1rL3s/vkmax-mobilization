@@ -2,23 +2,23 @@ import { Button } from "@maxhub/max-ui";
 
 import styles from "./chip-row.module.css";
 
-type ChipRowProps = {
+type ChipRowProps<T extends string> = {
   label: string;
-  options: readonly { id: string; label: string }[];
-  value: string | null;
-  onChange: (id: string) => void;
+  options: readonly { id: T; label: string }[];
+  value: T;
+  onChange: (id: T) => void;
   disabled?: boolean;
   wrap?: boolean;
 };
 
-export const ChipRow = ({
+export const ChipRow = <T extends string>({
   label,
   options,
   value,
   onChange,
   disabled,
-  wrap = false,
-}: ChipRowProps) => (
+  wrap,
+}: ChipRowProps<T>) => (
   <div
     className={wrap ? styles.Wrapped : styles.Row}
     role="radiogroup"

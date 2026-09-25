@@ -27,9 +27,7 @@ const Group = ({
   invites: { invite: OrgInvite; state: InviteState }[];
   onRevoke: (invite: OrgInvite) => void;
 }) => {
-  if (invites.length === 0) {
-    return null;
-  }
+  if (invites.length === 0) return null;
 
   return (
     <Flex asChild align="stretch" direction="column" gapY={8}>
@@ -53,19 +51,16 @@ const Group = ({
 
 const AdminOrgInvitesPage = () => {
   const [isCreating, setCreating] = useState(false);
-  // срок сверяется с моментом открытия экрана: пересчёт на каждый рендер
-  // двигал бы ссылки между группами прямо под пальцем
   const [now] = useState(() => Date.now());
   const actor = useActorRole();
   const invites = useOrgInvites();
   const revoke = useRevokeInvite();
   const confirm = useConfirm<OrgInvite>();
 
-  if (invites.isPending) {
+  if (invites.isPending)
     return <LoadingState fill title="Загружаем приглашения" />;
-  }
 
-  if (isForbidden(invites.error)) {
+  if (isForbidden(invites.error))
     return (
       <EmptyState
         fill
@@ -74,11 +69,9 @@ const AdminOrgInvitesPage = () => {
         description="Приглашать в команду и видеть ссылки могут создатель и администраторы организации"
       />
     );
-  }
 
-  if (invites.isError) {
+  if (invites.isError)
     return <ErrorState fill onRetry={() => void invites.refetch()} />;
-  }
 
   const items = invites.data.map((invite) => ({
     invite,
@@ -143,17 +136,13 @@ const AdminOrgInvitesPage = () => {
         }
         isPending={revoke.isPending}
         onConfirm={() => {
-          if (confirm.target) {
+          if (confirm.target)
             revoke.mutate(
               {
-                params: {
-                  ...orgParams(),
-                  path: { code: confirm.target.code },
-                },
+                params: { ...orgParams(), path: { code: confirm.target.code } },
               },
               { onSuccess: confirm.dismiss },
             );
-          }
         }}
         onClose={confirm.dismiss}
       />

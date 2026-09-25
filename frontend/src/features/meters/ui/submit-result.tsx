@@ -34,16 +34,15 @@ export const SubmitResult = ({
 }: SubmitResultProps) => {
   const { reading, house_average: houseAverage } = result;
   const unit = METER_UNIT[meter.type];
-  const total = zonesOf(meter).reduce(
+  const zones = zonesOf(meter);
+  const total = zones.reduce(
     (sum, zone) => sum + (reading.consumption[zone] ?? 0),
     0,
   );
-  // полоски сравнения меряются от большего из двух расходов
   const scale = Math.max(total, houseAverage ?? 0) || 1;
-  const difference =
-    houseAverage === null || houseAverage === undefined || houseAverage === 0
-      ? null
-      : Math.round(((total - houseAverage) / houseAverage) * 100);
+  const difference = houseAverage
+    ? Math.round(((total - houseAverage) / houseAverage) * 100)
+    : null;
 
   return (
     <>
@@ -75,7 +74,7 @@ export const SubmitResult = ({
             </Typography.Text>
 
             <div className={styles.Panel}>
-              {zonesOf(meter).map((zone) => {
+              {zones.map((zone) => {
                 const value = reading.values[zone] ?? 0;
                 const spent = reading.consumption[zone] ?? 0;
 
@@ -108,7 +107,7 @@ export const SubmitResult = ({
                 );
               })}
 
-              {reading.amount !== null && reading.amount !== undefined && (
+              {reading.amount != null && (
                 <Flex
                   direction="column"
                   align="stretch"
@@ -136,7 +135,7 @@ export const SubmitResult = ({
           </section>
         </Flex>
 
-        {houseAverage !== null && houseAverage !== undefined && (
+        {houseAverage != null && (
           <Flex asChild direction="column" align="stretch" gap={12}>
             <section>
               <Typography.Text asChild variant="title" color="primary">
@@ -149,47 +148,20 @@ export const SubmitResult = ({
                 gap={14}
                 className={styles.Comparison}
               >
-                <Flex direction="column" align="stretch" gap={6}>
-                  <Flex align="center" gap={8}>
-                    <Typography.Text
-                      variant="detail"
-                      color="primary"
-                      className={styles.Grow}
-                    >
-                      Ваша квартира
-                    </Typography.Text>
-                    <Typography.Text variant="detail-strong" color="primary">
-                      {formatReading(total)} {unit}
-                    </Typography.Text>
-                  </Flex>
-                  <div className={styles.Track}>
-                    <div
-                      className={styles.Fill}
-                      style={{ width: `${(total / scale) * 100}%` }}
-                    />
-                  </div>
-                </Flex>
-
-                <Flex direction="column" align="stretch" gap={6}>
-                  <Flex align="center" gap={8}>
-                    <Typography.Text
-                      variant="detail"
-                      color="primary"
-                      className={styles.Grow}
-                    >
-                      Среднее по дому
-                    </Typography.Text>
-                    <Typography.Text variant="detail-strong" color="primary">
-                      {formatReading(houseAverage)} {unit}
-                    </Typography.Text>
-                  </Flex>
-                  <div className={styles.Track}>
-                    <div
-                      className={styles.HouseFill}
-                      style={{ width: `${(houseAverage / scale) * 100}%` }}
-                    />
-                  </div>
-                </Flex>
+                <Bar
+                  label="Ваша квартира"
+                  value={total}
+                  unit={unit}
+                  scale={scale}
+                  fill={styles.Fill}
+                />
+                <Bar
+                  label="Среднее по дому"
+                  value={houseAverage}
+                  unit={unit}
+                  scale={scale}
+                  fill={styles.HouseFill}
+                />
 
                 {difference !== null && (
                   <Typography.Text variant="description" color="secondary">
@@ -260,3 +232,27 @@ export const SubmitResult = ({
     </>
   );
 };
+
+type BarProps = {
+  label: string;
+  value: number;
+  unit: string;
+  scale: number;
+  fill: string | undefined;
+};
+
+const Bar = ({ label, value, unit, scale, fill }: BarProps) => (
+  <Flex direction="column" align="stretch" gap={6}>
+    <Flex align="center" gap={8}>
+      <Typography.Text variant="detail" color="primary" className={styles.Grow}>
+        {label}
+      </Typography.Text>
+      <Typography.Text variant="detail-strong" color="primary">
+        {formatReading(value)} {unit}
+      </Typography.Text>
+    </Flex>
+    <div className={styles.Track}>
+      <div className={fill} style={{ width: `${(value / scale) * 100}%` }} />
+    </div>
+  </Flex>
+);

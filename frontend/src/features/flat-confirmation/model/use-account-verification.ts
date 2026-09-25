@@ -3,21 +3,15 @@ import type { Residency } from "@/shared/model/session";
 
 import type { VerifyInput } from "../domain/verify-method";
 
-type Done = () => Promise<void>;
-
 export const useAccountVerification = (
   flatId: Residency["flat_id"],
-  done: Done,
+  done: () => Promise<void>,
 ) => {
   const mutation = rqClient.useMutation("post", "/api/flats/{flat_id}/verify", {
     onSuccess: async (result) => {
-      // счет не совпал - это успешный ответ ручки, а не сбой: экран остается
-      // на месте и предлагает другой путь
-      if (!result.verified) {
-        return;
+      if (result.verified) {
+        await done();
       }
-
-      await done();
     },
   });
 
@@ -32,7 +26,7 @@ export const useAccountVerification = (
         body: { account_no: accountNo },
       });
     },
-    reset: () => mutation.reset(),
+    reset: mutation.reset,
     mismatched: mutation.data?.verified === false,
     isPending: mutation.isPending,
     isFailed: mutation.isError,

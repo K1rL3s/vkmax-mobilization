@@ -8,17 +8,11 @@ import {
   type InvitableRole,
   type OrgRole,
 } from "../domain/roles";
-import {
-  ACTIVATIONS,
-  LIFETIMES,
-  useInviteForm,
-} from "../model/use-invite-form";
+import { useInviteForm } from "../model/use-invite-form";
 import { InviteCard } from "./invite-card";
 
 import styles from "./invite-dialog.module.css";
 
-// что роль даёт - по зависимостям ручек: дома, настройки и команда требуют
-// администратора, заявки, приём, объявления и опросы открыты любому сотруднику
 const ROLE_HINT: Record<InvitableRole, string> = {
   admin:
     "Дома, жители, настройки и команда. Приглашает сотрудников и исполнителей",
@@ -28,8 +22,6 @@ const ROLE_HINT: Record<InvitableRole, string> = {
     "Кабинета УК нет: получает назначенные заявки и отмечает выполнение в боте",
 };
 
-type Choice<T> = { value: T; label: string; disabled?: boolean };
-
 const Chips = <T extends string | number>({
   label,
   choices,
@@ -37,7 +29,7 @@ const Chips = <T extends string | number>({
   onChange,
 }: {
   label: string;
-  choices: Choice<T>[];
+  choices: { value: T; label: string; disabled?: boolean }[];
   value: T;
   onChange: (value: T) => void;
 }) => (
@@ -74,11 +66,8 @@ export const InviteDialog = ({ actor, isOpen, onClose }: InviteDialogProps) => {
   const form = useInviteForm();
 
   useEffect(() => {
-    if (isOpen) {
-      dialog.current?.showModal();
-    } else {
-      dialog.current?.close();
-    }
+    if (isOpen) dialog.current?.showModal();
+    else dialog.current?.close();
   }, [isOpen]);
 
   const close = () => {
@@ -97,9 +86,7 @@ export const InviteDialog = ({ actor, isOpen, onClose }: InviteDialogProps) => {
       ref={dialog}
       className={styles.Dialog}
       onCancel={(event) => {
-        if (form.isPending) {
-          event.preventDefault();
-        }
+        if (form.isPending) event.preventDefault();
       }}
       onClose={close}
     >
@@ -167,14 +154,19 @@ export const InviteDialog = ({ actor, isOpen, onClose }: InviteDialogProps) => {
 
             <Chips
               label="Сколько действует ссылка"
-              choices={LIFETIMES}
+              choices={[
+                { value: 24, label: "1 день" },
+                { value: 72, label: "3 дня" },
+                { value: 168, label: "Неделя" },
+                { value: 720, label: "30 дней" },
+              ]}
               value={form.values.hours}
               onChange={(hours) => form.setValue("expires_in_hours", hours)}
             />
 
             <Chips
               label="Сколько человек войдёт по ссылке"
-              choices={ACTIVATIONS.map((value) => ({
+              choices={[1, 3, 5, 10].map((value) => ({
                 value,
                 label: String(value),
               }))}

@@ -5,8 +5,6 @@ export type Reading = components["schemas"]["AdminReadingItem"];
 
 const ZONE_ORDER = ["single", "day", "night"];
 
-// зона однотарифного счётчика не подписывается: «показание» в строке
-// показания читалось бы дважды
 const byZone = (values: Record<string, number>, sign: boolean) =>
   Object.entries(values)
     .sort(([a], [b]) => ZONE_ORDER.indexOf(a) - ZONE_ORDER.indexOf(b))

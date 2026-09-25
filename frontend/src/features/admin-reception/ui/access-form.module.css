@@ -41,8 +41,6 @@
   color: var(--text-themed);
 }
 
-/* подпись колонки переносится на 360px - поля равняются по низу, иначе одно
-   уезжает выше другого */
 .Pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -50,7 +48,6 @@
   gap: 12px;
 }
 
-/* Input не тянется во флексе сам: без этого поле вылезает за колонку */
 .Field > * {
   min-width: 0;
 }

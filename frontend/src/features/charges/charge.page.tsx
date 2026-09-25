@@ -45,11 +45,6 @@ const Row = ({ title, value }: { title: string; value: string }) => (
   </Flex>
 );
 
-/**
- * Итог дельты и её раскладка. Раскладку по каждой строке считает бэк, здесь
- * она только суммируется. Строку, которой не было в одном из месяцев, бэк
- * целиком относит к расходу, поэтому такие строки идут отдельной суммой
- */
 const DeltaSummary = ({ breakdown }: { breakdown: ChargeBreakdown }) => {
   if (!breakdown.previous_period) {
     return (
@@ -105,7 +100,6 @@ const Lines = ({
           : null;
 
       const change = () => {
-        // в первом месяце истории новые все строки, говорить об этом незачем
         if (!breakdown.previous_period) {
           return null;
         }

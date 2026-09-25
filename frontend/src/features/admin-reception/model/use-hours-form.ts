@@ -55,8 +55,6 @@ export const useHoursForm = (windows: ReceptionWindow[]) => {
     values: draftOfDay(windows, weekday),
   });
 
-  // смена дня перезаполняет форму окнами выбранного дня: `values` сам этого не
-  // сделает, пока не изменится ответ бэка
   const { reset } = form;
 
   useEffect(() => {
@@ -66,16 +64,12 @@ export const useHoursForm = (windows: ReceptionWindow[]) => {
   const draft = useWatch({ control: form.control }) as DayDraft;
   const spans = dayError(draft);
 
-  const submit = form.handleSubmit((values) => {
-    if (dayError(values)) {
-      return;
-    }
-
+  const submit = form.handleSubmit((values) =>
     save.mutate({
       params: orgParams(),
       body: { windows: gridWithDay(windows, weekday, values) },
-    });
-  });
+    }),
+  );
 
   return {
     weekday,
@@ -88,8 +82,6 @@ export const useHoursForm = (windows: ReceptionWindow[]) => {
     draft,
     spansError: spans,
     slots: slotsPerDay(draft),
-    // выключение приёма переспрашивает: последствие лежит в кабинете жителя,
-    // и сотрудник его не увидит
     isTurningOff: !draft.enabled && windows.some((w) => w.weekday === weekday),
     canSave: form.formState.isDirty && form.formState.isValid && spans === null,
     isSaving: save.isPending,

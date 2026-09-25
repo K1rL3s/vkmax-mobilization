@@ -56,8 +56,6 @@ const Row = ({ item }: { item: Appointment }) => {
     </>
   );
 
-  // УК не меняет запись ничем: строка ведёт либо на привязанную заявку, либо
-  // никуда. Отменённая не ведёт никуда даже с заявкой - человек не придёт
   return item.request_id !== null && !isCancelled ? (
     <Link
       className={cn(styles.Row, styles.link)}
@@ -75,7 +73,6 @@ const Row = ({ item }: { item: Appointment }) => {
 export const AppointmentsSection = () => {
   const [day, setDay] = useState(() => dayKey(new Date()));
   const appointments = useOrgAppointments(day);
-  const items = appointments.data ?? [];
 
   return (
     <section className={styles.Section}>
@@ -119,7 +116,7 @@ export const AppointmentsSection = () => {
           description="Не получилось загрузить записи на приём"
           onRetry={() => void appointments.refetch()}
         />
-      ) : items.length === 0 ? (
+      ) : appointments.data.length === 0 ? (
         <EmptyState
           title="В этот день никто не записан"
           description="Жители записываются сами из своего кабинета — в кабинете УК записать человека нельзя. Проверьте соседние дни стрелками выше."
@@ -131,7 +128,7 @@ export const AppointmentsSection = () => {
             appointments.isPlaceholderData && styles.stale,
           )}
         >
-          {items.map((item) => (
+          {appointments.data.map((item) => (
             <Row key={item.id} item={item} />
           ))}
         </div>

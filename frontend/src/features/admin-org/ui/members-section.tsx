@@ -32,13 +32,6 @@ const byRole = (a: OrgMember, b: OrgMember) =>
   ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) ||
   a.created_at.localeCompare(b.created_at);
 
-const EXECUTOR_NOTE = "Работает через бота, кабинета УК у исполнителя нет";
-
-const removeNote = (member: OrgMember) =>
-  member.role === "executor"
-    ? "Бот перестанет присылать ему заявки. Уже назначенные заявки передайте другому исполнителю"
-    : "Доступ к кабинету УК закроется сразу. Вернуть человека можно новым приглашением";
-
 const MemberRow = ({
   member,
   isMe,
@@ -58,7 +51,11 @@ const MemberRow = ({
   ]
     .filter(Boolean)
     .join(" · ");
-  const note = blocked ?? (member.role === "executor" ? EXECUTOR_NOTE : null);
+  const note =
+    blocked ??
+    (member.role === "executor"
+      ? "Работает через бота, кабинета УК у исполнителя нет"
+      : null);
 
   return (
     <CellSimple
@@ -103,20 +100,18 @@ export const MembersSection = () => {
   const confirm = useConfirm<OrgMember>();
 
   const content = () => {
-    if (members.isPending) {
+    if (members.isPending)
       return <LoadingState title="Загружаем сотрудников" />;
-    }
 
-    if (members.isError) {
+    if (members.isError)
       return (
         <ErrorState
           description="Не получилось загрузить сотрудников"
           onRetry={() => void members.refetch()}
         />
       );
-    }
 
-    if (members.data.length === 0) {
+    if (members.data.length === 0)
       return (
         <EmptyState
           icon={usersIcon}
@@ -124,7 +119,6 @@ export const MembersSection = () => {
           description="Пригласите сотрудников и исполнителей ссылкой: они появятся здесь, когда откроют её в MAX"
         />
       );
-    }
 
     return (
       <div className={styles.Panel}>
@@ -166,7 +160,12 @@ export const MembersSection = () => {
         <ConfirmDialog
           isOpen={confirm.isOpen}
           title={`Исключить: ${confirm.target?.name ?? ""}?`}
-          description={confirm.target && removeNote(confirm.target)}
+          description={
+            confirm.target &&
+            (confirm.target.role === "executor"
+              ? "Бот перестанет присылать ему заявки. Уже назначенные заявки передайте другому исполнителю"
+              : "Доступ к кабинету УК закроется сразу. Вернуть человека можно новым приглашением")
+          }
           confirmLabel="Исключить"
           error={
             remove.isError &&
@@ -175,7 +174,7 @@ export const MembersSection = () => {
           }
           isPending={remove.isPending}
           onConfirm={() => {
-            if (confirm.target) {
+            if (confirm.target)
               remove.mutate(
                 {
                   params: {
@@ -185,7 +184,6 @@ export const MembersSection = () => {
                 },
                 { onSuccess: confirm.dismiss },
               );
-            }
           }}
           onClose={confirm.dismiss}
         />

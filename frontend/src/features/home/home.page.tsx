@@ -48,15 +48,9 @@ import { useActiveRequest } from "./use-active-request";
 
 import styles from "./home.module.css";
 
-const NEWS_ICON = {
-  urgent: { src: alertIcon, className: styles.NewsIconAlert },
-  regular: { src: megaphoneIcon, className: styles.NewsIconAnnouncement },
-};
-
 const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
   const navigate = useNavigate();
   const tone = STATUS_TONE[request.status];
-  // на приёмке нормативный срок уже не идёт: работы сделаны, ход за жителем
   const onReview = isOnReview(request.status);
   const deadline = onReview ? null : deadlineLeft(request.deadline_at);
   const progress = onReview
@@ -168,14 +162,20 @@ const NewsSection = () => {
     }
 
     return items.map((item) => {
-      const icon = NEWS_ICON[item.urgent ? "urgent" : "regular"];
       const when = newsWhen(item.created_at);
 
       return (
         <CellSimple
           key={item.id}
           asChild
-          before={<Icon src={icon.src} className={icon.className} />}
+          before={
+            <Icon
+              src={item.urgent ? alertIcon : megaphoneIcon}
+              className={
+                item.urgent ? styles.NewsIconAlert : styles.NewsIconAnnouncement
+              }
+            />
+          }
           title={item.text}
           subtitle={item.urgent ? `Срочное · ${when}` : when}
           innerClassNames={{ title: styles.TwoLines }}

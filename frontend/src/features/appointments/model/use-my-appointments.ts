@@ -1,5 +1,5 @@
 import { authParams, rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { houseParams, useSession } from "@/shared/model/session";
 import { useConfirm } from "@/shared/ui/confirm-dialog";
 
@@ -9,9 +9,6 @@ export const useMyAppointments = () => {
   const { currentResidency } = useSession();
   const confirm = useConfirm<Appointment>();
 
-  // ручка отдаёт записи жителя по всем домам, в любом статусе и от поздних к
-  // ранним, а прошедшая запись так и остаётся booked: экран открыт для одного
-  // дома и показывает только предстоящие, ближайшую первой
   const list = rqClient.useQuery(
     "get",
     "/api/appointments",
@@ -35,12 +32,7 @@ export const useMyAppointments = () => {
     {
       onSuccess: async () => {
         confirm.dismiss();
-        await Promise.all(
-          ["/api/appointments", "/api/houses/{house_id}/reception-slots"].map(
-            (path) =>
-              queryClient.invalidateQueries({ queryKey: ["get", path] }),
-          ),
-        );
+        await refetchAppointments();
       },
     },
   );
@@ -50,8 +42,6 @@ export const useMyAppointments = () => {
 
   return {
     items,
-    // бэк отвечает на повторную запись тем же 409, что и на занятый слот, поэтому
-    // своё время выключено заранее, а не объясняется после отказа
     isOwn: (slot: ReceptionSlot) => ownTimes.has(Date.parse(slot.starts_at)),
     isPending: list.isPending,
     isError: list.isError,
@@ -80,3 +70,9 @@ export const useMyAppointments = () => {
     },
   };
 };
+
+export const refetchAppointments = () =>
+  invalidatePaths(
+    "/api/appointments",
+    "/api/houses/{house_id}/reception-slots",
+  );

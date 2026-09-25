@@ -1,15 +1,9 @@
 import type { components } from "@/shared/api/schema/generated";
 
-import { dayKey } from "./day";
+import { minuteOfDay, pad } from "./day";
 
 export type AccessFlat = { flat_id: number; flat_number: string };
 
-// строка выбора показывает квартиру, а имя подтверждённого жителя - подписью:
-// сотрудник узнаёт квартиру по человеку, с которым и договаривается
-export type EligibleFlat = AccessFlat & { name: string };
-
-// причина уходит на бэк без ограничения длины, но поле без лимита - это поле,
-// в которое однажды вставят весь наряд-заданием
 export const accessFormConstraints = {
   reasonMax: 500,
   windowMinutesMin: 15,
@@ -18,38 +12,24 @@ export const accessFormConstraints = {
   perWindowMax: 50,
 };
 
-export type WindowsRule = {
+const clock = (total: number) =>
+  `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+
+export const generateWindows = (rule: {
   date: string;
   timeFrom: string;
   timeTo: string;
   windowMinutes: number;
-};
-
-const pad = (value: number) => String(value).padStart(2, "0");
-
-const minuteOfDay = (time: string) => {
-  const [hours, rest] = time.split(":");
-
-  return Number(hours) * 60 + Number(rest);
-};
-
-const clock = (total: number) =>
-  `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
-
-// окно уходит наивной локальной строкой: момент без зоны бэк трактует как
-// время дома. `Z` не добавляется ни при каких обстоятельствах
-export const generateWindows = (rule: WindowsRule): string[] => {
-  const from = minuteOfDay(rule.timeFrom);
+}): string[] => {
   const to = minuteOfDay(rule.timeTo);
-
-  if (!rule.date || rule.windowMinutes < 1 || from >= to) {
-    return [];
-  }
-
   const starts: string[] = [];
 
+  if (!rule.date || rule.windowMinutes < 1) {
+    return starts;
+  }
+
   for (
-    let start = from;
+    let start = minuteOfDay(rule.timeFrom);
     start + rule.windowMinutes <= to;
     start += rule.windowMinutes
   ) {
@@ -65,13 +45,10 @@ export const windowLabel = (startsAt: string, minutes: number): string => {
   return `${from}-${clock(minuteOfDay(from) + minutes)}`;
 };
 
-// предикат бэка - `verified_at is not null AND status != blocked`: ячейку в
-// сборе получает только такая квартира, и клиент фильтрует ровно так же,
-// иначе выбранная квартира молча окажется среди тех, кому не досталось ячейки
 export const eligibleFlats = (
   residents: components["schemas"]["HouseResidentItem"][],
-): EligibleFlat[] => {
-  const flats = new Map<number, EligibleFlat>();
+) => {
+  const flats = new Map<number, AccessFlat & { name: string }>();
 
   for (const resident of residents) {
     const { flat_id: flatId, flat_number: flatNumber } = resident;
@@ -89,5 +66,3 @@ export const eligibleFlats = (
 
   return [...flats.values()];
 };
-
-export const isPastDay = (date: string): boolean => date < dayKey(new Date());

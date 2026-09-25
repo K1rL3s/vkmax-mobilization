@@ -63,7 +63,7 @@ export const RequestAssignment = ({ request }: { request: AdminRequest }) => {
         ))}
       </div>
 
-      {!isFull && model.executors.length > visible.length && (
+      {model.executors.length > visible.length && (
         <Button
           className={styles.Inline}
           size="small"

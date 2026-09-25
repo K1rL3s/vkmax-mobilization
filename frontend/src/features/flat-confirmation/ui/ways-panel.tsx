@@ -3,22 +3,7 @@ import { generatePath, Link } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
 
-import type { VerifyMethod } from "../domain/verify-method";
-
 import styles from "./ways-panel.module.css";
-
-const WAYS: { method: VerifyMethod; title: string; subtitle: string }[] = [
-  {
-    method: "account",
-    title: "По лицевому счёту",
-    subtitle: "Номер есть в квитанции",
-  },
-  {
-    method: "org",
-    title: "Через УК",
-    subtitle: "Отправим запрос в управляющую компанию",
-  },
-];
 
 type WaysPanelProps = {
   residentId: number;
@@ -33,7 +18,18 @@ export const WaysPanel = ({ residentId, returnTo }: WaysPanelProps) => {
       </Typography.Text>
 
       <div className={styles.Panel}>
-        {WAYS.map((way) => (
+        {[
+          {
+            method: "account",
+            title: "По лицевому счёту",
+            subtitle: "Номер есть в квитанции",
+          },
+          {
+            method: "org",
+            title: "Через УК",
+            subtitle: "Отправим запрос в управляющую компанию",
+          },
+        ].map((way) => (
           <CellSimple
             key={way.method}
             asChild

@@ -5,15 +5,11 @@ import { z } from "zod";
 import { useRouteParams } from "@/shared/lib/router";
 import { Routes } from "@/shared/model/routes";
 
-import type { VerifyMethod } from "../domain/verify-method";
-
 import { useAccountVerification } from "./use-account-verification";
 import { useOrgRequest } from "./use-org-request";
 import { useResidency } from "./use-residency";
 
-const methodSchema: z.ZodType<VerifyMethod> = z.enum(["account", "org"]);
-
-const paramsSchema = z.object({ method: methodSchema });
+const paramsSchema = z.object({ method: z.enum(["account", "org"]) });
 
 export const useVerifyMethod = () => {
   const params = useRouteParams(paramsSchema);
@@ -56,8 +52,6 @@ export const useVerifyMethod = () => {
       way.reset();
     },
     submit: () => way.send({ accountNo: stated, comment: comment.trim() }),
-    // лицевой счет не совпал - житель уходит в УК с тем же номером, чтобы не
-    // набирать его заново и чтобы сотрудник видел, что житель считает своим
     askOrg: () => {
       if (!residency) {
         return;

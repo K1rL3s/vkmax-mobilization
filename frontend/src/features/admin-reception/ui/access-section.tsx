@@ -53,9 +53,6 @@ const List = ({ items }: { items: AccessRequest[] }) => (
   </div>
 );
 
-// сбор доступа заводит администратор организации: список квартир требует тех
-// же прав, что и часы приёма, поэтому кнопка у сотрудника без прав не ведёт
-// в форму, из которой некого выбрать
 const CreateAction = ({ canCreate }: { canCreate: boolean }) =>
   canCreate ? (
     <Button asChild size="medium" iconBefore={<Icon src={plusIcon} />}>

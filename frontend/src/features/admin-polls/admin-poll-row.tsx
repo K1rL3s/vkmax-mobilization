@@ -10,9 +10,11 @@ import { StatusPill } from "@/shared/ui/status-pill";
 
 import styles from "./admin-poll-row.module.css";
 
-export type AdminPoll = components["schemas"]["AdminPollListItem"];
-
-export const AdminPollRow = ({ poll }: { poll: AdminPoll }) => {
+export const AdminPollRow = ({
+  poll,
+}: {
+  poll: components["schemas"]["AdminPollListItem"];
+}) => {
   const navigate = useNavigate();
   const isActive = poll.status === "active";
 
@@ -52,8 +54,6 @@ export const AdminPollRow = ({ poll }: { poll: AdminPoll }) => {
           {deadlineLabel(poll)}
         </Typography.Text>
 
-        {/* свой голос сотрудника в списке УК ни при чём: строка про квартиры
-            дома, как у жителя, который ещё не голосовал */}
         <Typography.Text variant="description" color="secondary">
           {votedLine({ ...poll, voted: false })}
         </Typography.Text>

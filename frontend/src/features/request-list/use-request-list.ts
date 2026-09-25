@@ -5,15 +5,11 @@ import { houseParams } from "@/shared/model/session";
 
 import { groupRequests, type FilterId } from "./filters";
 
-// лента грузится одной пачкой: фильтр и группы считаются на клиенте, а
-// серверная пагинация разрезала бы их посередине
-const PAGE_LIMIT = 100;
-
 export const useRequestList = () => {
   const [filter, setFilter] = useState<FilterId>("all");
 
   const requests = rqClient.useQuery("get", "/api/requests", {
-    params: { ...houseParams(), query: { limit: PAGE_LIMIT } },
+    params: { ...houseParams(), query: { limit: 100 } },
   });
 
   const items = requests.data?.items ?? [];

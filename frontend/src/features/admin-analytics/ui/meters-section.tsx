@@ -5,6 +5,7 @@ import { EmptyState } from "@/shared/ui/state";
 
 import { periodTitle, windowTitle } from "../domain/meters";
 import { formatMetric } from "../domain/metric";
+import { useMetersSeason } from "../model/use-meters-season";
 import { useRemind } from "../model/use-remind";
 
 import { FillBar } from "./fill-bar";
@@ -12,14 +13,6 @@ import { Section } from "./section";
 import styles from "./meters-section.module.css";
 
 type MetersSeason = components["schemas"]["MetersSeasonResponse"];
-
-type MetersSectionProps = {
-  isPending: boolean;
-  isError: boolean;
-  isEmpty: boolean;
-  onRetry: () => void;
-  season: MetersSeason | null;
-};
 
 const Remind = ({ season }: { season: MetersSeason }) => {
   const remind = useRemind();
@@ -61,62 +54,60 @@ const Remind = ({ season }: { season: MetersSeason }) => {
   );
 };
 
-export const MetersSection = ({
-  isPending,
-  isError,
-  isEmpty,
-  onRetry,
-  season,
-}: MetersSectionProps) => (
-  <Section
-    title="Показания"
-    note={season ? `за ${periodTitle(season.period)}` : undefined}
-    isPending={isPending}
-    isError={isError}
-    onRetry={onRetry}
-  >
-    {isEmpty || season === null ? (
-      <EmptyState
-        title="В домах организации нет квартир с показаниями"
-        description="Показания появятся, когда жители подтвердят квартиры и заведут счётчики"
-      />
-    ) : (
-      <Flex direction="column" align="stretch" gapY={12}>
-        <Typography.Text variant="header" color="primary">
-          Сдано {season.submitted} из {season.submitted + season.not_submitted}
-        </Typography.Text>
+export const MetersSection = () => {
+  const meters = useMetersSeason();
+  const season = meters.data;
 
-        <Flex direction="column" align="stretch" gapY={10}>
-          {season.houses.map((house) => (
-            <Flex
-              key={house.house_id}
-              direction="column"
-              align="stretch"
-              gapY={4}
-            >
-              <Typography.Text variant="detail" color="primary">
-                {house.address}
-              </Typography.Text>
+  return (
+    <Section
+      title="Показания"
+      note={season ? `за ${periodTitle(season.period)}` : undefined}
+      isPending={meters.isPending}
+      isError={meters.isError}
+      onRetry={() => void meters.refetch()}
+    >
+      {season === undefined || season.is_empty ? (
+        <EmptyState
+          title="В домах организации нет квартир с показаниями"
+          description="Показания появятся, когда жители подтвердят квартиры и заведут счётчики"
+        />
+      ) : (
+        <Flex direction="column" align="stretch" gapY={12}>
+          <Typography.Text variant="header" color="primary">
+            Сдано {season.submitted} из{" "}
+            {season.submitted + season.not_submitted}
+          </Typography.Text>
 
-              <Flex align="center" justify="space-between" gap={8}>
-                <Typography.Text variant="detail" color="secondary">
-                  {house.submitted} из {house.flats_total}
+          <Flex direction="column" align="stretch" gapY={10}>
+            {season.houses.map((house) => (
+              <Flex
+                key={house.house_id}
+                direction="column"
+                align="stretch"
+                gapY={4}
+              >
+                <Typography.Text variant="detail" color="primary">
+                  {house.address}
                 </Typography.Text>
 
-                <Typography.Text variant="detail-strong" color="primary">
-                  {formatMetric(house.percent, "percent")}
-                </Typography.Text>
+                <Flex align="center" justify="space-between" gap={8}>
+                  <Typography.Text variant="detail" color="secondary">
+                    {house.submitted} из {house.flats_total}
+                  </Typography.Text>
+
+                  <Typography.Text variant="detail-strong" color="primary">
+                    {formatMetric(house.percent, "percent")}
+                  </Typography.Text>
+                </Flex>
+
+                <FillBar share={house.percent} />
               </Flex>
+            ))}
+          </Flex>
 
-              {/* полоска заполнения: «какой дом отстаёт» читается с одного
-                  взгляда, а по колонке процентов это надо вычитывать */}
-              <FillBar share={house.percent} />
-            </Flex>
-          ))}
+          <Remind season={season} />
         </Flex>
-
-        <Remind season={season} />
-      </Flex>
-    )}
-  </Section>
-);
+      )}
+    </Section>
+  );
+};

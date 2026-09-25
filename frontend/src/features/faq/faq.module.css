@@ -61,7 +61,6 @@
     transform: rotate(-90deg);
   }
 
-  /* 14px отступа вопроса снизу превращаются в 6px до ответа */
   .Answer {
     margin: -8px 0 0;
     padding: 0 16px 14px;

@@ -10,8 +10,6 @@ export const STATUS_LABEL: Record<RequestStatus, string> = {
   done: "Выполнена",
 };
 
-// приёмка выделена цветом: это единственный статус, на котором заявка ждёт
-// действия жителя, а не УК
 export const STATUS_TONE: Record<RequestStatus, StatusPillTone> = {
   new: "themed",
   accepted: "themed",
@@ -22,6 +20,4 @@ export const STATUS_TONE: Record<RequestStatus, StatusPillTone> = {
 
 export const isFinished = (status: RequestStatus) => status === "done";
 
-// приёмка - единственный статус, на котором ход за жителем: её проверяют и
-// Главная, и лента, и карточка
 export const isOnReview = (status: RequestStatus) => status === "on_review";

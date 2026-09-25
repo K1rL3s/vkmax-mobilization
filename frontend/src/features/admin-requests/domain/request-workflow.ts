@@ -1,4 +1,8 @@
-import type { RequestStatus } from "@/features/request";
+import {
+  CATEGORY_ICON,
+  type RequestCategory,
+  type RequestStatus,
+} from "@/features/request";
 import type { components } from "@/shared/api/schema/generated";
 
 export type AdminRequest = components["schemas"]["AdminRequestCard"];
@@ -32,16 +36,13 @@ const statusOrder: RequestStatus[] = [
   "done",
 ];
 
-// Одиночная заявка движется на один шаг. Группа может догнать общий статус,
-// но не откатить ни одного участника; работу за жителя УК не принимает.
 export const statusChoices = (target: StatusTarget): RequestStatus[] => {
   if (target.kind === "request") {
     const request = target.request;
     const next = statusOrder[statusOrder.indexOf(request.status) + 1];
     const requiresResidentReview =
       next === "done" && request.author_name != null;
-    if (!next || requiresResidentReview) return [];
-    return [next];
+    return !next || requiresResidentReview ? [] : [next];
   }
 
   const { requests, status } = target.group;
@@ -60,3 +61,6 @@ export const statusChoices = (target: StatusTarget): RequestStatus[] => {
     return !wouldMoveBackwards && hasChanges && !requiresResidentReview;
   });
 };
+
+export const isCategory = (value: unknown): value is RequestCategory =>
+  typeof value === "string" && Object.hasOwn(CATEGORY_ICON, value);

@@ -62,7 +62,6 @@ const AdminBenchmarkPage = () => {
           <h1>Сравнение с платформой</h1>
         </Typography.Text>
 
-        {/* своего периода у экрана нет: бэк всегда считает 30 дней */}
         <Typography.Text variant="description" color="secondary">
           За последние 30 дней
         </Typography.Text>
@@ -70,9 +69,11 @@ const AdminBenchmarkPage = () => {
 
       {benchmark.isPending && <LoadingState fill title="Считаем сравнение" />}
 
-      {benchmark.isError && <ErrorState fill onRetry={benchmark.retry} />}
+      {benchmark.isError && (
+        <ErrorState fill onRetry={() => void benchmark.refetch()} />
+      )}
 
-      {!benchmark.isPending && !benchmark.isError && benchmark.isEmpty && (
+      {!benchmark.isError && benchmark.data?.is_empty && (
         <EmptyState
           fill
           icon={chartIcon}
@@ -81,17 +82,17 @@ const AdminBenchmarkPage = () => {
         />
       )}
 
-      {!benchmark.isPending && !benchmark.isError && !benchmark.isEmpty && (
+      {benchmark.isSuccess && !benchmark.data.is_empty && (
         <>
           <Section title="Ваши показатели">
             <Flex direction="column" align="stretch" gapY={14}>
-              {benchmark.metrics.map((metric) => (
+              {benchmark.data.metrics.map((metric) => (
                 <BenchmarkMetricRow key={metric.key} metric={metric} />
               ))}
             </Flex>
           </Section>
 
-          {(benchmark.regions.length > 0 || benchmark.cities.length > 0) && (
+          {benchmark.data.regions.length > 0 && (
             <Section
               title="Разрезы"
               note="Среднее время до принятия, медиана по УК разреза"
@@ -99,25 +100,29 @@ const AdminBenchmarkPage = () => {
               <Flex direction="column" align="stretch" gapY={14}>
                 <SplitRows
                   title="По регионам"
-                  rows={benchmark.regions}
+                  rows={benchmark.data.regions.filter(
+                    (row) => row.city == null,
+                  )}
                   pick={(row) => row.region}
                 />
 
                 <SplitRows
                   title="По городам"
-                  rows={benchmark.cities}
+                  rows={benchmark.data.regions.filter(
+                    (row) => row.city != null,
+                  )}
                   pick={(row) => row.city ?? row.region}
                 />
               </Flex>
             </Section>
           )}
 
-          {benchmark.houses.length > 0 && (
+          {benchmark.data.unconnected_houses.length > 0 && (
             <Section
               title="Неподключённые дома"
               note="Жители этих домов уже ждут сервис"
             >
-              <UnconnectedHouses houses={benchmark.houses} />
+              <UnconnectedHouses houses={benchmark.data.unconnected_houses} />
             </Section>
           )}
         </>

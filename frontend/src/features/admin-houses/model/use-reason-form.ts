@@ -6,8 +6,6 @@ import { reasonFormConstraints } from "../domain/resident";
 
 const { reasonMin, reasonMax } = reasonFormConstraints;
 
-// бэк проверяет только непустоту, а «нет» её проходит: причину житель получит
-// сообщением от бота, и другого объяснения у него не будет
 const reasonSchema = z.object({
   reason: z
     .string()

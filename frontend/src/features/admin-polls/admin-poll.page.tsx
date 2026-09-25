@@ -68,8 +68,6 @@ const AdminPollPage = () => {
           Это {poll.disclaimer}
         </Typography.Text>
 
-        {/* по вариантам только квартиры и площадь: кто как голосовал, УК не
-            видит, свой голос сотрудника тоже не отмечается */}
         <Flex align="stretch" direction="column" gap={8}>
           {poll.options.map((option) => (
             <PollOption

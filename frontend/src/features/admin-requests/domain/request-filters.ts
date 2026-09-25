@@ -43,12 +43,7 @@ export const matchesFilter = (
   return STATUSES[filter].includes(request.status);
 };
 
-export type RequestSection = {
-  title: string;
-  items: AdminRequestItem[];
-};
-
-export const toSections = (items: AdminRequestItem[]): RequestSection[] =>
+export const toSections = (items: AdminRequestItem[]) =>
   [
     {
       title: "Активные",

@@ -34,19 +34,18 @@ export const useRequestStatus = (target: StatusTarget) => {
         "Не удалось сменить статус. Попробуйте ещё раз.")
       : null,
     submit: () => {
-      if (change.isPending || !choices.includes(status)) return;
+      if (change.isPending) return;
       const body = { status, comment: null };
-      if (target.kind === "request") {
+      if (target.kind === "request")
         requestChange.mutate({
           params: { ...orgParams(), path: { request_id: target.request.id } },
           body,
         });
-        return;
-      }
-      groupChange.mutate({
-        params: { ...orgParams(), path: { group_id: target.group.id } },
-        body,
-      });
+      else
+        groupChange.mutate({
+          params: { ...orgParams(), path: { group_id: target.group.id } },
+          body,
+        });
     },
   };
 };

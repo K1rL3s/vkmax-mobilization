@@ -10,8 +10,6 @@ export const useResidencySwitcher = () => {
   const [markedId, setMarkedId] = useState<number | null>(null);
   const [isSwitching, setSwitching] = useState(false);
 
-  // отметка живёт только на этом экране: пока житель не нажал «Подтвердить»,
-  // кабинет показывает прежний адрес
   const marked =
     residencies.find((item) => item.resident_id === markedId) ??
     currentResidency;

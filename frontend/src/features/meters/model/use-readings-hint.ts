@@ -2,11 +2,6 @@ import { formatPeriod } from "../domain/reading";
 
 import { useFlatReadings } from "./use-flat-readings";
 
-/**
- * Подпись под входом в подачу показаний на Главной: по ней житель понимает,
- * ждёт ли УК показания прямо сейчас. Пока данных нет, подписи тоже нет -
- * строка-заглушка врала бы об окне подачи.
- */
 export const useReadingsHint = (): string | null => {
   const { residency, meters, periods, isPending, isError } = useFlatReadings();
 

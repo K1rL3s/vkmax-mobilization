@@ -32,8 +32,6 @@
   border-top: 1px solid var(--background-secondary);
 }
 
-/* причина сбора бывает в два предложения: в строке от неё нужна первая
-   половина, остальное читается на карточке */
 .Reason {
   overflow: hidden;
   white-space: nowrap;

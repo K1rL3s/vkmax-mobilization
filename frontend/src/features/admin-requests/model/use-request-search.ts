@@ -62,26 +62,20 @@ const useRequestSearch = <T>({
     change,
     reset: () => change(""),
     select: (id: AutocompleteOption["id"]) => {
-      if (!isReady) return;
-      const item = items.find(
-        (item) => option(item).id === id && include(item),
-      );
+      const item = items.find((item) => option(item).id === id);
       if (!item) return;
       setSelected(item);
       setQuery(option(item).title);
       return item;
     },
-    retry: () => {
-      if (isSearching && !isDebouncing) void results.refetch();
-    },
+    retry: () => void results.refetch(),
   };
 };
 
-export const useRequestHouses = (enabled = true) => {
+export const useRequestHouses = () => {
   const params = orgParams();
   return useRequestSearch({
     queryKey: ["get", "/api/admin/houses", params],
-    enabled,
     read: (query, signal) =>
       fetchClient.GET("/api/admin/houses", {
         params: { ...params, query },

@@ -20,7 +20,6 @@ export const UnconnectedHouses = ({
   return (
     <Flex direction="column" align="stretch" gapY={10}>
       {(expanded ? houses : houses.slice(0, VISIBLE)).map((house) => (
-        /* строки неинтерактивны: действия по чужому дому у УК нет */
         <Flex
           key={house.house_id}
           align="baseline"

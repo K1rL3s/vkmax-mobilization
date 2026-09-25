@@ -14,8 +14,6 @@ type IssueInviteDialogProps = {
   onClose: () => void;
 };
 
-type Choice = { value: number; label: string };
-
 const Chips = ({
   label,
   choices,
@@ -23,7 +21,7 @@ const Chips = ({
   onChange,
 }: {
   label: string;
-  choices: Choice[];
+  choices: { value: number; label: string }[];
   value: number;
   onChange: (value: number) => void;
 }) => (
@@ -65,7 +63,6 @@ export const IssueInviteDialog = ({
     }
   }, [isOpen]);
 
-  // следующее открытие начинается с выбора, а не с прошлого кода
   const close = () => {
     issue.reset();
     onClose();

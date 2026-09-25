@@ -15,21 +15,19 @@ type StatusFilterProps = {
   onChange: (value: StatusFilterId) => void;
 };
 
-export const StatusFilter = ({ value, onChange }: StatusFilterProps) => {
-  return (
-    <div className={styles.Filter} role="tablist">
-      {FILTERS.map((filter) => (
-        <Button
-          key={filter.id}
-          role="tab"
-          aria-selected={filter.id === value}
-          size="small"
-          variant={filter.id === value ? "primary" : "secondary"}
-          onClick={() => onChange(filter.id)}
-        >
-          {filter.label}
-        </Button>
-      ))}
-    </div>
-  );
-};
+export const StatusFilter = ({ value, onChange }: StatusFilterProps) => (
+  <div className={styles.Filter} role="tablist">
+    {FILTERS.map((filter) => (
+      <Button
+        key={filter.id}
+        role="tab"
+        aria-selected={filter.id === value}
+        size="small"
+        variant={filter.id === value ? "primary" : "secondary"}
+        onClick={() => onChange(filter.id)}
+      >
+        {filter.label}
+      </Button>
+    ))}
+  </div>
+);

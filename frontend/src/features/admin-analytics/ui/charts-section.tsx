@@ -13,8 +13,8 @@ import {
 } from "recharts";
 
 import type { components } from "@/shared/api/schema/generated";
+import { formatDay } from "@/shared/lib/format";
 
-import { chartPoints, weekTick, weekTitle } from "../domain/chart";
 import { formatMetric } from "../domain/metric";
 
 import styles from "./charts-section.module.css";
@@ -22,7 +22,10 @@ import styles from "./charts-section.module.css";
 type ChartSeries = components["schemas"]["ChartSeries"];
 
 const CategoryChart = ({ series }: { series: ChartSeries }) => {
-  const points = chartPoints(series);
+  const points =
+    series.key === "by_category"
+      ? series.points.filter((point) => point.value > 0)
+      : series.points;
 
   return (
     <ResponsiveContainer width="100%" height={points.length * 32 + 16}>
@@ -48,8 +51,6 @@ const CategoryChart = ({ series }: { series: ChartSeries }) => {
           radius={4}
           isAnimationActive={false}
         >
-          {/* число у конца столбца: тултип на телефоне требует попасть пальцем
-              в столбец высотой 26 px, а прочитать столбцы надо с одного взгляда */}
           <LabelList
             dataKey="value"
             position="right"
@@ -62,8 +63,6 @@ const CategoryChart = ({ series }: { series: ChartSeries }) => {
   );
 };
 
-// свой тултип вместо китового: дефолтный у recharts белый и в тёмной теме
-// светится, а подпись точки - ISO-дата, читать её человеку нечем
 const WeekTooltip = ({
   active,
   payload,
@@ -84,7 +83,7 @@ const WeekTooltip = ({
       gapY={2}
     >
       <Typography.Text variant="detail-strong" color="primary">
-        {weekTitle(String(label))}
+        Неделя с {formatDay(`${label}T00:00`)} {String(label).slice(0, 4)}
       </Typography.Text>
 
       <Typography.Text variant="detail" color="secondary">
@@ -106,7 +105,7 @@ const WeekChart = ({ series }: { series: ChartSeries }) => (
         padding={{ left: 8, right: 8 }}
         axisLine={false}
         tickLine={false}
-        tickFormatter={weekTick}
+        tickFormatter={(iso: string) => `${iso.slice(8)}.${iso.slice(5, 7)}`}
         className={styles.Axis}
       />
       <YAxis hide domain={["auto", "auto"]} />

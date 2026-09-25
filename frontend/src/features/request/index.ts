@@ -1,7 +1,6 @@
 export { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
 export { deadlineLeft, deadlineProgress } from "./domain/format";
 export { buildTimeline } from "./domain/timeline";
-export type { TimelineStep } from "./domain/timeline";
 export { DeadlinePanel } from "./ui/deadline-panel";
 export { RequestTimeline } from "./ui/request-timeline";
 export {

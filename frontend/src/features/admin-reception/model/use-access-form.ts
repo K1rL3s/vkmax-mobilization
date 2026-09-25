@@ -6,7 +6,7 @@ import { z } from "zod";
 import { errorDetail } from "@/shared/api/errors";
 import { plural } from "@/shared/lib/format";
 import { rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
 import { useConfirm } from "@/shared/ui/confirm-dialog";
@@ -14,12 +14,9 @@ import { useConfirm } from "@/shared/ui/confirm-dialog";
 import {
   accessFormConstraints as limits,
   generateWindows,
-  isPastDay,
   type AccessFlat,
 } from "../domain/access-form";
 import { dayKey } from "../domain/day";
-
-import { withoutCellState } from "./use-access";
 
 const accessSchema = z
   .object({
@@ -35,7 +32,7 @@ const accessSchema = z
     date: z
       .string()
       .min(1, "Выберите день сбора")
-      .refine((date) => !isPastDay(date), "День доступа уже прошёл"),
+      .refine((date) => date >= dayKey(new Date()), "День доступа уже прошёл"),
     timeFrom: z.string().min(1),
     timeTo: z.string().min(1),
     windowMinutes: z
@@ -64,8 +61,6 @@ const accessSchema = z
       });
     }
 
-    // окно вместимее, чем весь сбор, означает промах в правиле: жителей
-    // столько не наберётся, и часть окон останется пустой
     if (draft.flats.length > 0 && draft.perWindow > draft.flats.length) {
       ctx.addIssue({
         code: "custom",
@@ -75,7 +70,7 @@ const accessSchema = z
     }
   });
 
-export type AccessDraft = z.infer<typeof accessSchema>;
+type AccessDraft = z.infer<typeof accessSchema>;
 
 export const useAccessForm = (houseIds: number[]) => {
   const navigate = useNavigate();
@@ -84,8 +79,6 @@ export const useAccessForm = (houseIds: number[]) => {
   const form = useForm<AccessDraft>({
     resolver: zodResolver(accessSchema),
     defaultValues: {
-      // предвыбора при нескольких домах нет: пустая строка честнее молча
-      // подставленного первого, из которого уедет бригада
       houseId: houseIds.length === 1 ? houseIds[0] : 0,
       reason: "",
       date: dayKey(new Date()),
@@ -113,9 +106,7 @@ export const useAccessForm = (houseIds: number[]) => {
 
   const create = rqClient.useMutation("post", "/api/admin/access-requests", {
     onSuccess: async (grid) => {
-      await queryClient.invalidateQueries({
-        queryKey: ["get", "/api/admin/access-requests"],
-      });
+      await invalidatePaths("/api/admin/access-requests");
 
       const chosen = confirm.target?.flats ?? [];
       const withoutCell = grid.flats_without_residents.map(
@@ -124,32 +115,17 @@ export const useAccessForm = (houseIds: number[]) => {
           String(flatId),
       );
 
-      // «назад» не должно возвращать в заполненную форму, из которой уйдёт
-      // второй такой же сбор: отмены и правки на бэке нет
       void navigate(
         Routes.ADMIN_ACCESS.replace(
           ":accessRequestId",
           String(grid.access_request.id),
         ),
-        { replace: true, state: withoutCellState(withoutCell) },
+        { replace: true, state: { withoutCell } },
       );
     },
   });
 
   const validate = { shouldValidate: form.formState.isSubmitted };
-
-  // окна собираются из правила здесь, а не хранятся в форме: правило и есть
-  // то, что заполняет сотрудник, а окна - его следствие
-  const accessRequest = (draft: AccessDraft) => ({
-    house_id: draft.houseId,
-    reason: draft.reason,
-    date: draft.date,
-    flat_ids: draft.flats.map((flat) => flat.flat_id),
-    slots: generateWindows(draft).map((startsAt) => ({
-      starts_at: startsAt,
-      capacity: draft.perWindow,
-    })),
-  });
 
   return {
     register: form.register,
@@ -161,8 +137,6 @@ export const useAccessForm = (houseIds: number[]) => {
     windows: generateWindows({ date, timeFrom, timeTo, windowMinutes }),
     selectHouse: (id: number) => {
       form.setValue("houseId", id, validate);
-      // квартиры принадлежат дому: смена дома обнуляет выбор, иначе в сбор
-      // уедут квартиры чужого дома, и бэк ответит отказом целиком
       form.setValue("flats", [], validate);
     },
     toggleFlat: (flat: AccessFlat, checked: boolean) =>
@@ -187,11 +161,23 @@ export const useAccessForm = (houseIds: number[]) => {
     send: () => {
       const draft = confirm.target;
 
-      if (create.isPending || !draft) {
+      if (!draft) {
         return;
       }
 
-      create.mutate({ params: orgParams(), body: accessRequest(draft) });
+      create.mutate({
+        params: orgParams(),
+        body: {
+          house_id: draft.houseId,
+          reason: draft.reason,
+          date: draft.date,
+          flat_ids: draft.flats.map((flat) => flat.flat_id),
+          slots: generateWindows(draft).map((startsAt) => ({
+            starts_at: startsAt,
+            capacity: draft.perWindow,
+          })),
+        },
+      });
     },
     dismiss: () => {
       if (!create.isPending) {

@@ -38,26 +38,14 @@ const qrStartParamSchema = startParam(qrStartParamPattern).transform(
   },
 );
 
-const flatStartParamSchema = startParam(/^flat_[A-Za-z0-9_-]+$/).transform(
-  (raw) => ({
-    kind: "flat" as const,
-    code: raw.slice("flat_".length),
-  }),
-);
-
-const inviteStartParamSchema = startParam(/^inv_[A-Za-z0-9_-]+$/).transform(
-  (raw) => ({
-    kind: "invite" as const,
-    code: raw.slice("inv_".length),
-  }),
-);
-
-const registerStartParamSchema = startParam(/^reg_[A-Za-z0-9_-]+$/).transform(
-  (raw) => ({
-    kind: "register" as const,
-    code: raw.slice("reg_".length),
-  }),
-);
+const codeStartParamSchema = <Kind extends string>(
+  prefix: string,
+  kind: Kind,
+) =>
+  startParam(new RegExp(`^${prefix}_[A-Za-z0-9_-]+$`)).transform((raw) => ({
+    kind,
+    code: raw.slice(prefix.length + 1),
+  }));
 
 const demoStartParamPattern = /^demo_(admin|staff|resident)_([1-5])$/;
 
@@ -76,9 +64,9 @@ const demoStartParamSchema = startParam(demoStartParamPattern).transform(
 const startParamSchema = z.union([
   houseStartParamSchema,
   qrStartParamSchema,
-  flatStartParamSchema,
-  inviteStartParamSchema,
-  registerStartParamSchema,
+  codeStartParamSchema("flat", "flat"),
+  codeStartParamSchema("inv", "invite"),
+  codeStartParamSchema("reg", "register"),
   demoStartParamSchema,
 ]);
 

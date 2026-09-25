@@ -23,16 +23,12 @@ type Note = {
   tone: "muted" | "action" | "overdue";
 };
 
-// оценить можно только принятую работу: у отклонённой и автозакрытой заявки
-// на карточке блока оценки нет, и звать туда жителя незачем
 const CLOSED_NOTE: Record<RequestCompletionReason, Note> = {
   resident_accepted: { text: "Оцените работу", tone: "action" },
   resident_rejected: { text: "Вы не приняли работу", tone: "muted" },
   auto_closed: { text: "Закрыта автоматически", tone: "muted" },
 };
 
-// вторая строка карточки: пока заявка идёт - нормативный срок, дальше - то,
-// чего лента ждёт от жителя
 const note = (request: RequestListItem): Note | null => {
   if (isOnReview(request.status)) {
     return { text: "Проверьте работу", tone: "action" };

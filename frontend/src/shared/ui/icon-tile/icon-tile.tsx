@@ -19,8 +19,6 @@ type IconTileProps = {
   className?: string;
 };
 
-const ICON_SIZE = { medium: 24, large: 24, xlarge: 32 } as const;
-
 export const IconTile = ({
   icon,
   tone = "neutral",
@@ -29,7 +27,7 @@ export const IconTile = ({
 }: IconTileProps) => {
   return (
     <div className={cn(styles.Tile, styles[tone], styles[size], className)}>
-      <Icon src={icon} size={ICON_SIZE[size]} />
+      <Icon src={icon} size={size === "xlarge" ? 32 : 24} />
     </div>
   );
 };

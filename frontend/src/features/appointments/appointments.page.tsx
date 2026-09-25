@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
-
 import { generatePath } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
@@ -160,14 +159,7 @@ const AppointmentsPage = () => {
 
             <Section title="Время" aside={dayTitle(day.date)}>
               <TimeGrid
-                groups={
-                  halves.afternoon.length > 0
-                    ? [
-                        { title: "До обеда", slots: halves.morning },
-                        { title: "После обеда", slots: halves.afternoon },
-                      ]
-                    : [{ title: null, slots: halves.morning }]
-                }
+                groups={halves.groups}
                 value={slot?.starts_at}
                 schedule={schedule}
                 isOwn={mine.isOwn}

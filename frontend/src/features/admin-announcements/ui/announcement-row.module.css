@@ -3,7 +3,6 @@
   min-width: 0;
 }
 
-/* полный текст читают в ленте жителя, в списке УК хватает начала */
 .Text {
   display: -webkit-box;
   overflow: hidden;

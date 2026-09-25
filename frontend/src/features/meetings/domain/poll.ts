@@ -8,10 +8,8 @@ export type PollCard = components["schemas"]["PollCard"];
 
 export type PollResults = components["schemas"]["PollResults"];
 
-export type PollNonVoter = components["schemas"]["PollNonVoterItem"];
+type PollNonVoter = components["schemas"]["PollNonVoterItem"];
 
-// список приходит уже разложенным по подъездам, квартиры без подъезда в
-// конце: группы собираются одним проходом, своей сортировки фронт не пишет
 export const groupByEntrance = (flats: PollNonVoter[]) => {
   const groups: { title: string; flats: PollNonVoter[] }[] = [];
 
@@ -30,8 +28,6 @@ export const groupByEntrance = (flats: PollNonVoter[]) => {
   return groups;
 };
 
-// created_by_role приходит строкой, а не перечислением: незнакомая роль
-// должна давать нейтральную подпись, а не пустое место и не падение
 export const authorCaption = (role: string) => {
   if (role === "chairman") {
     return "Опрос председателя совета дома";
@@ -45,8 +41,6 @@ export const deadlineLabel = (poll: PollListItem) => {
     return `Голосование до ${formatDay(poll.ends_at)}`;
   }
 
-  // опрос могли закрыть раньше срока: дата окончания тогда ещё впереди, и
-  // «завершён 26 сентября» было бы неправдой
   return new Date(poll.ends_at) > new Date()
     ? "Завершён досрочно"
     : `Завершён ${formatDay(poll.ends_at)}`;
@@ -55,8 +49,6 @@ export const deadlineLabel = (poll: PollListItem) => {
 export const flatsCount = (count: number) =>
   `${count} ${plural(count, ["квартира", "квартиры", "квартир"])}`;
 
-// отметка о своём голосе стоит в той же строке, что и счётчик квартир: на
-// 393px она не помещается рядом со сроком
 export const votedLine = (poll: PollListItem) => {
   if (poll.voted) {
     return `Вы проголосовали · ${flatsCount(poll.voted_flats)}`;
@@ -67,18 +59,10 @@ export const votedLine = (poll: PollListItem) => {
     : `${flatsCount(poll.voted_flats)} ${plural(poll.voted_flats, ["проголосовала", "проголосовали", "проголосовали"])}`;
 };
 
-export type VoteNote = {
-  text: string;
-  // вход в подтверждение квартиры показываем только там, где он что-то меняет
-  confirm: boolean;
-};
-
-// общей плашки «голосовать нельзя» не делаем: у каждого случая своя причина, и
-// голос без веса - это не запрет, а предупреждение
 export const voteNote = (
   poll: PollCard,
   residency: Residency | undefined,
-): VoteNote | null => {
+): { text: string; confirm: boolean } | null => {
   const weightless =
     residency !== undefined &&
     !residency.verified &&
@@ -140,8 +124,5 @@ export const voteNote = (
     : null;
 };
 
-// строка о голосах без веса: туда попадает не только неподтверждённый житель,
-// но и второй собственник уже проголосовавшей квартиры - формулировка общая,
-// иначе она отправит подтверждать уже подтверждённую квартиру
 export const weightlessLine = (count: number) =>
   `${count} ${plural(count, ["голос учтён", "голоса учтены", "голосов учтены"])} как ${plural(count, ["мнение", "мнения", "мнения"])} без веса: квартира не подтверждена или за неё уже проголосовал другой собственник.`;

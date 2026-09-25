@@ -2,13 +2,9 @@ import { useState } from "react";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { useSession } from "@/shared/model/session";
 
-export const CONSENT_VERSION = "1.0";
-
-export const useConsent = (onContinue: () => void | Promise<void>) => {
+export const useConsent = (onContinue: () => Promise<void>) => {
   const { isConsentGiven, save } = useSession();
   const [checked, setChecked] = useState(false);
-
-  const accepted = isConsentGiven;
 
   const consent = rqClient.useMutation("post", "/api/me/consent", {
     onSuccess: async (data) => {
@@ -18,7 +14,7 @@ export const useConsent = (onContinue: () => void | Promise<void>) => {
   });
 
   const start = () => {
-    if (accepted) {
+    if (isConsentGiven) {
       void onContinue();
 
       return;
@@ -26,14 +22,13 @@ export const useConsent = (onContinue: () => void | Promise<void>) => {
 
     consent.mutate({
       params: authParams(),
-      body: { version: CONSENT_VERSION },
+      body: { version: "1.0" },
     });
   };
 
   return {
-    // согласие уже дано - галочка остаётся стоять, чтобы экран не дёргался
-    checked: accepted || checked,
-    accepted,
+    checked: isConsentGiven || checked,
+    accepted: isConsentGiven,
     setChecked,
     start,
     isPending: consent.isPending,

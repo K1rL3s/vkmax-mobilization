@@ -65,8 +65,6 @@ export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
   const form = useForm<SettingsDraft>({
     resolver: zodResolver(settingsSchema),
     mode: "onChange",
-    // values, а не defaultValues: форма подхватывает свежий ответ бэка,
-    // например после смены организации, а равный ей ответ не сбрасывает правки
     values: draftOf(settings),
     disabled: readOnly,
   });

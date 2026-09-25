@@ -43,7 +43,6 @@ export const useAdminPollForm = () => {
   const options = useFieldArray({ control: form.control, name: "options" });
 
   const create = rqClient.useMutation("post", "/api/admin/polls", {
-    // форма из истории уходит: назад с опроса сотрудник попадает в список
     onSuccess: (poll) =>
       navigate(generatePath(Routes.ADMIN_POLL, { pollId: String(poll.id) }), {
         replace: true,
@@ -58,8 +57,6 @@ export const useAdminPollForm = () => {
     isHousesError: houses.isError,
     retryHouses: () => void houses.refetch(),
     register: form.register,
-    // ошибка «варианты повторяются» живёт на массиве, а RHF перепроверяет
-    // только изменённое поле
     registerOption: (index: number) =>
       form.register(`options.${index}.text`, {
         onChange: () => void form.trigger("options"),
@@ -72,19 +69,13 @@ export const useAdminPollForm = () => {
     removeOption: (index: number) => options.remove(index),
     canAddOption: options.fields.length < pollFormConstraints.optionsMax,
     canRemoveOption: options.fields.length > pollFormConstraints.optionsMin,
-    // сегодняшний день ещё идёт, поэтому он допустим
     minDate: new Date().toISOString().slice(0, 10),
     isSubmitting: create.isPending,
-    // бэк отвечает понятным текстом на 400, 404 и 409; без него это связь
     submitError:
       create.isError &&
       (errorDetail(create.error) ??
         "Опрос не создался. Проверьте связь и попробуйте ещё раз."),
-    submit: form.handleSubmit((draft) => {
-      if (create.isPending) {
-        return;
-      }
-
+    submit: form.handleSubmit((draft) =>
       create.mutate({
         params: orgParams(),
         body: {
@@ -95,7 +86,7 @@ export const useAdminPollForm = () => {
           ends_at: endOfDay(draft.endsAt).toISOString(),
           is_multiple: draft.isMultiple,
         },
-      });
-    }),
+      }),
+    ),
   };
 };

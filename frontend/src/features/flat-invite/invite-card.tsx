@@ -17,10 +17,8 @@ type InviteCardProps = {
 
 const HOUR = 60 * 60 * 1000;
 
-// duration отбрасывает неполные сутки: код на 3 дня сразу после выдачи
-// показал бы «ещё 2 дня»
-const timeLeft = (expiresAt: string, now = Date.now()) =>
-  duration(Math.round((Date.parse(expiresAt) - now) / HOUR) * HOUR);
+const timeLeft = (expiresAt: string) =>
+  duration(Math.round((Date.parse(expiresAt) - Date.now()) / HOUR) * HOUR);
 
 const Fact = ({
   label,

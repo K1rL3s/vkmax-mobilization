@@ -2,7 +2,11 @@ import { CellSimple, Counter, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { errorDetail, isForbidden } from "@/shared/api/errors";
+import {
+  errorDetail,
+  isForbidden,
+  retryUnlessForbidden,
+} from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import type { components } from "@/shared/api/schema/generated";
 import { formatArea, plural } from "@/shared/lib/format";
@@ -83,13 +87,6 @@ const Stat = ({ value, label }: { value: number; label: string }) => (
   </Flex>
 );
 
-// 404 - дом не этой организации или его нет вовсе: повтор не поможет
-const isNotFound = (error: unknown) =>
-  typeof error === "object" &&
-  error !== null &&
-  "status" in error &&
-  error.status === 404;
-
 const AdminHousePage = () => {
   const navigate = useNavigate();
   const params = useRouteParams(
@@ -104,11 +101,11 @@ const AdminHousePage = () => {
     {
       enabled: params !== null,
       retry: (failures, error) =>
-        failures < 3 && !isNotFound(error) && !isForbidden(error),
+        error.status !== 404 && retryUnlessForbidden(failures, error),
     },
   );
 
-  if (params === null || isNotFound(card.error)) {
+  if (params === null || card.error?.status === 404) {
     return (
       <EmptyState
         fill

@@ -3,17 +3,14 @@ import { useForm, useWatch } from "react-hook-form";
 import { generatePath, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import {
-  CATEGORY_ICON,
-  useRequestCategories,
-  type RequestCategory,
-} from "@/features/request";
+import { useRequestCategories, type RequestCategory } from "@/features/request";
 import { errorDetail } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
 
 import { requestFormConstraints } from "../domain/request-form-constraints";
+import { isCategory } from "../domain/request-workflow";
 import { refreshRequests } from "./refresh-requests";
 import {
   useRequestFlats,
@@ -24,11 +21,7 @@ import {
 const phoneSchema = z
   .object({
     houseId: z.number().int().positive("Выберите дом"),
-    category: z.custom<RequestCategory>(
-      (value) =>
-        typeof value === "string" && Object.hasOwn(CATEGORY_ICON, value),
-      "Выберите категорию",
-    ),
+    category: z.custom<RequestCategory>(isCategory, "Выберите категорию"),
     description: z
       .string()
       .trim()
@@ -121,28 +114,15 @@ export const usePhoneRequest = () => {
   };
   const selectResident = (id: number | string) => {
     const resident = residents.select(id);
-    if (resident) {
+    if (resident)
       form.setValue("residentId", resident.resident_id, {
         shouldValidate: true,
       });
-    }
   };
-  const retry = () => void categories.refetch();
   const submit = form.handleSubmit((draft) => {
     if (create.isPending || create.isSuccess) return;
-    const matchesHouse = houses.selected?.id === draft.houseId;
-    if (!matchesHouse) {
-      form.setError("houseId", {
-        message: "Выберите дом организации из результатов поиска",
-      });
-      return;
-    }
-    const resident = residents.selected;
-    const matchesResident = resident?.resident_id === draft.residentId;
-    const isActiveResident = resident?.status === "active";
-    const matchesFlat = !draft.flatId || resident?.flat_id === draft.flatId;
-    const isValidResident = matchesResident && isActiveResident && matchesFlat;
-    if (draft.residentId && !isValidResident) {
+    const residentFlat = residents.selected?.flat_id;
+    if (draft.residentId && draft.flatId && residentFlat !== draft.flatId) {
       form.setError("residentId", {
         message: "Выберите жителя этого дома и квартиры",
       });
@@ -164,11 +144,9 @@ export const usePhoneRequest = () => {
 
   return {
     form,
-    category: category ?? null,
-    selectCategory: (value: string) =>
-      form.setValue("category", value as RequestCategory, {
-        shouldValidate: true,
-      }),
+    category,
+    selectCategory: (value: RequestCategory) =>
+      form.setValue("category", value, { shouldValidate: true }),
     hasHouse: houseId > 0,
     houseSearch: { ...houses, change: changeHouse, select: selectHouse },
     flatSearch: { ...flats, change: changeFlat, select: selectFlat },
@@ -185,7 +163,7 @@ export const usePhoneRequest = () => {
       ? (errorDetail(create.error) ??
         "Не удалось создать заявку. Попробуйте ещё раз.")
       : null,
-    retry,
+    retry: () => void categories.refetch(),
     submit,
   };
 };

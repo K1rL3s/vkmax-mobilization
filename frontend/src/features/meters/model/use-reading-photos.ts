@@ -5,8 +5,6 @@ import { authParams, fetchClient } from "@/shared/api/instance";
 
 import type { MeterType, TariffZone } from "../domain/reading";
 
-// фото обязательно, иначе бэк показание не примет; трёх кадров хватает на
-// табло с любым числом зон
 export const PHOTO_LIMIT = 3;
 
 type Photo = {
@@ -39,8 +37,6 @@ export const useReadingPhotos = (meterType: MeterType | undefined) => {
       },
     });
 
-    // превью берём у выбранного файла: серверу от нас нужно только имя, оно же
-    // уедет в показание и в распознавание
     return data && { name: data.name, preview: URL.createObjectURL(file) };
   };
 
@@ -52,7 +48,6 @@ export const useReadingPhotos = (meterType: MeterType | undefined) => {
       body: { photo_path: name, meter_type: type },
     });
 
-    // распознаванию разрешено не получиться: житель просто вводит цифры сам
     setRecognized(data?.values ?? null);
     setRecognizing(false);
   };
@@ -71,8 +66,6 @@ export const useReadingPhotos = (meterType: MeterType | undefined) => {
 
     const first = added.at(0);
 
-    // распознаём первый кадр табло: следующие фото житель добавляет как
-    // доказательство, и переписывать ими уже проверенные значения незачем
     if (first && photos.length === 0 && meterType) {
       await recognize(first.name, meterType);
     }

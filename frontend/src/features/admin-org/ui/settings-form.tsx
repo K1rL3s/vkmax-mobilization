@@ -57,28 +57,19 @@ const Section = ({
   </Flex>
 );
 
-// пока поле пустое или вне границ, подпись говорит общими словами, а не
-// подставляет NaN
 const valid = (value: number, min: number, max: number) =>
   Number.isInteger(value) && value >= min && value <= max;
 
-// напоминания и переход через конец месяца - из reminders.py и
-// window_period бэка
 const windowNote = ({ alwaysOpen, dayFrom, dayTo }: Watched) => {
-  if (alwaysOpen) {
+  if (alwaysOpen)
     return "Показания принимаются в любой день. Бот напомнит жителям 1-го числа и за 2 дня до конца месяца";
-  }
-
   if (
     !valid(dayFrom, limits.dayMin, limits.dayMax) ||
     !valid(dayTo, limits.dayMin, limits.dayMax)
-  ) {
+  )
     return "Жители передают показания только в эти дни месяца";
-  }
-
-  if (dayFrom > dayTo) {
+  if (dayFrom > dayTo)
     return `Окно переходит через конец месяца: с ${dayFrom}-го по ${dayTo}-е следующего. Показания идут за месяц, в котором окно открылось`;
-  }
 
   return `Жители передают показания с ${dayFrom}-го по ${dayTo}-е число. Бот напомнит в первый день окна и за 2 дня до конца`;
 };
@@ -87,9 +78,8 @@ const groupNote = ({ threshold, windowHours }: Watched) => {
   if (
     !valid(threshold, limits.thresholdMin, limits.thresholdMax) ||
     !valid(windowHours, limits.windowHoursMin, limits.windowHoursMax)
-  ) {
+  )
     return "Похожие заявки из разных квартир одного дома объединяются в одну коллективную";
-  }
 
   return `Если за ${windowHours} ${plural(windowHours, ["час", "часа", "часов"])} из ${threshold} разных ${plural(threshold, ["квартиры", "квартир", "квартир"])} одного дома придут заявки одной категории, они объединятся в коллективную заявку`;
 };
@@ -214,8 +204,6 @@ export const SettingsForm = ({ settings, readOnly }: SettingsFormProps) => {
           </Field>
 
           <Field label="Часы приёма">
-            {/* secondary у Textarea - цвет default у Input, иначе поля
-                разного оттенка */}
             <Textarea
               rows={3}
               mode="secondary"

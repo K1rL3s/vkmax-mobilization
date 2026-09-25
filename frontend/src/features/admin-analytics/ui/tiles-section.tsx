@@ -3,16 +3,11 @@ import { Flex, Typography } from "@maxhub/max-ui";
 import type { components } from "@/shared/api/schema/generated";
 import { cn } from "@/shared/lib/css";
 
-import { tileView } from "../domain/tile";
+import { splitTiles, tileView } from "../domain/tile";
 
 import styles from "./tiles-section.module.css";
 
 type DashboardTile = components["schemas"]["DashboardTile"];
-
-type TilesSectionProps = {
-  now: DashboardTile[];
-  period: DashboardTile[];
-};
 
 const TileGroup = ({
   title,
@@ -64,9 +59,13 @@ const TileGroup = ({
   );
 };
 
-export const TilesSection = ({ now, period }: TilesSectionProps) => (
-  <Flex direction="column" align="stretch" gapY={16}>
-    <TileGroup title="Сейчас" tiles={now} />
-    <TileGroup title="За период" tiles={period} />
-  </Flex>
-);
+export const TilesSection = ({ tiles }: { tiles: DashboardTile[] }) => {
+  const { now, period } = splitTiles(tiles);
+
+  return (
+    <Flex direction="column" align="stretch" gapY={16}>
+      <TileGroup title="Сейчас" tiles={now} />
+      <TileGroup title="За период" tiles={period} />
+    </Flex>
+  );
+};

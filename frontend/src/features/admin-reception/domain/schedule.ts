@@ -1,14 +1,11 @@
 import type { components } from "@/shared/api/schema/generated";
 
+import { minuteOfDay } from "./day";
+
 export type ReceptionWindow = components["schemas"]["ReceptionWindowItem"];
 
 export type Appointment = components["schemas"]["AppointmentItem"];
 
-export type ReceptionWindowInput =
-  components["schemas"]["ReceptionWindowInput"];
-
-// день недели нумеруется с понедельника, как в контракте. `at` - готовая
-// форма для подписи «Принимаем во вторник»: склонять на лету нечем
 export const WEEKDAYS = [
   { value: 0, short: "Пн", at: "в понедельник" },
   { value: 1, short: "Вт", at: "во вторник" },
@@ -19,8 +16,6 @@ export const WEEKDAYS = [
   { value: 6, short: "Вс", at: "в воскресенье" },
 ];
 
-// границы повторяют ReceptionService.set_windows бэка, длина перерыва - наша:
-// окно короче слота не вместит ни одной записи
 export const receptionFormConstraints = {
   slotMin: 5,
   slotMax: 240,
@@ -28,31 +23,26 @@ export const receptionFormConstraints = {
   capacityMax: 20,
 };
 
-// бэк отдаёт время как HH:MM:SS, поле ввода принимает и возвращает HH:MM
-export const asTime = (value: string): string => value.slice(0, 5);
+const asTime = (value: string): string => value.slice(0, 5);
 
-// в подписи час без ведущего нуля: «9:00», а не «09:00»
 const spoken = (value: string) => asTime(value).replace(/^0/, "");
 
-const minutes = (time: string) => {
-  const [hours, rest] = asTime(time).split(":");
-
-  return Number(hours) * 60 + Number(rest);
-};
-
 const byStart = (a: ReceptionWindow, b: ReceptionWindow) =>
-  minutes(a.time_from) - minutes(b.time_from);
+  minuteOfDay(a.time_from) - minuteOfDay(b.time_from);
 
-export const windowsOfDay = (
+const windowsOfDay = (
   windows: ReceptionWindow[],
   weekday: number,
 ): ReceptionWindow[] =>
   windows.filter((window) => window.weekday === weekday).sort(byStart);
 
-// день описывается одной строкой: два окна - это обед, разрыв между ними
-const dayHours = (day: ReceptionWindow[]) => {
+export const dayLabel = (
+  windows: ReceptionWindow[],
+  weekday: number,
+): string | null => {
+  const day = windowsOfDay(windows, weekday);
   const first = day[0];
-  const last = day[day.length - 1];
+  const last = day.at(-1);
 
   if (!first || !last) {
     return null;
@@ -65,49 +55,36 @@ const dayHours = (day: ReceptionWindow[]) => {
     : span;
 };
 
-export const dayLabel = (
-  windows: ReceptionWindow[],
-  weekday: number,
-): string | null => dayHours(windowsOfDay(windows, weekday));
-
-// подряд идущие дни с одинаковыми часами сливаются в «Пн-Пт»: расписание УК
-// обычно одинаково всю неделю, и перечисление по дню не помещается в строку
-const runsOfDays = (windows: ReceptionWindow[]) => {
-  const runs: { from: number; to: number; hours: string }[] = [];
+export const scheduleSummary = (windows: ReceptionWindow[]): string => {
+  const runs: {
+    from: (typeof WEEKDAYS)[number];
+    to: (typeof WEEKDAYS)[number];
+    hours: string;
+  }[] = [];
 
   for (const weekday of WEEKDAYS) {
     const hours = dayLabel(windows, weekday.value);
+    const last = runs.at(-1);
 
     if (hours === null) {
       continue;
     }
 
-    const last = runs[runs.length - 1];
-
-    if (last && last.hours === hours && last.to === weekday.value - 1) {
-      last.to = weekday.value;
+    if (last && last.hours === hours && last.to.value === weekday.value - 1) {
+      last.to = weekday;
     } else {
-      runs.push({ from: weekday.value, to: weekday.value, hours });
+      runs.push({ from: weekday, to: weekday, hours });
     }
   }
 
-  return runs;
-};
-
-// сводка перечисляет дни приёма и заканчивается длиной слота, когда она у всех
-// дней одна: разные длины в одну строку не помещаются и уводят в редактор
-export const scheduleSummary = (windows: ReceptionWindow[]): string => {
-  const days = runsOfDays(windows).map((run) => {
-    const from = WEEKDAYS[run.from]?.short;
-    const to = WEEKDAYS[run.to]?.short;
-
-    return `${run.to > run.from ? `${from}-${to}` : from} ${run.hours}`;
-  });
-
-  if (days.length === 0) {
+  if (runs.length === 0) {
     return "Приём не ведётся";
   }
 
+  const days = runs.map(
+    (run) =>
+      `${run.to === run.from ? run.from.short : `${run.from.short}-${run.to.short}`} ${run.hours}`,
+  );
   const lengths = new Set(windows.map((window) => window.slot_minutes));
   const slot = lengths.size === 1 ? `, по ${[...lengths][0]} минут` : "";
 
@@ -125,7 +102,7 @@ export type DayDraft = {
   capacity: number;
 };
 
-export const emptyDay: DayDraft = {
+const emptyDay: DayDraft = {
   enabled: false,
   timeFrom: "09:00",
   timeTo: "18:00",
@@ -142,7 +119,7 @@ export const draftOfDay = (
 ): DayDraft => {
   const day = windowsOfDay(windows, weekday);
   const first = day[0];
-  const last = day[day.length - 1];
+  const last = day.at(-1);
 
   if (!first || !last) {
     return emptyDay;
@@ -163,7 +140,7 @@ export const draftOfDay = (
 const windowsOfDraft = (
   draft: DayDraft,
   weekday: number,
-): ReceptionWindowInput[] => {
+): components["schemas"]["ReceptionWindowInput"][] => {
   if (!draft.enabled) {
     return [];
   }
@@ -182,13 +159,11 @@ const windowsOfDraft = (
     : [{ ...shared, time_from: draft.timeFrom, time_to: draft.timeTo }];
 };
 
-// `PUT` заменяет сетку целиком, поэтому правка одного дня отправляется вместе
-// со всеми известными окнами остальных дней
 export const gridWithDay = (
   windows: ReceptionWindow[],
   weekday: number,
   draft: DayDraft,
-): ReceptionWindowInput[] => [
+): components["schemas"]["ReceptionWindowInput"][] => [
   ...windows
     .filter((window) => window.weekday !== weekday)
     .sort((a, b) => a.weekday - b.weekday || byStart(a, b))
@@ -202,13 +177,12 @@ export const gridWithDay = (
   ...windowsOfDraft(draft, weekday),
 ];
 
-// сколько записей поместится в день: то, ради чего и правят длину слота
 export const slotsPerDay = (draft: DayDraft): number => {
   if (!draft.enabled || draft.slotMinutes < 1) {
     return 0;
   }
 
-  const spans = draft.hasBreak
+  const spans: [string, string][] = draft.hasBreak
     ? [
         [draft.timeFrom, draft.breakFrom],
         [draft.breakTo, draft.timeTo],
@@ -216,7 +190,7 @@ export const slotsPerDay = (draft: DayDraft): number => {
     : [[draft.timeFrom, draft.timeTo]];
 
   return spans.reduce((total, [from, to]) => {
-    const span = minutes(to ?? "") - minutes(from ?? "");
+    const span = minuteOfDay(to) - minuteOfDay(from);
 
     return total + Math.max(0, Math.floor(span / draft.slotMinutes));
   }, 0);
@@ -227,7 +201,7 @@ export const dayError = (draft: DayDraft): string | null => {
     return null;
   }
 
-  if (minutes(draft.timeFrom) >= minutes(draft.timeTo)) {
+  if (minuteOfDay(draft.timeFrom) >= minuteOfDay(draft.timeTo)) {
     return "Приём кончается раньше, чем начинается";
   }
 
@@ -235,12 +209,12 @@ export const dayError = (draft: DayDraft): string | null => {
     return null;
   }
 
-  if (minutes(draft.breakFrom) >= minutes(draft.breakTo)) {
+  if (minuteOfDay(draft.breakFrom) >= minuteOfDay(draft.breakTo)) {
     return "Перерыв кончается раньше, чем начинается";
   }
 
-  return minutes(draft.breakFrom) < minutes(draft.timeFrom) ||
-    minutes(draft.breakTo) > minutes(draft.timeTo)
+  return minuteOfDay(draft.breakFrom) < minuteOfDay(draft.timeFrom) ||
+    minuteOfDay(draft.breakTo) > minuteOfDay(draft.timeTo)
     ? "Перерыв не помещается в часы приёма"
     : null;
 };

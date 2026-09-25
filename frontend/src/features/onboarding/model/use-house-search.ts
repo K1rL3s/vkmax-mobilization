@@ -9,15 +9,12 @@ import {
 
 import type { House } from "./types";
 
-const MIN_QUERY_LENGTH = 3;
-
 export const useHouseSearch = () => {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useDebounceState("", 300);
   const [house, setHouse] = useState<House | null>(null);
 
-  const isSearching =
-    !house && debouncedQuery.trim().length >= MIN_QUERY_LENGTH;
+  const isSearching = !house && debouncedQuery.trim().length >= 3;
 
   const houses = rqClient.useQuery(
     "get",

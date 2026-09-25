@@ -1,6 +1,7 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
+import { isForbidden } from "@/shared/api/errors";
 import { plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
@@ -14,8 +15,8 @@ import { RequestStatusAction } from "./ui/request-status-action";
 import styles from "./admin-requests.module.css";
 
 const AdminRequestGroupPage = () => {
-  const model = useAdminRequestGroup();
-  if (!model.valid)
+  const { valid, query } = useAdminRequestGroup();
+  if (!valid)
     return (
       <EmptyState
         fill
@@ -28,19 +29,12 @@ const AdminRequestGroupPage = () => {
         }
       />
     );
-  if (model.isForbidden) return <NoOrgAccess />;
-  if (model.isPending)
+  if (isForbidden(query.error)) return <NoOrgAccess />;
+  if (query.isPending)
     return <LoadingState fill title="Загружаем коллективную заявку…" />;
-  if (model.isError) return <ErrorState fill onRetry={model.retry} />;
-  const group = model.group;
-  if (!group)
-    return (
-      <EmptyState
-        fill
-        title="Коллективная заявка не найдена"
-        description="Вернитесь к списку заявок."
-      />
-    );
+  if (query.isError)
+    return <ErrorState fill onRetry={() => void query.refetch()} />;
+  const group = query.data;
 
   return (
     <Panel className={styles.Page} mode="secondary">

@@ -1,6 +1,7 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 
 import { rqClient } from "@/shared/api/instance";
+import { nextOffset } from "@/shared/api/next-offset";
 import { houseParams } from "@/shared/model/session";
 import { Card } from "@/shared/ui/card";
 import { alertIcon, megaphoneIcon } from "@/shared/ui/icon";
@@ -19,11 +20,7 @@ const NewsPage = () => {
     {
       pageParamName: "offset",
       initialPageParam: 0,
-      getNextPageParam: (last, pages) => {
-        const loaded = pages.reduce((sum, page) => sum + page.items.length, 0);
-
-        return loaded < last.total ? loaded : undefined;
-      },
+      getNextPageParam: nextOffset,
     },
   );
 

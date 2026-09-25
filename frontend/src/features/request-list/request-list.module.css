@@ -1,7 +1,6 @@
 .Page {
   flex: 1;
   gap: 16px;
-  /* чипы фильтра выходят за отступы страницы, но не за экран */
   overflow-x: clip;
   padding: 16px 16px 24px;
 

@@ -1,6 +1,5 @@
 import { Flex, Panel, Typography } from "@maxhub/max-ui";
 
-import { plural } from "@/shared/lib/format";
 import { checkIcon, pollIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
@@ -76,12 +75,7 @@ const NonVotersPage = () => {
               </Typography.Text>
 
               <Typography.Text variant="description" color="secondary">
-                {group.flats.length}{" "}
-                {plural(group.flats.length, [
-                  "квартира",
-                  "квартиры",
-                  "квартир",
-                ])}
+                {flatsCount(group.flats.length)}
               </Typography.Text>
             </Flex>
 

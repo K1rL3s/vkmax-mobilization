@@ -22,13 +22,9 @@ export const FlatPicker = ({
   selected,
   onToggle,
 }: FlatPickerProps) => {
-  // поиск и догрузка берутся у блока «Дома» баррелем: второй такой хук - это
-  // вторая реализация дебаунса и сдвига страницы
   const residents = useHouseResidents(houseId, 50);
   const flats = eligibleFlats(residents.items);
 
-  // сколько квартир дома осталось без подтверждённого жителя, видно только
-  // когда жители догружены целиком и список не сужен поиском
   const withoutResident =
     residents.isSearching || residents.hasMore ? 0 : flatsCount - flats.length;
 
@@ -73,12 +69,7 @@ export const FlatPicker = ({
                 key={flat.flat_id}
                 className={styles.Row}
                 checked={checked}
-                onChange={(next) =>
-                  onToggle(
-                    { flat_id: flat.flat_id, flat_number: flat.flat_number },
-                    next,
-                  )
-                }
+                onChange={(next) => onToggle(flat, next)}
               >
                 <Flex align="stretch" direction="column" gapY={2}>
                   <Typography.Text variant="body" color="primary">

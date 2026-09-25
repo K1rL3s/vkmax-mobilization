@@ -5,18 +5,14 @@ import { z } from "zod";
 
 import { useRequestCategories, type RequestCategory } from "@/features/request";
 import { authParams, rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { Routes } from "@/shared/model/routes";
 import { houseParams, useSession } from "@/shared/model/session";
 
 import { usePhotos } from "./use-photos";
 
-// бэк длину описания не ограничивает; тысяча знаков - предел, после которого
-// диспетчер перестаёт читать
 export const DESCRIPTION_LIMIT = 1000;
 
-// спор начисления приходит с экрана квитанции: категория уже выбрана, а
-// заявку заводит ручка спора, которая сама прикладывает расчёт
 const handoverSchema = z.object({
   category: z.literal("charge_dispute"),
   chargeId: z.number().int().positive(),
@@ -35,8 +31,6 @@ export const useNewRequest = () => {
 
   const categories = useRequestCategories();
 
-  // соседей ищем с задержкой: пока житель перебирает чипы, запрос за каждый
-  // тап не нужен
   const debouncedCategory = useDebounceValue(category, 400);
 
   const similar = rqClient.useQuery(
@@ -52,10 +46,7 @@ export const useNewRequest = () => {
   );
 
   const openCreated = async (requestId: number) => {
-    await queryClient.invalidateQueries({
-      queryKey: ["get", "/api/requests"],
-    });
-    // мастер уходит из истории: назад из карточки житель вернётся в ленту
+    await invalidatePaths("/api/requests");
     await navigate(
       generatePath(Routes.REQUEST, { requestId: String(requestId) }),
       { replace: true },
@@ -72,7 +63,7 @@ export const useNewRequest = () => {
     { onSuccess: (response) => openCreated(response.request_id) },
   );
 
-  const submit = (joinGroupId?: number) => {
+  const submit = (joinGroupId: number | null = null) => {
     if (!category) {
       return;
     }
@@ -93,9 +84,7 @@ export const useNewRequest = () => {
         description: description.trim(),
         flat_id: residency?.flat_id ?? null,
         photos: photos.names,
-        join_group_id: joinGroupId ?? null,
-        // подсказки категории по описанию нет: ставить флаги по своему `if`
-        // значит врать аналитике УК
+        join_group_id: joinGroupId,
         llm_suggested: false,
         llm_accepted: false,
       },

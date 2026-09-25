@@ -18,7 +18,7 @@ import styles from "./request-row.module.css";
 
 export const RequestRow = ({
   request,
-  member = false,
+  member,
 }: {
   request: AdminRequestItem;
   member?: boolean;

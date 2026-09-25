@@ -3,8 +3,6 @@ import { useUnmount } from "@siberiacancode/reactuse";
 
 import { authParams, fetchClient } from "@/shared/api/instance";
 
-// бэк примет двенадцать, но пять - предел, после которого фото перестают
-// помогать диспетчеру
 export const PHOTO_LIMIT = 5;
 
 type Photo = {
@@ -33,8 +31,6 @@ export const usePhotos = () => {
       },
     });
 
-    // превью берём у выбранного файла, а не у ответа: серверу от нас нужно
-    // только имя, которое уедет в заявку
     return data && { name: data.name, preview: URL.createObjectURL(file) };
   };
 

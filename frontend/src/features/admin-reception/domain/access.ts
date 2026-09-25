@@ -4,13 +4,8 @@ import { dayKey } from "./day";
 
 export type AccessRequest = components["schemas"]["AccessRequestItem"];
 
-export type AccessSlot = components["schemas"]["AccessSlotItem"];
-
 export type AccessTarget = components["schemas"]["AccessTargetCell"];
 
-// сбор идёт, пока не прошёл его день: ни отмены, ни правки на бэке нет,
-// других состояний у сбора не бывает. Сборы не удаляются и не архивируются,
-// поэтому без этого деления список с первой недели превращается в архив
 export const splitAccessRequests = (items: AccessRequest[]) => {
   const today = dayKey(new Date());
 
@@ -23,15 +18,13 @@ export const splitAccessRequests = (items: AccessRequest[]) => {
 export const respondedLabel = (item: AccessRequest): string =>
   `ответили ${item.responded_count} из ${item.targets_count}`;
 
-export type AccessGrid = components["schemas"]["AccessRequestGrid"];
+type AccessGrid = components["schemas"]["AccessRequestGrid"];
 
-export type AccessWindow = {
-  slot: AccessSlot;
+type AccessWindow = {
+  slot: components["schemas"]["AccessSlotItem"];
   flats: AccessTarget[];
 };
 
-// номера квартир читаются как маршрут на день, поэтому в окне они идут по
-// возрастанию, а не в порядке, в котором жители отвечали
 const byFlatNumber = (a: AccessTarget, b: AccessTarget) =>
   Number(a.flat_number) - Number(b.flat_number) ||
   a.flat_number.localeCompare(b.flat_number);

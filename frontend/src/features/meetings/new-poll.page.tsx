@@ -11,7 +11,7 @@ import {
 import { Icon, pollIcon, trashIcon } from "@/shared/ui/icon";
 import { EmptyState } from "@/shared/ui/state";
 
-import { pollFormConstraints } from "./domain/poll-form-constraints";
+import { pollFormConstraints } from "./domain/poll-draft";
 import { useNewPoll } from "./model/use-new-poll";
 import { DescriptionCounter } from "./ui/description-counter";
 
@@ -48,8 +48,6 @@ const NewPollPage = () => {
               {...form.register("title")}
             />
 
-            {/* secondary у Textarea - это цвет default у Input: у кита шкалы
-                режимов не совпадают, и без этого поля разного оттенка */}
             <Textarea
               rows={3}
               mode="secondary"
@@ -145,7 +143,7 @@ const NewPollPage = () => {
           size="large"
           stretched
           loading={form.isSubmitting}
-          disabled={!form.canSubmit}
+          disabled={form.isSubmitting}
           onClick={form.submit}
         >
           Создать опрос

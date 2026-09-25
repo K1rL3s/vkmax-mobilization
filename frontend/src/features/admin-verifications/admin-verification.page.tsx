@@ -7,10 +7,11 @@ import { useRouteParams } from "@/shared/lib/router";
 import { Routes } from "@/shared/model/routes";
 import { usersIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
-import { StatusPill, type StatusPillTone } from "@/shared/ui/status-pill";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import { useVerificationDecision } from "./model/use-verification-decision";
 import {
+  STATUS,
   useVerificationRequest,
   type VerificationRequest,
 } from "./model/use-verification-list";
@@ -18,20 +19,12 @@ import { RejectDialog } from "./ui/reject-dialog";
 
 import styles from "./admin-verification.module.css";
 
-const STATUS: Record<string, { label: string; tone: StatusPillTone }> = {
-  pending: { label: "Ждёт решения", tone: "themed" },
-  approved: { label: "Подтверждён", tone: "positive" },
-  rejected: { label: "Отклонён", tone: "negative" },
-};
-
 const sentAt = (request: VerificationRequest) => {
   const at = formatDayTime(request.created_at);
 
-  if (request.status !== "pending") {
-    return at;
-  }
-
-  return `${at} · ждёт ${duration(Date.now() - new Date(request.created_at).getTime())}`;
+  return request.status === "pending"
+    ? `${at} · ждёт ${duration(Date.now() - new Date(request.created_at).getTime())}`
+    : at;
 };
 
 const Field = ({ label, value }: { label: string; value: string }) => (
@@ -119,39 +112,11 @@ const AdminVerificationPage = () => {
         </div>
 
         {request.comment && (
-          <Flex asChild align="stretch" direction="column" gapY={8}>
-            <section>
-              <Typography.Text asChild variant="title" color="primary">
-                <h2 className={styles.Title}>Комментарий жителя</h2>
-              </Typography.Text>
-
-              <Typography.Text
-                className={styles.Card}
-                variant="body"
-                color="primary"
-              >
-                {request.comment}
-              </Typography.Text>
-            </section>
-          </Flex>
+          <Note title="Комментарий жителя" text={request.comment} />
         )}
 
         {request.status === "rejected" && request.reason && (
-          <Flex asChild align="stretch" direction="column" gapY={8}>
-            <section>
-              <Typography.Text asChild variant="title" color="primary">
-                <h2 className={styles.Title}>Причина отказа</h2>
-              </Typography.Text>
-
-              <Typography.Text
-                className={styles.Card}
-                variant="body"
-                color="primary"
-              >
-                {request.reason}
-              </Typography.Text>
-            </section>
-          </Flex>
+          <Note title="Причина отказа" text={request.reason} />
         )}
 
         {!isWaiting && (
@@ -202,5 +167,19 @@ const AdminVerificationPage = () => {
     </Panel>
   );
 };
+
+const Note = ({ title, text }: { title: string; text: string }) => (
+  <Flex asChild align="stretch" direction="column" gapY={8}>
+    <section>
+      <Typography.Text asChild variant="title" color="primary">
+        <h2 className={styles.Title}>{title}</h2>
+      </Typography.Text>
+
+      <Typography.Text className={styles.Card} variant="body" color="primary">
+        {text}
+      </Typography.Text>
+    </section>
+  </Flex>
+);
 
 export const Component = AdminVerificationPage;

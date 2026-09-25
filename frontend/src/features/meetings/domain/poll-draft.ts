@@ -1,13 +1,15 @@
 import { z } from "zod";
 
-import { pollFormConstraints } from "./poll-form-constraints";
+export const pollFormConstraints = {
+  title: 120,
+  option: 80,
+  description: 500,
+  optionsMin: 2,
+  optionsMax: 6,
+};
 
-// input type="date" отдаёт YYYY-MM-DD, а бэк ждёт момент времени: опрос идёт
-// до конца выбранного дня, как и обещает подпись «голосование до 26 сентября»
 export const endOfDay = (date: string) => new Date(`${date}T23:59:59`);
 
-// бэк проверяет то же самое, но ошибку из ответа житель ловил бы там, где её
-// видно сразу
 export const pollDraftSchema = z.object({
   title: z
     .string()
@@ -17,9 +19,6 @@ export const pollDraftSchema = z.object({
       pollFormConstraints.title,
       `Заголовок длиннее ${pollFormConstraints.title} символов`,
     ),
-  // длину набора держат кнопки: убрать ниже двух и добавить выше шести
-  // нельзя, поэтому схема проверяет только сами варианты. useFieldArray
-  // работает с объектами, а не со строками, отсюда { text }
   options: z
     .array(
       z.object({
@@ -33,7 +32,6 @@ export const pollDraftSchema = z.object({
           ),
       }),
     )
-    // пустые варианты сравнивать незачем: о них уже сказано у самих полей
     .refine((options) => {
       const filled = options.map(({ text }) => text).filter(Boolean);
 

@@ -39,13 +39,8 @@ export const useFlatSearch = (house: House | null) => {
     setFlat(null);
   };
 
-  const select = (option: AutocompleteOption) => {
-    const selected = found.find(({ id }) => id === option.id);
-
-    if (selected) {
-      setFlat(selected);
-    }
-  };
+  const select = (option: AutocompleteOption) =>
+    setFlat(found.find(({ id }) => id === option.id) ?? null);
 
   const reset = () => {
     setNumber("");
@@ -62,7 +57,6 @@ export const useFlatSearch = (house: House | null) => {
     flat,
     number: number.trim(),
     found,
-    isManual,
     enableManual: () => setIsManual(true),
     emptyTitle: `В доме нет квартиры ${debouncedNumber}`,
     status: autocompleteStatus(isSearching, flats.isPending, flats.isError),

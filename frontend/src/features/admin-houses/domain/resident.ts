@@ -5,15 +5,14 @@ export type Resident = components["schemas"]["HouseResidentItem"];
 export type ResidentActionKind =
   "chairman" | "unchairman" | "revoke" | "block" | "unblock";
 
-export type ResidentAction = {
+type ResidentAction = {
   kind: ResidentActionKind;
   label: string;
   destructive: boolean;
-  // почему бэк откажет в действии; null - действие доступно
   refusal: string | null;
 };
 
-export const ROLE_LABEL: Record<Resident["role"], string> = {
+const ROLE_LABEL: Record<Resident["role"], string> = {
   owner: "собственник",
   tenant: "арендатор",
 };
@@ -26,32 +25,24 @@ export const reasonFormConstraints = {
 export const residentPlace = (resident: Resident) =>
   `${resident.flat_number ? `Кв. ${resident.flat_number}` : "Квартира не указана"} · ${ROLE_LABEL[resident.role]}`;
 
-const chairmanAction = (resident: Resident): ResidentAction => {
-  if (resident.is_chairman) {
-    return {
-      kind: "unchairman",
-      label: "Снять с должности председателя",
-      destructive: true,
-      refusal: null,
-    };
-  }
-
-  const refusal = !resident.verified
-    ? "Председателем становится житель с подтверждённой квартирой"
-    : resident.status === "blocked"
-      ? "Житель заблокирован: сначала разблокируйте его"
-      : null;
-
-  return {
-    kind: "chairman",
-    label: "Назначить председателем",
-    destructive: false,
-    refusal,
-  };
-};
-
 export const residentActions = (resident: Resident): ResidentAction[] => [
-  chairmanAction(resident),
+  resident.is_chairman
+    ? {
+        kind: "unchairman",
+        label: "Снять с должности председателя",
+        destructive: true,
+        refusal: null,
+      }
+    : {
+        kind: "chairman",
+        label: "Назначить председателем",
+        destructive: false,
+        refusal: !resident.verified
+          ? "Председателем становится житель с подтверждённой квартирой"
+          : resident.status === "blocked"
+            ? "Житель заблокирован: сначала разблокируйте его"
+            : null,
+      },
   {
     kind: "revoke",
     label: "Отозвать подтверждение квартиры",

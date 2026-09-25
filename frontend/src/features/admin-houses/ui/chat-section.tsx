@@ -2,7 +2,7 @@ import { Button, Flex, IconButton, Typography } from "@maxhub/max-ui";
 import { useCopy } from "@siberiacancode/reactuse";
 
 import { rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import type { components } from "@/shared/api/schema/generated";
 import { orgParams } from "@/shared/model/session";
 import { Card } from "@/shared/ui/card";
@@ -13,14 +13,6 @@ import { IconTile } from "@/shared/ui/icon-tile";
 import styles from "./chat-section.module.css";
 
 type HouseCard = components["schemas"]["AdminHouseCard"];
-
-// шаги повторяют бота: on_bot_added пишет добавившему в личку и выходит из
-// чата, если тот бота не запускал или он ни житель, ни сотрудник УК
-const STEPS = [
-  "Добавьте бота в чат дома в MAX. Добавить должен тот, кто уже запускал бота, иначе бот сразу выйдет из чата.",
-  "Бот напишет добавившему в личные сообщения. Сотруднику УК и председателю он предложит выбрать дом, другому жителю - прислать код привязки.",
-  "Сделайте бота администратором чата и нажмите «Готово» в его сообщении.",
-];
 
 const Bound = ({ house }: { house: HouseCard }) => (
   <Card>
@@ -50,9 +42,7 @@ const Unbound = ({ house }: { house: HouseCard }) => {
     {
       onSuccess: async () => {
         rotation.dismiss();
-        await queryClient.invalidateQueries({
-          queryKey: ["get", "/api/admin/houses/{house_id}"],
-        });
+        await invalidatePaths("/api/admin/houses/{house_id}");
       },
     },
   );
@@ -103,7 +93,11 @@ const Unbound = ({ house }: { house: HouseCard }) => {
       )}
 
       <ol className={styles.Steps}>
-        {STEPS.map((step) => (
+        {[
+          "Добавьте бота в чат дома в MAX. Добавить должен тот, кто уже запускал бота, иначе бот сразу выйдет из чата.",
+          "Бот напишет добавившему в личные сообщения. Сотруднику УК и председателю он предложит выбрать дом, другому жителю - прислать код привязки.",
+          "Сделайте бота администратором чата и нажмите «Готово» в его сообщении.",
+        ].map((step) => (
           <Typography.Text key={step} asChild variant="body" color="primary">
             <li>{step}</li>
           </Typography.Text>

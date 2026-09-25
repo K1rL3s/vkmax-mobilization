@@ -21,8 +21,6 @@ export const useUnlink = () => {
     "/api/residencies/{resident_id}",
     {
       onSuccess: async () => {
-        // последний адрес уносит с собой весь кабинет: завести новый житель
-        // может только в онбординге
         if (residencies.length === 1) {
           await navigate(Routes.ONBOARDING_HOUSE, { replace: true });
         }

@@ -12,9 +12,7 @@ export const OrgSwitcher = () => {
   const { session, currentOrg, selectOrg } = useSession();
   const orgs = workingOrgs(session);
 
-  if (orgs.length < 2) {
-    return null;
-  }
+  if (orgs.length < 2) return null;
 
   return (
     <Flex asChild align="stretch" direction="column" gapY={8}>

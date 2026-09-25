@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { errorDetail } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
 import { useConfirm } from "@/shared/ui/confirm-dialog";
@@ -13,11 +13,10 @@ import { useConfirm } from "@/shared/ui/confirm-dialog";
 import { announcementFormConstraints } from "../domain/announcement-form-constraints";
 import type { Channel } from "../domain/labels";
 
-import { sentState, type OrgHouse } from "./use-announcements";
+import type { OrgHouse, SentOutcome } from "./use-announcements";
 
 const { textMax } = announcementFormConstraints;
 
-// тексты ошибок пустого текста, домов и каналов - те же, что у бэка
 const announcementSchema = z.object({
   text: z
     .string()
@@ -59,9 +58,7 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
 
   const create = rqClient.useMutation("post", "/api/admin/announcements", {
     onSuccess: async (created) => {
-      await queryClient.invalidateQueries({
-        queryKey: ["get", "/api/admin/announcements"],
-      });
+      await invalidatePaths("/api/admin/announcements");
 
       const withoutChat = (created.houses_without_chat ?? []).map(
         (id) => houses.find((house) => house.id === id)?.address ?? `дом ${id}`,
@@ -69,16 +66,16 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
 
       void navigate(Routes.ADMIN_ANNOUNCEMENTS, {
         replace: true,
-        state: sentState({
-          recipients: created.recipients_count,
-          withoutChat,
-        }),
+        state: {
+          sent: {
+            recipients: created.recipients_count,
+            withoutChat,
+          } satisfies SentOutcome,
+        },
       });
     },
   });
 
-  // после первой отправки ошибки пересчитываются на каждом изменении, до неё
-  // форма не ругается на ещё не заполненное
   const validate = { shouldValidate: form.formState.isSubmitted };
 
   return {
@@ -89,7 +86,6 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
     channels,
     urgent,
     isAllHouses: houses.every((house) => houseIds.includes(house.id)),
-    // только чат: дома без привязанного чата не получат ничего
     withoutChat:
       channels.length === 1 && channels[0] === "chat"
         ? houses.filter(
@@ -120,7 +116,7 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
     send: () => {
       const draft = confirm.target;
 
-      if (create.isPending || !draft) {
+      if (!draft) {
         return;
       }
 

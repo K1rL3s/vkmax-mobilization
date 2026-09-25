@@ -14,9 +14,6 @@ import { ResidentSheet } from "./resident-sheet";
 
 import styles from "./residents-section.module.css";
 
-// поиск нужен, когда жители не помещаются на пару экранов
-const SEARCH_FROM = 10;
-
 const ResidentRow = ({
   resident,
   onOpen,
@@ -69,15 +66,6 @@ const who = (resident: Resident) =>
   resident.flat_number
     ? `${resident.name}, кв. ${resident.flat_number}`
     : resident.name;
-
-const appointDescription = (resident: Resident, chairmanName: string | null) =>
-  [
-    `${resident.name} станет председателем совета дома: сможет привязать чат дома к сервису и закреплять в нём сообщения. Заблокировать председателя нельзя.`,
-    chairmanName &&
-      `Сейчас председатель - ${chairmanName}, он перестанет им быть.`,
-  ]
-    .filter(Boolean)
-    .join(" ");
 
 type ResidentsSectionProps = {
   houseId: number;
@@ -161,7 +149,7 @@ export const ResidentsSection = ({
           )}
         </Flex>
 
-        {(residents.total >= SEARCH_FROM || residents.query !== "") && (
+        {(residents.total >= 10 || residents.query !== "") && (
           <Input
             placeholder="Имя или номер квартиры"
             maxLength={100}
@@ -250,7 +238,7 @@ export const ResidentsSection = ({
             resident &&
             (step === "unchairman"
               ? `${resident.name} перестанет быть председателем совета дома: не сможет привязывать чат дома и закреплять в нём сообщения.`
-              : appointDescription(resident, chairmanName))
+              : `${resident.name} станет председателем совета дома: сможет привязать чат дома к сервису и закреплять в нём сообщения. Заблокировать председателя нельзя.${chairmanName ? ` Сейчас председатель - ${chairmanName}, он перестанет им быть.` : ""}`)
           }
           confirmLabel={
             step === "unchairman" ? "Снять с должности" : "Назначить"

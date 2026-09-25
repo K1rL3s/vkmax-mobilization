@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { rqClient } from "@/shared/api/instance";
+import { nextOffset } from "@/shared/api/next-offset";
 import type { components } from "@/shared/api/schema/generated";
 import { orgParams } from "@/shared/model/session";
 
@@ -10,7 +11,6 @@ export type Announcement = components["schemas"]["AnnouncementItem"];
 
 export type OrgHouse = components["schemas"]["AdminHouseListItem"];
 
-// ponytail: первые 100 домов (предел страницы бэка), выбор из остальных - когда у УК их станет больше
 export const useOrgHouses = () =>
   rqClient.useQuery("get", "/api/admin/houses", {
     params: { ...orgParams(), query: { limit: 100 } },
@@ -25,11 +25,7 @@ export const useAnnouncementList = () => {
     {
       pageParamName: "offset",
       initialPageParam: 0,
-      getNextPageParam: (last, pages) => {
-        const loaded = pages.reduce((sum, page) => sum + page.items.length, 0);
-
-        return loaded < last.total ? loaded : undefined;
-      },
+      getNextPageParam: nextOffset,
     },
   );
 
@@ -54,10 +50,6 @@ const sentSchema = z.object({
 
 export type SentOutcome = z.infer<typeof sentSchema>["sent"];
 
-export const sentState = (sent: SentOutcome) => ({ sent });
-
-// итог отправки приезжает состоянием навигации, а оно переживает перезагрузку
-// и возврат назад: читаем один раз и сразу стираем из истории
 export const useSentOutcome = () => {
   const { state, pathname } = useLocation();
   const navigate = useNavigate();

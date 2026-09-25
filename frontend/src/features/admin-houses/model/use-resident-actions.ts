@@ -2,29 +2,19 @@ import { useState } from "react";
 
 import { errorDetail, isConflict } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { orgParams } from "@/shared/model/session";
 
 import type { Resident, ResidentActionKind } from "../domain/resident";
 
-// menu - шторка со всеми действиями, остальное - диалог одного действия;
-// разблокировка идёт прямо из шторки, у неё нет своего диалога
 type Step = "menu" | Exclude<ResidentActionKind, "unblock">;
 
-const REFRESHED = [
-  "/api/admin/houses/{house_id}/residents",
-  "/api/admin/houses/{house_id}",
-];
-
 const refresh = () =>
-  Promise.all(
-    REFRESHED.map((path) =>
-      queryClient.invalidateQueries({ queryKey: ["get", path] }),
-    ),
+  invalidatePaths(
+    "/api/admin/houses/{house_id}/residents",
+    "/api/admin/houses/{house_id}",
   );
 
-// 409 значит, что строка устарела: коллега уже изменил жителя, и текст бэка
-// объясняет, что именно
 const actionError = (error: unknown) =>
   isConflict(error)
     ? (errorDetail(error) ?? "Житель уже изменился, список перечитан")
@@ -90,7 +80,7 @@ export const useResidentActions = () => {
       }
     },
     choose: (kind: ResidentActionKind) => {
-      if (!state || isPending) {
+      if (!state) {
         return;
       }
 

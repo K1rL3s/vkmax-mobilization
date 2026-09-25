@@ -28,7 +28,7 @@ export const RequestConversation = ({ request }: { request: AdminRequest }) => {
         {request.messages.map((message, index) => (
           <Card key={`${message.created_at}-${index}`}>
             <Typography.Text variant="description" color="secondary">
-              {message.author_name ?? "Сотрудник УК"}
+              {message.author_name}
               {message.author_role === "staff"
                 ? " · от сотрудника организации"
                 : ""}{" "}

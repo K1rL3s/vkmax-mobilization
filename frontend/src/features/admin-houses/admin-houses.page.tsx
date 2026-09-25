@@ -14,6 +14,7 @@ import { generatePath, useNavigate } from "react-router-dom";
 
 import { errorDetail, isForbidden } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
+import { nextOffset } from "@/shared/api/next-offset";
 import type { components } from "@/shared/api/schema/generated";
 import { plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
@@ -28,8 +29,6 @@ import {
 import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
-
-import { nextOffset } from "./model/next-offset";
 
 import styles from "./admin-houses.module.css";
 

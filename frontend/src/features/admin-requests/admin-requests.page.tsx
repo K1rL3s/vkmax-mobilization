@@ -64,11 +64,11 @@ const AdminRequestsPage = () => {
               : "Здесь появятся обращения жителей. Входящий звонок можно записать кнопкой выше."
           }
           action={
-            list.hasFilters ? (
+            list.hasFilters && (
               <Button variant="secondary" onClick={list.clearFilters}>
                 Показать все заявки
               </Button>
-            ) : undefined
+            )
           }
         />
       )}

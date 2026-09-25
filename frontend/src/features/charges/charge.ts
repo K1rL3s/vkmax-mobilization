@@ -1,12 +1,12 @@
 import type { components } from "@/shared/api/schema/generated";
 
-export type ChargeItem = components["schemas"]["ChargeListItem"];
+type ChargeItem = components["schemas"]["ChargeListItem"];
 
 export type ChargeCard = components["schemas"]["ChargeCard"];
 
 export type ChargeBreakdown = components["schemas"]["ChargeBreakdown"];
 
-export type ServiceType = components["schemas"]["ServiceType"];
+type ServiceType = components["schemas"]["ServiceType"];
 
 export type ServiceConsumption = components["schemas"]["ServiceConsumption"];
 
@@ -31,7 +31,6 @@ export const SERVICE_LABEL: Record<ServiceType, string> = {
   recalculation: "Перерасчёт",
 };
 
-// «+620 ₽ к августу»: месяц в дательном падеже Intl не даёт
 const MONTH_DATIVE = [
   "январю",
   "февралю",
@@ -54,15 +53,12 @@ const periodFormat = new Intl.DateTimeFormat("ru-RU", {
 
 const monthFormat = new Intl.DateTimeFormat("ru-RU", { month: "short" });
 
-// период приходит датой без времени: `new Date("2026-09-01")` читается как
-// полночь UTC и западнее Гринвича уезжает в август
 const parsePeriod = (iso: string) => {
   const [year, month] = iso.split("-").map(Number);
 
   return new Date(year ?? 0, (month ?? 1) - 1, 1);
 };
 
-// Intl всегда приписывает к месяцу с годом «г.», а в макете её нет
 export const formatPeriod = (iso: string): string => {
   const text = periodFormat.format(parsePeriod(iso)).replace(" г.", "");
 
@@ -82,8 +78,6 @@ const isPreviousMonth = (previous: string, current: string) => {
   return parsePeriod(previous).getTime() === date.getTime();
 };
 
-// копейки показываются, только когда они есть: квитанция с ровной суммой
-// читается «4 870 ₽», а не «4 870,00 ₽»
 export const formatMoney = (kopecks: number, signed = false): string =>
   new Intl.NumberFormat("ru-RU", {
     style: "currency",
@@ -96,7 +90,6 @@ export const formatMoney = (kopecks: number, signed = false): string =>
 export const formatVolume = (milli: number): string =>
   (milli / 1000).toLocaleString("ru-RU", { maximumFractionDigits: 3 });
 
-// тариф в 1/10000 рубля за единицу
 export const formatTariff = (tariff: number): string =>
   new Intl.NumberFormat("ru-RU", {
     style: "currency",
@@ -105,10 +98,6 @@ export const formatTariff = (tariff: number): string =>
     maximumFractionDigits: 4,
   }).format(tariff / 10000);
 
-/**
- * Подпись «+620 ₽ к августу» в списке периодов. Сравнивается только соседний
- * месяц: при дыре в истории разница набежала бы за несколько месяцев
- */
 export const listDelta = (
   item: ChargeItem,
   previous: ChargeItem | undefined,

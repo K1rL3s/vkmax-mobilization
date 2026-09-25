@@ -19,7 +19,6 @@
   color: var(--text-negative);
 }
 
-/* боковые 20px кита режут «с 15:00» многоточием на ширине 360 */
 .Grid > .Slot {
   min-width: 0;
   padding-inline: 4px;

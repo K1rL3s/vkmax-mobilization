@@ -34,8 +34,6 @@
   color: var(--text-negative);
 }
 
-/* кнопка решения не sticky: мобильная клавиатура делает прилипшую кнопку
-   полупрозрачной */
 .Footer {
   display: flex;
   flex-direction: column;

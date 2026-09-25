@@ -17,15 +17,6 @@ import {
 
 import styles from "./admin-tab-bar.module.css";
 
-const TABS = [
-  { to: Routes.ADMIN_REQUESTS, label: "Заявки", icon: navRequestsIcon },
-  { to: Routes.ADMIN_ANNOUNCEMENTS, label: "Объявления", icon: megaphoneIcon },
-  { to: Routes.ADMIN_POLLS, label: "Опросы", icon: pollIcon },
-  { to: Routes.ADMIN_RECEPTION, label: "Приём", icon: navMeetingsIcon },
-  { to: Routes.ADMIN_HOUSES, label: "Дома", icon: buildingIcon },
-  { to: Routes.ADMIN_ANALYTICS, label: "Аналитика", icon: chartIcon },
-];
-
 export const AdminTabBar = () => {
   const navigate = useNavigate();
   const { currentResidency, selectCabinet } = useSession();
@@ -49,7 +40,18 @@ export const AdminTabBar = () => {
       </Tappable>
 
       <div className={styles.Tabs}>
-        {TABS.map((tab) => (
+        {[
+          { to: Routes.ADMIN_REQUESTS, label: "Заявки", icon: navRequestsIcon },
+          {
+            to: Routes.ADMIN_ANNOUNCEMENTS,
+            label: "Объявления",
+            icon: megaphoneIcon,
+          },
+          { to: Routes.ADMIN_POLLS, label: "Опросы", icon: pollIcon },
+          { to: Routes.ADMIN_RECEPTION, label: "Приём", icon: navMeetingsIcon },
+          { to: Routes.ADMIN_HOUSES, label: "Дома", icon: buildingIcon },
+          { to: Routes.ADMIN_ANALYTICS, label: "Аналитика", icon: chartIcon },
+        ].map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}

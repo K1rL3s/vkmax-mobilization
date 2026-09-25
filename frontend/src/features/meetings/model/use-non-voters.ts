@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { isForbidden } from "@/shared/api/errors";
+import { isForbidden, retryUnlessForbidden } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { useRouteParams } from "@/shared/lib/router";
 
@@ -19,13 +19,10 @@ export const useNonVoters = () => {
     { params },
     {
       enabled: route !== null,
-      // отказ в правах повторять нечего: без этого житель три попытки
-      // смотрит на «Загружаем квартиры» вместо объяснения
-      retry: (count, error) => !isForbidden(error) && count < 3,
+      retry: retryUnlessForbidden,
     },
   );
 
-  // общее число квартир живёт только в результатах, отдельной ручки нет
   const results = rqClient.useQuery(
     "get",
     "/api/polls/{poll_id}/results",
@@ -34,14 +31,10 @@ export const useNonVoters = () => {
   );
 
   const items = flats.data ?? [];
-  const groups = groupByEntrance(items);
 
   return {
-    pollId: route?.pollId ?? null,
     items,
     totalFlats: results.data?.total_flats ?? null,
-    // права могли измениться, пока экран открыт: 403 объясняем словами, а не
-    // общей ошибкой загрузки
     isForbidden: isForbidden(flats.error),
     isPending: flats.isPending,
     isError: route === null || flats.isError,
@@ -49,6 +42,6 @@ export const useNonVoters = () => {
       void flats.refetch();
       void results.refetch();
     },
-    groups,
+    groups: groupByEntrance(items),
   };
 };

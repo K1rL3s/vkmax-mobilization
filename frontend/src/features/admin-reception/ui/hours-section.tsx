@@ -92,7 +92,7 @@ const HoursEditor = ({ windows }: { windows: ReceptionWindow[] }) => {
         <CellSimple
           as="label"
           className={styles.Switch}
-          title={`Принимаем ${WEEKDAYS[form.weekday]?.at}`}
+          title={`Принимаем ${WEEKDAYS[form.weekday].at}`}
           after={<Switch type="checkbox" {...register("enabled")} />}
         />
 

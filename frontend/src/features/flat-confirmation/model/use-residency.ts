@@ -7,8 +7,6 @@ import { useSession } from "@/shared/model/session";
 
 const paramsSchema = z.object({ residentId: z.coerce.number().int() });
 
-// что передал предыдущий экран: куда возвращаться и уже набранный лицевой
-// счет. Кладет это вызывающая сторона, но доезжает оно через историю браузера
 const historyState = z
   .object({ returnTo: z.string().startsWith("/"), accountNo: z.string() })
   .partial();

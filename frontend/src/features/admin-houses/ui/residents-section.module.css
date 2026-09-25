@@ -16,7 +16,6 @@
   min-width: 0;
 }
 
-/* строки одной высоты по имени: длинное полностью видно в шторке действий */
 .Ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;

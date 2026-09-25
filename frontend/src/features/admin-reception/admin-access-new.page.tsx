@@ -8,8 +8,6 @@ const AdminAccessNewPage = () => {
   const canCreate = useIsOrgAdmin();
   const houses = useOrgHouses(canCreate);
 
-  // квартиры для сбора берутся из жителей дома, а их список требует прав
-  // администратора: у сотрудника без прав форма нечем заполнится
   if (!canCreate) {
     return (
       <EmptyState

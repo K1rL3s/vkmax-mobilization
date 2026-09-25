@@ -26,7 +26,6 @@
   align-self: flex-end;
 }
 
-/* поле кита во флексе не тянется, поэтому строка варианта - сетка */
 .OptionRow {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -38,8 +37,6 @@
   color: var(--text-negative);
 }
 
-/* кнопка не sticky: мобильная клавиатура делает прилипшую кнопку
-   полупрозрачной */
 .Footer {
   padding: 12px 16px 24px;
   background-color: var(--background-surface);

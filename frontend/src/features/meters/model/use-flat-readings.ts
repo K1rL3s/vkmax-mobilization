@@ -1,11 +1,6 @@
 import { authParams, rqClient } from "@/shared/api/instance";
 import { useSession } from "@/shared/model/session";
 
-/**
- * Счётчики квартиры и периоды, за которые можно подать показания. Обе ручки
- * требуют подтверждённой квартиры, поэтому без неё запросы не уходят: отказ
- * доступа здесь не ошибка загрузки, а нормальное состояние экрана.
- */
 export const useFlatReadings = () => {
   const { currentResidency: residency } = useSession();
   const flatId = residency?.verified ? (residency.flat_id ?? null) : null;

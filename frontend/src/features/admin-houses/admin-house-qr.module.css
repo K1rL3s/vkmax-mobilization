@@ -8,15 +8,12 @@
   }
 }
 
-/* у Flex кита свой display, поэтому прячется обёртка, а не он */
 .Screen {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* лист всегда чёрным по белому: QR на тёмной подложке камера читает хуже,
-   а на бумаге тёмной темы нет */
 .Sheet {
   display: flex;
   flex-direction: column;
@@ -58,7 +55,6 @@
   margin: 20mm;
 }
 
-/* печать - по подъезду на лист A4, без заголовка экрана и кнопки */
 @media print {
   .Page {
     padding: 0;

@@ -18,12 +18,12 @@ const NewRequestPage = () => {
   const { currentResidency: residency } = useSession();
   const house = useHouseCard(residency?.house_id);
 
-  if (form.categories.length === 0 && !form.isCategoriesFailed) {
-    return <LoadingState fill title="Готовим форму" />;
-  }
-
   if (form.isCategoriesFailed) {
     return <ErrorState fill onRetry={() => window.location.reload()} />;
+  }
+
+  if (form.categories.length === 0) {
+    return <LoadingState fill title="Готовим форму" />;
   }
 
   const selected = form.categories.find(
@@ -88,7 +88,7 @@ const NewRequestPage = () => {
               count={form.neighbours.neighbours_count}
               canJoin={form.neighbours.can_join && form.canSubmit}
               isJoining={form.isSubmitting}
-              onJoin={() => form.submit(form.neighbours?.group_id ?? undefined)}
+              onJoin={() => form.submit(form.neighbours?.group_id)}
             />
           )}
 

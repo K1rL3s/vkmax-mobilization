@@ -2,9 +2,8 @@ import { useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 
 import { rqClient } from "@/shared/api/instance";
+import { nextOffset } from "@/shared/api/next-offset";
 import { orgParams } from "@/shared/model/session";
-
-import { nextOffset } from "./next-offset";
 
 export const useHouseReadings = (houseId: number) => {
   const [onlyBelow, setOnlyBelow] = useState(false);

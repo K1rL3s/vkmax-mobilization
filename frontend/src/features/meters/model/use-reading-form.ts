@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { authParams, rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths } from "@/shared/api/query-client";
 
 import {
   formatReading,
@@ -19,8 +19,6 @@ export const useReadingForm = () => {
   const [period, setPeriod] = useState<string | null>(null);
   const [edited, setEdited] = useState<Partial<Record<TariffZone, string>>>({});
 
-  // выбор по умолчанию выводится из данных, а не ставится эффектом: списки
-  // приходят после первого рендера, и эффект дал бы лишний кадр с пустой формой
   const meter =
     readings.meters.find((item) => item.id === meterId) ??
     readings.meters.find((item) => item.can_submit) ??
@@ -37,19 +35,12 @@ export const useReadingForm = () => {
     "/api/meters/{meter_id}/readings",
     {
       onSuccess: async () => {
-        // подача меняет и последнее показание счётчика, и отметку периода
-        await queryClient.invalidateQueries({
-          queryKey: ["get", "/api/flats/{flat_id}/meters"],
-        });
-        await queryClient.invalidateQueries({
-          queryKey: ["get", "/api/flats/{flat_id}/reading-periods"],
-        });
+        await invalidatePaths("/api/flats/{flat_id}/meters");
+        await invalidatePaths("/api/flats/{flat_id}/reading-periods");
       },
     },
   );
 
-  // распознанное показание живёт в поле до первой правки жителя, поэтому
-  // значение поля - это правка поверх подсказки, а не отдельное состояние
   const valueOf = (zone: TariffZone) => {
     const suggested = photos.recognized?.[zone];
 
@@ -83,8 +74,6 @@ export const useReadingForm = () => {
         values,
         photos: photos.names,
         ocr_used: recognized !== null,
-        // принятым распознавание считается, только если житель отправил ровно
-        // те значения, которые подставило фото
         ocr_accepted:
           recognized !== null &&
           zones.every((zone) => recognized[zone] === values[zone]),

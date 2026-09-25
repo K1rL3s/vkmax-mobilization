@@ -18,28 +18,26 @@ export const SimilarPanel = ({
   canJoin,
   isJoining,
   onJoin,
-}: SimilarPanelProps) => {
-  return (
-    <div className={styles.Panel}>
-      <Flex align="center" gap={12}>
-        <IconTile icon={userIcon} tone="themed" />
-        <Typography.Text variant="body-strong" color="primary">
-          {count} {plural(count, ["сосед", "соседа", "соседей"])} уже{" "}
-          {plural(count, ["сообщил", "сообщили", "сообщили"])} о той же проблеме
-        </Typography.Text>
-      </Flex>
+}: SimilarPanelProps) => (
+  <div className={styles.Panel}>
+    <Flex align="center" gap={12}>
+      <IconTile icon={userIcon} tone="themed" />
+      <Typography.Text variant="body-strong" color="primary">
+        {count} {plural(count, ["сосед", "соседа", "соседей"])} уже{" "}
+        {plural(count, ["сообщил", "сообщили", "сообщили"])} о той же проблеме
+      </Typography.Text>
+    </Flex>
 
-      {canJoin && (
-        <Button
-          size="medium"
-          variant="secondary"
-          stretched
-          loading={isJoining}
-          onClick={onJoin}
-        >
-          Присоединиться к заявке
-        </Button>
-      )}
-    </div>
-  );
-};
+    {canJoin && (
+      <Button
+        size="medium"
+        variant="secondary"
+        stretched
+        loading={isJoining}
+        onClick={onJoin}
+      >
+        Присоединиться к заявке
+      </Button>
+    )}
+  </div>
+);

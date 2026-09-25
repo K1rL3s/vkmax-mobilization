@@ -15,21 +15,11 @@ const docTime = new Intl.DateTimeFormat("ru-RU", {
   minute: "2-digit",
 });
 
-const at = (value: string | number) =>
+const at = (value: string) =>
   `${docDate.format(new Date(value))} в ${docTime.format(new Date(value))}`;
 
-/**
- * Обращение в ГЖИ по просроченной заявке: шаблон живёт на фронте, все
- * подстановки берутся из карточки заявки и карточки дома.
- *
- * ФИО и контакт житель вписывает сам - по 59-ФЗ без них обращение не
- * рассматривают, а имя из MAX для документа не годится: оно отображаемое.
- */
-export const gjiAppeal = (
-  request: RequestCard,
-  house: HouseCard,
-  now = Date.now(),
-): string => {
+export const gjiAppeal = (request: RequestCard, house: HouseCard) => {
+  const now = Date.now();
   const org = house.org;
   const flat = request.flat_number ? `, кв. ${request.flat_number}` : "";
   const license = org?.license_no ? `, лицензия № ${org.license_no}` : "";
