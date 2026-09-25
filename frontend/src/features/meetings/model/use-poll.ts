@@ -6,7 +6,7 @@ import { invalidatePaths } from "@/shared/api/query-client";
 import { useRouteParams } from "@/shared/lib/router";
 import { useSession } from "@/shared/model/session";
 
-const paramsSchema = z.object({ pollId: z.coerce.number().int() });
+const paramsSchema = z.object({ pollId: z.coerce.number().int().positive() });
 
 export const usePoll = () => {
   const route = useRouteParams(paramsSchema);
@@ -54,7 +54,7 @@ export const usePoll = () => {
     isVoteFailed: vote.isError,
     canSend: chosen.length > 0 && !vote.isPending,
     send: () => vote.mutate({ params, body: { option_ids: chosen } }),
-    isPending: card.isPending || results.isPending,
+    isPending: route !== null && (card.isPending || results.isPending),
     isError: route === null || card.isError || results.isError,
     retry: () => {
       void card.refetch();

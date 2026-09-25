@@ -13,6 +13,7 @@ export const useRequestList = () => {
   });
 
   const items = requests.data?.items ?? [];
+  const groups = groupRequests(items, filter);
 
   return {
     filter,
@@ -20,7 +21,8 @@ export const useRequestList = () => {
     isPending: requests.isPending,
     isError: requests.isError,
     retry: () => void requests.refetch(),
-    isEmpty: items.length === 0,
-    groups: groupRequests(items, filter),
+    isEmpty: requests.data?.items.length === 0,
+    isFilterEmpty: items.length > 0 && groups.length === 0,
+    groups,
   };
 };

@@ -7,7 +7,7 @@ import { useRequestCategories } from "./use-request-categories";
 
 export const useRequest = () => {
   const params = useRouteParams(
-    z.object({ requestId: z.coerce.number().int() }),
+    z.object({ requestId: z.coerce.number().int().positive() }),
   );
 
   const card = rqClient.useQuery(
@@ -31,7 +31,7 @@ export const useRequest = () => {
     zone:
       categories.data?.find(({ category }) => category === request?.category)
         ?.zone ?? null,
-    isPending: card.isPending,
+    isPending: params !== null && card.isPending,
     isError: params === null || card.isError,
     retry: () => void card.refetch(),
   };

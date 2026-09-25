@@ -26,7 +26,7 @@ const paramsSchema = z.object({
 export const useAccessRequest = () => {
   const route = useRouteParams(paramsSchema);
 
-  return rqClient.useQuery(
+  const query = rqClient.useQuery(
     "get",
     "/api/admin/access-requests/{access_request_id}",
     {
@@ -37,6 +37,8 @@ export const useAccessRequest = () => {
     },
     { enabled: route !== null },
   );
+
+  return { valid: route !== null, query };
 };
 
 const withoutCellSchema = z.object({ withoutCell: z.array(z.string()) });

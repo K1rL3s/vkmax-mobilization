@@ -52,6 +52,7 @@ export const ConfirmDialog = ({
         )}
 
         <Button
+          type="button"
           size="large"
           stretched
           variant="destructive"
@@ -62,6 +63,7 @@ export const ConfirmDialog = ({
         </Button>
 
         <Button
+          type="button"
           size="large"
           stretched
           variant="secondary"

@@ -298,6 +298,7 @@ export const pollNonVoters = (
       (a, b) =>
         Number(a.entrance === null) - Number(b.entrance === null) ||
         (a.entrance ?? 0) - (b.entrance ?? 0) ||
+        a.number.length - b.number.length ||
         a.number.localeCompare(b.number, "ru"),
     )
     .map((flat) => ({

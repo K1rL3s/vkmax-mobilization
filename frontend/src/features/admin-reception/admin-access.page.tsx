@@ -37,14 +37,10 @@ const numbersOf = (flats: AccessTarget[]) =>
   flats.map((flat) => flat.flat_number);
 
 const AdminAccessPage = () => {
-  const grid = useAccessRequest();
+  const { valid, query: grid } = useAccessRequest();
   const withoutCell = useWithoutCell();
 
-  if (grid.isPending) {
-    return <LoadingState fill title="Загружаем сбор доступа" />;
-  }
-
-  if (grid.isError) {
+  if (!valid || grid.isError) {
     return (
       <ErrorState
         fill
@@ -52,6 +48,10 @@ const AdminAccessPage = () => {
         onRetry={() => void grid.refetch()}
       />
     );
+  }
+
+  if (grid.isPending) {
+    return <LoadingState fill title="Загружаем сбор доступа" />;
   }
 
   const item = grid.data.access_request;

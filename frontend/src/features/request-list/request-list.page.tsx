@@ -35,7 +35,7 @@ const RequestListPage = () => {
         />
       )}
 
-      {!list.isEmpty && list.groups.length === 0 && (
+      {list.isFilterEmpty && (
         <EmptyState
           fill
           icon={wrenchIcon}

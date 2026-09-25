@@ -6,7 +6,7 @@ import { useRouteParams } from "@/shared/lib/router";
 
 import { groupByEntrance } from "../domain/poll";
 
-const paramsSchema = z.object({ pollId: z.coerce.number().int() });
+const paramsSchema = z.object({ pollId: z.coerce.number().int().positive() });
 
 export const useNonVoters = () => {
   const route = useRouteParams(paramsSchema);
@@ -36,7 +36,7 @@ export const useNonVoters = () => {
     items,
     totalFlats: results.data?.total_flats ?? null,
     isForbidden: isForbidden(flats.error),
-    isPending: flats.isPending,
+    isPending: route !== null && flats.isPending,
     isError: route === null || flats.isError,
     retry: () => {
       void flats.refetch();

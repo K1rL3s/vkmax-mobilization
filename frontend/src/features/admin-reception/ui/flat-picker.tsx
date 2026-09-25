@@ -88,6 +88,7 @@ export const FlatPicker = ({
         {residents.hasMore && (
           <Flex align="center" gap={8} wrap="wrap">
             <Button
+              type="button"
               size="small"
               variant="secondary"
               loading={residents.isLoadingMore}

@@ -275,7 +275,12 @@ class PollsService:
         flats = await self._house_flats(poll.house_id)
         return sorted(
             [flat for flat in flats if flat.id not in voted_ids],
-            key=lambda flat: (flat.entrance is None, flat.entrance or 0, flat.number),
+            key=lambda flat: (
+                flat.entrance is None,
+                flat.entrance or 0,
+                len(flat.number),
+                flat.number,
+            ),
         )
 
     async def close(self, poll_id: PollId, user_id: UserId) -> PollCardData:

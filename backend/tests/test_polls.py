@@ -369,6 +369,7 @@ async def test_non_voters_are_for_the_initiator_and_drop_a_weighted_vote(
         [
             Flat(house_id=base.house_id, number="2", entrance=2),
             Flat(house_id=base.house_id, number="3", entrance=1),
+            Flat(house_id=base.house_id, number="10", entrance=1),
         ],
     )
     await session.flush()
@@ -382,7 +383,7 @@ async def test_non_voters_are_for_the_initiator_and_drop_a_weighted_vote(
         await service.non_voters(card.poll.id, stranger_id)
 
     non_voters = await service.non_voters(card.poll.id, chairman_id)
-    assert [flat.number for flat in non_voters] == ["3", "2", "1"]
+    assert [flat.number for flat in non_voters] == ["3", "10", "2", "1"]
 
     await service.vote(card.poll.id, chairman_id, [card.options[0].id])
 
