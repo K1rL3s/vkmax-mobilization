@@ -81,14 +81,7 @@ services:
       <<: *app-env
     volumes:
       - ./backend/content:/data/files
-    command: [ "taskiq", "worker", "zheka.broker.broker:main", "--workers=1", "--no-configure-logging" ]
-
-  scheduler:
-    <<: [ *image, *common, *after-migrations ]
-    container_name: zheka-scheduler
-    environment:
-      <<: *app-env
-    command: [ "python", "-m", "zheka.broker.scheduler" ]
+    command: [ "python", "-m", "zheka.broker" ]
 
   migrations:
     <<: [ *image, *build, *common ]

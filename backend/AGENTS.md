@@ -22,6 +22,13 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   healthcheck expect) and `workers`: one per CPU, one under
   `MAX_BOT_MODE=polling`, since each worker's lifespan polls. `--preload` stays
   off: each worker builds its own dispatcher, container and connections.
+- The taskiq worker and scheduler share one process, `python -m zheka.broker`,
+  to spare memory on the server. The scheduler kicks through the container's
+  `ZhekaBroker`: `run_scheduler` starts and shuts down its broker, which would
+  run the receiving broker's lifecycle twice.
+- A `python -m` entry point starts through `zheka.runner.run`, which picks
+  uvloop under `PYTHONOPTIMIZE=1` (the Dockerfile) and asyncio otherwise; the
+  api gets uvloop from gunicorn's `asgi_loop = "auto"`.
 - Production is `MAX_BOT_MODE=webhook` with `MAX_WEBHOOK_URL` on 443 and a real
   certificate. Only the `migrations` compose service runs alembic.
 - `zheka/api/asgi.py` builds the app at import and needs a real env; import
@@ -29,11 +36,10 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   (`POSTGRES_*`, `REDIS_DB`, `LOG_LEVEL`).
 - An API change reruns `just openapi`, or a test fails on the stale root
   `openapi.yaml`.
-- Every entry point with an APP container closes it (api lifespan, worker
-  `WORKER_SHUTDOWN`, seed in `finally`; the scheduler builds none), which owns
-  the database pool, the bot session and the process's one
-  `aiohttp.ClientSession`. The Yandex clients pass their timeout per request,
-  never on that shared session.
+- Every entry point with an APP container closes it (api lifespan, worker and
+  seed in `finally`), which owns the database pool, the bot session and the
+  process's one `aiohttp.ClientSession`. The Yandex clients pass their timeout
+  per request, never on that shared session.
 
 ### Code conventions
 
@@ -98,7 +104,7 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   (`zheka/bot/dialog_data.py`), never a string key. Start data that must
   outlive the first window is copied into `dialog_data` in `on_start`.
 - Routers are module-level singletons, so a process builds one dispatcher (api
-  `app_factory`, worker `broker.py`, the scheduler none) and a second
+  `app_factory`, worker `zheka/broker/__main__.py`) and a second
   `make_dispatcher` raises; maxo refuses `include` and filters after startup.
   The only `BgManagerFactory` wired to the dialog middlewares is the one in
   `BotSetup`, and `app_factory` takes a ready `BotSetup`, so a test owns the

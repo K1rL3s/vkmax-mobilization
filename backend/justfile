@@ -86,10 +86,7 @@ api:
     uv run gunicorn -c gunicorn.conf.py zheka.api.asgi:app
 
 worker:
-    uv run taskiq worker zheka.broker.broker:main --workers=1 --no-configure-logging
-
-scheduler:
-    uv run python -m zheka.broker.scheduler
+    uv run python -m zheka.broker
 
 seed:
     uv run python -m zheka.seed

@@ -1,4 +1,3 @@
-import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from zheka.config import load_config
 from zheka.core.services.demo import DemoService
 from zheka.di import make_container
 from zheka.logger import setup_logger
+from zheka.runner import run
 from zheka.seed.demo import seed
 
 
@@ -31,4 +31,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run(main())
