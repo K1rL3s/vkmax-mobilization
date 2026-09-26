@@ -40,6 +40,7 @@ dependencies = [
 
 [dependency-groups]
 fast = [
+    "gunicorn-h1c==0.6.9",
     "uvloop==0.22.1",
 ]
 dev = [

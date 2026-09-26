@@ -5,6 +5,14 @@
 **/*.pyo
 **/.DS_Store
 **/.Python
+**/.aws
+**/.ssh
+**/.fleet
+**/.trash
+**/.gitlab-ci.yml
+**/nosetests.xml
+**/pip-delete-this-directory.txt
+**/pip-log.txt
 **/.cache
 **/.coverage
 **/.coverage.*
@@ -35,6 +43,11 @@
 **/.bumpversion.cfg
 **/.pre-commit-config.yaml
 **/tests
+content/
+**/AGENTS.md
+**/CLAUDE.md
+**/.claude
+**/.codex
+**/.qwen
 **/.superpowers
 **/graphify-out
-content/

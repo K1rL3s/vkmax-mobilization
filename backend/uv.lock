@@ -441,6 +441,12 @@ wheels = [
 ]
 
 [[package]]
+name = "gunicorn-h1c"
+version = "0.6.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/b2/36997f8a1a25c33bf429441eac7a106c5ba8a25be555fe2ea3fc76d3e8d0/gunicorn_h1c-0.6.9.tar.gz", hash = "sha256:1847ff14fe6354a0808785dbcab25c7fbf5e621a1593bc1456c2fadf018103b1", size = 58281, upload-time = "2026-08-23T14:21:15.023Z" }
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1321,6 +1327,7 @@ dev = [
     { name = "slotscheck" },
 ]
 fast = [
+    { name = "gunicorn-h1c" },
     { name = "uvloop" },
 ]
 tests = [
@@ -1364,7 +1371,10 @@ dev = [
     { name = "ruff", specifier = "==0.16.7" },
     { name = "slotscheck", specifier = "==0.21.0" },
 ]
-fast = [{ name = "uvloop", specifier = "==0.22.1" }]
+fast = [
+    { name = "gunicorn-h1c", specifier = "==0.6.9" },
+    { name = "uvloop", specifier = "==0.22.1" },
+]
 tests = [
     { name = "httpx", specifier = "==0.28.1" },
     { name = "pytest", specifier = "==9.1.1" },

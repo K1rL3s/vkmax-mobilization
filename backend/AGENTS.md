@@ -29,6 +29,11 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
 - A `python -m` entry point starts through `zheka.runner.run`, which picks
   uvloop under `PYTHONOPTIMIZE=1` (the Dockerfile) and asyncio otherwise; the
   api gets uvloop from gunicorn's `asgi_loop = "auto"`.
+- The `fast` group (uvloop, gunicorn's C parser `gunicorn-h1c`) goes into the
+  image; `gunicorn-h1c` ships no Linux wheels, so the build stage keeps gcc.
+  The image precompiles `-O` bytecode for the venv and the code: under
+  `PYTHONDONTWRITEBYTECODE` every process would otherwise compile it all on
+  start.
 - Production is `MAX_BOT_MODE=webhook` with `MAX_WEBHOOK_URL` on 443 and a real
   certificate. Only the `migrations` compose service runs alembic.
 - `zheka/api/asgi.py` builds the app at import and needs a real env; import

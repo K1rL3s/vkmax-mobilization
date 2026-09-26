@@ -41,6 +41,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --no-default-groups \
     --group=fast
 
+RUN /venv/bin/python -O -m compileall -q /venv/lib/python3.12/site-packages
+
 
 FROM base AS runtime
 
@@ -50,3 +52,5 @@ COPY ./alembic.ini ./alembic.ini
 COPY ./gunicorn.conf.py ./gunicorn.conf.py
 COPY ./migrations ./migrations
 COPY ./zheka ./zheka
+
+RUN python -O -m compileall -q ./zheka ./migrations
