@@ -1,0 +1,8 @@
+.Box {
+  min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.Box :focus {
+  outline: none;
+}

@@ -5,7 +5,6 @@ import {
   LabelList,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   type TooltipContentProps,
   XAxis,
@@ -14,6 +13,7 @@ import {
 
 import type { components } from "@/shared/api/schema/generated";
 import { formatDay } from "@/shared/lib/format";
+import { ChartBox } from "@/shared/ui/chart-box";
 
 import { formatMetric } from "../domain/metric";
 
@@ -28,7 +28,7 @@ const CategoryChart = ({ series }: { series: ChartSeries }) => {
       : series.points;
 
   return (
-    <ResponsiveContainer width="100%" height={points.length * 32 + 16}>
+    <ChartBox height={points.length * 32 + 16}>
       <BarChart
         layout="vertical"
         data={points}
@@ -59,7 +59,7 @@ const CategoryChart = ({ series }: { series: ChartSeries }) => {
           />
         </Bar>
       </BarChart>
-    </ResponsiveContainer>
+    </ChartBox>
   );
 };
 
@@ -94,7 +94,7 @@ const WeekTooltip = ({
 };
 
 const WeekChart = ({ series }: { series: ChartSeries }) => (
-  <ResponsiveContainer width="100%" height={160}>
+  <ChartBox height={160}>
     <LineChart
       data={series.points}
       margin={{ top: 8, right: 20, bottom: 0, left: 20 }}
@@ -123,7 +123,7 @@ const WeekChart = ({ series }: { series: ChartSeries }) => (
         isAnimationActive={false}
       />
     </LineChart>
-  </ResponsiveContainer>
+  </ChartBox>
 );
 
 export const ChartsSection = ({ charts }: { charts: ChartSeries[] }) => (
@@ -140,13 +140,11 @@ export const ChartsSection = ({ charts }: { charts: ChartSeries[] }) => (
           {series.title}
         </Typography.Text>
 
-        <div className={styles.Chart}>
-          {series.key === "by_week" ? (
-            <WeekChart series={series} />
-          ) : (
-            <CategoryChart series={series} />
-          )}
-        </div>
+        {series.key === "by_week" ? (
+          <WeekChart series={series} />
+        ) : (
+          <CategoryChart series={series} />
+        )}
 
         {series.key === "by_week" && (
           <Typography.Text variant="detail" color="tertiary">

@@ -13,10 +13,6 @@
   background-color: var(--background-card);
 }
 
-.Chart {
-  min-width: 0;
-}
-
 .Axis {
   font-size: 12px;
   fill: var(--text-secondary);
