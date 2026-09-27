@@ -285,7 +285,7 @@ async def test_status_change_notifies_the_author_once(
     assert enqueued[0]["user_id"] == data.user_id
     assert enqueued[0]["mandatory"] is True
     assert enqueued[0]["text"].startswith(
-        f"🔔 Заявка №{request.id} «💧 Протечка»: принята в работу\n⏱ Срок: до ",
+        f"🔔 Заявка №{request.id} «💧 Протечка»: принята в работу\n⏰ Срок: до ",
     )
     assert enqueued[0]["app_button"] == OPEN_REQUEST
     assert enqueued[0]["app_path"] == f"/requests/{request.id}"

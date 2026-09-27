@@ -185,4 +185,4 @@ def _request(request_id: RequestId, category: RequestCategory) -> str:
 
 
 def _deadline(deadline: datetime) -> str:
-    return f"⏱ Срок: до {deadline:{MOMENT}}"
+    return f"⏰ Срок: до {deadline:{MOMENT}}"

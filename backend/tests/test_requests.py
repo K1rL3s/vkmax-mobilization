@@ -878,5 +878,5 @@ async def test_a_new_and_a_repeat_request_notify_the_staff_but_not_executors(
     deadline = house.local(created.request.deadline_at)
     assert first["text"] == (
         f"🆕 Заявка №{created.request.id} «💧 Протечка»\n🏢 {house.address}\n"
-        f"⏱ Срок: до {deadline:%H:%M %d.%m}"
+        f"⏰ Срок: до {deadline:%H:%M %d.%m}"
     )
