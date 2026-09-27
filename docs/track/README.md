@@ -16,7 +16,8 @@
 6. [Критерии оценки](06-criteria.md)
 7. [Дополнительная информация](07-additional-info.md)
 8. [Сводный список требований и критериев](08-requirements-checklist.md)
+9. [Общий FAQ](09-faq.md)
 
 Расшифровки и саммари вебинаров: [Вводной](web-01-transcription.md), [Dive, Create, Impact](web-02-transcription.md), [Q&A](web-03-transcription.md), [Саммари](web-summary.md)
 
-Источник: `Умный-город.pdf` в этой папке.
+Источник: `Умный-город.pdf` в этой папке
