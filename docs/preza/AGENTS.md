@@ -10,7 +10,13 @@ npm run build # node build.js -> zheka.pptx
 ./render.sh   # build + zheka.pdf + build/slides/slide-NN.jpg
 ```
 
-`render.sh` needs LibreOffice (`soffice` on `PATH`, or its path in `SOFFICE`) and `pdftoppm` from Poppler. The submission is `zheka.pdf`; `zheka.pptx` is its source for manual touch-ups.
+`render.sh` needs LibreOffice (`soffice` on `PATH`, or its path in `SOFFICE`) and `pdftoppm` from Poppler. `zheka.pdf` is the committed deck; `zheka.pptx` is its source for manual touch-ups.
+
+The submitted PDF carries the commit hash and the API test token on slide 1, and the token must never reach the repository. Render it into the ignored `build/`:
+
+```
+OUT=build/submission COMMIT=<hash> API_TEST_TOKEN=<token> ./render.sh   # -> build/submission.pdf
+```
 
 Fonts: Unbounded (headings) and Manrope (body) must be installed as static instances (Regular, Bold). Variable builds render at their thinnest weight in LibreOffice and PowerPoint. `render.sh` writes its own `build/fonts.conf`, because headless LibreOffice on macOS otherwise sees no user fonts and falls back to serif.
 

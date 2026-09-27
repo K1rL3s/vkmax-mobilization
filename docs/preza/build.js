@@ -210,11 +210,11 @@ async function build() {
     const kv = [
       ["Бот в MAX", "max.ru/t260_hakaton_max_bot", BOT],
       ["Репозиторий", "github.com/K1rL3s/vkmax-mobilization", "https://github.com/K1rL3s/vkmax-mobilization"],
-      ["Commit", "[hash сдаваемой версии]"],
+      ["Commit", process.env.COMMIT || "[hash сдаваемой версии]"],
       ["API", "vkmax.k1rles.ru/api", "https://vkmax.k1rles.ru/api/healthcheck"],
       ["Документация", "vkmax.k1rles.ru/api/docs", "https://vkmax.k1rles.ru/api/docs"],
       ["Контракт", "openapi.yaml, DATA-API.yaml"],
-      ["Токен API", "Bearer [значение API_TEST_TOKEN]"],
+      ["Токен API", `Bearer ${process.env.API_TEST_TOKEN || "[значение API_TEST_TOKEN]"}`],
       ["Логины", "не нужны, вход по аккаунту MAX"],
       ["Лицевые счета", "номер квартиры с нулями: 0000000012"],
       ["Окружение", ".env.example; MAX_TOKEN - выданный бот, ключи Yandex не нужны"],
@@ -222,7 +222,7 @@ async function build() {
     kv.forEach(([k, v, url], i) => {
       const y = 2.68 + i * 0.4;
       text(s, k, { x: 0.9, y, w: 1.7, h: 0.4, fontSize: 13, bold: true, valign: "middle" });
-      text(s, [{ text: v, options: url ? { hyperlink: { url }, color: C.deep } : {} }], { x: 2.65, y, w: 3.8, h: 0.4, fontSize: 13, valign: "middle" });
+      text(s, [{ text: v, options: url ? { hyperlink: { url }, color: C.deep } : {} }], { x: 2.65, y, w: 3.8, h: 0.4, fontSize: ["Commit", "Токен API"].includes(k) ? 11 : 13, valign: "middle" });
     });
 
     card(s, 6.9, 2.0, 5.83, 4.9);
