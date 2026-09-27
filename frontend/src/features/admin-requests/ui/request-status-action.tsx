@@ -12,7 +12,12 @@ import styles from "./form-card.module.css";
 
 export const RequestStatusAction = ({ target }: { target: StatusTarget }) => {
   const model = useRequestStatus(target);
-  if (model.choices.length === 0) return null;
+  const notice = model.applied ? (
+    <Typography.Text variant="description" role="status">
+      Статус изменён: {STATUS_LABEL[model.applied]}
+    </Typography.Text>
+  ) : null;
+  if (model.choices.length === 0) return notice;
 
   const isChoice = model.choices.length > 1;
   const submit = (
@@ -21,7 +26,13 @@ export const RequestStatusAction = ({ target }: { target: StatusTarget }) => {
     </Button>
   );
 
-  if (!isChoice && !model.error) return submit;
+  if (!isChoice && !model.error)
+    return (
+      <>
+        {submit}
+        {notice}
+      </>
+    );
 
   return (
     <div className={styles.Form}>
@@ -54,6 +65,7 @@ export const RequestStatusAction = ({ target }: { target: StatusTarget }) => {
       <FieldError message={model.error} />
 
       {submit}
+      {notice}
     </div>
   );
 };

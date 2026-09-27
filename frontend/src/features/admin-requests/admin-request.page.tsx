@@ -117,6 +117,8 @@ const AdminRequestPage = () => {
         )}
       </Flex>
 
+      <RequestStatusAction target={{ kind: "request", request }} />
+
       {isRunning && <DeadlinePanel request={request} />}
 
       <Card>
@@ -173,8 +175,6 @@ const AdminRequestPage = () => {
           <RequestTimeline steps={buildTimeline(request, "staff")} />
         </section>
       </Flex>
-
-      <RequestStatusAction target={{ kind: "request", request }} />
 
       <RequestConversation request={request} />
     </Panel>

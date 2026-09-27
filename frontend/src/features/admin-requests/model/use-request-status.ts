@@ -11,6 +11,7 @@ import { refreshRequests } from "./refresh-requests";
 export const useRequestStatus = (target: StatusTarget) => {
   const choices = statusChoices(target);
   const [picked, setPicked] = useState<RequestStatus | null>(null);
+  const [applied, setApplied] = useState<RequestStatus | null>(null);
   const status = picked && choices.includes(picked) ? picked : choices[0];
   const requestChange = rqClient.useMutation(
     "post",
@@ -28,6 +29,7 @@ export const useRequestStatus = (target: StatusTarget) => {
     choices,
     status,
     setStatus: setPicked,
+    applied,
     isPending: change.isPending,
     error: change.isError
       ? errorMessage(
@@ -37,17 +39,25 @@ export const useRequestStatus = (target: StatusTarget) => {
       : null,
     submit: () => {
       if (change.isPending) return;
+      setApplied(null);
       const body = { status, comment: null };
+      const onSuccess = () => setApplied(status);
       if (target.kind === "request")
-        requestChange.mutate({
-          params: { ...orgParams(), path: { request_id: target.request.id } },
-          body,
-        });
+        requestChange.mutate(
+          {
+            params: { ...orgParams(), path: { request_id: target.request.id } },
+            body,
+          },
+          { onSuccess },
+        );
       else
-        groupChange.mutate({
-          params: { ...orgParams(), path: { group_id: target.group.id } },
-          body,
-        });
+        groupChange.mutate(
+          {
+            params: { ...orgParams(), path: { group_id: target.group.id } },
+            body,
+          },
+          { onSuccess },
+        );
     },
   };
 };

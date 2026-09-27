@@ -66,7 +66,6 @@ from zheka.bot.handlers.chats.router import UNPINNED
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.commands.deeplinks import (
     APP_BUTTON,
-    CABINET_BUTTON,
     DEMO_ADMIN_NOTICE,
     DEMO_RESIDENT_NOTICE,
     DEMO_STAFF_NOTICE,
@@ -187,7 +186,7 @@ from zheka.core.services.requests import (
     REJECT_NOT_ON_REVIEW,
     RequestsService,
 )
-from zheka.core.texts import OPEN_REQUEST, REQUEST_STATUS_LABELS
+from zheka.core.texts import CABINET_BUTTON, OPEN_REQUEST, REQUEST_STATUS_LABELS
 from zheka.infra.database.models import (
     Chat,
     ChatPin,
@@ -783,6 +782,9 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
     mode, _, chat_id, _ = shows[-1]
     assert mode is ShowMode.SEND
     assert chat_id == client.chat.chat_id
+    assert _opened(_buttons(message_manager.last_message())) == [
+        (OPEN_REQUEST, f"/requests/{request_id}"),
+    ]
 
     await client.click(message_manager.last_message(), REJECT)
     await _rendered(message_manager, REJECTION_TEXT)
@@ -795,6 +797,7 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
     assert repeat.description == "Кран все еще течет"
     assert GREETING in _text(message_manager)
     assert repeat_sent(repeat.id) in notices.texts
+    assert _opened(notices.buttons[-1]) == [(OPEN_REQUEST, f"/requests/{repeat.id}")]
 
 
 ACCEPT_WORK = InlineButtonTextLocator("👍 Принять")
@@ -2735,6 +2738,10 @@ async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
     assert _text(message_manager) == (
         f"{HOUSE_MENU_TEXT.format(address=address)}\n\n{STAFF_TEXT}"
     )
+    assert _opened(_buttons(message_manager.last_message())) == [
+        ("📱 Открыть приложение", None),
+        (CABINET_BUTTON, "/admin/requests"),
+    ]
 
 
 async def test_every_category_is_one_tap_away(

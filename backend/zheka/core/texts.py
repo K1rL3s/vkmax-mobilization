@@ -7,6 +7,7 @@ from zheka.core.ids import RequestId
 
 BLOCKED = "УК закрыла вам доступ к этому дому"
 OPEN_REQUEST = "📱 Открыть заявку"
+CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
 MOMENT = "%H:%M %d.%m"
 
 REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {

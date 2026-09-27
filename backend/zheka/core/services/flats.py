@@ -49,6 +49,7 @@ NO_ACCOUNT_DETAIL = (
 )
 MOVED_OUT = "Житель привязан к другой квартире, переезд оформляет УК"
 NOT_A_RESIDENT = "Вы не житель этой квартиры"
+VERIFY_FIRST = "Сначала подтвердите квартиру"
 
 
 def normalize_account(account_no: str) -> str:
@@ -293,7 +294,9 @@ class FlatsService:
         flat_id: FlatId,
     ) -> list[FlatResidentView]:
         flat, _ = await self._flat_and_house(flat_id)
-        await self._resident_of_flat(user_id, flat)
+        resident = await self._resident_of_flat(user_id, flat)
+        if resident.verified_at is None:
+            raise NotEnoughRights(VERIFY_FIRST)
         residents = await self._residents.list_for_flat(flat_id)
         users = {
             user.id: user
@@ -307,8 +310,7 @@ class FlatsService:
         ]
 
     async def list_invites(self, user_id: UserId, flat_id: FlatId) -> list[FlatInvite]:
-        flat, _ = await self._flat_and_house(flat_id)
-        await self._resident_of_flat(user_id, flat)
+        await self._verified_owner(user_id, flat_id)
         return list(await self._invites.list_for_flat(flat_id))
 
     async def create_invite(
@@ -428,7 +430,7 @@ class FlatsService:
         if resident.role is not ResidentRole.OWNER:
             raise NotEnoughRights("Код приглашения выдает собственник, а не арендатор")
         if resident.verified_at is None:
-            raise NotEnoughRights("Сначала подтвердите квартиру")
+            raise NotEnoughRights(VERIFY_FIRST)
         return resident
 
     async def _pending_request(

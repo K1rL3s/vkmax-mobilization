@@ -593,11 +593,8 @@ async def test_flat_card_carries_the_latest_verification_status(
     await service.request_verification(own.user_id, own.flat_id, ACCOUNT, "  ")
 
     card = FlatCard.of(await service.flat_card(own.user_id, own.flat_id))
-    residents = await service.list_residents(own.user_id, own.flat_id)
 
     assert card.verification_status is VerificationStatus.PENDING
-    assert len(residents) == 1
-    assert residents[0].user.id == own.user_id
 
 
 async def test_flat_card_is_refused_to_a_resident_of_another_flat(
@@ -629,3 +626,45 @@ async def test_request_verification_is_refused_while_the_org_is_not_connected(
         )
 
     assert await FlatsRepo(session).get_latest_request(own.user_id, own.flat_id) is None
+
+
+@pytest.mark.parametrize(
+    ("role", "verified"),
+    [(ResidentRole.TENANT, True), (ResidentRole.OWNER, False)],
+)
+async def test_invites_are_listed_only_to_a_verified_owner(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    role: ResidentRole,
+    verified: bool,
+) -> None:
+    own = await _verified_owner(session, make_org_house_flat_user)
+    service = _make_service(session)
+    await service.create_invite(own.user_id, own.flat_id, 72, 1)
+    other = await add_user(session)
+    await _add_resident(
+        session,
+        other,
+        own.house_id,
+        own.flat_id,
+        role,
+        verified=verified,
+    )
+
+    with pytest.raises(NotEnoughRights):
+        await service.list_invites(other, own.flat_id)
+    assert len(await service.list_invites(own.user_id, own.flat_id)) == 1
+
+
+async def test_flat_residents_are_listed_only_to_a_verified_resident(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await _verified_owner(session, make_org_house_flat_user)
+    service = _make_service(session)
+    claimant = await add_user(session)
+    await _add_resident(session, claimant, own.house_id, own.flat_id)
+
+    with pytest.raises(NotEnoughRights):
+        await service.list_residents(claimant, own.flat_id)
+    assert len(await service.list_residents(own.user_id, own.flat_id)) == 2

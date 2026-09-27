@@ -8,6 +8,7 @@ import {
   isUnauthorized,
 } from "@/shared/api/errors";
 import { cn } from "@/shared/lib/css";
+import { getWebApp } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { alertIcon } from "@/shared/ui/icon";
 import { IconTile, type IconTileTone } from "@/shared/ui/icon-tile";
@@ -92,6 +93,21 @@ export const ErrorState = ({
   const exit = pathname.startsWith(Routes.ADMIN) ? Routes.ADMIN : Routes.HOME;
 
   const action = () => {
+    if (expired) {
+      const webApp = getWebApp();
+      return (
+        webApp && (
+          <Button
+            size="medium"
+            variant="secondary"
+            onClick={() => webApp.close()}
+          >
+            Закрыть
+          </Button>
+        )
+      );
+    }
+
     if (!final) {
       return (
         onRetry && (
@@ -104,7 +120,6 @@ export const ErrorState = ({
 
     return (
       fill &&
-      !expired &&
       pathname !== exit && (
         <Button
           size="medium"

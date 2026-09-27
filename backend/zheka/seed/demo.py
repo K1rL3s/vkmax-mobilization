@@ -78,6 +78,7 @@ REQUESTS_PER_WEEK = 3
 RECENT = timedelta(days=30)
 AUTO_CLOSE_AFTER = timedelta(hours=48)
 RESIDENTS_PER_HOUSE = 8
+REVIEWERS_GROUP_THRESHOLD = 10
 DEMO_AUTHORS = 15
 POLL_TURNOUT = 4_870
 DEMAND = (7, 5, 4, 2, 1)
@@ -358,7 +359,13 @@ class Seeder:
         )
         self._session.add(org)
         await self._session.flush()
-        self._session.add(OrgSettings(org_id=org.id, meter_window_always_open=True))
+        self._session.add(
+            OrgSettings(
+                org_id=org.id,
+                meter_window_always_open=True,
+                group_threshold=REVIEWERS_GROUP_THRESHOLD,
+            ),
+        )
         await self._session.flush()
         return org
 

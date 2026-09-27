@@ -13,6 +13,7 @@ from tests.conftest import empty_bot_setup, make_bot_config, make_config
 
 from zheka.api.app import app_factory
 from zheka.api.dependencies.current_user import INIT_DATA_TTL, parse_init_data
+from zheka.api.routes.demo import API_CHECKER_DEMO_NUMBER
 from zheka.config import ApiConfig, DbConfig
 from zheka.core.consent import CONSENT_VERSION
 from zheka.core.services.demo import NOT_SEEDED
@@ -117,27 +118,44 @@ async def test_the_test_token_acts_as_one_synthetic_checker(
     assert again.json()["consent_version"] == CONSENT_VERSION
 
 
-async def test_the_checker_activates_demo_with_or_without_a_body(
+async def test_the_checker_activates_only_its_demo_org(
     bot_database_url: str,  # noqa: ARG001
 ) -> None:
     app = _app(CHECKER_TOKEN, make_bot_config().db)
-    headers = {"Authorization": f"Bearer {CHECKER_TOKEN}"}
+    checker = {"Authorization": f"Bearer {CHECKER_TOKEN}"}
+    resident = {"WebAppData": signed_init_data(datetime.now(UTC))}
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
     ) as client:
-        await client.post(
-            "/api/me/consent",
-            headers=headers,
-            json={"version": CONSENT_VERSION},
+        for headers in (checker, resident):
+            await client.post(
+                "/api/me/consent",
+                headers=headers,
+                json={"version": CONSENT_VERSION},
+            )
+        own = await client.post(
+            "/api/demo/activate",
+            headers=checker,
+            json={"number": API_CHECKER_DEMO_NUMBER},
         )
-        bare = await client.post("/api/demo/activate", headers=headers)
+        refused = [
+            await client.post("/api/demo/activate", headers=checker, json=body)
+            for body in (
+                None,
+                {"number": 1},
+                {"number": API_CHECKER_DEMO_NUMBER, "admin": True},
+            )
+        ]
+        bare = await client.post("/api/demo/activate", headers=resident)
         unknown = await client.post(
             "/api/demo/activate",
-            headers=headers,
+            headers=checker,
             json={"number": 9},
         )
 
+    assert own.json()["error"]["detail"] == NOT_SEEDED
+    assert [response.status_code for response in refused] == [403, 403, 403]
     assert bare.json()["error"]["detail"] == NOT_SEEDED
     assert unknown.status_code == 400

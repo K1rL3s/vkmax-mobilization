@@ -3,7 +3,7 @@ from datetime import timedelta
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import TextInput
-from maxo.dialogs.widgets.kbd import Button, Group, Select, SwitchTo
+from maxo.dialogs.widgets.kbd import Button, Group, Select, SwitchTo, WebApp
 from maxo.dialogs.widgets.media import DynamicMedia
 from maxo.dialogs.widgets.text import Const, Format, Multi
 
@@ -18,6 +18,7 @@ from zheka.bot.handlers.review.handlers import (
 )
 from zheka.bot.states import Review
 from zheka.core.services.requests import AUTO_CLOSE_AFTER
+from zheka.core.texts import OPEN_REQUEST
 
 CARD_TEXT = "📋 Заявка №{request_id}: {status_label}\n\n{description}"
 ASK_TEXT = (
@@ -58,6 +59,12 @@ review_dialog = Dialog(
             id="to_rating",
             state=Review.rating,
             when=F["can_rate"],
+        ),
+        WebApp(
+            Const(OPEN_REQUEST),
+            Format("{bot_username}"),
+            payload=Format("{request_payload}"),
+            when=F["bot_username"],
         ),
         state=Review.card,
         getter=get_review,

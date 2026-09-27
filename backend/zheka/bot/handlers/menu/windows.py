@@ -9,10 +9,12 @@ from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.kbd import Start, WebApp
 from maxo.dialogs.widgets.text import Const, Format, Multi
 
-from zheka.bot.cards import web_app_name
+from zheka.bot.cards import app_payload, web_app_name
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import Menu, NewRequest, Onboarding
+from zheka.core.deeplinks import ADMIN_APP_PATH
 from zheka.core.services.profile import ProfileService
+from zheka.core.texts import CABINET_BUTTON
 
 GREETING = "👋 Жэка Коммуналкин на связи"
 MENU_TEXT = (
@@ -63,6 +65,12 @@ menu_dialog = Dialog(
             Const("📱 Открыть приложение"),
             Format("{bot_username}"),
             when=F["bot_username"],
+        ),
+        WebApp(
+            Const(CABINET_BUTTON),
+            Format("{bot_username}"),
+            payload=Const(app_payload(ADMIN_APP_PATH)),
+            when=F["staff"] & F["bot_username"],
         ),
         Start(
             Const("🔎 Другой дом"),

@@ -2,16 +2,25 @@ from html import escape
 from typing import Any
 
 from dishka import FromDishka
+from maxo import Bot
 from maxo.dialogs import DialogManager
 from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import ManagedTextInput
 from maxo.dialogs.widgets.kbd import Button
 from maxo.types import MessageCallback, MessageCreated
 
-from zheka.bot.cards import ask_in_default_stack, back_to_menu, photo_media, refused
+from zheka.bot.cards import (
+    app_payload,
+    ask_in_default_stack,
+    back_to_menu,
+    photo_media,
+    refused,
+    web_app_name,
+)
 from zheka.bot.dialog_data import ReviewData
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import Review
+from zheka.core.deeplinks import request_app_path
 from zheka.core.enums import RequestChannel, RequestCompletionReason
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import RequestId
@@ -22,7 +31,7 @@ from zheka.core.services.requests import (
     MIN_RATING,
     RequestsService,
 )
-from zheka.core.texts import REQUEST_STATUS_LABELS
+from zheka.core.texts import OPEN_REQUEST, REQUEST_STATUS_LABELS
 
 PHOTOS_PER_SIDE = MAX_PHOTOS // 2
 
@@ -33,6 +42,7 @@ def _request_id(dialog_manager: DialogManager) -> RequestId:
 
 @inject
 async def get_review(
+    bot: Bot,
     dialog_manager: DialogManager,
     requests_service: FromDishka[RequestsService],
     files_service: FromDishka[FilesService],
@@ -43,6 +53,8 @@ async def get_review(
     request = card.request
     return {
         "request_id": request_id,
+        "bot_username": web_app_name(bot),
+        "request_payload": app_payload(request_app_path(request_id)),
         "status_label": REQUEST_STATUS_LABELS[request.status],
         "description": escape(request.description),
         "can_review": card.can_review,
@@ -132,7 +144,12 @@ async def on_rejection(
     except ZhekaError as error:
         await back_to_menu(dialog_manager, str(error))
         return
-    await back_to_menu(dialog_manager, repeat_sent(card.request.id))
+    await back_to_menu(
+        dialog_manager,
+        repeat_sent(card.request.id),
+        OPEN_REQUEST,
+        request_app_path(card.request.id),
+    )
 
 
 def repeat_sent(request_id: RequestId) -> str:

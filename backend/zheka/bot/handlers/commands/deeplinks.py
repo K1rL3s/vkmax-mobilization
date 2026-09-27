@@ -25,6 +25,7 @@ from zheka.core.services.demo import DemoService, demo_flat_number
 from zheka.core.services.events import EventsService
 from zheka.core.services.flats import FlatsService
 from zheka.core.services.orgs import OrgsService
+from zheka.core.texts import CABINET_BUTTON
 
 router = Router(name=__name__)
 
@@ -35,7 +36,6 @@ EXECUTOR_JOINED = (
     "🎉 Вы в команде «{name}». Назначенные заявки будут приходить сюда карточками"
 )
 APP_BUTTON = "📱 Открыть приложение"
-CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
 FLAT_JOINED = "✅ Квартира подтверждена"
 DEMO_DATA_NOTE = "\nℹ️ Организация и ее данные модельные, адреса домов настоящие"
 DEMO_ADMIN_NOTICE = (

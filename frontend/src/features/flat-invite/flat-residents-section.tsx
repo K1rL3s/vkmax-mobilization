@@ -198,7 +198,10 @@ export const FlatResidentsSection = () => {
 
     if (!residency.verified) {
       return (
-        <Note>Выдать код арендатору можно после подтверждения квартиры</Note>
+        <Note>
+          Жителей квартиры и коды для арендатора видно после подтверждения
+          квартиры
+        </Note>
       );
     }
 
@@ -212,7 +215,9 @@ export const FlatResidentsSection = () => {
           <h2>Жители квартиры</h2>
         </Typography.Text>
 
-        <Residents flatId={flatId} userId={session.user_id} />
+        {residency.verified && (
+          <Residents flatId={flatId} userId={session.user_id} />
+        )}
 
         {invites()}
       </section>
