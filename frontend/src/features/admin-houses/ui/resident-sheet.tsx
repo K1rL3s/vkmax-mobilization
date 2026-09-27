@@ -58,7 +58,9 @@ export const ResidentSheet = ({
             <Button
               size="large"
               stretched
-              variant={action.destructive ? "destructive" : "secondary-contrast"}
+              variant={
+                action.destructive ? "destructive" : "secondary-contrast"
+              }
               disabled={action.refusal !== null || isPending}
               loading={action.kind === "unblock" && isPending}
               onClick={() => onChoose(action.kind)}

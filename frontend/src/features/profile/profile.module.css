@@ -32,11 +32,11 @@
     background-color: var(--background-card);
   }
 
-  .OrgTitle {
+  .CellTitle {
     min-width: 0;
   }
 
-  .OrgName {
+  .Ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

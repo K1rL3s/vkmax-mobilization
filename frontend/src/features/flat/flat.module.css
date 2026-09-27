@@ -3,6 +3,10 @@
   gap: 20px;
   padding: 16px 16px 24px;
 
+  .Address {
+    margin: 0;
+  }
+
   h2 {
     margin: 0;
   }

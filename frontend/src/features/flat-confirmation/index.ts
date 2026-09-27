@@ -1,5 +1,7 @@
 export {
   confirmationCaption,
+  confirmationLabel,
+  confirmationTone,
   confirmationView,
   type ConfirmationView,
   residencyState,

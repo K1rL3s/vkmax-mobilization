@@ -60,7 +60,7 @@ export const InviteCard = ({
       <Flex align="flex-start" gap={8}>
         <Flex className={styles.Grow} direction="column" gapY={2}>
           <Typography.Text variant="description" color="secondary">
-            Код для арендатора
+            Приглашение для арендатора
           </Typography.Text>
           <span className={styles.Code}>{invite.code}</span>
         </Flex>
@@ -78,7 +78,7 @@ export const InviteCard = ({
           <IconButton
             size="small"
             variant="secondary"
-            aria-label="Отозвать код"
+            aria-label="Отозвать приглашение"
             onClick={onRevoke}
           >
             <Icon src={trashIcon} size={20} />
@@ -93,7 +93,7 @@ export const InviteCard = ({
           hint={`ещё ${timeLeft(invite.expires_at)}`}
         />
         <Fact
-          label="Активации"
+          label="Вошли по ссылке"
           value={`${invite.activations_used} из ${invite.max_activations}`}
           hint={`${plural(left, ["осталась", "осталось", "осталось"])} ${left}`}
         />
@@ -101,7 +101,7 @@ export const InviteCard = ({
 
       {link.copied && (
         <Typography.Text variant="description" color="secondary">
-          Ссылка с кодом скопирована, отправьте её арендатору
+          Ссылка скопирована, отправьте её арендатору
         </Typography.Text>
       )}
     </Flex>

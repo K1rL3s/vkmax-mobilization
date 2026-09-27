@@ -2,12 +2,16 @@ import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link, Navigate } from "react-router-dom";
 
 import { ChargesSection } from "@/features/charges";
-import type { ResidencyState } from "@/features/flat-confirmation";
+import {
+  confirmationLabel,
+  confirmationTone,
+  type ResidencyState,
+} from "@/features/flat-confirmation";
 import { FlatResidentsSection } from "@/features/flat-invite";
-import { HouseSummary } from "@/features/house";
 import { Routes } from "@/shared/model/routes";
 import { homeIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import { FlatRows } from "./flat-rows";
 import { useFlat } from "./use-flat";
@@ -75,11 +79,29 @@ const FlatPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <HouseSummary
-        title={residency.address}
-        flat={residency.flat_number}
-        state={state}
-      />
+      <Flex align="stretch" direction="column" gapY={12}>
+        <Flex align="stretch" direction="column" gapY={4}>
+          <Typography.Text asChild variant="header" color="primary">
+            <h1 className={styles.Address}>{residency.address}</h1>
+          </Typography.Text>
+          <Flex align="center" gap={8} wrap="wrap">
+            {residency.flat_number && (
+              <Typography.Text variant="description" color="secondary">
+                кв. {residency.flat_number}
+              </Typography.Text>
+            )}
+            <StatusPill tone={confirmationTone(state)}>
+              {confirmationLabel(state)}
+            </StatusPill>
+          </Flex>
+        </Flex>
+
+        <Flex>
+          <Button asChild size="small" variant="secondary">
+            <Link to={Routes.RESIDENCIES}>Сменить дом</Link>
+          </Button>
+        </Flex>
+      </Flex>
 
       {canConfirm && (
         <Button asChild size="medium" stretched>

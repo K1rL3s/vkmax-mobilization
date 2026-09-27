@@ -22,9 +22,9 @@ const failureView = (state: FailureState) => {
   switch (state.kind) {
     case "flat":
       return {
-        title: "Не получилось активировать код квартиры",
+        title: "Не получилось активировать приглашение",
         description:
-          "Возможно, код неверный или просрочен. Проверьте ссылку и попробуйте ещё раз",
+          "Возможно, приглашение отозвано или просрочено. Проверьте ссылку и попробуйте ещё раз",
         route: state.hasResidency ? Routes.HOME : Routes.ONBOARDING_HOUSE,
         action: state.hasResidency
           ? "Продолжить в текущий кабинет"

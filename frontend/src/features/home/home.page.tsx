@@ -17,7 +17,7 @@ import {
   announcementWhen,
   useLatestAnnouncements,
 } from "@/features/announcements";
-import { useReadingsHint } from "@/features/meters";
+import { formatPeriod, useOpenReadingPeriod } from "@/features/meters";
 import {
   CATEGORY_ICON,
   deadlineLeft,
@@ -247,7 +247,7 @@ const HomePage = () => {
   const poll = useNextPoll();
   const { currentResidency: residency } = useSession();
   const request = useActiveRequest();
-  const readingsHint = useReadingsHint();
+  const openPeriod = useOpenReadingPeriod();
 
   const card = useHouseCard(residency?.house_id);
 
@@ -325,7 +325,7 @@ const HomePage = () => {
         />
       )}
 
-      {connected && (
+      {connected && (request || openPeriod || poll) && (
         <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
@@ -334,29 +334,29 @@ const HomePage = () => {
 
             {request && <ActiveRequestCard request={request} />}
 
-            <Flex asChild align="center" gap={12}>
-              <Card>
-                <IconTile icon={meterIcon} tone="positive" />
-                <Flex
-                  className={styles.Grow}
-                  align="stretch"
-                  direction="column"
-                  gapY={2}
-                >
-                  <Typography.Text variant="body-strong" color="primary">
-                    Передать показания
-                  </Typography.Text>
-                  {readingsHint && (
-                    <Typography.Text variant="description" color="secondary">
-                      {readingsHint}
+            {openPeriod && (
+              <Flex asChild align="center" gap={12}>
+                <Card>
+                  <IconTile icon={meterIcon} tone="positive" />
+                  <Flex
+                    className={styles.Grow}
+                    align="stretch"
+                    direction="column"
+                    gapY={2}
+                  >
+                    <Typography.Text variant="body-strong" color="primary">
+                      Передать показания
                     </Typography.Text>
-                  )}
-                </Flex>
-                <Button asChild size="small">
-                  <Link to={Routes.METERS}>Передать</Link>
-                </Button>
-              </Card>
-            </Flex>
+                    <Typography.Text variant="description" color="secondary">
+                      Окно открыто · {formatPeriod(openPeriod.period)}
+                    </Typography.Text>
+                  </Flex>
+                  <Button asChild size="small">
+                    <Link to={Routes.METERS}>Передать</Link>
+                  </Button>
+                </Card>
+              </Flex>
+            )}
 
             {poll && (
               <Flex asChild align="center" gap={12}>

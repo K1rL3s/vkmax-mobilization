@@ -2,31 +2,21 @@ import type { ElementType, ReactNode } from "react";
 import { Flex, Tappable, Typography } from "@maxhub/max-ui";
 
 import {
-  confirmationCaption,
+  confirmationLabel,
+  confirmationTone,
   type ResidencyState,
 } from "@/features/flat-confirmation";
+import { cn } from "@/shared/lib/css";
 import { Chevron } from "@/shared/ui/chevron";
-import { homeIcon } from "@/shared/ui/icon";
-import { IconTile, type IconTileTone } from "@/shared/ui/icon-tile";
+import { homeIcon, Icon } from "@/shared/ui/icon";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import styles from "./house-summary.module.css";
-
-type HouseSummaryState = ResidencyState | "plain";
-
-const TONE: Record<HouseSummaryState, IconTileTone> = {
-  verified: "brand-green",
-  pending: "brand-blue",
-  ways: "brand-orange",
-  rejected: "brand-orange",
-  "no-flat": "brand-orange",
-  "flat-missing": "brand-orange",
-  "not-connected": "neutral",
-  plain: "brand-blue",
-};
 
 type HouseSummaryProps = {
   title: string;
   as?: ElementType;
+  action?: string;
   onClick?: () => void;
 } & (
   | { state: ResidencyState; flat?: string | null; subtitle?: never }
@@ -36,21 +26,35 @@ type HouseSummaryProps = {
 export const HouseSummary = ({
   title,
   as: Title = "div",
+  action,
   onClick,
   state,
   flat,
   subtitle,
 }: HouseSummaryProps) => {
+  const tone = state === "plain" ? "themed" : confirmationTone(state);
+
   const caption =
-    state === "plain"
-      ? subtitle
-      : [flat && `кв. ${flat}`, confirmationCaption(state)]
-          .filter(Boolean)
-          .join(" · ");
+    state === "plain" ? (
+      subtitle
+    ) : (
+      <Flex align="center" gap={8} wrap="wrap">
+        {flat && (
+          <Typography.Text variant="description" color="secondary">
+            кв. {flat}
+          </Typography.Text>
+        )}
+        <StatusPill tone={tone}>{confirmationLabel(state)}</StatusPill>
+      </Flex>
+    );
 
   const content = (
     <>
-      <IconTile icon={homeIcon} tone={TONE[state]} size="large" />
+      <Icon
+        src={homeIcon}
+        size={32}
+        className={cn(styles.Icon, styles[tone])}
+      />
 
       <Flex className={styles.Grow} align="stretch" direction="column" gapY={2}>
         <Typography.Text
@@ -62,9 +66,18 @@ export const HouseSummary = ({
           <Title>{title}</Title>
         </Typography.Text>
 
-        {caption && (
-          <Typography.Text variant="description" color="secondary">
-            {caption}
+        {caption &&
+          (state === "plain" ? (
+            <Typography.Text variant="description" color="secondary">
+              {caption}
+            </Typography.Text>
+          ) : (
+            caption
+          ))}
+
+        {action && (
+          <Typography.Text className={styles.Action} variant="detail-strong">
+            {action}
           </Typography.Text>
         )}
       </Flex>
@@ -73,13 +86,13 @@ export const HouseSummary = ({
     </>
   );
 
-  if (onClick) {
-    return (
-      <Tappable className={styles.Summary} onClick={onClick}>
-        {content}
-      </Tappable>
-    );
+  if (!onClick) {
+    return <div className={styles.Summary}>{content}</div>;
   }
 
-  return <div className={styles.Summary}>{content}</div>;
+  return (
+    <Tappable className={styles.Summary} onClick={onClick}>
+      {content}
+    </Tappable>
+  );
 };

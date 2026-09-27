@@ -25,3 +25,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.Icon {
+  flex-shrink: 0;
+}
+
+.themed {
+  color: var(--icon-themed);
+}
+
+.positive {
+  color: var(--icon-positive);
+}
+
+.negative {
+  color: var(--icon-negative);
+}
+
+.promo {
+  color: var(--promo-text-step-1);
+}
+
+.neutral {
+  color: var(--icon-secondary);
+}
+
+.Action {
+  color: var(--text-themed);
+}

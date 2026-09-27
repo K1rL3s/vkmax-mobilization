@@ -1,4 +1,5 @@
 import type { Residency } from "@/shared/model/session";
+import type { StatusPillTone } from "@/shared/ui/status-pill";
 
 export type ConfirmationView =
   "verified" | "no-flat" | "flat-missing" | "pending" | "rejected" | "ways";
@@ -34,3 +35,27 @@ export const confirmationCaption = (state: ResidencyState): string =>
     "flat-missing": "нет в данных УК",
     "not-connected": "дом ещё не подключён к сервису",
   })[state];
+
+export const confirmationLabel = (state: ResidencyState): string =>
+  ({
+    verified: "Подтверждена",
+    pending: "На рассмотрении",
+    rejected: "Отклонена",
+    ways: "Не подтверждена",
+    "no-flat": "Квартира не выбрана",
+    "flat-missing": "Нет в данных УК",
+    "not-connected": "Дом не подключён",
+  })[state];
+
+export const confirmationTone = (state: ResidencyState): StatusPillTone =>
+  (
+    ({
+      verified: "positive",
+      pending: "themed",
+      rejected: "negative",
+      ways: "negative",
+      "no-flat": "neutral",
+      "flat-missing": "neutral",
+      "not-connected": "neutral",
+    }) satisfies Record<ResidencyState, StatusPillTone>
+  )[state];

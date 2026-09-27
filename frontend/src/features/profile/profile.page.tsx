@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { generatePath, Link, Navigate, useNavigate } from "react-router-dom";
 
 import {
+  confirmationLabel,
+  confirmationTone,
   residencyState,
   type ResidencyState,
 } from "@/features/flat-confirmation";
-import { HouseSummary } from "@/features/house";
 import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
 import { useSession, workingOrgs } from "@/shared/model/session";
@@ -81,12 +82,38 @@ const ProfilePage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <HouseSummary
-        title={residency.address}
-        flat={residency.flat_number}
-        state={state}
-        onClick={() => void navigate(Routes.RESIDENCIES)}
-      />
+      <Flex asChild align="stretch" direction="column" gap={8}>
+        <section>
+          <Typography.Text asChild variant="title" color="primary">
+            <h2>Мой дом</h2>
+          </Typography.Text>
+
+          <div className={styles.Panel}>
+            <CellSimple
+              before={<Icon src={buildingIcon} className={styles.CellIcon} />}
+              title="Карточка дома"
+              subtitle="УК, тарифы, капремонт, документы"
+              showChevron
+              onClick={() => void navigate(Routes.HOUSE_CARD)}
+            />
+            <CellSimple
+              separator
+              before={<Icon src={homeIcon} className={styles.CellIcon} />}
+              title="Моя квартира"
+              subtitle={
+                <Flex align="center" gap={8} wrap="wrap">
+                  {residency.flat_number && `кв. ${residency.flat_number}`}
+                  <StatusPill tone={confirmationTone(state)}>
+                    {confirmationLabel(state)}
+                  </StatusPill>
+                </Flex>
+              }
+              showChevron
+              onClick={() => void navigate(Routes.FLAT)}
+            />
+          </div>
+        </section>
+      </Flex>
 
       {warning && (
         <Flex align="stretch" direction="column" gap={8}>
@@ -134,10 +161,10 @@ const ProfilePage = () => {
                   before={
                     <Icon src={buildingIcon} className={styles.CellIcon} />
                   }
-                  innerClassNames={{ title: styles.OrgTitle }}
+                  innerClassNames={{ title: styles.CellTitle }}
                   title={
                     <Flex align="center" gap={8}>
-                      <span className={styles.OrgName}>{org.name}</span>
+                      <span className={styles.Ellipsis}>{org.name}</span>
                       {org.is_demo && (
                         <StatusPill tone="themed">демо</StatusPill>
                       )}
@@ -152,35 +179,6 @@ const ProfilePage = () => {
           </section>
         </Flex>
       )}
-
-      <Flex asChild align="stretch" direction="column" gap={8}>
-        <section>
-          <Typography.Text asChild variant="title" color="primary">
-            <h2>Мой дом</h2>
-          </Typography.Text>
-          <div className={styles.Panel}>
-            <CellSimple
-              before={<Icon src={buildingIcon} className={styles.CellIcon} />}
-              title="Карточка дома"
-              subtitle="УК, тарифы, капремонт, документы"
-              showChevron
-              onClick={() => void navigate(Routes.HOUSE_CARD)}
-            />
-            <CellSimple
-              separator
-              before={<Icon src={homeIcon} className={styles.CellIcon} />}
-              title="Моя квартира"
-              subtitle={
-                warning
-                  ? "Доступна после подтверждения квартиры"
-                  : "Начисления, счётчики, код арендатору"
-              }
-              showChevron
-              onClick={() => void navigate(Routes.FLAT)}
-            />
-          </div>
-        </section>
-      </Flex>
 
       <Flex asChild align="stretch" direction="column" gap={8}>
         <section>

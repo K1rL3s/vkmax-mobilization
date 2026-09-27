@@ -21,7 +21,7 @@ import styles from "./flat-residents-section.module.css";
 
 const residentCaption = (resident: FlatResident) =>
   [
-    resident.role === "owner" ? "Собственник" : "Арендатор · вход по коду",
+    resident.role === "owner" ? "Собственник" : "Арендатор · по приглашению",
     resident.is_chairman && "председатель совета",
     !resident.verified && "не подтверждён",
     resident.status === "blocked" && "доступ закрыт УК",
@@ -36,7 +36,7 @@ const restrictions = (residency: Residency) => {
   ].filter(Boolean);
 
   return closed.length > 0
-    ? `Вы вошли по коду собственника, поэтому ${closed.join(" и ")}`
+    ? `Вы вошли по приглашению собственника, поэтому ${closed.join(" и ")}`
     : null;
 };
 
@@ -68,7 +68,7 @@ const Residents = ({ flatId, userId }: { flatId: number; userId: number }) => {
       <EmptyState
         icon={usersIcon}
         title="Жителей пока нет"
-        description="Здесь появятся собственники и арендаторы, вошедшие по коду"
+        description="Здесь появятся собственники и арендаторы, вошедшие по приглашению"
       />
     );
   }
@@ -100,14 +100,14 @@ const Invites = ({ flatId }: { flatId: number }) => {
 
   const content = () => {
     if (invites.isPending) {
-      return <LoadingState title="Загружаем коды" />;
+      return <LoadingState title="Загружаем приглашения" />;
     }
 
     if (invites.isError) {
       return (
         <ErrorState
           error={invites.error}
-          description="Не получилось загрузить выданные коды"
+          description="Не получилось загрузить приглашения"
           onRetry={() => void invites.refetch()}
         />
       );
@@ -135,12 +135,12 @@ const Invites = ({ flatId }: { flatId: number }) => {
         variant="secondary"
         onClick={() => setIssuing(true)}
       >
-        Выдать код
+        Пригласить в квартиру
       </Button>
 
       <Note>
         {invites.data?.length === 0
-          ? "Код впускает арендатора в квартиру. Арендатор не видит начисления и не голосует в опросах"
+          ? "Приглашение впускает арендатора в квартиру. Арендатор не видит начисления и не голосует в опросах"
           : "Арендатор не видит начисления и не голосует в опросах"}
       </Note>
 
@@ -152,11 +152,12 @@ const Invites = ({ flatId }: { flatId: number }) => {
 
       <ConfirmDialog
         isOpen={confirm.isOpen}
-        title={`Отозвать код ${confirm.target?.code ?? ""}?`}
+        title="Отозвать приглашение?"
         description="По нему больше никто не войдёт. Тех, кто уже вошёл, это не выселит"
         confirmLabel="Отозвать"
         error={
-          revoke.isError && "Не получилось отозвать код. Попробуйте ещё раз"
+          revoke.isError &&
+          "Не получилось отозвать приглашение. Попробуйте ещё раз"
         }
         isPending={revoke.isPending}
         onConfirm={() => {
@@ -191,7 +192,7 @@ export const FlatResidentsSection = () => {
       return (
         <Note>
           {restrictions(residency) ??
-            "Код для арендатора выдаёт собственник квартиры"}
+            "Приглашение в квартиру выдаёт собственник квартиры"}
         </Note>
       );
     }
@@ -199,8 +200,8 @@ export const FlatResidentsSection = () => {
     if (!residency.verified) {
       return (
         <Note>
-          Жителей квартиры и коды для арендатора видно после подтверждения
-          квартиры
+          Жителей квартиры и приглашения для арендатора видно после
+          подтверждения квартиры
         </Note>
       );
     }

@@ -73,11 +73,11 @@ export const IssueInviteDialog = ({
       {issue.data ? (
         <Flex direction="column" align="stretch" gapY={12}>
           <Typography.Text asChild variant="title" color="primary">
-            <h2 className={styles.Title}>Код готов</h2>
+            <h2 className={styles.Title}>Ссылка готова</h2>
           </Typography.Text>
 
           <Typography.Text variant="description" color="secondary">
-            Скопируйте ссылку с кодом и отправьте арендатору: по ней он войдёт в
+            Скопируйте ссылку и отправьте арендатору: по ней он войдёт в
             квартиру без подтверждения через УК
           </Typography.Text>
 
@@ -91,11 +91,11 @@ export const IssueInviteDialog = ({
         <Flex direction="column" align="stretch" gapY={16}>
           <Flex direction="column" gapY={4}>
             <Typography.Text asChild variant="title" color="primary">
-              <h2 className={styles.Title}>Код для арендатора</h2>
+              <h2 className={styles.Title}>Приглашение в квартиру</h2>
             </Typography.Text>
             <Typography.Text variant="description" color="secondary">
-              Арендатор войдёт по коду в квартиру, но не увидит начисления и не
-              сможет голосовать в опросах
+              Арендатор войдёт в квартиру по приглашению, но не увидит
+              начисления и не сможет голосовать в опросах
             </Typography.Text>
           </Flex>
 
@@ -121,7 +121,7 @@ export const IssueInviteDialog = ({
 
           {issue.isError && (
             <Typography.Text className={styles.Error} variant="description">
-              Не получилось выдать код. Попробуйте ещё раз
+              Не получилось создать приглашение. Попробуйте ещё раз
             </Typography.Text>
           )}
 
@@ -140,7 +140,7 @@ export const IssueInviteDialog = ({
                 })
               }
             >
-              Выдать код
+              Пригласить
             </Button>
             <Button
               size="large"
