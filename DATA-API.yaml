@@ -22,9 +22,9 @@ auth:
     заводят учетную запись и повторяются без побочных эффектов.
   roles:
     resident:
-      description: Житель демо-УК №1 с подтвержденной квартирой, начислениями и показаниями за полгода
+      description: Житель демо-УК №5 с подтвержденной квартирой, начислениями и показаниями за полгода
     staff:
-      description: Сотрудник демо-УК №1, видит заявки домов своей организации
+      description: Сотрудник демо-УК №5, видит заявки домов своей организации
 
 error_format:
   content_type: application/json
@@ -35,10 +35,10 @@ error_format:
     - error.detail
 
 test_data:
-  house_id: "[id дома демо-квартиры жителя]"
-  flat_id: "[id демо-квартиры жителя]"
-  request_id: "[id заявки жителя, созданной при подготовке]"
-  foreign_request_id: "[id заявки другого жителя другой УК]"
+  house_id: 6
+  flat_id: 1121
+  request_id: 766
+  foreign_request_id: 1
 
 checks:
   - id: provision_consent
@@ -56,9 +56,13 @@ checks:
       required_fields: [user_id, name, consent_at, consent_version, residencies, orgs, is_demo]
 
   - id: provision_demo
-    description: Демо-доступ - своя квартира в первом доме демо-УК №1 и роль сотрудника этой УК
+    description: Демо-доступ - своя квартира в первом доме демо-УК №5 и роль сотрудника этой УК. Ссылки со служебного слайда ведут в демо-УК №1, поэтому заявки проверки не пересекаются с заявками жюри
     method: POST
     path: /demo/activate
+    headers:
+      Content-Type: application/json
+    body:
+      number: 5
     role: resident
     expected_status: [200]
     response:

@@ -326,14 +326,16 @@ MAX и которая живет сутки. Поэтому для провер�
 `34c63235dea4b1fb95ce89a9f108fc18` в заголовке `Authorization: Bearer <токен>`,
 он же на служебном слайде презентации. Токен открывает одну учетную запись «Проверяющий API». Первые
 две проверки в `DATA-API.yaml` дают ей согласие и демо-доступ, после этого у
-нее есть квартира в демо-УК №1 и роль сотрудника этой УК. Обе проверки
-можно повторять.
+нее есть квартира в демо-УК №5 и роль сотрудника этой УК. Ссылки со
+служебного слайда ведут в демо-УК №1, поэтому заявки проверки не
+пересекаются с заявками жюри. Обе проверки можно повторять.
 
 ```sh
 TOKEN=34c63235dea4b1fb95ce89a9f108fc18
 curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"version":"1.0"}' https://vkmax.k1rles.ru/api/me/consent
-curl -X POST -H "Authorization: Bearer $TOKEN" https://vkmax.k1rles.ru/api/demo/activate
+curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"number":5}' https://vkmax.k1rles.ru/api/demo/activate
 curl -H "Authorization: Bearer $TOKEN" https://vkmax.k1rles.ru/api/me
 ```
 
