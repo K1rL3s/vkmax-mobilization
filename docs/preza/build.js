@@ -214,7 +214,7 @@ async function build() {
       ["API", "vkmax.k1rles.ru/api", "https://vkmax.k1rles.ru/api/healthcheck"],
       ["Документация", "vkmax.k1rles.ru/api/docs", "https://vkmax.k1rles.ru/api/docs"],
       ["Контракт", "openapi.yaml, DATA-API.yaml"],
-      ["Токен API", `Bearer ${process.env.API_TEST_TOKEN || "[значение API_TEST_TOKEN]"}`],
+      ["Токен API", "Bearer 34c63235dea4b1fb95ce89a9f108fc18"],
       ["Логины", "не нужны, вход по аккаунту MAX"],
       ["Лицевые счета", "номер квартиры с нулями: 0000000012"],
       ["Окружение", ".env.example; MAX_TOKEN - выданный бот, ключи Yandex не нужны"],
@@ -242,7 +242,7 @@ async function build() {
     });
     text(s, "Порядок проверки", { x: 7.2, y: 5.4, w: 5.2, h: 0.35, fontSize: 13, bold: true });
     text(s, "Житель: заявка с фото и подсказкой категории, показания по фото. Сотрудник: принять заявку, отправить на приёмку. Житель: уведомление, приёмка и оценка в чате. Подробно - README, «Сценарий проверки»", { x: 7.2, y: 5.78, w: 5.3, h: 0.95, fontSize: 12.5 });
-    s.addNotes("Слайд не оценивается, но по нему жюри проверяет решение. Перед сдачей вписать commit hash и значение API_TEST_TOKEN с прода. Все ссылки открыть в инкогнито");
+    s.addNotes("Слайд не оценивается, но по нему жюри проверяет решение. Перед сдачей собрать с COMMIT, см. AGENTS.md. Все ссылки открыть в инкогнито");
   }
 
   {
