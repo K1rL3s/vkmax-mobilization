@@ -18,7 +18,7 @@ Fonts: Unbounded (headings) and Manrope (body) must be installed as static insta
 
 - All content lives in `build.js`: one `{ ... }` block per slide, in deck order. Slide numbers come from the `n` counter, so adding or removing a block renumbers the rest.
 - The team is the `TEAM` constant. The deck shows names and roles only; GitHub links live in the root `README.md`.
-- Layout helpers: `lightSlide`/`darkSlide` (background, stripe corner, number), `title`, `text`, `card` (sticker card with a hard shadow), `badge` (lucide icon in a circle; names come from `react-icons/lu`), `says` (Zheka's speech bubble with his avatar), `bullets`, `placeholder`, `phone`.
+- Layout helpers: `lightSlide`/`darkSlide` (background, stripe corner, number), `title`, `text`, `card` (sticker card with a hard shadow), `badge` (lucide icon in a circle; names come from `react-icons/lu`), `says` (Zheka's speech bubble with his avatar), `bullets`, `placeholder`, `phone` (a screenshot from `screens/` in a phone frame, returns its width).
 - `says` bubbles are aimed at the avatar after the build: `aimBubbles` writes the callout adjustments into the slide XML, since pptxgenjs cannot set them. The bubble text is a separate text box on top of the shape, so it stays vertically centred.
 - Links must be clickable in the PDF. On light backgrounds use a text `hyperlink` run. On coloured shapes and dark slides use `link()`, a transparent image with a hyperlink laid over the text: LibreOffice repaints hyperlink text in its own blue.
 - No period after the last sentence of a phrase, bullet or bubble; periods stay between sentences.
