@@ -2,6 +2,7 @@ import { Button, Flex } from "@maxhub/max-ui";
 import { useLoaderData, useNavigate, useRevalidator } from "react-router-dom";
 
 import { Consent } from "@/features/onboarding";
+import { errorMessage } from "@/shared/api/errors";
 import { getMaxLaunch, getWebApp } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { infoIcon } from "@/shared/ui/icon";
@@ -135,7 +136,7 @@ const DeeplinkPage = () => {
       <ErrorState
         fill
         title={view.title}
-        description={view.description}
+        description={errorMessage(state.error, view.description)}
         onRetry={retry}
       />
 

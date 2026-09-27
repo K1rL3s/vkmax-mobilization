@@ -348,3 +348,27 @@ async def _create(
         channels,
         urgent=urgent,
     )
+
+
+async def test_a_demo_org_sends_a_direct_announcement_only_to_its_author(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    await _add_resident(session, data.house_id)
+    org = await OrgsRepo(session).get(data.org_id)
+    assert org is not None
+    org.is_demo = True
+    await session.flush()
+
+    await _create(
+        _service(session, publisher),
+        data,
+        channels=[AnnouncementChannel.DIRECT],
+    )
+
+    await publisher.flush()
+    [enqueued] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
+    assert enqueued["user_ids"] == [data.user_id]

@@ -2,6 +2,7 @@ import base64
 import logging
 import re
 from collections.abc import Mapping
+from pathlib import PurePath
 from typing import Any
 
 import aiohttp
@@ -17,6 +18,7 @@ TIMEOUT_SECONDS = 3.0
 _RECOGNIZE_URL = "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText"
 _MODEL = "meter"
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
+_MIME_TYPES = {".jpg": "JPEG", ".png": "PNG"}
 
 
 def parse_reading(text: str) -> int | None:
@@ -54,23 +56,26 @@ class VisionClient:
     async def recognize(self, photo_path: str) -> dict[TariffZone, int] | None:
         if not self._config.api_key or not self._config.folder_id:
             return None
+        mime_type = _MIME_TYPES.get(PurePath(photo_path).suffix)
+        if mime_type is None:
+            return None
 
         try:
             content = self._files.path_of(photo_path).read_bytes()
         except (EntityNotFound, OSError):
             return None
 
-        text = await self._call(content)
+        text = await self._call(content, mime_type)
         value = None if text is None else parse_reading(text)
         return None if value is None else {TariffZone.SINGLE: value}
 
-    async def _call(self, content: bytes) -> str | None:
+    async def _call(self, content: bytes, mime_type: str) -> str | None:
         headers = {
             "Authorization": f"Api-Key {self._config.api_key}",
             "x-folder-id": self._config.folder_id or "",
         }
         payload = {
-            "mimeType": "JPEG",
+            "mimeType": mime_type,
             "languageCodes": ["ru"],
             "model": _MODEL,
             "content": base64.b64encode(content).decode(),

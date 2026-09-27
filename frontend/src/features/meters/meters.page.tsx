@@ -17,8 +17,8 @@ import { SubmitResult } from "./ui/submit-result";
 import styles from "./meters.module.css";
 
 const photoHint = (photos: ReturnType<typeof useReadingPhotos>) => {
-  if (photos.isFailed) {
-    return "Фото не загрузилось, попробуйте ещё раз";
+  if (photos.error) {
+    return photos.error;
   }
 
   if (photos.isRecognizing) {
@@ -54,6 +54,7 @@ const MetersPage = () => {
               to={generatePath(Routes.FLAT_CONFIRMATION, {
                 residentId: String(residency.resident_id),
               })}
+              state={{ returnTo: Routes.METERS }}
             >
               Подтвердить квартиру
             </Link>
@@ -200,7 +201,7 @@ const MetersPage = () => {
             <Typography.Text
               variant="description"
               color="tertiary"
-              className={form.photos.isFailed ? styles.Failed : undefined}
+              className={form.photos.error ? styles.Failed : undefined}
             >
               {photoHint(form.photos)}
             </Typography.Text>

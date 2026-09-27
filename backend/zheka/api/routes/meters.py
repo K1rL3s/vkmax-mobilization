@@ -25,7 +25,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import NOT_VERIFIED
 from zheka.core.services.meters import MeterDraft, MeterUpdateDraft, MetersService
 from zheka.core.services.readings import ReadingRow, ReadingsService, SubmitDraft
-from zheka.infra.yandex import VisionClient
+from zheka.infra.yandex import VisionClient, YandexQuota
 
 router = APIRouter(tags=["Счетчики"], route_class=DishkaRoute)
 
@@ -111,10 +111,13 @@ async def submit_reading(
 
 @router.post("/meters/readings/recognize", summary="Распознать показание по фото")
 async def recognize_reading(
-    current_account: RequireConsentDep,  # noqa: ARG001
+    current_account: RequireConsentDep,
     vision_client: FromDishka[VisionClient],
     body: RecognizeReadingRequest,
+    quota: FromDishka[YandexQuota],
 ) -> RecognizeReadingResponse:
+    if not quota.take(current_account.user_id):
+        return RecognizeReadingResponse(values=None)
     values = await vision_client.recognize(body.photo_path)
     return RecognizeReadingResponse(values=values)
 

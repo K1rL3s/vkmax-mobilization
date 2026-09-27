@@ -1,6 +1,9 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
+import { DemandCard } from "@/features/home";
+import { useHouseCard } from "@/features/house";
+import { useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 import { wrenchIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
@@ -13,12 +16,25 @@ import styles from "./request-list.module.css";
 
 const RequestListPage = () => {
   const list = useRequestList();
+  const { currentResidency: residency } = useSession();
+  const card = useHouseCard(residency?.house_id);
+  const house = card.data;
+  const connected = house?.is_connected !== false;
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Button asChild size="large" stretched>
-        <Link to={Routes.REQUEST_NEW}>Новая заявка</Link>
-      </Button>
+      {house && !connected ? (
+        <DemandCard
+          houseId={house.id}
+          demandSent={house.demand_sent}
+          demandCount={house.demand_count}
+          onSent={() => void card.refetch()}
+        />
+      ) : (
+        <Button asChild size="large" stretched>
+          <Link to={Routes.REQUEST_NEW}>Новая заявка</Link>
+        </Button>
+      )}
 
       <StatusFilter value={list.filter} onChange={list.setFilter} />
 
@@ -28,7 +44,7 @@ const RequestListPage = () => {
         <ErrorState error={list.loadError} fill onRetry={list.retry} />
       )}
 
-      {list.isEmpty && (
+      {list.isEmpty && connected && (
         <EmptyState
           fill
           icon={wrenchIcon}

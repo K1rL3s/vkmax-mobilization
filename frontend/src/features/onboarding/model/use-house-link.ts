@@ -20,7 +20,7 @@ export const useHouseLink = () => {
           })
         : Routes.HOME;
 
-      await navigate(next, { state: { returnTo: Routes.HOME } });
+      await navigate(next, { replace: true, state: { returnTo: Routes.HOME } });
     },
   });
 

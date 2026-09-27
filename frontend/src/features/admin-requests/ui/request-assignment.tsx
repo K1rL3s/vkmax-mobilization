@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, CellSimple, Spinner, Typography } from "@maxhub/max-ui";
 
+import { FieldError } from "@/shared/ui/field-error";
 import { checkIcon, Icon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
@@ -64,6 +65,8 @@ export const RequestAssignment = ({ request }: { request: AdminRequest }) => {
           />
         ))}
       </div>
+
+      <FieldError message={model.error} />
 
       {model.executors.length > visible.length && (
         <Button

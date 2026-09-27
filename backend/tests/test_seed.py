@@ -382,3 +382,13 @@ async def test_the_mini_app_activation_follows_the_link_number_and_role(
     assert access.membership.org.inn == DEMO_INNS[2]
     assert access.membership.member.role is OrgRole.ADMIN
     assert access.residency.house.org_id == access.membership.org.id
+
+
+async def test_a_reviewer_account_cannot_be_derived_from_the_flat(
+    db: AsyncSession,
+) -> None:
+    access = await _demo(db).activate(await _positive_user(db))
+    flat = access.residency.flat
+    assert flat is not None
+
+    assert flat.account_no != demo_account_no(flat.number)

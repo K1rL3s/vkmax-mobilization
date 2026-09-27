@@ -149,6 +149,7 @@ checks:
     path: /requests
     headers:
       Content-Type: application/json
+      X-House-Id: "6"
     body:
       category: leak
       description: Течет кран в ванной, проверка API
@@ -162,6 +163,8 @@ checks:
     description: Список заявок жителя со статусами
     method: GET
     path: /requests
+    headers:
+      X-House-Id: "6"
     query:
       limit: 20
       offset: 0

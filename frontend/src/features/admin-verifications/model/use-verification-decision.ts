@@ -1,4 +1,4 @@
-import { errorDetail, isConflict } from "@/shared/api/errors";
+import { errorMessage, isConflict } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { invalidatePaths, queryClient } from "@/shared/api/query-client";
 import type { components } from "@/shared/api/schema/generated";
@@ -10,9 +10,10 @@ import type { VerificationRequest } from "./use-verification-list";
 const LIST_KEY = ["get", "/api/admin/verification-requests"];
 
 const decisionError = (error: unknown, action: string): string =>
-  isConflict(error)
-    ? (errorDetail(error) ?? "Запрос уже рассмотрен")
-    : `Не получилось ${action}. Проверьте связь и попробуйте ещё раз.`;
+  errorMessage(
+    error,
+    `Не получилось ${action}. Проверьте связь и попробуйте ещё раз.`,
+  );
 
 export const useVerificationDecision = (
   request: VerificationRequest | null,

@@ -26,6 +26,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestStatus,
     ResidentRole,
+    ResidentStatus,
 )
 from zheka.core.errors import (
     EntityNotFound,
@@ -509,3 +510,39 @@ async def test_house_card_gives_the_binding_code_to_the_chairman_alone(
     assert card.my_residency is not None
     assert card.my_residency.flat_id == own.flat_id
     assert (seen.chat_binding_code, seen.my_residency) == (None, None)
+
+
+async def test_a_blocked_resident_cannot_unlink_to_shed_the_block(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    residents = ResidentsRepo(session)
+    resident = await residents.get_for_house(own.user_id, own.house_id)
+    assert resident is not None
+    await residents.set_status(resident, ResidentStatus.BLOCKED, "Задолженность")
+
+    with pytest.raises(NotEnoughRights):
+        await _make_service(session).unlink(own.user_id, resident.id)
+
+    assert await residents.get(resident.id) is not None
+
+
+async def test_a_verified_tenant_cannot_relink_as_the_owner(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    await _consent(session, fixture)
+    first = await _link(session, fixture, fixture.flat_id, role=ResidentRole.TENANT)
+    first.resident.verified_at = datetime.now(UTC)
+    await session.flush()
+
+    with pytest.raises(InvalidState):
+        await _link(session, fixture, fixture.flat_id)
+    with pytest.raises(InvalidState):
+        await _link(session, fixture)
+
+    again = await _link(session, fixture, fixture.flat_id, role=ResidentRole.TENANT)
+    assert again.resident.role is ResidentRole.TENANT
+    assert again.resident.can_see_charges is False

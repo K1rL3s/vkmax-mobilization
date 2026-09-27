@@ -331,6 +331,7 @@ class AdminRequestsService:
         by_role: RequestActorRole,
         notify_author: bool = True,
     ) -> None:
+        await self._requests.lock(request)
         current = request.status
         if target is current:
             return

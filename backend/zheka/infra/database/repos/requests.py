@@ -431,3 +431,12 @@ class RequestsRepo(BaseAlchemyRepo):
         for request in requests:
             request.group_id = group_id
         await self._session.flush()
+
+    async def lock(self, request: Request) -> None:
+        stmt = (
+            select(Request)
+            .where(requests_table.c.id == request.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        await self._session.execute(stmt)

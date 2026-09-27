@@ -86,8 +86,16 @@ export const useNewRequest = () => {
     { onSuccess: (response) => openCreated(response.request_id) },
   );
 
+  const isSubmitting =
+    create.isPending ||
+    create.isSuccess ||
+    disputeCharge.isPending ||
+    disputeCharge.isSuccess;
+  const isJoining =
+    isSubmitting && typeof create.variables?.body.join_group_id === "number";
+
   const submit = (joinGroupId: number | null = null) => {
-    if (!category) {
+    if (!category || isSubmitting) {
       return;
     }
 
@@ -127,14 +135,12 @@ export const useNewRequest = () => {
     categories: categories.data ?? [],
     isCategoriesFailed: categories.isError,
     categoriesError: categories.error,
+    retryCategories: () => void categories.refetch(),
     photos,
     neighbours,
     isDispute: dispute !== null,
-    isSubmitting:
-      create.isPending ||
-      create.isSuccess ||
-      disputeCharge.isPending ||
-      disputeCharge.isSuccess,
+    isJoining,
+    isSending: isSubmitting && !isJoining,
     error:
       failure &&
       errorMessage(

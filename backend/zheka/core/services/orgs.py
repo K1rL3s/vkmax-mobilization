@@ -30,6 +30,7 @@ MAX_METER_WINDOW_DAY = 28
 MIN_GROUP_THRESHOLD = 2
 MIN_GROUP_WINDOW_HOURS = 1
 MAX_GROUP_WINDOW_HOURS = 168
+INVITE_USED_UP = "Код приглашения истек, отозван или исчерпан"
 
 
 class OrgLookupView(ZhekaType):
@@ -273,15 +274,15 @@ class OrgsService:
         if member is not None:
             if invite.revoked_at is not None or invite.expires_at <= datetime.now(UTC):
                 raise InvalidState("Код приглашения истек или отозван")
-            await self._orgs.set_member_role(
-                member,
-                member.role.higher_role(invite.role),
-            )
+            role = member.role.higher_role(invite.role)
+            if role is not member.role and await self._invites.consume(code) is None:
+                raise InvalidState(INVITE_USED_UP)
+            await self._orgs.set_member_role(member, role)
             return OrgMembershipView(member=member, org=org)
 
         consumed = await self._invites.consume(code)
         if consumed is None:
-            raise InvalidState("Код приглашения истек, отозван или исчерпан")
+            raise InvalidState(INVITE_USED_UP)
         return OrgMembershipView(
             member=await self._orgs.add_member(org_id, user_id, consumed.role),
             org=org,

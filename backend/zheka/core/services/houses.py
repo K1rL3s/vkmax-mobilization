@@ -5,7 +5,14 @@ from dataclasses import replace
 from decimal import Decimal
 
 from zheka.base import ZhekaType
-from zheka.core.enums import EventSource, EventType, ResidentRole, VerificationStatus
+from zheka.core import texts
+from zheka.core.enums import (
+    EventSource,
+    EventType,
+    ResidentRole,
+    ResidentStatus,
+    VerificationStatus,
+)
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -242,12 +249,13 @@ class HousesService:
             existing is not None
             and existing.flat_id is not None
             and existing.verified_at is not None
-            and (
-                number is not None
-                or (flat_id is not None and flat_id != existing.flat_id)
-            )
         ):
-            raise InvalidState("Квартира уже подтверждена, переезд оформляет УК")
+            if number is not None or (
+                flat_id is not None and flat_id != existing.flat_id
+            ):
+                raise InvalidState("Квартира уже подтверждена, переезд оформляет УК")
+            if role is not existing.role:
+                raise InvalidState("Квартира уже подтверждена, роль в ней не меняется")
 
         resident, created = await self._residents.add_or_get(
             user_id,
@@ -276,6 +284,8 @@ class HousesService:
         resident = await self._residents.get(resident_id)
         if resident is None or resident.user_id != user_id:
             raise EntityNotFound("Привязка к дому не найдена")
+        if resident.status is ResidentStatus.BLOCKED:
+            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
 
         house_id = resident.house_id
         await self._residents.delete(resident)

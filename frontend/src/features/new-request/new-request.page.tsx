@@ -23,7 +23,7 @@ const NewRequestPage = () => {
       <ErrorState
         fill
         error={form.categoriesError}
-        onRetry={() => window.location.reload()}
+        onRetry={form.retryCategories}
       />
     );
   }
@@ -94,7 +94,7 @@ const NewRequestPage = () => {
             <SimilarPanel
               count={form.neighbours.neighbours_count}
               canJoin={form.neighbours.can_join && form.canSubmit}
-              isJoining={form.isSubmitting}
+              isJoining={form.isJoining}
               onJoin={() => form.submit(form.neighbours?.group_id)}
             />
           )}
@@ -131,11 +131,10 @@ const NewRequestPage = () => {
               <Typography.Text
                 variant="description"
                 color="secondary"
-                className={form.photos.isFailed ? styles.Failed : undefined}
+                className={form.photos.error ? styles.Failed : undefined}
               >
-                {form.photos.isFailed
-                  ? "Фото не загрузилось, попробуйте ещё раз"
-                  : `До ${PHOTO_LIMIT} фото - так УК быстрее разберётся`}
+                {form.photos.error ??
+                  `До ${PHOTO_LIMIT} фото - так УК быстрее разберётся`}
               </Typography.Text>
             </section>
           </Flex>
@@ -162,7 +161,7 @@ const NewRequestPage = () => {
         <Button
           size="large"
           stretched
-          loading={form.isSubmitting}
+          loading={form.isSending}
           disabled={!form.canSubmit}
           onClick={() => form.submit()}
         >

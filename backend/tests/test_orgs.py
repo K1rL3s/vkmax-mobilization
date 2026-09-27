@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.conftest import (
     OrgHouseFlatUser,
     RecordingBroker,
+    add_resident,
     make_config,
     make_notifications_service,
 )
@@ -23,10 +24,11 @@ from zheka.core.errors import (
     InvalidState,
     NotEnoughRights,
 )
+from zheka.core.ids import MaxUserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.moderation import ModerationService
 from zheka.core.services.orgs import OrgsService
-from zheka.infra.database.models import Event
+from zheka.infra.database.models import Event, User
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
@@ -373,3 +375,66 @@ async def test_create_invite_rejects_dead_limits(
 def test_org_contact_without_a_phone_is_the_name_alone() -> None:
     assert texts.org_contact("УК Дом", " ") == "Связаться с УК: УК Дом"
     assert texts.org_contact("УК Дом", "+7 1") == "Связаться с УК: УК Дом, +7 1"
+
+
+async def test_a_member_cannot_rise_on_a_used_up_invite(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    org = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
+    admin = await make_org_house_flat_user()
+    employee = await make_org_house_flat_user()
+    orgs_service = make_orgs_service(session)
+
+    async def invite(role: OrgRole) -> str:
+        created = await orgs_service.create_invite(
+            org.org_id,
+            org.user_id,
+            OrgRole.CREATOR,
+            role,
+            expires_in_hours=72,
+            max_activations=1,
+        )
+        return created.code
+
+    admin_code = await invite(OrgRole.ADMIN)
+    await orgs_service.activate_invite(employee.user_id, await invite(OrgRole.EMPLOYEE))
+    await orgs_service.activate_invite(admin.user_id, admin_code)
+    await orgs_service.activate_invite(admin.user_id, admin_code)
+
+    with pytest.raises(InvalidState):
+        await orgs_service.activate_invite(employee.user_id, admin_code)
+
+    member = await OrgsRepo(session).get_member(org.org_id, employee.user_id)
+    assert member is not None
+    assert member.role is OrgRole.EMPLOYEE
+
+
+@pytest.mark.parametrize("action", ["block", "revoke_verification"])
+@pytest.mark.parametrize(
+    ("max_user_id", "spared"),
+    [(MaxUserId(7), True), (MaxUserId(-7), False)],
+    ids=["reviewer", "seeded"],
+)
+async def test_a_demo_org_restricts_only_seeded_residents(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    action: str,
+    max_user_id: MaxUserId,
+    spared: bool,
+) -> None:
+    own = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    org = await OrgsRepo(session).get(own.org_id)
+    assert org is not None
+    org.is_demo = True
+    user = User(max_user_id=max_user_id, name="Сосед")
+    session.add(user)
+    await session.flush()
+    resident = await add_resident(session, user.id, own.house_id, own.flat_id)
+    restrict = getattr(make_moderation_service(session), action)
+
+    if spared:
+        with pytest.raises(NotEnoughRights):
+            await restrict(own.org_id, resident.id, "причина", own.user_id)
+    else:
+        await restrict(own.org_id, resident.id, "причина", own.user_id)

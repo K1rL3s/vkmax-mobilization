@@ -81,7 +81,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - `API_TEST_TOKEN` (empty = off): `Bearer` with it is one synthetic user,
   `API_CHECKER_MAX_USER_ID` (below every seeded id); else `WebAppData` or 401.
   `/demo/activate` gives it only EMPLOYEE of `API_CHECKER_DEMO_NUMBER`, else
-  403: the token is public and the jury sits in org 1.
+  403: the token is public and the jury sits in org 1. Its own requests stop
+  at `ACCEPTED` (`change_request_status`): `DATA-API.yaml` `staff_status`
+  moves the test request there and fails 409 once it is further.
 - Middleware order lives only in `setup_middlewares` (`api/app.py`),
   `trace_id_middleware` outermost, `RequestStateMiddleware` last (gunicorn 26
   shares one `scope["state"]` per worker; without it concurrent requests share
@@ -93,6 +95,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `EntityNotFound` (404), never 403.
 - Route and bot uploads go through `save_download`, which counts
   `max_size_mb` while writing (`Bot.download` streams unchecked for 30 s).
+- `HousesService.link` never changes a verified resident's flat or role (УК
+  moves them); a blocked resident cannot `unlink` (relinking would shed the
+  block). An org invite reopened by a member is free unless it raises the
+  role, which consumes an activation.
 
 ## Bot
 
@@ -183,7 +189,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `executor_advance` checks both before writing, `executor_card` returns
   `None`.
 - The author's review card is queued only in `AdminRequestsService._move`,
-  the one road into `ON_REVIEW`. `_move` to the current status is a no-op (no
+  the one road into `ON_REVIEW`. Every status write first takes
+  `RequestsRepo.lock` (`FOR UPDATE`, refreshed), so a concurrent tap sees the
+  new status. `_move` to the current status is a no-op (no
   log, event, message, notification): a repeated staff status call answers 200
   with the card; backward is `InvalidState(BACKWARD)`.
 - New and repeat requests notify org staff (never executor or author) under
@@ -197,8 +205,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   / `YANDEX_FOLDER_ID`; 401, 403 or a non-header key disables it per process;
   other failures or answers outside `RequestCategory` -> `category: null`.
   Key never logged. The model picks only the category (`CATEGORY_RULES` give
-  the zone), the resident's text is its own `user` message, no per-user limit
-  yet. The bot does not classify.
+  the zone), the resident's text is its own `user` message. `YandexQuota`
+  caps classify and OCR together per user per api worker (`QUOTA_CALLS` an
+  hour); past it the route answers as if Yandex were off. The bot does not
+  classify. OCR gets the photo's real type and skips types it can't read.
 - `RequestChannel.CHAT` is written nowhere (no chat interaction in the spec).
 - Chats bind per `BOUND_CHAT` (`repos/chats.py`); fan-out also needs
   `bot_is_admin`. Every `bot_added` is a fresh binding: `upsert_added` clears
@@ -288,7 +298,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   house has tariffs, every demo org `meter_window_always_open`).
   `POST /demo/activate` (`number`, `admin`) does both, keeping an existing
   role unless `admin` raises it; both idempotent. No seed ->
-  `EntityNotFound`; no `consent_at` -> `NotEnoughRights`.
+  `EntityNotFound`; no `consent_at` -> `NotEnoughRights`. A reviewer's flat
+  account is random (seeded ones are the zero-padded number), so no other
+  reviewer can verify into it.
+- Demo orgs are shared by strangers: block and revoke-verification refuse a
+  real user (positive `max_user_id`) other than the actor, and a DIRECT
+  announcement reaches only its author.
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
   reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed
   on the deploy closest to judging. `scripts/fetch_seed_data.py` rewrites

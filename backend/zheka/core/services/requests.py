@@ -213,6 +213,7 @@ class RequestsService:
         channel: RequestChannel = RequestChannel.MINIAPP,
     ) -> RequestCardData:
         parent = await self._own_request(user_id, request_id)
+        await self._requests.lock(parent)
         rejected_on_review = parent.status is RequestStatus.ON_REVIEW
         if not rejected_on_review and parent.status is not RequestStatus.DONE:
             raise InvalidState(REPEAT_NOT_DONE)
@@ -293,6 +294,7 @@ class RequestsService:
     async def accept(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
         await self._active_resident(user_id, request.house_id)
+        await self._requests.lock(request)
         if request.status is not RequestStatus.ON_REVIEW:
             raise InvalidState(ACCEPT_NOT_ON_REVIEW)
 

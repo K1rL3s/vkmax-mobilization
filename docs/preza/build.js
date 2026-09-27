@@ -217,7 +217,7 @@ async function build() {
       ["Токен API", "Bearer 34c63235dea4b1fb95ce89a9f108fc18"],
       ["Логины", "не нужны, вход по аккаунту MAX"],
       ["Лицевые счета", "номер квартиры с нулями: 0000000012"],
-      ["Окружение", ".env.example; MAX_TOKEN - выданный бот, ключи Yandex не нужны"],
+      ["Окружение", ".env.example; без MAX_TOKEN локально все, кроме бота"],
     ];
     kv.forEach(([k, v, url], i) => {
       const y = 2.68 + i * 0.4;
@@ -540,7 +540,7 @@ async function build() {
   {
     const s = lightSlide(++n);
     title(s, "Как это выглядит");
-    text(s, "Экраны мини-приложения на демо-данных", { x: 7.7, y: 0.8, w: 5.0, h: 0.35, fontSize: 13, color: C.muted, align: "right" });
+    text(s, "Экраны мини-приложения на модельных данных", { x: 7.7, y: 0.8, w: 5.0, h: 0.35, fontSize: 13, color: C.muted, align: "right" });
     const shots = [
       ["01-home.png", "Главная: заявка на приёмке, окно показаний, опрос"],
       ["02-new-request.png", "Заявка: модель подсказала категорию, соседи уже сообщили"],
@@ -661,7 +661,7 @@ async function build() {
     const arrow = (x1, y1, x2, y2, o = {}) => s.addShape(pres.shapes.LINE, { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1), flipH: x2 < x1, flipV: y2 < y1, line: { color: C.navy, width: 1.25, endArrowType: "triangle", beginArrowType: o.both ? "triangle" : undefined, dashType: o.dash ? "dash" : "solid" } });
 
     box("MAX", "бот, мини-приложение, домовые чаты", 0.6, 3.05, 2.3, 1.1, { main: true, fill: C.deep, color: C.pure, subColor: C.refl });
-    box("nginx", "HTTPS, разводит по путям", 3.5, 3.05, 1.9, 1.1);
+    box("nginx", "за TLS хоста, разводит по путям", 3.5, 3.05, 1.9, 1.1);
     box("web", "React + TypeScript, max-ui", 6.0, 1.65, 2.5, 1.0);
     box("api", "FastAPI, вебхук бота maxo", 6.0, 3.1, 2.5, 1.0, { main: true });
     box("worker, scheduler", "taskiq: рассылки, напоминания", 6.0, 4.55, 2.5, 1.0);
@@ -760,7 +760,7 @@ async function build() {
     card(s, 0.6, 6.1, 12.13, 0.75, { fill: C.refl, flat: true, noLine: true, r: 0.12 });
     text(s, [
       { text: "Новый регион без изменений ядра: ", options: { bold: true } },
-      { text: "скрипт загружает выгрузку КР 1.1 и реестр УО Реформы ЖКХ, под регион настраиваются выгрузка и разбор адресов. УК подключается сама по ИНН и зовёт сотрудников ссылками, своих ИТ-специалистов не нужно" },
+      { text: "скрипт загружает выгрузку КР 1.1 и реестр УО Реформы ЖКХ, под регион настраиваются выгрузка и разбор адресов. УК подключается сама по ИНН и коду регистрации, сотрудников зовёт ссылками, своих ИТ-специалистов не нужно" },
     ], { x: 0.85, y: 6.15, w: 11.7, h: 0.65, fontSize: 12.5, valign: "middle" });
   }
 

@@ -23,6 +23,9 @@ from tests.conftest import (
     photo_name,
 )
 
+from zheka.api.dependencies.current_account import CurrentAccount
+from zheka.api.routes.meters import recognize_reading
+from zheka.api.schemas.meters import RecognizeReadingRequest
 from zheka.config import FilesConfig, YandexConfig
 from zheka.core.enums import (
     EventType,
@@ -39,7 +42,7 @@ from zheka.core.errors import (
     InvalidValue,
     NotEnoughRights,
 )
-from zheka.core.ids import MeterId, OrgId
+from zheka.core.ids import MeterId, OrgId, UserId
 from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
@@ -64,6 +67,8 @@ from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.yandex import YandexQuota
+from zheka.infra.yandex.quota import QUOTA_CALLS
 from zheka.infra.yandex.vision import VisionClient, parse_reading
 
 MOSCOW = ZoneInfo("Europe/Moscow")
@@ -786,3 +791,59 @@ async def test_a_verification_ended_on_the_house_date_blocks_the_reading(
     assert card.verification_expired is True
     with pytest.raises(InvalidState, match="Срок поверки истек"):
         await service.submit(own.user_id, meter_id, _draft(period=date(2026, 9, 1)))
+
+
+@pytest.mark.parametrize(
+    ("suffix", "mime_type"),
+    [(".jpg", "JPEG"), (".png", "PNG"), (".webp", None), (".heic", None)],
+)
+async def test_vision_client_names_the_photo_type_ocr_accepts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    suffix: str,
+    mime_type: str | None,
+) -> None:
+    sent: list[str] = []
+
+    async def recognize(request: web.Request) -> web.StreamResponse:
+        sent.append((await request.json())["mimeType"])
+        text = {"textAnnotation": {"fullText": "00123,45 м3"}}
+        return web.json_response({"result": text})
+
+    app = web.Application()
+    app.router.add_post("/ocr", recognize)
+    name = photo_name().replace(".jpg", suffix)
+    (tmp_path / name).write_bytes(b"photo")
+    files = FilesService(FilesConfig(dir=str(tmp_path), max_size_mb=10), "token")
+    config = YandexConfig(api_key="key", folder_id="folder")
+    async with TestServer(app) as server, aiohttp.ClientSession() as http:
+        url = str(server.make_url("/ocr"))
+        monkeypatch.setattr("zheka.infra.yandex.vision._RECOGNIZE_URL", url)
+        await VisionClient(config, files, http).recognize(name)
+
+    assert sent == ([] if mime_type is None else [mime_type])
+
+
+class _StubVision(VisionClient):
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        pass
+
+    async def recognize(self, photo_path: str) -> dict[TariffZone, int] | None:  # noqa: ARG002
+        return {TariffZone.SINGLE: 1}
+
+
+async def test_recognize_answers_without_ocr_past_the_hourly_quota() -> None:
+    account = CurrentAccount(user_id=UserId(1), consent_at=None)
+    body = RecognizeReadingRequest(
+        photo_path=photo_name(),
+        meter_type=MeterType.COLD_WATER,
+    )
+    quota = YandexQuota()
+    for _ in range(QUOTA_CALLS):
+        quota.take(account.user_id)
+
+    response = await recognize_reading(account, _StubVision(), body, quota)
+
+    assert response.values is None

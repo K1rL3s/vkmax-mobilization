@@ -21,14 +21,19 @@ type DeeplinkExecution = { target: "resident" | "admin" };
 
 type DeeplinkAttempt =
   | { status: "succeeded"; value: DeeplinkExecution }
-  | { status: "failed" }
+  | { status: "failed"; error: unknown }
   | { status: "ignored" };
 
 export type DeeplinkPageState =
   | { status: "consent" }
   | { status: "bot-only"; hasResidency: boolean }
   | { status: "no-access"; route: string }
-  | { status: "failure"; kind: StartParam["kind"]; hasResidency: boolean };
+  | {
+      status: "failure";
+      kind: StartParam["kind"];
+      hasResidency: boolean;
+      error: unknown;
+    };
 
 class ExpectedDeeplinkError extends Error {}
 
@@ -59,7 +64,7 @@ export const runDeeplinkOnce = (
           throw error;
         }
 
-        return { status: "failed" };
+        return { status: "failed", error: error.cause };
       },
     )
     .then((settled) => {
@@ -88,7 +93,7 @@ export const shouldHandleDeeplink = (raw: string): boolean =>
 
 const expectedFailure = (error: unknown): never => {
   throw error instanceof TypeError || errorDetail(error) !== undefined
-    ? new ExpectedDeeplinkError()
+    ? new ExpectedDeeplinkError(undefined, { cause: error })
     : error;
 };
 
@@ -107,7 +112,7 @@ const executeHouseDeeplink = async (
     .catch(expectedFailure);
 
   if (error) {
-    throw new ExpectedDeeplinkError();
+    throw new ExpectedDeeplinkError(undefined, { cause: error });
   }
 
   await reloadSession();
@@ -140,7 +145,7 @@ const executeDemoDeeplink = async (
     .catch(expectedFailure);
 
   if (error) {
-    throw new ExpectedDeeplinkError();
+    throw new ExpectedDeeplinkError(undefined, { cause: error });
   }
 
   await reloadSession();

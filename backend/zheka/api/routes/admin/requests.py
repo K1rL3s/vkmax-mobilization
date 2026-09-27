@@ -2,7 +2,8 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import CurrentOrgDep
+from zheka.api.dependencies import CurrentOrgDep, CurrentUserDep
+from zheka.api.dependencies.current_user import API_CHECKER_MAX_USER_ID
 from zheka.api.routes.requests import signed
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.requests import (
@@ -17,6 +18,7 @@ from zheka.api.schemas.requests import (
     RequestGroupCard,
 )
 from zheka.core.enums import RequestCategory, RequestChannel, RequestStatus
+from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import HouseId, RequestGroupId, RequestId, UserId
 from zheka.core.services.admin_requests import (
     AdminRequestCardData,
@@ -86,7 +88,17 @@ async def change_request_status(
     admin_requests_service: FromDishka[AdminRequestsService],
     files_service: FromDishka[FilesService],
     body: ChangeRequestStatusRequest,
+    current_user: CurrentUserDep,
 ) -> AdminRequestCard:
+    if current_user.user.id == API_CHECKER_MAX_USER_ID and (
+        body.status is not RequestStatus.ACCEPTED
+    ):
+        own = await admin_requests_service.card(current_org.org_id, request_id)
+        if own.card.request.author_user_id == current_org.user_id:
+            raise NotEnoughRights(
+                "Тестовый токен ведет свои заявки только до статуса «Принята»: "
+                "на них держатся обязательные проверки API",
+            )
     data = await admin_requests_service.change_status(
         current_org.org_id,
         request_id,

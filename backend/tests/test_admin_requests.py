@@ -1,5 +1,6 @@
 import pytest
-from sqlalchemy import select
+from maxo.utils.webapp import WebAppChat, WebAppInitData, WebAppUser
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import (
@@ -8,6 +9,7 @@ from tests.conftest import (
     RecordingBroker,
     admin_requests_service,
     events_of,
+    make_config,
     photo_name,
     requests_service,
 )
@@ -19,6 +21,10 @@ from tests.test_requests import (
     _neighbour,
 )
 
+from zheka.api.dependencies.current_org import CurrentOrg
+from zheka.api.dependencies.current_user import API_CHECKER
+from zheka.api.routes.admin.requests import change_request_status
+from zheka.api.schemas.requests import AdminRequestCard, ChangeRequestStatusRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
@@ -42,13 +48,22 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import RequestId, ResidentId, UserId
 from zheka.core.services.admin_requests import RESIDENT_BLOCKED, PhoneRequestDraft
+from zheka.core.services.files import FilesService
 from zheka.infra.database.models import Flat
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters
 from zheka.infra.database.repos.residents import ResidentsRepo
-from zheka.infra.database.tables.requests import request_status_log_table
+from zheka.infra.database.tables.requests import (
+    request_status_log_table,
+    requests_table,
+)
 
 NO_FILTERS = RequestFilters()
+_STAFF_INIT_DATA = WebAppInitData(
+    chat=WebAppChat(id=7, type="DIALOG"),
+    user=WebAppUser(id=7, first_name="Сотрудник"),
+    hash="",
+)
 TO_REVIEW = (RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS, RequestStatus.ON_REVIEW)
 
 
@@ -781,3 +796,56 @@ async def test_repeating_the_current_status_changes_nothing(
             None,
             staff,
         )
+
+
+async def test_change_status_rereads_a_status_moved_meanwhile(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request = await _complain(session, own.user_id, own.house_id)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request.id)
+        .values(status=RequestStatus.ACCEPTED)
+    )
+    await session.execute(stmt)
+
+    await admin_requests_service(session).change_status(
+        own.org_id,
+        request.id,
+        RequestStatus.ACCEPTED,
+        None,
+        staff,
+    )
+
+    assert await _logs(session, request.id) == [RequestStatus.NEW]
+
+
+@pytest.mark.parametrize(
+    ("user", "moved"),
+    [(API_CHECKER, False), (_STAFF_INIT_DATA, True)],
+    ids=["checker", "staff"],
+)
+async def test_the_checker_takes_its_own_request_no_further_than_accepted(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    user: WebAppInitData,
+    moved: bool,
+) -> None:
+    request = await _complain(session, own.user_id, own.house_id)
+    org = CurrentOrg(org_id=own.org_id, user_id=own.user_id, role=OrgRole.EMPLOYEE)
+    service = admin_requests_service(session)
+    files = FilesService(make_config().files, "test-token")
+
+    async def move(status: RequestStatus) -> AdminRequestCard:
+        body = ChangeRequestStatusRequest(status=status)
+        return await change_request_status(request.id, org, service, files, body, user)
+
+    await move(RequestStatus.ACCEPTED)
+    if moved:
+        card = await move(RequestStatus.IN_PROGRESS)
+        assert card.status is RequestStatus.IN_PROGRESS
+    else:
+        with pytest.raises(NotEnoughRights):
+            await move(RequestStatus.IN_PROGRESS)

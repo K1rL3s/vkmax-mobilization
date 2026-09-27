@@ -108,7 +108,7 @@ export const ErrorState = ({
       );
     }
 
-    if (!final) {
+    if (!final || (fill && pathname === exit)) {
       return (
         onRetry && (
           <Button size="medium" variant="secondary" onClick={onRetry}>
@@ -119,8 +119,7 @@ export const ErrorState = ({
     }
 
     return (
-      fill &&
-      pathname !== exit && (
+      fill && (
         <Button
           size="medium"
           variant="secondary"

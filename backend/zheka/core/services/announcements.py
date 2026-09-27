@@ -98,6 +98,8 @@ class AnnouncementsService:
 
         org = await self._orgs.get(org_id)
         org_name = UNKNOWN_ORG if org is None else org.name
+        if org is not None and org.is_demo and user_ids:
+            user_ids = [user_id]
         announcement = await self._announcements.create(
             org_id,
             user_id,

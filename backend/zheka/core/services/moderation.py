@@ -1,6 +1,11 @@
 from zheka.core import texts
 from zheka.core.enums import EventType, NotificationCategory, ResidentStatus
-from zheka.core.errors import EntityNotFound, InvalidRequest, InvalidState
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import OrgId, ResidentId, UserId
 from zheka.core.models import Resident
 from zheka.core.services.events import EventsService
@@ -10,6 +15,8 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+
+SPARE_REVIEWERS = "В демо-УК можно ограничить только модельных жителей"
 
 
 class ModerationService:
@@ -47,6 +54,7 @@ class ModerationService:
     ) -> HouseResidentView:
         stated = _require_reason(reason)
         resident = await self._get_resident(org_id, resident_id)
+        await self._spare_reviewers(org_id, resident, by)
         if resident.is_chairman:
             raise InvalidState("Нельзя заблокировать председателя совета дома")
         contact = await self._contact(org_id)
@@ -90,6 +98,7 @@ class ModerationService:
     ) -> HouseResidentView:
         stated = _require_reason(reason)
         resident = await self._get_resident(org_id, resident_id)
+        await self._spare_reviewers(org_id, resident, by)
         if resident.verified_at is None:
             raise InvalidState("Квартира жителя не подтверждена")
         contact = await self._contact(org_id)
@@ -159,6 +168,21 @@ class ModerationService:
     async def _contact(self, org_id: OrgId) -> str:
         org = await self._orgs.get_existing(org_id)
         return texts.org_contact(org.name, org.phone)
+
+    async def _spare_reviewers(
+        self,
+        org_id: OrgId,
+        resident: Resident,
+        by: UserId,
+    ) -> None:
+        if (
+            resident.user_id == by
+            or not (await self._orgs.get_existing(org_id)).is_demo
+        ):
+            return
+        user = await self._users.get_by_id(resident.user_id)
+        if user is not None and user.max_user_id > 0:
+            raise NotEnoughRights(SPARE_REVIEWERS)
 
 
 def _require_reason(reason: str) -> str:

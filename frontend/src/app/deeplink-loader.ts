@@ -69,6 +69,7 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
       status: "failure",
       kind: command.kind,
       hasResidency: session.residencies.length > 0,
+      error: attempt.error,
     };
   }
 

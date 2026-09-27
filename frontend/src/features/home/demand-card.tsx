@@ -1,11 +1,13 @@
 import { Button, Flex, Typography } from "@maxhub/max-ui";
 
+import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { Card } from "@/shared/ui/card";
+import { FieldError } from "@/shared/ui/field-error";
 import { alertIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
-import styles from "./home.module.css";
+import styles from "./demand-card.module.css";
 
 type DemandCardProps = {
   houseId: number;
@@ -66,9 +68,12 @@ export const DemandCard = ({
         )}
 
         {demand.isError && (
-          <Typography.Text variant="description" color="secondary">
-            Не получилось отправить. Попробуйте ещё раз
-          </Typography.Text>
+          <FieldError
+            message={errorMessage(
+              demand.error,
+              "Не получилось отправить. Попробуйте ещё раз",
+            )}
+          />
         )}
       </Card>
     </Flex>

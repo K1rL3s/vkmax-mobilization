@@ -80,6 +80,8 @@ from zheka.infra.database.tables.requests import (
     request_status_log_table,
     requests_table,
 )
+from zheka.infra.yandex import YandexQuota
+from zheka.infra.yandex.quota import QUOTA_CALLS, QUOTA_WINDOW_SECONDS
 
 DESCRIPTION = "Течет труба в ванной, вода на полу"
 
@@ -779,6 +781,7 @@ async def test_classify_answers_the_category_with_its_zone_and_records_it(
         _account(user_id),
         service,
         ClassifyRequestRequest(text="Батареи холодные"),
+        YandexQuota(),
     )
 
     assert response.category is category
@@ -880,3 +883,69 @@ async def test_a_new_and_a_repeat_request_notify_the_staff_but_not_executors(
         f"🆕 Заявка №{created.request.id} «💧 Протечка»\n🏢 {house.address}\n"
         f"⏰ Срок: до {deadline:%H:%M %d.%m}"
     )
+
+
+async def _close_behind_the_session(
+    session: AsyncSession,
+    request_id: RequestId,
+) -> None:
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(status=RequestStatus.DONE)
+    )
+    await session.execute(stmt)
+
+
+async def test_accept_rereads_a_request_closed_meanwhile(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = created.request.id
+    await _mark_on_review(session, request_id)
+    await _close_behind_the_session(session, request_id)
+
+    with pytest.raises(InvalidState, match="на приемке"):
+        await service.accept(own.user_id, request_id)
+
+
+async def test_repeat_rereads_a_request_closed_meanwhile(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = created.request.id
+    await _mark_on_review(session, request_id)
+    await _close_behind_the_session(session, request_id)
+
+    await service.repeat(own.user_id, request_id, "Не устранили протечку", [])
+
+    logs = await _logs(session, request_id)
+    assert [log.to_status for log in logs] == [RequestStatus.NEW]
+
+
+async def test_classify_answers_without_the_model_past_the_hourly_quota(
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = await add_user(session)
+    other_id = await add_user(session)
+    classifier = StubClassifier(RequestCategory.HEATING)
+    service = requests_service(session, classifier=classifier)
+    quota = YandexQuota()
+    clock = [0.0]
+    monkeypatch.setattr("zheka.infra.yandex.quota.monotonic", lambda: clock[0])
+
+    async def ask(who: UserId) -> RequestCategory | None:
+        body = ClassifyRequestRequest(text="Батареи холодные")
+        response = await classify_request_text(_account(who), service, body, quota)
+        return response.category
+
+    answers = [await ask(user_id) for _ in range(QUOTA_CALLS + 1)]
+    assert answers[-2:] == [RequestCategory.HEATING, None]
+    assert await ask(other_id) is RequestCategory.HEATING
+    clock[0] = QUOTA_WINDOW_SECONDS
+    assert await ask(user_id) is RequestCategory.HEATING

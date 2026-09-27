@@ -1,4 +1,5 @@
 import dataclasses
+import secrets
 from datetime import UTC, date, datetime, time, timedelta
 from random import Random
 
@@ -251,7 +252,7 @@ class DemoService:
             house_id,
             flat_number,
             area=Random(f"demo-flat:{user_id}").randint(3_800, 7_800),
-            account_no=demo_account_no(flat_number),
+            account_no=f"Д{secrets.randbelow(10**9):09d}",
         )
         if created:
             await self.furnish(

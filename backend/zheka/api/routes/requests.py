@@ -25,6 +25,7 @@ from zheka.core.models import RequestPhoto
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
+from zheka.infra.yandex import YandexQuota
 
 router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
 
@@ -179,6 +180,9 @@ async def classify_request_text(
     current_account: RequireConsentDep,
     requests_service: FromDishka[RequestsService],
     body: ClassifyRequestRequest,
+    quota: FromDishka[YandexQuota],
 ) -> ClassifyRequestResponse:
+    if not quota.take(current_account.user_id):
+        return ClassifyRequestResponse.of(None)
     category = await requests_service.classify(current_account.user_id, body.text)
     return ClassifyRequestResponse.of(category)
