@@ -8,7 +8,10 @@ import {
 } from "@maxhub/max-ui";
 import { useNavigate } from "react-router-dom";
 
-import { confirmationCaption } from "@/features/flat-confirmation";
+import {
+  confirmationCaption,
+  residencyState,
+} from "@/features/flat-confirmation";
 import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
 import { type Residency } from "@/shared/model/session";
@@ -21,10 +24,13 @@ import { useUnlink } from "./use-unlink";
 
 import styles from "./residencies.module.css";
 
-const flatOf = (residency: Residency) =>
-  residency.flat_number == null
-    ? confirmationCaption(residency)
-    : `кв. ${residency.flat_number} · ${confirmationCaption(residency)}`;
+const flatOf = (residency: Residency) => {
+  const caption = confirmationCaption(residencyState(residency));
+
+  return residency.flat_number == null
+    ? caption
+    : `кв. ${residency.flat_number} · ${caption}`;
+};
 
 const ResidenciesPage = () => {
   const navigate = useNavigate();

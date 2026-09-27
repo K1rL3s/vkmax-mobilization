@@ -18,11 +18,7 @@
   }
 
   .Result {
-    background-color: color-mix(
-      in srgb,
-      var(--button-primary) 10%,
-      transparent
-    );
+    background-color: var(--background-accent-neutral-fade-secondary);
   }
 
   .Error {

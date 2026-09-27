@@ -16,11 +16,7 @@
   .Summary {
     padding: 12px;
     border-radius: 16px;
-    background-color: color-mix(
-      in srgb,
-      var(--button-primary) 10%,
-      transparent
-    );
+    background-color: var(--background-card);
   }
 
   .Panel {

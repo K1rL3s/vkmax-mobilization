@@ -19,8 +19,13 @@
 }
 
 .neutral {
-  background-color: var(--background-secondary);
-  color: var(--text-secondary);
+  background-color: #e7ecf2;
+  color: #475569;
+}
+
+:global([class*="MaxUI_colorScheme_dark"]) .neutral {
+  background-color: #475569;
+  color: #cbd5e1;
 }
 
 .positive {

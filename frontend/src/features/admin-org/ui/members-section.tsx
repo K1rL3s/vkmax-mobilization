@@ -6,7 +6,7 @@ import { formatDay } from "@/shared/lib/format";
 import { orgParams, useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
 import { ConfirmDialog, useConfirm } from "@/shared/ui/confirm-dialog";
-import { Icon, trashIcon, userIcon, usersIcon } from "@/shared/ui/icon";
+import { Icon, trashIcon, usersIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill, type StatusPillTone } from "@/shared/ui/status-pill";
 
@@ -25,7 +25,7 @@ const ROLE_TONE: Record<OrgRole, StatusPillTone> = {
   creator: "promo",
   admin: "themed",
   employee: "neutral",
-  executor: "neutral",
+  executor: "positive",
 };
 
 const byRole = (a: OrgMember, b: OrgMember) =>
@@ -51,16 +51,10 @@ const MemberRow = ({
   ]
     .filter(Boolean)
     .join(" · ");
-  const note =
-    blocked ??
-    (member.role === "executor"
-      ? "Работает через бота, кабинета УК у исполнителя нет"
-      : null);
 
   return (
     <CellSimple
       separator={separator}
-      before={<Icon src={userIcon} className={styles.CellIcon} />}
       innerClassNames={{ title: styles.Title, content: styles.Content }}
       title={
         <Flex align="center" gap={8} wrap="wrap">
@@ -72,23 +66,19 @@ const MemberRow = ({
       }
       subtitle={caption}
       after={
-        <IconButton
-          size="small"
-          variant="secondary"
-          disabled={blocked !== null}
-          aria-label={blocked ?? `Исключить: ${member.name}`}
-          onClick={onRemove}
-        >
-          <Icon src={trashIcon} size={20} />
-        </IconButton>
+        !blocked && (
+          <IconButton
+            size="small"
+            variant="secondary"
+            disabled={blocked !== null}
+            aria-label={blocked ?? `Исключить: ${member.name}`}
+            onClick={onRemove}
+          >
+            <Icon src={trashIcon} size={20} />
+          </IconButton>
+        )
       }
-    >
-      {note && (
-        <Typography.Text variant="description" color="tertiary">
-          {note}
-        </Typography.Text>
-      )}
-    </CellSimple>
+    />
   );
 };
 

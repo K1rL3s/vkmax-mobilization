@@ -94,7 +94,7 @@ const FlatConfirmationPage = () => {
     />
   );
 
-  if (view === "no-flat") {
+  if (view === "no-flat" || view === "flat-missing") {
     return (
       <PageLayout footer={later}>
         {hero}

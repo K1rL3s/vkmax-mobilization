@@ -130,8 +130,9 @@ const router = createBrowserRouter([
                 lazy: () => import("@/features/residencies/residencies.page"),
               },
               {
-                path: Routes.NEWS,
-                lazy: () => import("@/features/news/news.page"),
+                path: Routes.ANNOUNCEMENTS,
+                lazy: () =>
+                  import("@/features/announcements/announcements.page"),
               },
               {
                 path: Routes.FAQ,

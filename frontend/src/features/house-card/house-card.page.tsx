@@ -3,7 +3,7 @@ import { Button, CellSimple, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link, Navigate } from "react-router-dom";
 
 import { MyAppointmentsSection } from "@/features/appointments";
-import { type HouseCard, useHouseCard } from "@/features/house";
+import { HouseSummary, type HouseCard, useHouseCard } from "@/features/house";
 import { cn } from "@/shared/lib/css";
 import {
   duration,
@@ -20,14 +20,12 @@ import {
   clockIcon,
   documentIcon,
   geoPinIcon,
-  homeIcon,
   Icon,
   infoIcon,
   phoneIcon,
   starIcon,
   wrenchIcon,
 } from "@/shared/ui/icon";
-import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { TariffsSection } from "./tariffs-section";
@@ -336,22 +334,7 @@ const HouseCardPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex align="center" gap={12}>
-        <IconTile icon={homeIcon} tone="themed" size="large" />
-        <Flex
-          className={styles.Grow}
-          align="stretch"
-          direction="column"
-          gapY={2}
-        >
-          <Typography.Text variant="title" color="primary">
-            {house.address}
-          </Typography.Text>
-          <Typography.Text variant="description" color="secondary">
-            {house.region} · многоквартирный дом
-          </Typography.Text>
-        </Flex>
-      </Flex>
+      <HouseSummary as="h1" title={house.address} state="plain" />
 
       <Facts house={house} />
 

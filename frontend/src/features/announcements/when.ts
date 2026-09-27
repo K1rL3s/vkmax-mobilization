@@ -2,7 +2,7 @@ import { formatDay, formatTime } from "@/shared/lib/format";
 
 const isSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
-export const newsWhen = (iso: string) => {
+export const announcementWhen = (iso: string) => {
   const date = new Date(iso);
   const today = new Date();
   const yesterday = new Date(today);

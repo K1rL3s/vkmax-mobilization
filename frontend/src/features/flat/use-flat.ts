@@ -1,7 +1,4 @@
-import {
-  confirmationCaption,
-  confirmationView,
-} from "@/features/flat-confirmation";
+import { residencyState } from "@/features/flat-confirmation";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { useSession } from "@/shared/model/session";
 
@@ -20,19 +17,12 @@ export const useFlat = () => {
     return { residency: null };
   }
 
-  const view = confirmationView(residency);
+  const state = residencyState(residency);
 
   return {
     residency,
     card,
-    view,
-    canConfirm:
-      residency.is_connected && view !== "verified" && view !== "no-flat",
-    caption: residency.is_connected
-      ? confirmationCaption(residency)
-      : "дом ещё не подключён к сервису",
-    title: residency.flat_number
-      ? `Квартира ${residency.flat_number}`
-      : "Квартира",
+    state,
+    canConfirm: state === "ways" || state === "pending" || state === "rejected",
   };
 };

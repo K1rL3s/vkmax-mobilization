@@ -10,10 +10,13 @@ import {
 import { generatePath, Link, useNavigate } from "react-router-dom";
 
 import { EmergencyCard } from "@/features/emergency";
-import { confirmationCaption } from "@/features/flat-confirmation";
-import { useHouseCard } from "@/features/house";
+import { residencyState } from "@/features/flat-confirmation";
+import { HouseSummary, useHouseCard } from "@/features/house";
 import { useNextPoll } from "@/features/meetings";
-import { newsWhen, useLatestNews } from "@/features/news";
+import {
+  announcementWhen,
+  useLatestAnnouncements,
+} from "@/features/announcements";
 import { useReadingsHint } from "@/features/meters";
 import {
   CATEGORY_ICON,
@@ -33,7 +36,6 @@ import { Chevron } from "@/shared/ui/chevron";
 import {
   alertIcon,
   buildingIcon,
-  homeIcon,
   Icon,
   megaphoneIcon,
   meterIcon,
@@ -125,25 +127,28 @@ const ActiveRequestCard = ({ request }: { request: RequestListItem }) => {
   );
 };
 
-const NewsSection = () => {
-  const news = useLatestNews();
-  const items = news.data?.items ?? [];
+const AnnouncementsSection = () => {
+  const navigate = useNavigate();
+  const announcements = useLatestAnnouncements();
+  const items = announcements.data?.items ?? [];
 
   const content = () => {
-    if (news.isPending) {
+    if (announcements.isPending) {
       return <LoadingState />;
     }
 
-    if (news.isError) {
+    if (announcements.isError) {
       return (
         <CellSimple
-          before={<Icon src={alertIcon} className={styles.NewsIconAlert} />}
-          title="Новости не загрузились"
+          before={
+            <Icon src={alertIcon} className={styles.AnnouncementIconAlert} />
+          }
+          title="Объявления не загрузились"
           after={
             <Button
               size="small"
               variant="secondary"
-              onClick={() => void news.refetch()}
+              onClick={() => void announcements.refetch()}
             >
               Повторить
             </Button>
@@ -155,37 +160,57 @@ const NewsSection = () => {
     if (items.length === 0) {
       return (
         <CellSimple
-          before={<Icon src={megaphoneIcon} className={styles.NewsIconMuted} />}
+          before={
+            <Icon
+              src={megaphoneIcon}
+              className={styles.AnnouncementIconMuted}
+            />
+          }
           title="Объявлений пока нет"
-          subtitle="Здесь появятся новости от управляющей компании"
+          subtitle="Здесь появятся объявления управляющей компании"
         />
       );
     }
 
-    return items.map((item) => {
-      const when = newsWhen(item.created_at);
+    return items.map((item) => (
+      <Tappable
+        key={item.id}
+        className={styles.AnnouncementRow}
+        onClick={() => void navigate(Routes.ANNOUNCEMENTS)}
+      >
+        <IconTile
+          icon={item.urgent ? alertIcon : megaphoneIcon}
+          tone={item.urgent ? "negative" : "themed"}
+        />
 
-      return (
-        <CellSimple
-          key={item.id}
-          asChild
-          before={
-            <Icon
-              src={item.urgent ? alertIcon : megaphoneIcon}
-              className={
-                item.urgent ? styles.NewsIconAlert : styles.NewsIconAnnouncement
-              }
-            />
-          }
-          title={item.text}
-          subtitle={item.urgent ? `Срочное · ${when}` : when}
-          innerClassNames={{ title: styles.TwoLines }}
-          showChevron
+        <Flex
+          className={styles.Grow}
+          align="stretch"
+          direction="column"
+          gapY={4}
         >
-          <Link to={Routes.NEWS} />
-        </CellSimple>
-      );
-    });
+          <Typography.Text
+            className={styles.Ellipsis}
+            variant="description"
+            color="tertiary"
+          >
+            {[item.org_name, announcementWhen(item.created_at)]
+              .filter(Boolean)
+              .join(" · ")}
+          </Typography.Text>
+
+          <Typography.Text
+            className={styles.TwoLines}
+            variant="body-strong"
+            color="primary"
+          >
+            {item.text}
+          </Typography.Text>
+        </Flex>
+
+        <Chevron />
+      </Tappable>
+    ));
   };
 
   return (
@@ -198,7 +223,7 @@ const NewsSection = () => {
             color="primary"
             className={styles.Grow}
           >
-            <h2>Новости дома</h2>
+            <h2>Объявления</h2>
           </Typography.Text>
           {items.length > 0 && (
             <Typography.Text
@@ -206,12 +231,12 @@ const NewsSection = () => {
               variant="detail-strong"
               className={styles.SectionAction}
             >
-              <Link to={Routes.NEWS}>Все</Link>
+              <Link to={Routes.ANNOUNCEMENTS}>Все</Link>
             </Typography.Text>
           )}
         </Flex>
 
-        <div className={styles.NewsPanel}>{content()}</div>
+        <div className={styles.AnnouncementsPanel}>{content()}</div>
       </section>
     </Flex>
   );
@@ -241,34 +266,12 @@ const HomePage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex asChild align="center" gap={12}>
-        <Tappable
-          className={styles.HouseCard}
-          onClick={() => void navigate(Routes.FLAT)}
-        >
-          <IconTile icon={homeIcon} tone="card" size="large" />
-          <Flex
-            className={styles.Grow}
-            align="stretch"
-            direction="column"
-            gapY={2}
-          >
-            <Typography.Text
-              variant="title"
-              color="primary"
-              className={styles.Ellipsis}
-            >
-              {house.address}
-              {residency?.flat_number && `, кв. ${residency.flat_number}`}
-            </Typography.Text>
-            <Typography.Text variant="description" color="secondary">
-              {house.city}
-              {residency && ` · ${confirmationCaption(residency)}`}
-            </Typography.Text>
-          </Flex>
-          <Chevron />
-        </Tappable>
-      </Flex>
+      <HouseSummary
+        title={house.address}
+        flat={residency?.flat_number}
+        state={residency ? residencyState(residency) : "not-connected"}
+        onClick={() => void navigate(Routes.FLAT)}
+      />
 
       {house.org && (
         <Card>
@@ -392,7 +395,7 @@ const HomePage = () => {
         </Flex>
       )}
 
-      {connected && <NewsSection />}
+      {connected && <AnnouncementsSection />}
     </Panel>
   );
 };

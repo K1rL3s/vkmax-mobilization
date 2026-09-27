@@ -1,7 +1,6 @@
 import { CellSimple, Flex, Radio, Typography } from "@maxhub/max-ui";
 
 import { useSession, workingOrgs } from "@/shared/model/session";
-import { buildingIcon, Icon } from "@/shared/ui/icon";
 import { StatusPill } from "@/shared/ui/status-pill";
 
 import { ROLE_LABEL } from "../domain/roles";
@@ -27,7 +26,6 @@ export const OrgSwitcher = () => {
               key={org.org_id}
               as="label"
               separator={index > 0}
-              before={<Icon src={buildingIcon} className={styles.CellIcon} />}
               innerClassNames={{ title: styles.Title, content: styles.Content }}
               title={
                 <Flex align="center" gap={8}>

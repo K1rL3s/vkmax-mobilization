@@ -73,7 +73,6 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
 
               <Textarea
                 className={styles.Text}
-                mode="secondary"
                 rows={5}
                 maxLength={textMax}
                 placeholder="Что случилось или что будет, когда и что делать жителям"

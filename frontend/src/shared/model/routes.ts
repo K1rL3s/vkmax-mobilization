@@ -22,7 +22,7 @@ export const Routes = {
   CHARGE: "/charges/:chargeId",
   HOUSE_CARD: "/house",
   APPOINTMENTS: "/appointments",
-  NEWS: "/news",
+  ANNOUNCEMENTS: "/announcements",
   FAQ: "/faq",
   EMERGENCY: "/emergency",
   OUTSIDE_MAX: "/outside-max",

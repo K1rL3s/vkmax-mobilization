@@ -11,7 +11,7 @@ const FaqPage = () => (
   <Panel className={styles.Page} mode="secondary">
     <Typography.Text variant="detail" color="secondary">
       Жэка связывает жителей с управляющей компанией: заявки, показания, опросы
-      и новости дома - в приложении и в боте MAX
+      и объявления дома - в приложении и в боте MAX
     </Typography.Text>
 
     {[

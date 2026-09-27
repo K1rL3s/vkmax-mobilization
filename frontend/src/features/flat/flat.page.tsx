@@ -1,13 +1,12 @@
-import { Button, Flex, Panel, Tappable, Typography } from "@maxhub/max-ui";
-import { generatePath, Link, Navigate, useNavigate } from "react-router-dom";
+import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
+import { generatePath, Link, Navigate } from "react-router-dom";
 
 import { ChargesSection } from "@/features/charges";
-import type { ConfirmationView } from "@/features/flat-confirmation";
+import type { ResidencyState } from "@/features/flat-confirmation";
 import { FlatResidentsSection } from "@/features/flat-invite";
+import { HouseSummary } from "@/features/house";
 import { Routes } from "@/shared/model/routes";
-import { Chevron } from "@/shared/ui/chevron";
 import { homeIcon } from "@/shared/ui/icon";
-import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { FlatRows } from "./flat-rows";
@@ -15,23 +14,22 @@ import { useFlat } from "./use-flat";
 
 import styles from "./flat.module.css";
 
-const actionLabel = (view: ConfirmationView) => {
-  if (view === "pending") {
+const actionLabel = (state: ResidencyState) => {
+  if (state === "pending") {
     return "Открыть запрос";
   }
 
-  return view === "rejected" ? "Подтвердить ещё раз" : "Подтвердить квартиру";
+  return state === "rejected" ? "Подтвердить ещё раз" : "Подтвердить квартиру";
 };
 
 const FlatPage = () => {
-  const navigate = useNavigate();
   const flat = useFlat();
 
   if (!flat.residency) {
     return <Navigate to={Routes.HOME} replace />;
   }
 
-  const { residency, card, view, canConfirm, caption, title } = flat;
+  const { residency, card, state, canConfirm } = flat;
 
   const about = () => {
     if (!residency.is_connected) {
@@ -77,39 +75,11 @@ const FlatPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex asChild align="center" gap={12}>
-        <Tappable
-          className={styles.Summary}
-          onClick={() => void navigate(Routes.RESIDENCIES)}
-        >
-          <IconTile
-            icon={homeIcon}
-            tone={residency.verified ? "positive" : "themed"}
-            size="large"
-          />
-          <Flex
-            className={styles.Grow}
-            align="stretch"
-            direction="column"
-            gapY={2}
-          >
-            <Typography.Text variant="title" color="primary">
-              {title}
-            </Typography.Text>
-            <Typography.Text
-              variant="description"
-              color="secondary"
-              className={styles.Ellipsis}
-            >
-              {residency.address}
-            </Typography.Text>
-            <Typography.Text variant="description" color="secondary">
-              {caption}
-            </Typography.Text>
-          </Flex>
-          <Chevron />
-        </Tappable>
-      </Flex>
+      <HouseSummary
+        title={residency.address}
+        flat={residency.flat_number}
+        state={state}
+      />
 
       {canConfirm && (
         <Button asChild size="medium" stretched>
@@ -119,7 +89,7 @@ const FlatPage = () => {
             })}
             state={{ returnTo: Routes.FLAT }}
           >
-            {actionLabel(view)}
+            {actionLabel(state)}
           </Link>
         </Button>
       )}

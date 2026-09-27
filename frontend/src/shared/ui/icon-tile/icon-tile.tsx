@@ -10,7 +10,10 @@ export type IconTileTone =
   | "themed"
   | "positive"
   | "negative"
-  | "promo";
+  | "promo"
+  | "brand-blue"
+  | "brand-green"
+  | "brand-orange";
 
 type IconTileProps = {
   icon: string;

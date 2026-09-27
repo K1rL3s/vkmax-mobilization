@@ -1,52 +1,42 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 
-import { rqClient } from "@/shared/api/instance";
-import { nextOffset } from "@/shared/api/next-offset";
-import { houseParams } from "@/shared/model/session";
 import { Card } from "@/shared/ui/card";
 import { alertIcon, megaphoneIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
-import { newsWhen } from "./when";
+import { useAnnouncements } from "./use-announcements";
+import { announcementWhen } from "./when";
 
-import styles from "./news.module.css";
+import styles from "./announcements.module.css";
 
-const NewsPage = () => {
-  const news = rqClient.useInfiniteQuery(
-    "get",
-    "/api/announcements",
-    { params: { ...houseParams(), query: { limit: 20 } } },
-    {
-      pageParamName: "offset",
-      initialPageParam: 0,
-      getNextPageParam: nextOffset,
-    },
-  );
+const AnnouncementsPage = () => {
+  const {
+    items,
+    isPending,
+    isError,
+    error,
+    hasMore,
+    isLoadingMore,
+    retry,
+    loadMore,
+  } = useAnnouncements();
 
   const content = () => {
-    if (news.isPending) {
-      return <LoadingState fill title="Загружаем новости" />;
+    if (isPending) {
+      return <LoadingState fill title="Загружаем объявления" />;
     }
 
-    if (news.isError) {
-      return (
-        <ErrorState
-          error={news.error}
-          fill
-          onRetry={() => void news.refetch()}
-        />
-      );
+    if (isError) {
+      return <ErrorState error={error} fill onRetry={retry} />;
     }
-
-    const items = news.data.pages.flatMap((page) => page.items);
 
     if (items.length === 0) {
       return (
         <EmptyState
           fill
           icon={megaphoneIcon}
-          title="Новостей пока нет"
+          title="Объявлений пока нет"
           description="Здесь появятся объявления управляющей компании: отключения воды и света, ремонт, уборка"
         />
       );
@@ -61,37 +51,42 @@ const NewsPage = () => {
                 icon={item.urgent ? alertIcon : megaphoneIcon}
                 tone={item.urgent ? "negative" : "themed"}
               />
+
               <Flex
                 className={styles.Grow}
                 align="stretch"
                 direction="column"
                 gapY={2}
               >
-                <Typography.Text variant="body-strong" color="primary">
-                  {item.urgent ? "Срочное объявление" : "Объявление УК"}
+                <Typography.Text variant="title" color="primary">
+                  {item.urgent ? "Срочное объявление" : "Объявление"}
                 </Typography.Text>
-                <Typography.Text variant="description" color="secondary">
-                  {newsWhen(item.created_at)}
+
+                <Typography.Text variant="description" color="tertiary">
+                  {[item.org_name, announcementWhen(item.created_at)]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Typography.Text>
               </Flex>
             </Flex>
+
             <Typography.Text
+              className={styles.Text}
               variant="body"
               color="primary"
-              className={styles.Text}
             >
               {item.text}
             </Typography.Text>
           </Card>
         ))}
 
-        {news.hasNextPage && (
+        {hasMore && (
           <Button
             size="medium"
             variant="secondary"
             stretched
-            loading={news.isFetchingNextPage}
-            onClick={() => void news.fetchNextPage()}
+            loading={isLoadingMore}
+            onClick={loadMore}
           >
             Показать ещё
           </Button>
@@ -107,4 +102,4 @@ const NewsPage = () => {
   );
 };
 
-export const Component = NewsPage;
+export const Component = AnnouncementsPage;

@@ -1,7 +1,9 @@
 import type { Residency } from "@/shared/model/session";
 
 export type ConfirmationView =
-  "verified" | "no-flat" | "pending" | "rejected" | "ways";
+  "verified" | "no-flat" | "flat-missing" | "pending" | "rejected" | "ways";
+
+export type ResidencyState = ConfirmationView | "not-connected";
 
 export const confirmationView = (residency: Residency): ConfirmationView => {
   if (residency.verified) {
@@ -9,7 +11,7 @@ export const confirmationView = (residency: Residency): ConfirmationView => {
   }
 
   if (residency.flat_id == null) {
-    return "no-flat";
+    return residency.flat_number ? "flat-missing" : "no-flat";
   }
 
   if (residency.verification_status === "pending") {
@@ -19,17 +21,16 @@ export const confirmationView = (residency: Residency): ConfirmationView => {
   return residency.verification_status === "rejected" ? "rejected" : "ways";
 };
 
-export const confirmationCaption = (residency: Residency): string => {
-  const view = confirmationView(residency);
+export const residencyState = (residency: Residency): ResidencyState =>
+  residency.is_connected ? confirmationView(residency) : "not-connected";
 
-  if (view === "no-flat") {
-    return residency.flat_number ? "нет в данных УК" : "квартира не выбрана";
-  }
-
-  return {
+export const confirmationCaption = (state: ResidencyState): string =>
+  ({
     verified: "квартира подтверждена",
     pending: "запрос на рассмотрении",
     rejected: "УК отклонила запрос",
     ways: "нужно подтвердить",
-  }[view];
-};
+    "no-flat": "квартира не выбрана",
+    "flat-missing": "нет в данных УК",
+    "not-connected": "дом ещё не подключён к сервису",
+  })[state];

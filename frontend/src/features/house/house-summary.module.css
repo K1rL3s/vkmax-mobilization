@@ -1,0 +1,27 @@
+.Summary {
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+  color: inherit;
+  text-decoration: none;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

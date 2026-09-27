@@ -20,12 +20,7 @@ import { plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { orgParams, useSession } from "@/shared/model/session";
 import { Chevron } from "@/shared/ui/chevron";
-import {
-  buildingIcon,
-  Icon,
-  searchOutlineIcon,
-  usersIcon,
-} from "@/shared/ui/icon";
+import { homeIcon, Icon, searchOutlineIcon, usersIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
@@ -46,7 +41,7 @@ const HouseRow = ({ house }: { house: House }) => {
         )
       }
     >
-      <IconTile icon={buildingIcon} tone="themed" />
+      <IconTile icon={homeIcon} tone="neutral" />
 
       <Flex className={styles.Grow} align="stretch" direction="column" gapY={4}>
         <Typography.Text variant="body-strong" color="primary">
@@ -118,7 +113,7 @@ const AdminHousesPage = () => {
       return (
         <EmptyState
           fill
-          icon={buildingIcon}
+          icon={homeIcon}
           title="Дома видит администратор"
           description={
             errorDetail(houses.error) ??
@@ -142,7 +137,7 @@ const AdminHousesPage = () => {
       return (
         <EmptyState
           fill
-          icon={buildingIcon}
+          icon={homeIcon}
           title="Ничего не нашли"
           description="Ищите по названию улицы или номеру дома"
           action={
@@ -162,7 +157,7 @@ const AdminHousesPage = () => {
       return (
         <EmptyState
           fill
-          icon={buildingIcon}
+          icon={homeIcon}
           title="Домов пока нет"
           description="Дома попадают в организацию из открытого реестра: те, у которых ваша УК указана управляющей. Если дома нет в списке, проверьте, что в реестре у него указана ваша организация"
         />
@@ -219,6 +214,7 @@ const AdminHousesPage = () => {
           maxLength={100}
           iconBefore={<Icon src={searchOutlineIcon} size={20} />}
           value={query}
+          mode="contrast"
           onChange={(event) => setQuery(event.target.value)}
         />
       )}

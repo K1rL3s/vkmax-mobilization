@@ -58,13 +58,7 @@ export const ResidentSheet = ({
             <Button
               size="large"
               stretched
-              variant="secondary"
-              innerClassNames={{
-                content:
-                  action.destructive && !action.refusal
-                    ? styles.Error
-                    : undefined,
-              }}
+              variant={action.destructive ? "destructive" : "secondary-contrast"}
               disabled={action.refusal !== null || isPending}
               loading={action.kind === "unblock" && isPending}
               onClick={() => onChoose(action.kind)}
@@ -89,7 +83,7 @@ export const ResidentSheet = ({
         <Button
           size="large"
           stretched
-          variant="ghost"
+          variant="secondary"
           disabled={isPending}
           onClick={onClose}
         >

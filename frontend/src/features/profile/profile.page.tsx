@@ -1,23 +1,15 @@
-import {
-  Button,
-  CellSimple,
-  Flex,
-  Panel,
-  Tappable,
-  Typography,
-} from "@maxhub/max-ui";
+import { Button, CellSimple, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { useQuery } from "@tanstack/react-query";
 import { generatePath, Link, Navigate, useNavigate } from "react-router-dom";
 
 import {
-  confirmationCaption,
-  confirmationView,
-  type ConfirmationView,
+  residencyState,
+  type ResidencyState,
 } from "@/features/flat-confirmation";
+import { HouseSummary } from "@/features/house";
 import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
 import { useSession, workingOrgs } from "@/shared/model/session";
-import { Chevron } from "@/shared/ui/chevron";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   alertIcon,
@@ -29,7 +21,6 @@ import {
   infoIcon,
   trashIcon,
 } from "@/shared/ui/icon";
-import { IconTile } from "@/shared/ui/icon-tile";
 import { StatusPill } from "@/shared/ui/status-pill";
 
 import { useForgetMe } from "./use-forget-me";
@@ -42,9 +33,8 @@ import {
 
 import styles from "./profile.module.css";
 
-const WARNING: Record<
-  Exclude<ConfirmationView, "verified" | "no-flat">,
-  { title: string; action: string; alert: boolean }
+const WARNING: Partial<
+  Record<ResidencyState, { title: string; action: string; alert: boolean }>
 > = {
   ways: {
     title: "Квартира не подтверждена",
@@ -86,44 +76,17 @@ const ProfilePage = () => {
     await navigate(Routes.ADMIN);
   };
 
-  const view = confirmationView(residency);
-  const warning =
-    residency.is_connected && view !== "verified" && view !== "no-flat"
-      ? WARNING[view]
-      : null;
+  const state = residencyState(residency);
+  const warning = WARNING[state];
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex asChild align="center" gap={12}>
-        <Tappable
-          className={styles.Summary}
-          onClick={() => void navigate(Routes.RESIDENCIES)}
-        >
-          <IconTile icon={homeIcon} tone="card" size="large" />
-          <Flex
-            className={styles.Grow}
-            align="stretch"
-            direction="column"
-            gapY={2}
-          >
-            <Typography.Text variant="title" color="primary">
-              {residency.address}
-              {residency.flat_number && `, кв. ${residency.flat_number}`}
-            </Typography.Text>
-            {!warning && (
-              <Typography.Text variant="description" color="secondary">
-                {residency.is_connected
-                  ? confirmationCaption(residency)
-                  : "дом ещё не подключён к сервису"}
-              </Typography.Text>
-            )}
-            <Typography.Text variant="description" color="primary">
-              Сменить дом
-            </Typography.Text>
-          </Flex>
-          <Chevron />
-        </Tappable>
-      </Flex>
+      <HouseSummary
+        title={residency.address}
+        flat={residency.flat_number}
+        state={state}
+        onClick={() => void navigate(Routes.RESIDENCIES)}
+      />
 
       {warning && (
         <Flex align="stretch" direction="column" gap={8}>

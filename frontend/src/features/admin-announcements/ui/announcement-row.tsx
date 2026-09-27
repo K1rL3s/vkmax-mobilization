@@ -1,6 +1,6 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
-import { newsWhen } from "@/features/news";
+import { announcementWhen } from "@/features/announcements";
 import { Card } from "@/shared/ui/card";
 import { alertIcon, megaphoneIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
@@ -37,7 +37,7 @@ export const AnnouncementRow = ({
         </Typography.Text>
 
         <Typography.Text variant="description" color="secondary">
-          {newsWhen(announcement.created_at)}
+          {announcementWhen(announcement.created_at)}
         </Typography.Text>
       </Flex>
     </Flex>

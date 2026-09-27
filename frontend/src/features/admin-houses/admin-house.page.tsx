@@ -7,6 +7,7 @@ import {
   isForbidden,
   retryUnlessForbidden,
 } from "@/shared/api/errors";
+import { HouseSummary } from "@/features/house";
 import { rqClient } from "@/shared/api/instance";
 import type { components } from "@/shared/api/schema/generated";
 import { formatArea, plural } from "@/shared/lib/format";
@@ -14,7 +15,6 @@ import { useRouteParams } from "@/shared/lib/router";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
 import { clockIcon, homeIcon, Icon, qrIcon, usersIcon } from "@/shared/ui/icon";
-import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { ChatSection } from "./ui/chat-section";
@@ -142,22 +142,12 @@ const AdminHousePage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex align="center" gap={12}>
-        <IconTile icon={homeIcon} tone="themed" size="large" />
-        <Flex
-          className={styles.Grow}
-          align="stretch"
-          direction="column"
-          gapY={2}
-        >
-          <Typography.Text asChild variant="title" color="primary">
-            <h1>{house.address}</h1>
-          </Typography.Text>
-          <Typography.Text variant="description" color="secondary">
-            {house.region}
-          </Typography.Text>
-        </Flex>
-      </Flex>
+      <HouseSummary
+        as="h1"
+        title={house.address}
+        state="plain"
+        subtitle={house.region}
+      />
 
       <div className={styles.Stats}>
         <Stat

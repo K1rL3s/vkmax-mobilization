@@ -156,6 +156,7 @@ export const ResidentsSection = ({
             maxLength={100}
             iconBefore={<Icon src={searchOutlineIcon} size={20} />}
             value={residents.query}
+            mode="contrast"
             onChange={(event) => residents.setQuery(event.target.value)}
           />
         )}

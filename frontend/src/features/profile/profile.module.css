@@ -7,23 +7,6 @@
     margin: 0;
   }
 
-  .Grow {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .Summary {
-    position: relative;
-    overflow: hidden;
-    padding: 12px;
-    border-radius: 16px;
-    background-color: color-mix(
-      in srgb,
-      var(--button-primary) 10%,
-      transparent
-    );
-  }
-
   .Warning {
     padding: 8px 12px;
     border-radius: 12px;
