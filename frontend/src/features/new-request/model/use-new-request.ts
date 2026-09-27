@@ -4,6 +4,7 @@ import { generatePath, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { useRequestCategories, type RequestCategory } from "@/features/request";
+import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import { Routes } from "@/shared/model/routes";
@@ -24,12 +25,34 @@ export const useNewRequest = () => {
   const dispute = handoverSchema.safeParse(state).data ?? null;
   const { currentResidency: residency } = useSession();
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<RequestCategory | null>(
+  const [picked, setPicked] = useState<RequestCategory | null>(
     dispute?.category ?? null,
   );
   const photos = usePhotos();
 
   const categories = useRequestCategories();
+
+  const text = useDebounceValue(description.trim(), 800);
+  const isClassifiable = !dispute && text.length >= 15;
+
+  const classify = rqClient.useQuery(
+    "post",
+    "/api/requests/classify",
+    { params: authParams(), body: { text } },
+    {
+      enabled: isClassifiable,
+      staleTime: Infinity,
+      retry: 0,
+      placeholderData: (previous) => previous,
+    },
+  );
+
+  const suggested = isClassifiable
+    ? (categories.data?.find(
+        ({ category }) => category === classify.data?.category,
+      )?.category ?? null)
+    : null;
+  const category = picked ?? suggested;
 
   const debouncedCategory = useDebounceValue(category, 400);
 
@@ -85,22 +108,25 @@ export const useNewRequest = () => {
         flat_id: residency?.flat_id ?? null,
         photos: photos.names,
         join_group_id: joinGroupId,
-        llm_suggested: false,
-        llm_accepted: false,
+        llm_suggested: suggested !== null,
+        llm_accepted: suggested !== null && category === suggested,
       },
     });
   };
 
   const neighbours = debouncedCategory === category ? similar.data : undefined;
+  const failure = create.error ?? disputeCharge.error;
 
   return {
     description,
     setDescription: (next: string) =>
       setDescription(next.slice(0, DESCRIPTION_LIMIT)),
     category,
-    setCategory,
+    suggested,
+    setCategory: setPicked,
     categories: categories.data ?? [],
     isCategoriesFailed: categories.isError,
+    categoriesError: categories.error,
     photos,
     neighbours,
     isDispute: dispute !== null,
@@ -109,8 +135,31 @@ export const useNewRequest = () => {
       create.isSuccess ||
       disputeCharge.isPending ||
       disputeCharge.isSuccess,
-    isFailed: create.isError || disputeCharge.isError,
-    canSubmit: description.trim().length > 0 && category !== null,
+    error:
+      failure &&
+      errorMessage(
+        failure,
+        "Заявка не ушла. Проверьте связь и попробуйте ещё раз",
+      ),
+    canSubmit:
+      description.trim().length > 0 && category !== null && !photos.isUploading,
+    missing: missingPart(description, category, photos.isUploading),
     submit,
   };
+};
+
+const missingPart = (
+  description: string,
+  category: RequestCategory | null,
+  isUploading: boolean,
+): string | null => {
+  if (description.trim().length === 0) {
+    return "Опишите, что случилось";
+  }
+
+  if (category === null) {
+    return "Выберите категорию";
+  }
+
+  return isUploading ? "Дождитесь загрузки фото" : null;
 };

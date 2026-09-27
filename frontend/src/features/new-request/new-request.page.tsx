@@ -19,7 +19,13 @@ const NewRequestPage = () => {
   const house = useHouseCard(residency?.house_id);
 
   if (form.isCategoriesFailed) {
-    return <ErrorState fill onRetry={() => window.location.reload()} />;
+    return (
+      <ErrorState
+        fill
+        error={form.categoriesError}
+        onRetry={() => window.location.reload()}
+      />
+    );
   }
 
   if (form.categories.length === 0) {
@@ -68,6 +74,7 @@ const NewRequestPage = () => {
               <CategoryChips
                 categories={form.categories}
                 value={form.category}
+                suggested={form.suggested}
                 onChange={form.setCategory}
               />
             </section>
@@ -121,7 +128,11 @@ const NewRequestPage = () => {
                 onRemove={form.photos.remove}
               />
 
-              <Typography.Text variant="description" color="secondary">
+              <Typography.Text
+                variant="description"
+                color="secondary"
+                className={form.photos.isFailed ? styles.Failed : undefined}
+              >
                 {form.photos.isFailed
                   ? "Фото не загрузилось, попробуйте ещё раз"
                   : `До ${PHOTO_LIMIT} фото - так УК быстрее разберётся`}
@@ -130,14 +141,24 @@ const NewRequestPage = () => {
           </Flex>
         )}
 
-        {form.isFailed && (
+        {form.error && (
           <Typography.Text variant="description" className={styles.Failed}>
-            Заявка не ушла. Проверьте связь и попробуйте ещё раз.
+            {form.error}
           </Typography.Text>
         )}
       </div>
 
       <div className={styles.Footer}>
+        {form.missing && (
+          <Typography.Text
+            className={styles.Missing}
+            variant="description"
+            color="secondary"
+          >
+            {form.missing}
+          </Typography.Text>
+        )}
+
         <Button
           size="large"
           stretched

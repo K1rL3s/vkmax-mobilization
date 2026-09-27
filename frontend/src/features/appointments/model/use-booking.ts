@@ -67,6 +67,7 @@ export const useBooking = () => {
     schedule,
     isPending: queries.some((query) => query.isPending),
     isError: queries.some((query) => query.isError),
+    loadError: queries.find((query) => query.isError)?.error,
     retry: () => {
       for (const query of queries) {
         if (query.isError) {

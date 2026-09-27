@@ -1,5 +1,13 @@
+.Frame {
+  min-height: 100vh;
+  background-color: var(--background-surface);
+}
+
 .App {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  max-width: 640px;
+  margin: 0 auto;
+  background-color: var(--background-primary);
 }

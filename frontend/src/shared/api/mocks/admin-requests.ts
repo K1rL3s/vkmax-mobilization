@@ -119,6 +119,7 @@ for (const groupId of new Set(
       makeRequest(first.house_id, {
         category: first.category,
         category_label: first.category_label,
+        description: first.description,
         normative_hours: first.normative_hours,
         deadline_at: first.deadline_at,
         group_id: groupId,
@@ -153,6 +154,8 @@ for (let index = 0; index < 3; index++) {
 }
 requests.push(
   makeRequest(2, {
+    category: "electricity",
+    category_label: "Электричество",
     caller_name: "Александр",
     caller_phone: "+7 999 123-45-67",
   }),
@@ -161,6 +164,8 @@ const repeatParent = requests.find((request) => request.status === "done")!;
 requests.push(
   makeRequest(repeatParent.house_id, {
     parent_request_id: repeatParent.id,
+    category: repeatParent.category,
+    category_label: repeatParent.category_label,
     author_name: "Анна Морозова",
     channel: "miniapp",
     is_staff_author: false,

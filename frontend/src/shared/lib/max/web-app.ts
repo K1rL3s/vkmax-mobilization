@@ -6,7 +6,8 @@ interface MaxShareText {
 interface MaxWebApp {
   readonly initData: string | null;
   readonly initDataUnsafe: unknown;
-  readonly BackButton: {
+  readonly platform?: string | null;
+  readonly BackButton?: {
     show(): void;
     hide(): void;
     onClick(callback: () => void): void;

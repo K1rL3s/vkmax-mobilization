@@ -267,7 +267,7 @@ const ProfilePage = () => {
             <CellSimple
               before={<Icon src={bulbIcon} className={styles.CellIcon} />}
               title="Как это работает"
-              subtitle="Заявки, показания, собрания и что умеет бот в чате"
+              subtitle="Заявки, показания, опросы и что умеет бот в чате"
               showChevron
               onClick={() => void navigate(Routes.FAQ)}
             />

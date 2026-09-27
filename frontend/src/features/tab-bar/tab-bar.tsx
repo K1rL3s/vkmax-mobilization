@@ -6,9 +6,9 @@ import { Routes } from "@/shared/model/routes";
 import {
   Icon,
   navHomeIcon,
-  navMeetingsIcon,
   navProfileIcon,
   navRequestsIcon,
+  pollIcon,
 } from "@/shared/ui/icon";
 
 import styles from "./tab-bar.module.css";
@@ -19,7 +19,7 @@ export const TabBar = () => {
       {[
         { to: Routes.HOME, label: "Главная", icon: navHomeIcon },
         { to: Routes.REQUESTS, label: "Заявки", icon: navRequestsIcon },
-        { to: Routes.MEETINGS, label: "Собрания", icon: navMeetingsIcon },
+        { to: Routes.MEETINGS, label: "Опросы", icon: pollIcon },
         { to: Routes.PROFILE, label: "Профиль", icon: navProfileIcon },
       ].map((tab) => (
         <NavLink

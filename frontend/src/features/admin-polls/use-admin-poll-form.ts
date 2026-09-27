@@ -8,7 +8,7 @@ import {
   pollDraftSchema,
   pollFormConstraints,
 } from "@/features/meetings";
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
@@ -55,6 +55,7 @@ export const useAdminPollForm = () => {
     houses: houses.data?.items ?? [],
     isHousesPending: houses.isPending,
     isHousesError: houses.isError,
+    housesError: houses.error,
     retryHouses: () => void houses.refetch(),
     register: form.register,
     registerOption: (index: number) =>
@@ -73,8 +74,10 @@ export const useAdminPollForm = () => {
     isSubmitting: create.isPending,
     submitError:
       create.isError &&
-      (errorDetail(create.error) ??
-        "Опрос не создался. Проверьте связь и попробуйте ещё раз."),
+      errorMessage(
+        create.error,
+        "Опрос не создался. Проверьте связь и попробуйте ещё раз.",
+      ),
     submit: form.handleSubmit((draft) =>
       create.mutate({
         params: orgParams(),

@@ -20,18 +20,22 @@ export const usePhotos = () => {
   useUnmount(() => photos.forEach(revoke));
 
   const upload = async (file: File) => {
-    const { data } = await fetchClient.POST("/api/files", {
-      params: authParams(),
-      body: { file: file as unknown as string },
-      bodySerializer: (body) => {
-        const form = new FormData();
-        form.append("file", body.file as unknown as File);
+    try {
+      const { data } = await fetchClient.POST("/api/files", {
+        params: authParams(),
+        body: { file: file as unknown as string },
+        bodySerializer: (body) => {
+          const form = new FormData();
+          form.append("file", body.file as unknown as File);
 
-        return form;
-      },
-    });
+          return form;
+        },
+      });
 
-    return data && { name: data.name, preview: URL.createObjectURL(file) };
+      return data && { name: data.name, preview: URL.createObjectURL(file) };
+    } catch {
+      return undefined;
+    }
   };
 
   const add = async (files: File[]) => {

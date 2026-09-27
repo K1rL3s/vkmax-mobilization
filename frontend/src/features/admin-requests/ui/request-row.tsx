@@ -31,7 +31,7 @@ export const RequestRow = ({
     ? (request.author_name ?? request.caller_name ?? "Звонок в УК")
     : request.category_label;
   const memberSubtitle = flat ? `Квартира ${flat}` : "Квартира не указана";
-  const address = `${request.address}${!grouped && flat ? ` · кв. ${flat}` : ""}`;
+  const address = `№${request.id} · ${request.address}${!grouped && flat ? ` · кв. ${flat}` : ""}`;
   const meta = [
     grouped &&
       `Коллективная · ${request.group_size} ${plural(request.group_size, [
@@ -73,9 +73,16 @@ export const RequestRow = ({
         <Typography.Text
           className={styles.Ellipsis}
           variant="description"
+          color="primary"
+        >
+          {request.description}
+        </Typography.Text>
+        <Typography.Text
+          className={styles.Ellipsis}
+          variant="description"
           color="secondary"
         >
-          {member ? memberSubtitle : address}
+          {member ? `№${request.id} · ${memberSubtitle}` : address}
         </Typography.Text>
         <Typography.Text
           className={cn(styles.Ellipsis, overdue && styles.Overdue)}

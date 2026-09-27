@@ -39,6 +39,7 @@ export const useAdminPoll = () => {
     closing: useClosePoll(route?.pollId ?? 0),
     isPending: route !== null && (card.isPending || results.isPending),
     isError: route === null || card.isError || results.isError,
+    loadError: card.error ?? results.error,
     retry: () => {
       void card.refetch();
       void results.refetch();

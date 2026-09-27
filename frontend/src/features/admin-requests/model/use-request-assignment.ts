@@ -1,4 +1,4 @@
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { orgParams } from "@/shared/model/session";
 
@@ -26,11 +26,14 @@ export const useRequestAssignment = (request: AdminRequest) => {
     selectedId: request.executor_user_id,
     isLoading: executors.isPending,
     isLoadError: executors.isError,
+    loadError: executors.error,
     isPending: assign.isPending,
     pendingId: assign.isPending ? assign.variables?.body.user_id : undefined,
     error: assign.isError
-      ? (errorDetail(assign.error) ??
-        "Не удалось назначить исполнителя. Попробуйте ещё раз.")
+      ? errorMessage(
+          assign.error,
+          "Не удалось назначить исполнителя. Попробуйте ещё раз.",
+        )
       : null,
     retry: () => void executors.refetch(),
     assign: (userId: number) => {

@@ -1,8 +1,9 @@
 import { Button, Flex, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
+import { plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
-import { Icon, alertIcon, checkIcon } from "@/shared/ui/icon";
+import { alertIcon, checkIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
 import {
@@ -23,6 +24,7 @@ type SubmitResultProps = {
   result: ReadingResult;
   meter: Meter;
   onResubmit: () => void;
+  onNext: (() => void) | undefined;
   onDone: () => void;
 };
 
@@ -30,9 +32,11 @@ export const SubmitResult = ({
   result,
   meter,
   onResubmit,
+  onNext,
   onDone,
 }: SubmitResultProps) => {
   const { reading, house_average: houseAverage } = result;
+  const isBelow = reading.is_below_previous || Boolean(result.warning);
   const unit = METER_UNIT[meter.type];
   const zones = zonesOf(meter);
   const total = zones.reduce(
@@ -43,6 +47,7 @@ export const SubmitResult = ({
   const difference = houseAverage
     ? Math.round(((total - houseAverage) / houseAverage) * 100)
     : null;
+  const times = houseAverage ? Math.round(total / houseAverage) : 0;
 
   return (
     <>
@@ -54,88 +59,112 @@ export const SubmitResult = ({
           className={styles.Hero}
         >
           <IconTile
-            icon={checkIcon}
-            tone="positive"
+            icon={isBelow ? alertIcon : checkIcon}
+            tone={isBelow ? "negative" : "positive"}
             size="xlarge"
             className={styles.Check}
           />
           <Typography.Text asChild variant="header" color="primary">
-            <h1 className={styles.Title}>Показания отправлены</h1>
+            <h1 className={styles.Title}>
+              {isBelow ? "Проверьте показания" : "Показания отправлены"}
+            </h1>
           </Typography.Text>
           <Typography.Text variant="detail" color="secondary">
             {METER_LABEL[meter.type]} · {formatPeriod(reading.period)}
           </Typography.Text>
         </Flex>
 
-        <Flex asChild direction="column" align="stretch" gap={12}>
-          <section>
-            <Typography.Text asChild variant="title" color="primary">
-              <h2>Расход за месяц</h2>
+        {isBelow && (
+          <Flex
+            direction="column"
+            align="stretch"
+            gap={8}
+            className={styles.Warning}
+          >
+            <Typography.Text variant="body-strong" color="primary">
+              {result.warning ?? "Новое значение меньше предыдущего"}
             </Typography.Text>
+            <Typography.Text variant="description" color="secondary">
+              Показания приняты, но расход и сумму не считаем: с такими цифрами
+              они будут неверными. Если ошиблись, переподайте показания
+            </Typography.Text>
+          </Flex>
+        )}
 
-            <div className={styles.Panel}>
-              {zones.map((zone) => {
-                const value = reading.values[zone] ?? 0;
-                const spent = reading.consumption[zone] ?? 0;
+        {!isBelow && (
+          <Flex asChild direction="column" align="stretch" gap={12}>
+            <section>
+              <Typography.Text asChild variant="title" color="primary">
+                <h2>Расход за месяц</h2>
+              </Typography.Text>
 
-                return (
-                  <Flex
-                    key={zone}
-                    align="center"
-                    gap={12}
-                    className={styles.Line}
-                  >
+              <div className={styles.Panel}>
+                {zones.map((zone) => {
+                  const value = reading.values[zone] ?? 0;
+                  const spent = reading.consumption[zone] ?? 0;
+
+                  return (
                     <Flex
-                      direction="column"
-                      align="stretch"
-                      gapY={2}
-                      className={styles.Grow}
+                      key={zone}
+                      align="center"
+                      gap={12}
+                      className={styles.Line}
                     >
-                      <Typography.Text variant="detail" color="primary">
-                        {zone === "single" ? "За месяц" : ZONE_LABEL[zone]}
-                      </Typography.Text>
-                      <Typography.Text variant="description" color="secondary">
-                        {spent === 0
-                          ? "Первое показание, расход пойдёт со следующего"
-                          : `${formatReading(value - spent)} → ${formatReading(value)}`}
+                      <Flex
+                        direction="column"
+                        align="stretch"
+                        gapY={2}
+                        className={styles.Grow}
+                      >
+                        <Typography.Text variant="detail" color="primary">
+                          {zone === "single" ? "За месяц" : ZONE_LABEL[zone]}
+                        </Typography.Text>
+                        <Typography.Text
+                          variant="description"
+                          color="secondary"
+                        >
+                          {spent === 0
+                            ? "Первое показание, расход пойдёт со следующего"
+                            : `${formatReading(value - spent)} → ${formatReading(value)}`}
+                        </Typography.Text>
+                      </Flex>
+                      <Typography.Text variant="detail-strong" color="primary">
+                        {formatReading(spent)} {unit}
                       </Typography.Text>
                     </Flex>
-                    <Typography.Text variant="detail-strong" color="primary">
-                      {formatReading(spent)} {unit}
+                  );
+                })}
+
+                {reading.amount != null && (
+                  <Flex
+                    direction="column"
+                    align="stretch"
+                    gapY={2}
+                    className={styles.Line}
+                  >
+                    <Flex align="center" gap={12}>
+                      <Typography.Text
+                        variant="detail-strong"
+                        color="primary"
+                        className={styles.Grow}
+                      >
+                        К оплате
+                      </Typography.Text>
+                      <Typography.Text variant="subheader" color="primary">
+                        ≈ {formatAmount(reading.amount)}
+                      </Typography.Text>
+                    </Flex>
+                    <Typography.Text variant="description" color="tertiary">
+                      Предварительный расчёт, итог в квитанции
                     </Typography.Text>
                   </Flex>
-                );
-              })}
+                )}
+              </div>
+            </section>
+          </Flex>
+        )}
 
-              {reading.amount != null && (
-                <Flex
-                  direction="column"
-                  align="stretch"
-                  gapY={2}
-                  className={styles.Line}
-                >
-                  <Flex align="center" gap={12}>
-                    <Typography.Text
-                      variant="detail-strong"
-                      color="primary"
-                      className={styles.Grow}
-                    >
-                      К оплате за {METER_LABEL[meter.type].toLowerCase()}
-                    </Typography.Text>
-                    <Typography.Text variant="subheader" color="primary">
-                      ≈ {formatAmount(reading.amount)}
-                    </Typography.Text>
-                  </Flex>
-                  <Typography.Text variant="description" color="tertiary">
-                    Предварительный расчёт, итог в квитанции
-                  </Typography.Text>
-                </Flex>
-              )}
-            </div>
-          </section>
-        </Flex>
-
-        {houseAverage != null && (
+        {!isBelow && houseAverage != null && (
           <Flex asChild direction="column" align="stretch" gap={12}>
             <section>
               <Typography.Text asChild variant="title" color="primary">
@@ -165,26 +194,11 @@ export const SubmitResult = ({
 
                 {difference !== null && (
                   <Typography.Text variant="description" color="secondary">
-                    {difference === 0
-                      ? "Столько же, сколько в среднем по дому"
-                      : `На ${Math.abs(difference)}% ${difference < 0 ? "меньше" : "больше"} среднего по дому`}
+                    {comparison(difference, times)}
                   </Typography.Text>
                 )}
               </Flex>
             </section>
-          </Flex>
-        )}
-
-        {result.warning && (
-          <Flex align="center" gap={8}>
-            <Icon src={alertIcon} size={20} className={styles.Alert} />
-            <Typography.Text
-              variant="description"
-              color="primary"
-              className={styles.Grow}
-            >
-              {result.warning}
-            </Typography.Text>
           </Flex>
         )}
 
@@ -206,9 +220,19 @@ export const SubmitResult = ({
         )}
 
         <Flex direction="column" align="stretch" gap={8}>
+          {onNext && (
+            <Button
+              size="large"
+              variant={isBelow ? "secondary" : "primary"}
+              stretched
+              onClick={onNext}
+            >
+              Следующий счётчик
+            </Button>
+          )}
           <Button
             size="large"
-            variant="secondary"
+            variant={isBelow ? "primary" : "secondary"}
             stretched
             onClick={onResubmit}
           >
@@ -225,7 +249,12 @@ export const SubmitResult = ({
       </div>
 
       <div className={styles.Footer}>
-        <Button size="large" stretched onClick={onDone}>
+        <Button
+          size="large"
+          stretched
+          variant={onNext ? "secondary" : "primary"}
+          onClick={onDone}
+        >
           Готово
         </Button>
       </div>
@@ -256,3 +285,15 @@ const Bar = ({ label, value, unit, scale, fill }: BarProps) => (
     </div>
   </Flex>
 );
+
+const comparison = (difference: number, times: number): string => {
+  if (difference === 0) {
+    return "Столько же, сколько в среднем по дому";
+  }
+
+  if (times >= 2) {
+    return `В ${times} ${plural(times, ["раз", "раза", "раз"])} больше среднего по дому`;
+  }
+
+  return `На ${Math.abs(difference)}% ${difference < 0 ? "меньше" : "больше"} среднего по дому`;
+};

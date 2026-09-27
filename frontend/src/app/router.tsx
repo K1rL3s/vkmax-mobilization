@@ -8,6 +8,7 @@ import {
   type To,
 } from "react-router-dom";
 import { App } from "./app";
+import { BackBar } from "./back-bar";
 import { Component as ErrorPage } from "@/features/error/error.page";
 
 import { protectedLoader } from "./protected-loader";
@@ -21,14 +22,19 @@ import {
 import { AdminTabBar } from "@/features/admin-tab-bar";
 import { TabBar } from "@/features/tab-bar";
 import { queryClient } from "@/shared/api/query-client";
-import { useBackNavigation } from "@/shared/lib/max";
+import { hasHeaderBackButton, useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { LoadingState } from "@/shared/ui/state";
 
 const PushedPage = ({ fallback }: { fallback: To }) => {
-  useBackNavigation(fallback);
+  const back = useBackNavigation(fallback);
 
-  return <Outlet />;
+  return (
+    <>
+      {!hasHeaderBackButton() && <BackBar onBack={back} />}
+      <Outlet />
+    </>
+  );
 };
 
 const router = createBrowserRouter([
@@ -66,6 +72,12 @@ const router = createBrowserRouter([
               {
                 path: Routes.ONBOARDING_HOUSE,
                 lazy: () => import("@/features/onboarding/house-select.page"),
+              },
+              {
+                path: Routes.REGISTER,
+                loader: sessionLoader,
+                lazy: () =>
+                  import("@/features/org-registration/org-registration.page"),
               },
             ],
           },

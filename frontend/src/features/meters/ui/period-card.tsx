@@ -9,12 +9,17 @@ import styles from "./period-card.module.css";
 type PeriodCardProps = {
   period: ReadingPeriod;
   flatNumber: string | null;
+  submitted: boolean;
 };
 
-export const PeriodCard = ({ period, flatNumber }: PeriodCardProps) => {
+export const PeriodCard = ({
+  period,
+  flatNumber,
+  submitted,
+}: PeriodCardProps) => {
   const flat = flatNumber === null ? null : `кв. ${flatNumber}`;
-  const state = period.is_submitted
-    ? "Показания уже отправлены, можно переподать"
+  const state = submitted
+    ? "По этому счётчику уже отправлены, можно переподать"
     : "Окно подачи открыто";
 
   return (

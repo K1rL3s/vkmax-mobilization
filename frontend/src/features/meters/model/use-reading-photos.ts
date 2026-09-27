@@ -19,6 +19,7 @@ export const useReadingPhotos = (meterType: MeterType | undefined) => {
   > | null>(null);
   const [isUploading, setUploading] = useState(false);
   const [isRecognizing, setRecognizing] = useState(false);
+  const [isUnrecognized, setUnrecognized] = useState(false);
   const [isFailed, setFailed] = useState(false);
 
   const revoke = (photo: Photo) => URL.revokeObjectURL(photo.preview);
@@ -26,30 +27,44 @@ export const useReadingPhotos = (meterType: MeterType | undefined) => {
   useUnmount(() => photos.forEach(revoke));
 
   const upload = async (file: File) => {
-    const { data } = await fetchClient.POST("/api/files", {
-      params: authParams(),
-      body: { file: file as unknown as string },
-      bodySerializer: (body) => {
-        const form = new FormData();
-        form.append("file", body.file as unknown as File);
+    try {
+      const { data } = await fetchClient.POST("/api/files", {
+        params: authParams(),
+        body: { file: file as unknown as string },
+        bodySerializer: (body) => {
+          const form = new FormData();
+          form.append("file", body.file as unknown as File);
 
-        return form;
-      },
-    });
+          return form;
+        },
+      });
 
-    return data && { name: data.name, preview: URL.createObjectURL(file) };
+      return data && { name: data.name, preview: URL.createObjectURL(file) };
+    } catch {
+      return undefined;
+    }
   };
 
   const recognize = async (name: string, type: MeterType) => {
     setRecognizing(true);
+    setUnrecognized(false);
 
-    const { data } = await fetchClient.POST("/api/meters/readings/recognize", {
-      params: authParams(),
-      body: { photo_path: name, meter_type: type },
-    });
+    try {
+      const { data } = await fetchClient.POST(
+        "/api/meters/readings/recognize",
+        {
+          params: authParams(),
+          body: { photo_path: name, meter_type: type },
+        },
+      );
 
-    setRecognized(data?.values ?? null);
-    setRecognizing(false);
+      setRecognized(data?.values ?? null);
+      setUnrecognized(!data?.values);
+    } catch {
+      setUnrecognized(true);
+    } finally {
+      setRecognizing(false);
+    }
   };
 
   const add = async (files: File[]) => {
@@ -78,6 +93,7 @@ export const useReadingPhotos = (meterType: MeterType | undefined) => {
       return [];
     });
     setRecognized(null);
+    setUnrecognized(false);
     setFailed(false);
   };
 
@@ -95,6 +111,7 @@ export const useReadingPhotos = (meterType: MeterType | undefined) => {
     recognized,
     isUploading,
     isRecognizing,
+    isUnrecognized,
     isFailed,
     isFull: photos.length >= PHOTO_LIMIT,
     names: photos.map((photo) => photo.name),

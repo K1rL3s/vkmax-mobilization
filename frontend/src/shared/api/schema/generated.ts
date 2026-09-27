@@ -2687,6 +2687,21 @@ export interface components {
       /** Total */
       total: number;
     };
+    /** DemoActivationRequest */
+    DemoActivationRequest: {
+      /**
+       * Number
+       * @description Номер демо-УК, как N в ссылке demo_..._N
+       * @default 1
+       */
+      number: number;
+      /**
+       * Admin
+       * @description Выдать роль администратора, а не сотрудника
+       * @default false
+       */
+      admin: boolean;
+    };
     /** DemoActivationResponse */
     DemoActivationResponse: {
       org: components["schemas"]["OrgMembership"];
@@ -4305,8 +4320,8 @@ export interface operations {
   get_me: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4390,8 +4405,8 @@ export interface operations {
   accept_consent: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4479,8 +4494,8 @@ export interface operations {
   get_notification_settings: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4564,8 +4579,8 @@ export interface operations {
   update_notification_settings: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4653,8 +4668,8 @@ export interface operations {
   track_event: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4745,8 +4760,8 @@ export interface operations {
         q?: string | null;
         region?: string | null;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4834,8 +4849,8 @@ export interface operations {
         region?: string | null;
         q?: string | null;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4928,8 +4943,8 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -5019,8 +5034,8 @@ export interface operations {
         /** @description Размер страницы */
         limit?: number;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -5104,8 +5119,8 @@ export interface operations {
   get_house_card: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -5191,8 +5206,8 @@ export interface operations {
   link_house: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -5282,8 +5297,8 @@ export interface operations {
   unlink_house: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         resident_id: number;
@@ -5369,8 +5384,8 @@ export interface operations {
   create_demand_signal: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -5463,8 +5478,8 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -5550,8 +5565,8 @@ export interface operations {
   get_flat_card: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -5637,8 +5652,8 @@ export interface operations {
   verify_flat: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -5728,8 +5743,8 @@ export interface operations {
   request_flat_verification: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -5819,8 +5834,8 @@ export interface operations {
   list_flat_residents: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -5906,8 +5921,8 @@ export interface operations {
   list_flat_invites: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -5993,8 +6008,8 @@ export interface operations {
   create_flat_invite: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -6084,8 +6099,8 @@ export interface operations {
   revoke_flat_invite: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         code: string;
@@ -6171,8 +6186,8 @@ export interface operations {
   activate_flat_invite: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         code: string;
@@ -6258,8 +6273,8 @@ export interface operations {
   list_request_categories: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -6349,9 +6364,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-House-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -6435,9 +6450,9 @@ export interface operations {
   create_request: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-House-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -6527,9 +6542,9 @@ export interface operations {
       query: {
         category: components["schemas"]["RequestCategory"];
       };
-      header: {
+      header?: {
         "X-House-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -6613,8 +6628,8 @@ export interface operations {
   get_request: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -6700,8 +6715,8 @@ export interface operations {
   rate_request: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -6791,8 +6806,8 @@ export interface operations {
   create_repeat_request: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -6882,8 +6897,8 @@ export interface operations {
   accept_request: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -6969,8 +6984,8 @@ export interface operations {
   export_request: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -7056,8 +7071,8 @@ export interface operations {
   classify_request_text: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -7145,8 +7160,8 @@ export interface operations {
   list_flat_meters: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -7232,8 +7247,8 @@ export interface operations {
   add_meter: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -7323,8 +7338,8 @@ export interface operations {
   list_reading_periods: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -7410,8 +7425,8 @@ export interface operations {
   list_meter_readings: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         meter_id: number;
@@ -7497,8 +7512,8 @@ export interface operations {
   submit_reading: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         meter_id: number;
@@ -7588,8 +7603,8 @@ export interface operations {
   recognize_reading: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -7677,8 +7692,8 @@ export interface operations {
   update_meter: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         meter_id: number;
@@ -7768,8 +7783,8 @@ export interface operations {
   list_house_tariffs: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -7860,8 +7875,8 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         flat_id: number;
@@ -7947,8 +7962,8 @@ export interface operations {
   get_charge: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         charge_id: number;
@@ -8034,8 +8049,8 @@ export interface operations {
   get_charge_breakdown: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         charge_id: number;
@@ -8121,8 +8136,8 @@ export interface operations {
   dispute_charge: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         charge_id: number;
@@ -8212,8 +8227,8 @@ export interface operations {
   pay_charge_demo: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         charge_id: number;
@@ -8301,8 +8316,8 @@ export interface operations {
       query?: {
         status?: components["schemas"]["PollStatus"] | null;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -8388,8 +8403,8 @@ export interface operations {
   create_poll: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -8479,8 +8494,8 @@ export interface operations {
   get_poll: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         poll_id: number;
@@ -8566,8 +8581,8 @@ export interface operations {
   vote_in_poll: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         poll_id: number;
@@ -8657,8 +8672,8 @@ export interface operations {
   get_poll_results: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         poll_id: number;
@@ -8744,8 +8759,8 @@ export interface operations {
   list_poll_non_voters: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         poll_id: number;
@@ -8831,8 +8846,8 @@ export interface operations {
   close_poll: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         poll_id: number;
@@ -8923,9 +8938,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-House-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -9011,8 +9026,8 @@ export interface operations {
       query?: {
         on_date?: string | null;
       };
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -9098,9 +9113,9 @@ export interface operations {
   list_my_appointments: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-House-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -9184,9 +9199,9 @@ export interface operations {
   book_appointment: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-House-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -9274,8 +9289,8 @@ export interface operations {
   cancel_appointment: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         appointment_id: number;
@@ -9361,9 +9376,9 @@ export interface operations {
   list_my_access_requests: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-House-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -9447,8 +9462,8 @@ export interface operations {
   pick_access_slot: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         access_request_id: number;
@@ -9535,8 +9550,8 @@ export interface operations {
   lookup_org: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -9624,8 +9639,8 @@ export interface operations {
   register_org: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -9713,8 +9728,8 @@ export interface operations {
   activate_org_invite: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path: {
         code: string;
@@ -9800,13 +9815,18 @@ export interface operations {
   activate_demo: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        "application/json":
+          components["schemas"]["DemoActivationRequest"] | null;
+      };
+    };
     responses: {
       /** @description Successful Response */
       200: {
@@ -9885,9 +9905,9 @@ export interface operations {
   get_org: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -9971,9 +9991,9 @@ export interface operations {
   get_org_settings: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -10057,9 +10077,9 @@ export interface operations {
   update_org_settings: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -10147,9 +10167,9 @@ export interface operations {
   list_org_members: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -10233,9 +10253,9 @@ export interface operations {
   remove_org_member: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         user_id: number;
@@ -10321,9 +10341,9 @@ export interface operations {
   list_org_invites: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -10407,9 +10427,9 @@ export interface operations {
   create_org_invite: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -10497,9 +10517,9 @@ export interface operations {
   revoke_org_invite: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         code: string;
@@ -10591,9 +10611,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -10677,9 +10697,9 @@ export interface operations {
   get_admin_house_card: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -10765,9 +10785,9 @@ export interface operations {
   rotate_house_binding_code: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -10859,9 +10879,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -10947,9 +10967,9 @@ export interface operations {
   block_resident: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         resident_id: number;
@@ -11039,9 +11059,9 @@ export interface operations {
   unblock_resident: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         resident_id: number;
@@ -11127,9 +11147,9 @@ export interface operations {
   revoke_flat_verification: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         resident_id: number;
@@ -11219,9 +11239,9 @@ export interface operations {
   set_chairman: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         resident_id: number;
@@ -11318,9 +11338,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -11404,9 +11424,9 @@ export interface operations {
   approve_verification_request: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         verification_id: number;
@@ -11492,9 +11512,9 @@ export interface operations {
   reject_verification_request: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         verification_id: number;
@@ -11596,9 +11616,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -11682,9 +11702,9 @@ export interface operations {
   get_org_request: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -11770,9 +11790,9 @@ export interface operations {
   change_request_status: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -11862,9 +11882,9 @@ export interface operations {
   reply_to_request: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -11954,9 +11974,9 @@ export interface operations {
   assign_request_executor: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         request_id: number;
@@ -12046,9 +12066,9 @@ export interface operations {
   get_request_group: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         group_id: number;
@@ -12134,9 +12154,9 @@ export interface operations {
   change_request_group_status: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         group_id: number;
@@ -12226,9 +12246,9 @@ export interface operations {
   create_phone_request: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -12316,9 +12336,9 @@ export interface operations {
   list_org_executors: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -12410,9 +12430,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         house_id: number;
@@ -12504,9 +12524,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -12590,9 +12610,9 @@ export interface operations {
   create_announcement: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -12687,9 +12707,9 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -12773,9 +12793,9 @@ export interface operations {
   create_org_poll: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -12863,9 +12883,9 @@ export interface operations {
   list_reception_windows: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -12949,9 +12969,9 @@ export interface operations {
   set_reception_windows: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13042,9 +13062,9 @@ export interface operations {
         on_date?: string | null;
         house_id?: number | null;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13130,9 +13150,9 @@ export interface operations {
       query?: {
         house_id?: number | null;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13216,9 +13236,9 @@ export interface operations {
   create_access_request: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13306,9 +13326,9 @@ export interface operations {
   get_access_request_grid: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path: {
         access_request_id: number;
@@ -13398,9 +13418,9 @@ export interface operations {
         date_to?: string | null;
         house_id?: number | null;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13486,9 +13506,9 @@ export interface operations {
       query?: {
         period?: string | null;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13572,9 +13592,9 @@ export interface operations {
   remind_not_submitted: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13665,9 +13685,9 @@ export interface operations {
         date_from?: string | null;
         date_to?: string | null;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13754,9 +13774,9 @@ export interface operations {
         date_from?: string | null;
         date_to?: string | null;
       };
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13840,9 +13860,9 @@ export interface operations {
   get_benchmark: {
     parameters: {
       query?: never;
-      header: {
+      header?: {
         "X-Org-Id"?: number | null;
-        WebAppData: string;
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13926,8 +13946,8 @@ export interface operations {
   upload_file: {
     parameters: {
       query?: never;
-      header: {
-        WebAppData: string;
+      header?: {
+        WebAppData?: string | null;
       };
       path?: never;
       cookie?: never;

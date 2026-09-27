@@ -36,6 +36,7 @@ export const useHouseResidents = (houseId: number, limit = 10) => {
     total: residents.data?.pages[0].total ?? 0,
     isPending: residents.isPending,
     isError: residents.isError,
+    loadError: residents.error,
     retry: () => void residents.refetch(),
     hasMore: residents.hasNextPage,
     isLoadingMore: residents.isFetchingNextPage,

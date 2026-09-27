@@ -80,6 +80,7 @@ export const AccessSection = () => {
         <LoadingState title="Загружаем сборы доступа" />
       ) : requests.isError ? (
         <ErrorState
+          error={requests.error}
           description="Не получилось загрузить сборы доступа"
           onRetry={() => void requests.refetch()}
         />
@@ -102,7 +103,7 @@ export const AccessSection = () => {
             </>
           ) : (
             <Typography.Text variant="description" color="secondary">
-              Идущих сборов нет — все прошли
+              Идущих сборов нет - все прошли
             </Typography.Text>
           )}
 

@@ -28,6 +28,7 @@ export const MyAppointmentsSection = ({
   if (mine.isError) {
     return (
       <ErrorState
+        error={mine.loadError}
         description="Не получилось загрузить ваши записи на приём"
         onRetry={mine.retry}
       />

@@ -38,6 +38,7 @@ export const useNonVoters = () => {
     isForbidden: isForbidden(flats.error),
     isPending: route !== null && flats.isPending,
     isError: route === null || flats.isError,
+    loadError: flats.error,
     retry: () => {
       void flats.refetch();
       void results.refetch();

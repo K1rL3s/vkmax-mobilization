@@ -4,7 +4,7 @@ import { generatePath, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { useRequestCategories, type RequestCategory } from "@/features/request";
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
@@ -158,10 +158,13 @@ export const usePhoneRequest = () => {
     categories: categories.data ?? [],
     isPending: categories.isPending,
     isError: categories.isError,
+    loadError: categories.error,
     isSubmitting: create.isPending || create.isSuccess,
     error: create.isError
-      ? (errorDetail(create.error) ??
-        "Не удалось создать заявку. Попробуйте ещё раз.")
+      ? errorMessage(
+          create.error,
+          "Не удалось создать заявку. Попробуйте ещё раз.",
+        )
       : null,
     retry: () => void categories.refetch(),
     submit,

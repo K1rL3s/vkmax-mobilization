@@ -113,13 +113,14 @@ export const AppointmentsSection = () => {
         <LoadingState title="Загружаем записи" />
       ) : appointments.isError ? (
         <ErrorState
+          error={appointments.error}
           description="Не получилось загрузить записи на приём"
           onRetry={() => void appointments.refetch()}
         />
       ) : appointments.data.length === 0 ? (
         <EmptyState
           title="В этот день никто не записан"
-          description="Жители записываются сами из своего кабинета — в кабинете УК записать человека нельзя. Проверьте соседние дни стрелками выше."
+          description="Жители записываются сами из своего кабинета - в кабинете УК записать человека нельзя. Проверьте соседние дни стрелками выше."
         />
       ) : (
         <div

@@ -25,7 +25,8 @@ const AdminRequestPhonePage = () => {
 
   if (model.isPending)
     return <LoadingState fill title="Загружаем форму заявки…" />;
-  if (model.isError) return <ErrorState fill onRetry={model.retry} />;
+  if (model.isError)
+    return <ErrorState error={model.loadError} fill onRetry={model.retry} />;
   if (model.categories.length === 0)
     return (
       <EmptyState

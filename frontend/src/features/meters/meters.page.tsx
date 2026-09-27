@@ -25,8 +25,12 @@ const photoHint = (photos: ReturnType<typeof useReadingPhotos>) => {
     return "Распознаём показания с фото";
   }
 
+  if (photos.isUnrecognized) {
+    return "Не удалось распознать, введите показание вручную";
+  }
+
   if (photos.recognized) {
-    return "Значения с фото подставили в поля ниже — проверьте их";
+    return "Значения с фото подставили в поля ниже - проверьте их";
   }
 
   return `Снимите табло целиком, до ${PHOTO_LIMIT} фото`;
@@ -43,7 +47,7 @@ const MetersPage = () => {
         fill
         icon={meterIcon}
         title="Сначала подтвердите квартиру"
-        description="Показания принимаются только от подтверждённого жителя — это занимает пару минут"
+        description="Показания принимаются только от подтверждённого жителя - это занимает пару минут"
         action={
           <Button asChild size="medium">
             <Link
@@ -64,7 +68,7 @@ const MetersPage = () => {
   }
 
   if (form.isError) {
-    return <ErrorState fill onRetry={form.refetch} />;
+    return <ErrorState error={form.loadError} fill onRetry={form.refetch} />;
   }
 
   const meter = form.meter;
@@ -87,6 +91,7 @@ const MetersPage = () => {
           result={form.result}
           meter={meter}
           onResubmit={form.resubmit}
+          onNext={form.openNext}
           onDone={() => void navigate(Routes.HOME)}
         />
       </Panel>
@@ -99,7 +104,7 @@ const MetersPage = () => {
         fill
         icon={meterIcon}
         title="Окно подачи закрыто"
-        description="Показания принимаются не весь месяц. Загляните позже — окно откроет управляющая компания"
+        description="Показания принимаются не весь месяц. Загляните позже - окно откроет управляющая компания"
       />
     );
   }
@@ -110,6 +115,7 @@ const MetersPage = () => {
         <PeriodCard
           period={form.period}
           flatNumber={residency?.flat_number ?? null}
+          submitted={meter.last_period === form.period.period}
         />
 
         <Flex asChild align="stretch" direction="column" gap={12}>
@@ -132,7 +138,7 @@ const MetersPage = () => {
 
             {!meter.can_submit && (
               <Typography.Text variant="description" className={styles.Failed}>
-                Срок поверки истёк — показания не примут, начисление пойдёт по
+                Срок поверки истёк - показания не примут, начисление пойдёт по
                 нормативу. Поверку заказывают через УК
               </Typography.Text>
             )}
@@ -191,7 +197,11 @@ const MetersPage = () => {
               onRemove={form.photos.remove}
             />
 
-            <Typography.Text variant="description" color="tertiary">
+            <Typography.Text
+              variant="description"
+              color="tertiary"
+              className={form.photos.isFailed ? styles.Failed : undefined}
+            >
               {photoHint(form.photos)}
             </Typography.Text>
           </section>
@@ -205,6 +215,7 @@ const MetersPage = () => {
 
             <ReadingFields
               meter={meter}
+              period={form.period.period}
               zones={form.zones}
               valueOf={form.valueOf}
               onChange={form.setValue}
@@ -212,9 +223,9 @@ const MetersPage = () => {
           </section>
         </Flex>
 
-        {form.isFailed && (
+        {form.error && (
           <Typography.Text variant="description" className={styles.Failed}>
-            Показания не ушли. Проверьте связь и попробуйте ещё раз.
+            {form.error}
           </Typography.Text>
         )}
       </div>

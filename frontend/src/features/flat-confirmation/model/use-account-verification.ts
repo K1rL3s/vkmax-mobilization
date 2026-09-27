@@ -30,5 +30,6 @@ export const useAccountVerification = (
     mismatched: mutation.data?.verified === false,
     isPending: mutation.isPending,
     isFailed: mutation.isError,
+    failure: mutation.error,
   };
 };

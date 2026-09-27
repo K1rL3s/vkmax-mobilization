@@ -79,7 +79,7 @@ const DeeplinkPage = () => {
         fill
         icon={infoIcon}
         title="Эту ссылку нужно открыть в боте"
-        description="Вернитесь в чат с Жекой Коммуналкиным и откройте ссылку там"
+        description="Вернитесь в чат с Жэкой Коммуналкиным и откройте ссылку там"
         action={
           <Flex className={styles.Actions} direction="column" gap={12}>
             <Button size="large" stretched onClick={() => getWebApp()?.close()}>
@@ -95,6 +95,25 @@ const DeeplinkPage = () => {
               Продолжить в приложении
             </Button>
           </Flex>
+        }
+      />
+    );
+  }
+
+  if (state.status === "no-access") {
+    return (
+      <StateMessage
+        fill
+        icon={infoIcon}
+        title="Нет доступа к кабинету УК"
+        description="Эта ссылка для сотрудников управляющей компании, которая ведёт заявку"
+        action={
+          <Button
+            size="large"
+            onClick={() => navigate(state.route, { replace: true })}
+          >
+            На главную
+          </Button>
         }
       />
     );

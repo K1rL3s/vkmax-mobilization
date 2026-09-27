@@ -39,5 +39,6 @@ export const useOrgRequest = (
     mismatched: false,
     isPending: mutation.isPending,
     isFailed: mutation.isError && !isConflict(mutation.error),
+    failure: mutation.error,
   };
 };

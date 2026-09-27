@@ -33,6 +33,7 @@ export const useRequest = () => {
         ?.zone ?? null,
     isPending: params !== null && card.isPending,
     isError: params === null || card.isError,
+    loadError: card.error,
     retry: () => void card.refetch(),
   };
 };

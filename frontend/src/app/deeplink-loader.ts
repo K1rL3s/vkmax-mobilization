@@ -1,8 +1,10 @@
-import { redirect } from "react-router-dom";
+import { generatePath, redirect } from "react-router-dom";
 
 import {
   defaultRouteForSession,
   executeDeeplink,
+  ignoreDeeplink,
+  openPathDeeplink,
   parseStartParam,
   runDeeplinkOnce,
   shouldHandleDeeplink,
@@ -21,6 +23,11 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
     throw redirect(defaultRouteForSession(session));
   }
 
+  if (command.kind === "path" && command.path === Routes.PRIVACY) {
+    ignoreDeeplink(raw);
+    throw redirect(Routes.PRIVACY);
+  }
+
   if (session.consent_at === null) {
     return { status: "consent" };
   }
@@ -29,11 +36,26 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
     throw redirect(defaultRouteForSession(session));
   }
 
-  if (command.kind === "invite" || command.kind === "register") {
+  if (command.kind === "invite") {
     return {
       status: "bot-only",
       hasResidency: session.residencies.length > 0,
     };
+  }
+
+  if (command.kind === "register" || command.kind === "path") {
+    const route =
+      command.kind === "register"
+        ? generatePath(Routes.REGISTER, { code: command.code })
+        : await openPathDeeplink(command.path, session);
+
+    ignoreDeeplink(raw);
+
+    if (route === null) {
+      return { status: "no-access", route: defaultRouteForSession(session) };
+    }
+
+    throw redirect(route);
   }
 
   const attempt = await runDeeplinkOnce(raw, () => executeDeeplink(command));

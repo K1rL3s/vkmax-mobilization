@@ -46,7 +46,9 @@ const AdminPollNewPage = () => {
   }
 
   if (form.isHousesError) {
-    return <ErrorState fill onRetry={form.retryHouses} />;
+    return (
+      <ErrorState error={form.housesError} fill onRetry={form.retryHouses} />
+    );
   }
 
   if (form.houses.length === 0) {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { RequestStatus } from "@/features/request";
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { orgParams } from "@/shared/model/session";
 
@@ -30,8 +30,10 @@ export const useRequestStatus = (target: StatusTarget) => {
     setStatus: setPicked,
     isPending: change.isPending,
     error: change.isError
-      ? (errorDetail(change.error) ??
-        "Не удалось сменить статус. Попробуйте ещё раз.")
+      ? errorMessage(
+          change.error,
+          "Не удалось сменить статус. Попробуйте ещё раз.",
+        )
       : null,
     submit: () => {
       if (change.isPending) return;

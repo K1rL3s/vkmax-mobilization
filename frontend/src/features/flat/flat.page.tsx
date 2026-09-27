@@ -53,7 +53,7 @@ const FlatPage = () => {
         <EmptyState
           icon={homeIcon}
           title="Квартира не выбрана"
-          description="Привяжитесь к дому заново и выберите квартиру — заявки и показания при этом останутся"
+          description="Привяжитесь к дому заново и выберите квартиру - заявки и показания при этом останутся"
         />
       );
     }
@@ -63,7 +63,9 @@ const FlatPage = () => {
     }
 
     if (card.isError) {
-      return <ErrorState onRetry={() => void card.refetch()} />;
+      return (
+        <ErrorState error={card.error} onRetry={() => void card.refetch()} />
+      );
     }
 
     return (

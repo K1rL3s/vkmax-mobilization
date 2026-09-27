@@ -1,0 +1,32 @@
+.Page {
+  flex: 1;
+
+  h1 {
+    margin: 0;
+  }
+
+  .Content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 20px;
+    padding: 16px;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Failed {
+    color: var(--text-negative);
+  }
+
+  .Footer {
+    padding: 12px 16px;
+  }
+
+  .Note {
+    text-align: center;
+  }
+}

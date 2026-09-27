@@ -17,4 +17,6 @@ export const useBackNavigation = (fallback: To) => {
   });
 
   useEffect(() => pushBackHandler(() => handler.current()), [handler]);
+
+  return () => handler.current();
 };

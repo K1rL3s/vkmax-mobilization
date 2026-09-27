@@ -35,7 +35,7 @@ const MeetingsPage = () => {
       )}
 
       {list.isConnected && list.isError && (
-        <ErrorState fill onRetry={list.retry} />
+        <ErrorState error={list.loadError} fill onRetry={list.retry} />
       )}
 
       {list.isConnected && !list.isPending && !list.isError && list.isEmpty && (

@@ -56,6 +56,7 @@ export const usePoll = () => {
     send: () => vote.mutate({ params, body: { option_ids: chosen } }),
     isPending: route !== null && (card.isPending || results.isPending),
     isError: route === null || card.isError || results.isError,
+    loadError: card.error ?? results.error,
     retry: () => {
       void card.refetch();
       void results.refetch();

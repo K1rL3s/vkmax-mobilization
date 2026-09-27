@@ -1,6 +1,8 @@
 export {
   defaultRouteForSession,
   executeDeeplink,
+  ignoreDeeplink,
+  openPathDeeplink,
   runDeeplinkOnce,
   shouldHandleDeeplink,
   type DeeplinkPageState,

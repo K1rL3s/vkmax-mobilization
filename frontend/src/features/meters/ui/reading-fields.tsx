@@ -4,6 +4,7 @@ import { Icon, alertIcon } from "@/shared/ui/icon";
 
 import {
   formatReading,
+  isImplausiblyHigh,
   parseReading,
   ZONE_LABEL,
   type Meter,
@@ -14,6 +15,7 @@ import styles from "./reading-fields.module.css";
 
 type ReadingFieldsProps = {
   meter: Meter;
+  period: string;
   zones: TariffZone[];
   valueOf: (zone: TariffZone) => string;
   onChange: (zone: TariffZone, value: string) => void;
@@ -21,6 +23,7 @@ type ReadingFieldsProps = {
 
 export const ReadingFields = ({
   meter,
+  period,
   zones,
   valueOf,
   onChange,
@@ -32,6 +35,10 @@ export const ReadingFields = ({
         const current = parseReading(valueOf(zone));
         const isBelow =
           previous !== undefined && current !== null && current < previous;
+        const isHigh =
+          previous !== undefined &&
+          current !== null &&
+          isImplausiblyHigh(meter, period, current - previous);
 
         return (
           <Flex key={zone} direction="column" align="stretch" gap={8}>
@@ -60,8 +67,22 @@ export const ReadingFields = ({
                   color="primary"
                   className={styles.Warning}
                 >
-                  Меньше прошлого показания. Проверьте — отправить всё равно
-                  можно
+                  Меньше прошлого показания. Проверьте цифры: расход и сумму с
+                  таким значением не посчитаем. Отправить всё равно можно
+                </Typography.Text>
+              </Flex>
+            )}
+
+            {isHigh && (
+              <Flex align="center" gap={8}>
+                <Icon src={alertIcon} size={20} className={styles.Alert} />
+                <Typography.Text
+                  variant="description"
+                  color="primary"
+                  className={styles.Warning}
+                >
+                  Расход в разы больше обычного для квартиры. Проверьте цифры и
+                  запятую. Отправить всё равно можно
                 </Typography.Text>
               </Flex>
             )}

@@ -129,7 +129,13 @@ const AdminHousesPage = () => {
     }
 
     if (houses.isError) {
-      return <ErrorState fill onRetry={() => void houses.refetch()} />;
+      return (
+        <ErrorState
+          error={houses.error}
+          fill
+          onRetry={() => void houses.refetch()}
+        />
+      );
     }
 
     if (items.length === 0 && search !== "") {

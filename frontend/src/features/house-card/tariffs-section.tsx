@@ -63,7 +63,9 @@ export const TariffsSection = ({
     }
 
     if (query.isError) {
-      return <ErrorState onRetry={() => void query.refetch()} />;
+      return (
+        <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+      );
     }
 
     if (tariffs.length === 0) {

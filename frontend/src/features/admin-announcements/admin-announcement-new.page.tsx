@@ -16,7 +16,13 @@ const AdminAnnouncementNewPage = () => {
   }
 
   if (houses.isError) {
-    return <ErrorState fill onRetry={() => void houses.refetch()} />;
+    return (
+      <ErrorState
+        error={houses.error}
+        fill
+        onRetry={() => void houses.refetch()}
+      />
+    );
   }
 
   if (houses.data.items.length === 0) {

@@ -45,6 +45,7 @@ export const useMyAppointments = () => {
     isOwn: (slot: ReceptionSlot) => ownTimes.has(Date.parse(slot.starts_at)),
     isPending: list.isPending,
     isError: list.isError,
+    loadError: list.error,
     retry: () => void list.refetch(),
     target: confirm.target,
     isOpen: confirm.isOpen,

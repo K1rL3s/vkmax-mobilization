@@ -3,3 +3,12 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.Suggested {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background-color: color-mix(in srgb, currentColor 16%, transparent);
+  font-size: 11px;
+  line-height: 14px;
+}

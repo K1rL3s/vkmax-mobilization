@@ -1,7 +1,7 @@
 import { CellSimple, Flex, IconButton, Typography } from "@maxhub/max-ui";
 import { useNavigate } from "react-router-dom";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { formatDay } from "@/shared/lib/format";
 import { orgParams, useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
@@ -106,6 +106,7 @@ export const MembersSection = () => {
     if (members.isError)
       return (
         <ErrorState
+          error={members.error}
           description="Не получилось загрузить сотрудников"
           onRetry={() => void members.refetch()}
         />
@@ -169,8 +170,10 @@ export const MembersSection = () => {
           confirmLabel="Исключить"
           error={
             remove.isError &&
-            (errorDetail(remove.error) ??
-              "Не получилось исключить. Проверьте связь и попробуйте ещё раз")
+            errorMessage(
+              remove.error,
+              "Не получилось исключить. Проверьте связь и попробуйте ещё раз",
+            )
           }
           isPending={remove.isPending}
           onConfirm={() => {

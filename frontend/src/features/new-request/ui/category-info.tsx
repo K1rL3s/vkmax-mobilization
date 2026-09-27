@@ -36,10 +36,10 @@ export const CategoryInfo = ({ category, orgName }: CategoryInfoProps) => {
         <Icon src={clockIcon} className={styles.Icon} />
         <Flex align="stretch" direction="column" gapY={2}>
           <Typography.Text variant="body-strong" color="primary">
-            Реакция до {hours} {plural(hours, ["часа", "часов", "часов"])}
+            Срок - {hours} {plural(hours, ["час", "часа", "часов"])}
           </Typography.Text>
           <Typography.Text variant="description" color="secondary">
-            Нормативный срок для этой категории
+            На выполнение заявки этой категории
           </Typography.Text>
         </Flex>
       </Flex>

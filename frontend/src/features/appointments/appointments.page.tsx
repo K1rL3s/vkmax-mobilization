@@ -65,6 +65,7 @@ const AppointmentsPage = () => {
     return (
       <ErrorState
         fill
+        error={parts.find((part) => part.isError)?.loadError}
         onRetry={() => {
           for (const part of parts) {
             if (part.isError) {

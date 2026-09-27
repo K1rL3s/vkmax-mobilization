@@ -10,6 +10,7 @@ type SectionProps = {
   note?: string;
   isPending?: boolean;
   isError?: boolean;
+  error?: unknown;
   onRetry?: () => void;
   children: ReactNode;
 };
@@ -19,6 +20,7 @@ export const Section = ({
   note,
   isPending,
   isError,
+  error,
   onRetry,
   children,
 }: SectionProps) => (
@@ -44,7 +46,7 @@ export const Section = ({
 
       {isPending && <LoadingState />}
 
-      {isError && <ErrorState onRetry={onRetry} />}
+      {isError && <ErrorState error={error} onRetry={onRetry} />}
 
       {!isPending && !isError && children}
     </section>

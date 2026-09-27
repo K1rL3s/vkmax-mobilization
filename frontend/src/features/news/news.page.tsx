@@ -30,7 +30,13 @@ const NewsPage = () => {
     }
 
     if (news.isError) {
-      return <ErrorState fill onRetry={() => void news.refetch()} />;
+      return (
+        <ErrorState
+          error={news.error}
+          fill
+          onRetry={() => void news.refetch()}
+        />
+      );
     }
 
     const items = news.data.pages.flatMap((page) => page.items);

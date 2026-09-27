@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { orgParams } from "@/shared/model/session";
 
@@ -46,8 +46,10 @@ export const useRequestReplyForm = (requestId: number) => {
     isPending: reply.isPending,
     isSuccess: reply.isSuccess,
     error: reply.isError
-      ? (errorDetail(reply.error) ??
-        "Не удалось отправить ответ. Попробуйте ещё раз.")
+      ? errorMessage(
+          reply.error,
+          "Не удалось отправить ответ. Попробуйте ещё раз.",
+        )
       : null,
     submit,
   };

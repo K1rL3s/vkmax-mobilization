@@ -31,7 +31,10 @@ const AdminAnalyticsPage = () => {
       {dashboard.isPending && <LoadingState title="Считаем показатели" />}
 
       {dashboard.isError && (
-        <ErrorState onRetry={() => void dashboard.refetch()} />
+        <ErrorState
+          error={dashboard.error}
+          onRetry={() => void dashboard.refetch()}
+        />
       )}
 
       {!dashboard.isError && dashboard.data?.is_empty && (

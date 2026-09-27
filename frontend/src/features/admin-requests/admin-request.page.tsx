@@ -8,6 +8,7 @@ import {
   DeadlinePanel,
   isFinished,
   isOnReview,
+  RequestPhotos,
   RequestTimeline,
   STATUS_LABEL,
   STATUS_TONE,
@@ -25,7 +26,6 @@ import { useAdminRequest } from "./model/use-admin-request";
 import { NoOrgAccess } from "./ui/no-org-access";
 import { RequestAssignment } from "./ui/request-assignment";
 import { RequestConversation } from "./ui/request-conversation";
-import { RequestPhotos } from "./ui/request-photos";
 import { RequestStatusAction } from "./ui/request-status-action";
 
 import styles from "./admin-requests.module.css";
@@ -48,7 +48,13 @@ const AdminRequestPage = () => {
   if (isForbidden(query.error)) return <NoOrgAccess />;
   if (query.isPending) return <LoadingState fill title="Загружаем заявку…" />;
   if (query.isError)
-    return <ErrorState fill onRetry={() => void query.refetch()} />;
+    return (
+      <ErrorState
+        error={query.error}
+        fill
+        onRetry={() => void query.refetch()}
+      />
+    );
   const request = query.data;
 
   const tone = STATUS_TONE[request.status];

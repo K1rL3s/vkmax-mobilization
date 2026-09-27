@@ -29,11 +29,13 @@ export const RequestAssignment = ({ request }: { request: AdminRequest }) => {
       <Typography.Text variant="description" color="secondary">
         {request.executor_name
           ? `Работает ${request.executor_name}. Нажмите на другого, чтобы переназначить.`
-          : "Не назначен. Нажмите на сотрудника — заявка уйдёт ему."}
+          : "Не назначен. Нажмите на сотрудника - заявка уйдёт ему."}
       </Typography.Text>
 
       {model.isLoading && <LoadingState title="Загружаем исполнителей…" />}
-      {model.isLoadError && <ErrorState onRetry={model.retry} />}
+      {model.isLoadError && (
+        <ErrorState error={model.loadError} onRetry={model.retry} />
+      )}
 
       {!model.isLoading &&
         !model.isLoadError &&

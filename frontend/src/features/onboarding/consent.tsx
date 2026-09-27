@@ -1,6 +1,7 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
+import { errorMessage } from "@/shared/api/errors";
 import { Routes } from "@/shared/model/routes";
 import { Checkbox } from "@/shared/ui/checkbox";
 import { buildingIcon } from "@/shared/ui/icon";
@@ -35,7 +36,7 @@ export const Consent = ({
           gapY={6}
         >
           <Typography.Text asChild variant="header" color="primary">
-            <h1>Жека Коммуналкин</h1>
+            <h1>Жэка Коммуналкин</h1>
           </Typography.Text>
 
           <Typography.Text variant="body" color="secondary">
@@ -67,10 +68,14 @@ export const Consent = ({
             </Typography.Text>
           </Checkbox>
 
-          {consent.isError && (
+          {consent.error && (
             <ErrorState
               title="Не получилось сохранить согласие"
-              description="Проверьте связь и попробуйте ещё раз"
+              description={errorMessage(
+                consent.error,
+                "Проверьте связь и попробуйте ещё раз",
+              )}
+              error={consent.error}
               onRetry={consent.start}
             />
           )}
@@ -82,7 +87,7 @@ export const Consent = ({
             disabled={!consent.checked}
             onClick={consent.start}
           >
-            Добавить недвижимость
+            {consent.label}
           </Button>
         </Flex>
       </Flex>

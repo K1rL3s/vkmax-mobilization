@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { authParams, rqClient } from "@/shared/api/instance";
-import { useSession } from "@/shared/model/session";
+import { hasWorkingOrg, useSession } from "@/shared/model/session";
 
 export const useConsent = (onContinue: () => Promise<void>) => {
-  const { isConsentGiven, save } = useSession();
+  const { session, isConsentGiven, save } = useSession();
   const [checked, setChecked] = useState(false);
 
   const consent = rqClient.useMutation("post", "/api/me/consent", {
@@ -32,6 +32,10 @@ export const useConsent = (onContinue: () => Promise<void>) => {
     setChecked,
     start,
     isPending: consent.isPending,
-    isError: consent.isError,
+    error: consent.error,
+    label:
+      session && hasWorkingOrg(session) && session.residencies.length === 0
+        ? "Открыть кабинет УК"
+        : "Добавить недвижимость",
   };
 };

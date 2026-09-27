@@ -32,6 +32,7 @@ export const useHouseReadings = (houseId: number) => {
     items: readings.data?.pages.flatMap((page) => page.items) ?? [],
     isPending: readings.isPending,
     isError: readings.isError,
+    loadError: readings.error,
     retry: () => void readings.refetch(),
     hasMore: readings.hasNextPage,
     isLoadingMore: readings.isFetchingNextPage,

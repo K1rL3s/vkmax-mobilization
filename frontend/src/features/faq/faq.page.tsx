@@ -10,7 +10,7 @@ import styles from "./faq.module.css";
 const FaqPage = () => (
   <Panel className={styles.Page} mode="secondary">
     <Typography.Text variant="detail" color="secondary">
-      Жека связывает жителей с управляющей компанией: заявки, показания, опросы
+      Жэка связывает жителей с управляющей компанией: заявки, показания, опросы
       и новости дома - в приложении и в боте MAX
     </Typography.Text>
 
@@ -75,7 +75,7 @@ const FaqPage = () => (
         ],
       },
       {
-        title: "Собрания и опросы",
+        title: "Опросы",
         items: [
           [
             "Кто может голосовать?",

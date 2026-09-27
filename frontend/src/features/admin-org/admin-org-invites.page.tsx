@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 
-import { errorDetail, isForbidden } from "@/shared/api/errors";
+import { errorMessage, isForbidden } from "@/shared/api/errors";
 import { orgParams } from "@/shared/model/session";
 import { ConfirmDialog, useConfirm } from "@/shared/ui/confirm-dialog";
 import { usersIcon } from "@/shared/ui/icon";
@@ -71,7 +71,13 @@ const AdminOrgInvitesPage = () => {
     );
 
   if (invites.isError)
-    return <ErrorState fill onRetry={() => void invites.refetch()} />;
+    return (
+      <ErrorState
+        error={invites.error}
+        fill
+        onRetry={() => void invites.refetch()}
+      />
+    );
 
   const items = invites.data.map((invite) => ({
     invite,
@@ -131,8 +137,10 @@ const AdminOrgInvitesPage = () => {
         confirmLabel="Отозвать"
         error={
           revoke.isError &&
-          (errorDetail(revoke.error) ??
-            "Не получилось отозвать. Проверьте связь и попробуйте ещё раз")
+          errorMessage(
+            revoke.error,
+            "Не получилось отозвать. Проверьте связь и попробуйте ещё раз",
+          )
         }
         isPending={revoke.isPending}
         onConfirm={() => {

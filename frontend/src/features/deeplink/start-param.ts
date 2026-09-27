@@ -1,4 +1,7 @@
+import { matchPath } from "react-router-dom";
 import { z } from "zod";
+
+import { Routes } from "@/shared/model/routes";
 
 const startParam = (pattern: RegExp) => z.string().max(512).regex(pattern);
 
@@ -61,6 +64,50 @@ const demoStartParamSchema = startParam(demoStartParamPattern).transform(
   },
 );
 
+const decodeBase64Url = (raw: string): unknown => {
+  try {
+    const base64 = raw.replaceAll("-", "+").replaceAll("_", "/");
+    const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+
+    return JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(binary, (char) => char.charCodeAt(0)),
+      ),
+    );
+  } catch {
+    return null;
+  }
+};
+
+const linkableRoutes = Object.values(Routes).filter(
+  (route) =>
+    route !== Routes.WELCOME &&
+    route !== Routes.DEEPLINK &&
+    route !== Routes.OUTSIDE_MAX,
+);
+
+const appPathSchema = z
+  .string()
+  .regex(/^\/[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/)
+  .refine((path) =>
+    linkableRoutes.some((route) => matchPath(route, path) !== null),
+  );
+
+const pathStartParamSchema = startParam(/^[A-Za-z0-9_-]+$/).transform(
+  (raw, context) => {
+    const payload = z
+      .object({ path: appPathSchema })
+      .safeParse(decodeBase64Url(raw));
+
+    if (!payload.success) {
+      context.addIssue({ code: "custom", message: "Некорректный путь" });
+      return z.NEVER;
+    }
+
+    return { kind: "path", path: payload.data.path } as const;
+  },
+);
+
 const startParamSchema = z.union([
   houseStartParamSchema,
   qrStartParamSchema,
@@ -68,6 +115,7 @@ const startParamSchema = z.union([
   codeStartParamSchema("inv", "invite"),
   codeStartParamSchema("reg", "register"),
   demoStartParamSchema,
+  pathStartParamSchema,
 ]);
 
 export type StartParam = z.infer<typeof startParamSchema>;

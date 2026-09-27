@@ -64,6 +64,7 @@ export const MetersSection = () => {
       note={season ? `за ${periodTitle(season.period)}` : undefined}
       isPending={meters.isPending}
       isError={meters.isError}
+      error={meters.error}
       onRetry={() => void meters.refetch()}
     >
       {season === undefined || season.is_empty ? (

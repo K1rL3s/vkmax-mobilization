@@ -6,7 +6,7 @@ export const independentModulesConfig = createIndependentModules({
       name: "Shared",
       pattern: "src/shared/**",
       errorMessage:
-        "`shared` is the bottom layer — it may only import from `shared`. This import points upward. 🔥",
+        "`shared` is the bottom layer - it may only import from `shared`. This import points upward. 🔥",
       allowImportsFrom: ["src/shared/**"],
     },
     {

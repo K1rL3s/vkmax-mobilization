@@ -67,6 +67,7 @@ export const useAdminRequestList = () => {
     isForbidden: isForbidden(requests.error),
     isPending: requests.isPending,
     isError: requests.isError,
+    loadError: requests.error,
     isSuccess: requests.isSuccess,
     hasFilters: filters.filter !== "all" || !!filters.category,
     updateFilter,

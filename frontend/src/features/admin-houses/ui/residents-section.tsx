@@ -88,6 +88,7 @@ export const ResidentsSection = ({
     if (residents.isError) {
       return (
         <ErrorState
+          error={residents.loadError}
           description="Не получилось загрузить жителей. Проверьте связь и попробуйте ещё раз"
           onRetry={residents.retry}
         />

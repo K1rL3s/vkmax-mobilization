@@ -50,6 +50,7 @@ const AdminOrgPage = () => {
     return (
       <ErrorState
         fill
+        error={card.error ?? settings.error}
         onRetry={() => {
           void card.refetch();
           void settings.refetch();

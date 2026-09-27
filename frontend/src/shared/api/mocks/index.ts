@@ -15,6 +15,7 @@ import { housesConfigs } from "./houses";
 import { meConfigs } from "./me";
 import { metersConfigs } from "./meters";
 import { notificationsConfigs } from "./notifications";
+import { orgsConfigs } from "./orgs";
 import { pollsConfigs } from "./polls";
 import { requestsConfigs } from "./requests";
 
@@ -38,4 +39,5 @@ export const mockConfigs = [
   ...adminVerificationsConfigs,
   ...adminAnalyticsConfigs,
   ...adminOrgConfigs,
+  ...orgsConfigs,
 ];

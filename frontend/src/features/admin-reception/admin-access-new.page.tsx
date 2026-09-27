@@ -13,7 +13,7 @@ const AdminAccessNewPage = () => {
       <EmptyState
         fill
         title="Собрать доступ может администратор"
-        description="Сбор доступа заводит администратор организации: список квартир дома открыт только ему. Попросите его создать сбор — жителям придёт уведомление"
+        description="Сбор доступа заводит администратор организации: список квартир дома открыт только ему. Попросите его создать сбор - жителям придёт уведомление"
       />
     );
   }
@@ -25,6 +25,7 @@ const AdminAccessNewPage = () => {
   if (houses.isError) {
     return (
       <ErrorState
+        error={houses.error}
         fill
         description="Не получилось загрузить дома организации"
         onRetry={() => void houses.refetch()}

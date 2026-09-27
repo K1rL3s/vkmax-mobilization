@@ -28,7 +28,13 @@ const NotificationsPage = () => {
   }
 
   if (settings.isError) {
-    return <ErrorState fill onRetry={() => void settings.refetch()} />;
+    return (
+      <ErrorState
+        error={settings.error}
+        fill
+        onRetry={() => void settings.refetch()}
+      />
+    );
   }
 
   return (

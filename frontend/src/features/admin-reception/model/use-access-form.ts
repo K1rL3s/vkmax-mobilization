@@ -3,7 +3,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { plural } from "@/shared/lib/format";
 import { rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
@@ -65,7 +65,7 @@ const accessSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["perWindow"],
-        message: `Выбрано ${draft.flats.length} ${plural(draft.flats.length, ["квартира", "квартиры", "квартир"])} — в окно не поместится больше`,
+        message: `Выбрано ${draft.flats.length} ${plural(draft.flats.length, ["квартира", "квартиры", "квартир"])} - в окно не поместится больше`,
       });
     }
   });
@@ -156,8 +156,10 @@ export const useAccessForm = (houseIds: number[]) => {
     isSending: create.isPending,
     sendError:
       create.isError &&
-      (errorDetail(create.error) ??
-        "Не получилось собрать доступ. Проверьте связь и попробуйте ещё раз"),
+      errorMessage(
+        create.error,
+        "Не получилось собрать доступ. Проверьте связь и попробуйте ещё раз",
+      ),
     send: () => {
       const draft = confirm.target;
 

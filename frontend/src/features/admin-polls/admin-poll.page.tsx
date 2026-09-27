@@ -22,7 +22,7 @@ const AdminPollPage = () => {
   }
 
   if (view.isError || !poll || !results) {
-    return <ErrorState fill onRetry={view.retry} />;
+    return <ErrorState error={view.loadError} fill onRetry={view.retry} />;
   }
 
   const isActive = poll.status === "active";

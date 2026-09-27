@@ -18,10 +18,6 @@
   color: var(--text-primary);
 }
 
-.ExitArrow {
-  transform: rotate(180deg);
-}
-
 .Tabs {
   display: flex;
   padding: 8px 0;

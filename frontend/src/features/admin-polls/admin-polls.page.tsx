@@ -45,7 +45,11 @@ const AdminPollsPage = () => {
       {polls.isPending && <LoadingState fill title="Загружаем опросы" />}
 
       {polls.isError && (
-        <ErrorState fill onRetry={() => void polls.refetch()} />
+        <ErrorState
+          error={polls.error}
+          fill
+          onRetry={() => void polls.refetch()}
+        />
       )}
 
       {polls.isSuccess && items.length === 0 && (

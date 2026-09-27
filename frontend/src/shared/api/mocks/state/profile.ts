@@ -219,3 +219,7 @@ export const me = (): Schemas["MeResponse"] => ({
   orgs,
   is_demo: true,
 });
+
+export const joinOrg = (membership: Schemas["OrgMembership"]): void => {
+  orgs.push(membership);
+};

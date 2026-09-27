@@ -7,7 +7,7 @@ import { useSession } from "@/shared/model/session";
 import {
   buildingIcon,
   chartIcon,
-  chevronSmallIcon,
+  homeIcon,
   Icon,
   megaphoneIcon,
   navMeetingsIcon,
@@ -33,7 +33,7 @@ export const AdminTabBar = () => {
   return (
     <nav className={styles.AdminTabBar}>
       <Tappable className={styles.Exit} onClick={leave}>
-        <Icon src={chevronSmallIcon} size={10} className={styles.ExitArrow} />
+        <Icon src={homeIcon} size={16} />
         <Typography.Text variant="tag" color="primary">
           {exit.label}
         </Typography.Text>

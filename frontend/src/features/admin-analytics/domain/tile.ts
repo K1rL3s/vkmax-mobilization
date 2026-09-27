@@ -17,7 +17,7 @@ export const tileView = (tile: DashboardTile) => {
     return {
       key: tile.key,
       label: tile.label,
-      value: "—",
+      value: "-",
       note: "за период нет принятых заявок",
       isAlert: false,
     };

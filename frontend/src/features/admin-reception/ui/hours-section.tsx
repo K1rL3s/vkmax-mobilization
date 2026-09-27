@@ -209,7 +209,7 @@ const HoursEditor = ({ windows }: { windows: ReceptionWindow[] }) => {
       <ConfirmDialog
         isOpen={confirm.isOpen}
         title="Выключить приём в этот день?"
-        description="Слоты этого дня пропадут у жителей, записаться будет нельзя. Уже назначенные записи останутся — отменить их может только житель"
+        description="Слоты этого дня пропадут у жителей, записаться будет нельзя. Уже назначенные записи останутся - отменить их может только житель"
         confirmLabel="Выключить приём"
         onConfirm={send}
         onClose={confirm.dismiss}
@@ -242,6 +242,7 @@ export const HoursSection = () => {
         <LoadingState title="Загружаем часы приёма" />
       ) : windows.isError ? (
         <ErrorState
+          error={windows.error}
           description="Не получилось загрузить часы приёма"
           onRetry={() => void windows.refetch()}
         />

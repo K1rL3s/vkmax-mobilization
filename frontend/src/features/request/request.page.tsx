@@ -23,19 +23,20 @@ import { Answers } from "./ui/answers";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
 import { RatePanel } from "./ui/rate-panel";
+import { RequestPhotos } from "./ui/request-photos";
 import { RequestTimeline } from "./ui/request-timeline";
 
 import styles from "./request.module.css";
 
 const RequestPage = () => {
-  const { request, zone, isPending, isError, retry } = useRequest();
+  const { request, zone, isPending, isError, loadError, retry } = useRequest();
 
   if (isPending) {
     return <LoadingState fill title="Загружаем заявку" />;
   }
 
   if (isError || !request) {
-    return <ErrorState fill onRetry={retry} />;
+    return <ErrorState fill error={loadError} onRetry={retry} />;
   }
 
   const tone = STATUS_TONE[request.status];
@@ -161,6 +162,10 @@ const RequestPage = () => {
             <Answers messages={request.messages} />
           </section>
         </Flex>
+      )}
+
+      {!request.can_review && (
+        <RequestPhotos title="Ваши фото" files={request.photos} />
       )}
     </Panel>
   );

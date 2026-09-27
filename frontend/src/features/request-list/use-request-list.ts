@@ -20,6 +20,7 @@ export const useRequestList = () => {
     setFilter,
     isPending: requests.isPending,
     isError: requests.isError,
+    loadError: requests.error,
     retry: () => void requests.refetch(),
     isEmpty: requests.data?.items.length === 0,
     isFilterEmpty: items.length > 0 && groups.length === 0,

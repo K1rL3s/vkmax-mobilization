@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { CellSimple, Flex, Input, Spinner, Typography } from "@maxhub/max-ui";
 
 import { Icon } from "@/shared/ui/icon";
@@ -30,7 +29,6 @@ type AutocompleteProps = {
   loadingText?: string;
   emptyTitle?: string;
   emptyDescription?: string;
-  emptyAction?: ReactNode;
   onRetry?: () => void;
 };
 
@@ -47,7 +45,6 @@ export const Autocomplete = ({
   loadingText = "Ищем…",
   emptyTitle = "Ничего не нашли",
   emptyDescription,
-  emptyAction,
   onRetry,
 }: AutocompleteProps) => {
   const isEmpty = status === "ready" && options.length === 0;
@@ -94,8 +91,6 @@ export const Autocomplete = ({
                   {emptyDescription}
                 </Typography.Text>
               )}
-
-              {emptyAction}
             </Flex>
           )}
 

@@ -37,7 +37,30 @@ const STATUSES: Schemas["RequestStatus"][] = [
 const categoryOf = (value: string | undefined) =>
   requestCategories().find(({ category }) => category === value)?.category;
 
+const CLASSIFY_RULES: [RegExp, Schemas["RequestCategory"]][] = [
+  [/теч|капает|залива|потоп/i, "leak"],
+  [/лифт/i, "elevator"],
+  [/мусор|контейнер/i, "garbage"],
+  [/батаре|отоплен/i, "heating"],
+  [/нет (горячей |холодной )?воды|напор/i, "water_supply"],
+  [/свет|ламп|электр|розетк/i, "electricity"],
+  [/подъезд|двер|стекл|домофон/i, "entrance"],
+  [/двор|яма|площадк|парковк/i, "yard"],
+];
+
 export const requestsConfigs = [
+  endpoint("post", "/requests/classify", (request) => {
+    const text = String(request.body.text ?? "");
+    const category =
+      CLASSIFY_RULES.find(([pattern]) => pattern.test(text))?.[1] ?? null;
+
+    return ok({
+      category,
+      zone:
+        requestCategories().find((item) => item.category === category)?.zone ??
+        null,
+    } satisfies Schemas["ClassifyRequestResponse"]);
+  }),
   endpoint("get", "/requests", (request) => {
     const houseId = houseOf(request);
 

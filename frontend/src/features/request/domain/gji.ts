@@ -38,11 +38,11 @@ export const gjiAppeal = (request: RequestCard, house: HouseCard) => {
     org &&
       `Управляющая организация: ${org.name}${license}, адрес: ${org.address}.`,
     org && "",
-    `${at(request.created_at)} через мини-приложение «Жека Коммуналкин» в мессенджере MAX я подал(а) в управляющую организацию заявку №${request.id} по категории «${request.category_label}».`,
+    `${at(request.created_at)} через мини-приложение «Жэка Коммуналкин» в мессенджере MAX я подал(а) в управляющую организацию заявку №${request.id} по категории «${request.category_label}».`,
     "",
-    `Нормативный срок реакции по этой категории — ${request.normative_hours} ${plural(request.normative_hours, ["час", "часа", "часов"])}.` +
+    `Срок реакции по этой категории в сервисе - ${request.normative_hours} ${plural(request.normative_hours, ["час", "часа", "часов"])}.` +
       (request.deadline_at ? ` Срок истёк ${at(request.deadline_at)}.` : "") +
-      (overdue ? ` Просрочка на момент обращения — ${overdue}.` : "") +
+      (overdue ? ` Просрочка на момент обращения - ${overdue}.` : "") +
       ` Заявка находится в статусе «${STATUS_LABEL[request.status]}», работы не завершены.`,
     "",
     "Прошу провести проверку по изложенным фактам и обязать управляющую организацию устранить нарушение.",

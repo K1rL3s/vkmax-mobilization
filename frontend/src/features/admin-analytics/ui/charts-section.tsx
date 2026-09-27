@@ -39,7 +39,7 @@ const CategoryChart = ({ series }: { series: ChartSeries }) => {
         <YAxis
           type="category"
           dataKey="label"
-          width={104}
+          width={132}
           axisLine={false}
           tickLine={false}
           className={styles.Axis}

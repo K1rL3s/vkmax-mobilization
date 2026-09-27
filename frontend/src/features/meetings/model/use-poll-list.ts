@@ -30,6 +30,7 @@ export const usePollList = () => {
     isChairman: residency?.is_chairman === true,
     isPending: polls.isPending,
     isError: polls.isError,
+    loadError: polls.error,
     retry: () => void polls.refetch(),
     isEmpty: items.length === 0,
     sections: [

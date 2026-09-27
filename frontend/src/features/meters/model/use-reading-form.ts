@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 
@@ -57,6 +58,13 @@ export const useReadingForm = () => {
     photos.reset();
   };
 
+  const nextMeter = readings.meters.find(
+    (item) =>
+      item.id !== meter?.id &&
+      item.can_submit &&
+      item.last_period !== selectedPeriod?.period,
+  );
+
   const send = () => {
     if (!meter || !selectedPeriod || parsed.some((value) => value === null)) {
       return;
@@ -95,12 +103,24 @@ export const useReadingForm = () => {
     photos,
     result: submit.data,
     resubmit: submit.reset,
+    openNext:
+      nextMeter &&
+      (() => {
+        selectMeter(nextMeter.id);
+        submit.reset();
+      }),
     isSending: submit.isPending,
-    isFailed: submit.isError,
+    error:
+      submit.error &&
+      errorMessage(
+        submit.error,
+        "Показания не ушли. Проверьте связь и попробуйте ещё раз",
+      ),
     canSend:
       meter?.can_submit === true &&
       selectedPeriod !== undefined &&
       photos.photos.length > 0 &&
+      !photos.isUploading &&
       parsed.every((value) => value !== null),
     send,
   };

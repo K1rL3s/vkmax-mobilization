@@ -30,7 +30,9 @@ const AdminVerificationsPage = () => {
 
       {list.isPending && <LoadingState fill title="Загружаем запросы" />}
 
-      {list.isError && <ErrorState fill onRetry={list.retry} />}
+      {list.isError && (
+        <ErrorState error={list.loadError} fill onRetry={list.retry} />
+      )}
 
       {!list.isPending && !list.isError && list.isEmpty && (
         <EmptyState

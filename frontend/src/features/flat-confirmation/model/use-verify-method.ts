@@ -69,5 +69,6 @@ export const useVerifyMethod = () => {
     isPending: way.isPending,
     isDisabled: stated === "" || way.isPending,
     isFailed: way.isFailed,
+    failure: way.failure,
   };
 };

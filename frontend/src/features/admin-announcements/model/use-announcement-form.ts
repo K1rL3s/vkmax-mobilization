@@ -3,7 +3,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import { Routes } from "@/shared/model/routes";
@@ -111,8 +111,10 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
     isSending: create.isPending,
     sendError:
       create.isError &&
-      (errorDetail(create.error) ??
-        "Не получилось отправить. Проверьте связь и попробуйте ещё раз."),
+      errorMessage(
+        create.error,
+        "Не получилось отправить. Проверьте связь и попробуйте ещё раз.",
+      ),
     send: () => {
       const draft = confirm.target;
 

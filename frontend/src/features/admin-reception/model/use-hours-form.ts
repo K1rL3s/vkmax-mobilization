@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { orgParams } from "@/shared/model/session";
 
 import {
@@ -88,8 +88,10 @@ export const useHoursForm = (windows: ReceptionWindow[]) => {
     isSaved: save.isSuccess && !form.formState.isDirty,
     saveError:
       save.isError &&
-      (errorDetail(save.error) ??
-        "Не получилось сохранить часы. Проверьте связь и попробуйте ещё раз"),
+      errorMessage(
+        save.error,
+        "Не получилось сохранить часы. Проверьте связь и попробуйте ещё раз",
+      ),
     submit,
   };
 };

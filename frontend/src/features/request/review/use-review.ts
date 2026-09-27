@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 
 import { refetchRequests, useRepeatRequest } from "../model/use-repeat-request";
@@ -31,7 +32,12 @@ export const useReview = (requestId: number) => {
     setComment: (next: string) => setComment(next.slice(0, COMMENT_LIMIT)),
     isAccepting: accept.isPending || accept.isSuccess,
     isRejecting: repeat.isPending || repeat.isSuccess,
-    isFailed: accept.isError || repeat.isError,
+    error:
+      (accept.error ?? repeat.error) &&
+      errorMessage(
+        accept.error ?? repeat.error,
+        "Ответ не ушёл. Проверьте связь и попробуйте ещё раз",
+      ),
     canAccept: !isSending,
     canReject: text.length > 0 && !isSending,
     accept: () => accept.mutate({ params }),

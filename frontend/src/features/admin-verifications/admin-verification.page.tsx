@@ -46,9 +46,8 @@ const AdminVerificationPage = () => {
     z.object({ verificationId: z.coerce.number().int().positive() }),
   );
 
-  const { request, isPending, isError, retry } = useVerificationRequest(
-    params?.verificationId ?? null,
-  );
+  const { request, isPending, isError, loadError, retry } =
+    useVerificationRequest(params?.verificationId ?? null);
 
   const decision = useVerificationDecision(
     request,
@@ -64,7 +63,7 @@ const AdminVerificationPage = () => {
   }
 
   if (isError) {
-    return <ErrorState fill onRetry={retry} />;
+    return <ErrorState fill error={loadError} onRetry={retry} />;
   }
 
   if (!request) {

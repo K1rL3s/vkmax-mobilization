@@ -76,7 +76,13 @@ export const ChargesList = ({ page = false }: { page?: boolean }) => {
   }
 
   if (list.isError) {
-    return <ErrorState fill={page} onRetry={() => void list.refetch()} />;
+    return (
+      <ErrorState
+        error={list.error}
+        fill={page}
+        onRetry={() => void list.refetch()}
+      />
+    );
   }
 
   if (list.data.items.length === 0) {

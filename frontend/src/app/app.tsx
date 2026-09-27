@@ -19,8 +19,10 @@ export const App = () => {
   );
 
   return (
-    <div className={styles.App}>
-      <Outlet />
+    <div className={styles.Frame}>
+      <div className={styles.App}>
+        <Outlet />
+      </div>
     </div>
   );
 };

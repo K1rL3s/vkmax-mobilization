@@ -2,7 +2,7 @@ import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { cn } from "@/shared/lib/css";
 import { formatDay } from "@/shared/lib/format";
 import { useRouteParams } from "@/shared/lib/router";
@@ -178,7 +178,7 @@ const ChargePage = () => {
     return (
       <ErrorState
         fill
-        description={errorDetail(card.error ?? breakdown.error)}
+        error={card.error ?? breakdown.error}
         onRetry={() => {
           void card.refetch();
           void breakdown.refetch();
@@ -290,8 +290,10 @@ const ChargePage = () => {
               className={cn(styles.Center, pay.isError && styles.Failed)}
             >
               {pay.isError
-                ? (errorDetail(pay.error) ??
-                  "Оплата не прошла. Попробуйте ещё раз")
+                ? errorMessage(
+                    pay.error,
+                    "Оплата не прошла. Попробуйте ещё раз",
+                  )
                 : "Модельные данные: деньги не списываются, месяц только отмечается оплаченным"}
             </Typography.Text>
           </>

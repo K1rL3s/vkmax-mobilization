@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 
 import type { RequestCard } from "../domain/types";
@@ -31,7 +32,18 @@ export const useRatePanel = (request: RequestCard) => {
     setFeedback: (next: string) => setFeedback(next.slice(0, FEEDBACK_LIMIT)),
     isRating: rate.isPending || rate.isSuccess,
     isRepeating: repeat.isPending || repeat.isSuccess,
-    failed: repeat.isError ? "repeat" : rate.isError ? "rate" : null,
+    repeatError:
+      repeat.error &&
+      errorMessage(
+        repeat.error,
+        "Повторная заявка не создалась. Проверьте связь и попробуйте ещё раз",
+      ),
+    rateError:
+      rate.error &&
+      errorMessage(
+        rate.error,
+        "Оценка не ушла. Проверьте связь и попробуйте ещё раз",
+      ),
     canRate: rating > 0 && !isSending,
     canRepeat: text.length > 0 && !isSending,
     rate: () =>

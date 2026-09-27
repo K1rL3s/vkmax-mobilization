@@ -61,3 +61,34 @@ export const parseReading = (input: string): number | null => {
 
   return Math.round(Number(normalized) * MILLI);
 };
+
+const TYPICAL_MONTH: Record<MeterType, number> = {
+  cold_water: 5,
+  hot_water: 3,
+  electricity: 200,
+  gas: 15,
+  heating: 1,
+};
+
+const monthsBetween = (from: string, to: string): number => {
+  const start = new Date(from);
+  const end = new Date(to);
+
+  return (
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    end.getMonth() -
+    start.getMonth()
+  );
+};
+
+export const isImplausiblyHigh = (
+  meter: Meter,
+  period: string,
+  consumption: number,
+): boolean => {
+  const months = meter.last_period
+    ? Math.max(1, monthsBetween(meter.last_period, period))
+    : 1;
+
+  return consumption > TYPICAL_MONTH[meter.type] * 10 * months * MILLI;
+};

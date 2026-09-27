@@ -54,3 +54,13 @@ export const pushBackHandler = (handler: BackHandler) => {
     scheduleSync();
   };
 };
+
+export const hasHeaderBackButton = (): boolean => {
+  const webApp = getWebApp();
+
+  return (
+    webApp?.BackButton !== undefined &&
+    webApp.platform !== "web" &&
+    webApp.platform !== "desktop"
+  );
+};

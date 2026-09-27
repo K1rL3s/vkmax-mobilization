@@ -70,7 +70,11 @@ const AdminBenchmarkPage = () => {
       {benchmark.isPending && <LoadingState fill title="Считаем сравнение" />}
 
       {benchmark.isError && (
-        <ErrorState fill onRetry={() => void benchmark.refetch()} />
+        <ErrorState
+          error={benchmark.error}
+          fill
+          onRetry={() => void benchmark.refetch()}
+        />
       )}
 
       {!benchmark.isError && benchmark.data?.is_empty && (

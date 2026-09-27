@@ -120,22 +120,28 @@ const flat = (
   number: string,
   entrance: number | null,
   area: number | null,
-  account_no: string,
   house_id = 1,
-): MockFlat => ({ id, house_id, number, entrance, area, account_no });
+): MockFlat => ({
+  id,
+  house_id,
+  number,
+  entrance,
+  area,
+  account_no: number.padStart(10, "0"),
+});
 
 export const FLATS: MockFlat[] = [
-  flat(101, "45", 2, 5420, "1600450012"),
-  flat(102, "112", 4, 7310, "1601120034"),
-  flat(103, "7", 1, 3890, "1600070055"),
-  flat(105, "12", 1, 4165, "1600120088"),
-  flat(106, "28", 1, null, "1600280091"),
-  flat(107, "63", 3, 6180, "1600630014"),
-  flat(108, "90", 4, null, "1600900027"),
-  flat(109, "101", 4, 5875, "1601010063"),
-  flat(110, "77", 3, 3240, "1600770049"),
-  flat(111, "5", null, 4100, "1600050072"),
-  flat(104, "3", 1, 4210, "1400030077", 2),
+  flat(101, "45", 2, 5420),
+  flat(102, "112", 4, 7310),
+  flat(103, "7", 1, 3890),
+  flat(105, "12", 1, 4165),
+  flat(106, "28", 1, null),
+  flat(107, "63", 3, 6180),
+  flat(108, "90", 4, null),
+  flat(109, "101", 4, 5875),
+  flat(110, "77", 3, 3240),
+  flat(111, "5", null, 4100),
+  flat(104, "3", 1, 4210, 2),
 ];
 
 export const findHouse = (houseId: number): MockHouse | undefined =>
@@ -217,3 +223,6 @@ export const isDemandSent = (houseId: number): boolean =>
 
 export const demandTotal = (houseId: number): number =>
   demand.get(houseId) ?? 0;
+
+export const orgHouses = (orgId: number): MockHouse[] =>
+  HOUSES.filter((house) => house.org?.id === orgId);

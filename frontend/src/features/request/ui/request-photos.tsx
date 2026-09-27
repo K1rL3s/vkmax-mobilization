@@ -1,6 +1,6 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
-import type { AdminRequest } from "../domain/request-workflow";
+import type { RequestCard } from "../domain/types";
 
 import styles from "./request-photos.module.css";
 
@@ -9,7 +9,7 @@ export const RequestPhotos = ({
   files,
 }: {
   title: string;
-  files: AdminRequest["photos"];
+  files: RequestCard["photos"];
 }) => {
   if (files.length === 0) return null;
 

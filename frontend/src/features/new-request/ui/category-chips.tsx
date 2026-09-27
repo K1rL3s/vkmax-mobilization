@@ -7,12 +7,14 @@ import styles from "./category-chips.module.css";
 type CategoryChipsProps = {
   categories: RequestCategoryItem[];
   value: RequestCategory | null;
+  suggested: RequestCategory | null;
   onChange: (value: RequestCategory) => void;
 };
 
 export const CategoryChips = ({
   categories,
   value,
+  suggested,
   onChange,
 }: CategoryChipsProps) => (
   <div className={styles.Chips}>
@@ -25,6 +27,9 @@ export const CategoryChips = ({
         onClick={() => onChange(item.category)}
       >
         {item.label}
+        {item.category === suggested && (
+          <span className={styles.Suggested}>подсказка</span>
+        )}
       </Button>
     ))}
   </div>

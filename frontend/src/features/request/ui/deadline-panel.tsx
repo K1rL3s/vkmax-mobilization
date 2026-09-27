@@ -26,7 +26,7 @@ export const DeadlinePanel = ({ request }: { request: DeadlineSource }) => {
           variant="body-strong"
           color="primary"
         >
-          Нормативный срок
+          Срок
         </Typography.Text>
         {left && (
           <Typography.Text
@@ -50,7 +50,7 @@ export const DeadlinePanel = ({ request }: { request: DeadlineSource }) => {
       <Typography.Text variant="description" color="secondary">
         {request.deadline_at &&
           `${left?.overdue ? "Срок истёк" : "До"} ${formatDayTime(request.deadline_at)} · `}
-        норматив {hours} {plural(hours, ["час", "часа", "часов"])}
+        срок {hours} {plural(hours, ["час", "часа", "часов"])}
       </Typography.Text>
     </div>
   );

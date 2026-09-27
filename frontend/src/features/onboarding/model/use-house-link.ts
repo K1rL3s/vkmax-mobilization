@@ -41,6 +41,6 @@ export const useHouseLink = () => {
     isLinked: (houseId: number) =>
       residencies.some((residency) => residency.house_id === houseId),
     isLinking: link.isPending || link.isSuccess,
-    isFailed: link.isError,
+    error: link.error,
   };
 };

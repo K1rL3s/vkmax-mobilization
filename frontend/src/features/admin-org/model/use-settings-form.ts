@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import type { components } from "@/shared/api/schema/generated";
 import { orgParams } from "@/shared/model/session";
 
@@ -108,8 +108,10 @@ export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
     isSaving: save.isPending,
     saveError:
       save.isError &&
-      (errorDetail(save.error) ??
-        "Не получилось сохранить. Проверьте связь и попробуйте ещё раз"),
+      errorMessage(
+        save.error,
+        "Не получилось сохранить. Проверьте связь и попробуйте ещё раз",
+      ),
     submit,
   };
 };

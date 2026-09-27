@@ -57,7 +57,7 @@ const seeded: Item[] = [
     house_id: 1,
     flat_number: "12",
     user_name: "Гульнара Ахметзяновна Сафиуллина-Валиева",
-    account_no: "1600120088",
+    account_no: "0000000012",
     comment:
       "Квитанции приходят на девичью фамилию, в паспорте она другая. Лицевой счёт переписан с последней квитанции за август, но в личном кабинете расчётного центра у него другой номер - там на две цифры длиннее. Подскажите, какой из них правильный, я перезаявлю.",
   }),
@@ -67,7 +67,7 @@ const seeded: Item[] = [
     house_id: 2,
     flat_number: "3",
     user_name: "Пётр Сергеев",
-    account_no: "1400030077",
+    account_no: "0000000003",
     comment: "Купил квартиру в июле, квитанции ещё на прежнего собственника.",
   }),
   seed({
@@ -76,7 +76,7 @@ const seeded: Item[] = [
     house_id: 3,
     flat_number: "118",
     user_name: "Алла Гринёва",
-    account_no: "1601180204",
+    account_no: "0000000118",
     comment: null,
   }),
   seed({
@@ -85,7 +85,7 @@ const seeded: Item[] = [
     house_id: 1,
     flat_number: "7",
     user_name: "Игорь Тимофеев",
-    account_no: "16-00-07-0055",
+    account_no: "000-000-0007",
     comment: "Счёт с квитанции, набрал с дефисами, как напечатано.",
   }),
   seed({
@@ -94,7 +94,7 @@ const seeded: Item[] = [
     house_id: 3,
     flat_number: "204",
     user_name: "Марина Козлова",
-    account_no: "1602040311",
+    account_no: "0000000204",
     comment: "Живу по договору найма, квитанции забирает собственник.",
   }),
   seed({
@@ -103,7 +103,7 @@ const seeded: Item[] = [
     house_id: 2,
     flat_number: "56",
     user_name: "Денис Лапшин",
-    account_no: "1400560142",
+    account_no: "0000000056",
     comment: "Переехал внутри дома, старую квартиру сдал.",
   }),
   seed({
@@ -112,7 +112,7 @@ const seeded: Item[] = [
     house_id: 1,
     flat_number: "90",
     user_name: "Ольга Белова",
-    account_no: "1600900027",
+    account_no: "0000000090",
     comment: null,
   }),
   seed({
@@ -121,7 +121,7 @@ const seeded: Item[] = [
     house_id: 3,
     flat_number: "33",
     user_name: "Рустем Хайруллин",
-    account_no: "1600330176",
+    account_no: "0000000033",
     comment: "Счётчики хочу подавать сам, а не через соседа.",
   }),
   seed({
@@ -130,7 +130,7 @@ const seeded: Item[] = [
     house_id: 1,
     flat_number: "45",
     user_name: "Анна Морозова",
-    account_no: "1600450012",
+    account_no: "0000000045",
     status: "approved",
     comment: "Квитанция за сентябрь на руках.",
   }),
@@ -140,7 +140,7 @@ const seeded: Item[] = [
     house_id: 2,
     flat_number: "11",
     user_name: "Виктор Панов",
-    account_no: "0000000000",
+    account_no: "0000000011",
     status: "rejected",
     comment: "Номер списал с домофонной карточки.",
     reason: "Лицевой счёт не совпал с данными УК",

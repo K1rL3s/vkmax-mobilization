@@ -33,7 +33,13 @@ const AdminRequestGroupPage = () => {
   if (query.isPending)
     return <LoadingState fill title="Загружаем коллективную заявку…" />;
   if (query.isError)
-    return <ErrorState fill onRetry={() => void query.refetch()} />;
+    return (
+      <ErrorState
+        error={query.error}
+        fill
+        onRetry={() => void query.refetch()}
+      />
+    );
   const group = query.data;
 
   return (

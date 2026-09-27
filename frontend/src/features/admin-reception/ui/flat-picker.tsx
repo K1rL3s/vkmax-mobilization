@@ -37,6 +37,7 @@ export const FlatPicker = ({
       return (
         <ErrorState
           description="Не получилось загрузить квартиры дома"
+          error={residents.loadError}
           onRetry={residents.retry}
         />
       );

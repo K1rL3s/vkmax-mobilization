@@ -23,12 +23,12 @@ const OutsideMaxPage = () => {
           gapY={6}
         >
           <Typography.Text asChild variant="header" color="primary">
-            <h1>Откройте Жеку в MAX</h1>
+            <h1>Откройте Жэку в MAX</h1>
           </Typography.Text>
 
           <Typography.Text variant="body" color="secondary">
-            Жека работает только внутри мессенджера MAX: оттуда приложение
-            узнаёт, кто вы и какой у вас дом. Найдите бота «Жека Коммуналкин» в
+            Жэка работает только внутри мессенджера MAX: оттуда приложение
+            узнаёт, кто вы и какой у вас дом. Найдите бота «Жэка Коммуналкин» в
             MAX и нажмите «Открыть».
           </Typography.Text>
         </Flex>

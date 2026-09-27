@@ -24,6 +24,7 @@ export const useAccessRequests = () => {
     items: list.data ?? [],
     isPending: list.isPending,
     isError: list.isError,
+    loadError: list.error,
     retry: () => void list.refetch(),
     isPicking: pick.isPending,
     pendingSlotId: pick.isPending

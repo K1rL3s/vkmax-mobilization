@@ -12,15 +12,6 @@
     padding: 16px;
   }
 
-  .TextButton {
-    margin-top: 4px;
-    padding: 0;
-    border: none;
-    background: none;
-    color: var(--text-accent, var(--button-primary));
-    cursor: pointer;
-  }
-
   .Footer {
     padding: 12px 16px;
   }

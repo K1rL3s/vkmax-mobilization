@@ -38,7 +38,9 @@ const AdminHouseQrPage = () => {
   }
 
   if (card.isError) {
-    return <ErrorState fill onRetry={() => void card.refetch()} />;
+    return (
+      <ErrorState error={card.error} fill onRetry={() => void card.refetch()} />
+    );
   }
 
   const house = card.data;

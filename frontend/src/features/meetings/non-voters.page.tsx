@@ -27,7 +27,7 @@ const NonVotersPage = () => {
   }
 
   if (view.isError) {
-    return <ErrorState fill onRetry={view.retry} />;
+    return <ErrorState error={view.loadError} fill onRetry={view.retry} />;
   }
 
   if (view.items.length === 0) {

@@ -1,7 +1,14 @@
 import type { ReactNode } from "react";
 import { Button, Flex, Spinner, Typography } from "@maxhub/max-ui";
+import { useLocation, useNavigate } from "react-router-dom";
 
+import {
+  errorMessage,
+  isClientError,
+  isUnauthorized,
+} from "@/shared/api/errors";
 import { cn } from "@/shared/lib/css";
+import { Routes } from "@/shared/model/routes";
 import { alertIcon } from "@/shared/ui/icon";
 import { IconTile, type IconTileTone } from "@/shared/ui/icon-tile";
 
@@ -68,29 +75,63 @@ export const EmptyState = (props: {
 export const ErrorState = ({
   title = "Что-то пошло не так",
   description = "Не получилось загрузить данные. Проверьте связь и попробуйте ещё раз",
+  error,
   onRetry,
   fill,
 }: {
   title?: string;
   description?: string;
+  error?: unknown;
   onRetry?: () => void;
   fill?: boolean;
-}) => (
-  <StateMessage
-    fill={fill}
-    title={title}
-    description={description}
-    icon={alertIcon}
-    tone="negative"
-    action={
-      onRetry && (
-        <Button size="medium" variant="secondary" onClick={onRetry}>
-          Повторить
+}) => {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const expired = isUnauthorized(error);
+  const final = isClientError(error);
+  const exit = pathname.startsWith(Routes.ADMIN) ? Routes.ADMIN : Routes.HOME;
+
+  const action = () => {
+    if (!final) {
+      return (
+        onRetry && (
+          <Button size="medium" variant="secondary" onClick={onRetry}>
+            Повторить
+          </Button>
+        )
+      );
+    }
+
+    return (
+      fill &&
+      !expired &&
+      pathname !== exit && (
+        <Button
+          size="medium"
+          variant="secondary"
+          onClick={() => navigate(exit, { replace: true })}
+        >
+          На главную
         </Button>
       )
-    }
-  />
-);
+    );
+  };
+
+  return (
+    <StateMessage
+      fill={fill}
+      title={expired ? "Сессия устарела" : title}
+      description={
+        expired
+          ? "Закройте приложение и откройте его заново из бота"
+          : errorMessage(error, description)
+      }
+      icon={alertIcon}
+      tone="negative"
+      action={action()}
+    />
+  );
+};
 
 export const LoadingState = ({
   title,

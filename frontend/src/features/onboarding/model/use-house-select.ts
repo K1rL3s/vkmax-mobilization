@@ -47,11 +47,10 @@ export const useHouseSelect = () => {
     selectFlat: flatSearch.select,
     isFlatDisabled: house === null,
     emptyFlatTitle: flatSearch.emptyTitle,
-    enableManualFlat: flatSearch.enableManual,
 
     isAlreadyLinked,
     isLinking: link.isLinking,
-    isLinkFailed: link.isFailed,
+    linkError: link.error,
     isSubmitDisabled: house === null || isAlreadyLinked || !isFlatChosen,
     submit: () => {
       if (house) {

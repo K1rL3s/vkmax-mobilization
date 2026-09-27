@@ -1,13 +1,17 @@
+import { matchPath } from "react-router-dom";
+
 import { activateFlatInvite } from "@/features/flat-invite";
 import { errorDetail } from "@/shared/api/errors";
 import { authParams, fetchClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
 import {
+  hasWorkingOrg,
   reloadSession,
   selectCabinet,
   selectOrg,
   selectResidency,
   startTarget,
+  workingOrgs,
   type Session,
 } from "@/shared/model/session";
 
@@ -23,6 +27,7 @@ type DeeplinkAttempt =
 export type DeeplinkPageState =
   | { status: "consent" }
   | { status: "bot-only"; hasResidency: boolean }
+  | { status: "no-access"; route: string }
   | { status: "failure"; kind: StartParam["kind"]; hasResidency: boolean };
 
 class ExpectedDeeplinkError extends Error {}
@@ -128,7 +133,10 @@ const executeDemoDeeplink = async (
   command: Extract<StartParam, { kind: "demo" }>,
 ): Promise<DeeplinkExecution> => {
   const { data, error } = await fetchClient
-    .POST("/api/demo/activate", { params: authParams() })
+    .POST("/api/demo/activate", {
+      params: authParams(),
+      body: { number: command.profile, admin: command.cabinet === "admin" },
+    })
     .catch(expectedFailure);
 
   if (error) {
@@ -151,7 +159,7 @@ const executeDemoDeeplink = async (
 };
 
 export const executeDeeplink = (
-  command: Exclude<StartParam, { kind: "invite" | "register" }>,
+  command: Exclude<StartParam, { kind: "invite" | "register" | "path" }>,
 ): Promise<DeeplinkExecution> => {
   switch (command.kind) {
     case "flat":
@@ -173,4 +181,54 @@ export const defaultRouteForSession = (session: Session): string => {
     case "onboarding":
       return Routes.WELCOME;
   }
+};
+
+const orgOfRequest = async (session: Session, requestId: number) => {
+  for (const org of workingOrgs(session)) {
+    const { data } = await fetchClient
+      .GET("/api/admin/requests/{request_id}", {
+        params: {
+          header: { ...authParams().header, "X-Org-Id": org.org_id },
+          path: { request_id: requestId },
+        },
+      })
+      .catch(() => ({ data: undefined }));
+
+    if (data) {
+      return org.org_id;
+    }
+  }
+
+  return null;
+};
+
+export const openPathDeeplink = async (
+  path: string,
+  session: Session,
+): Promise<string | null> => {
+  if (!path.startsWith(Routes.ADMIN)) {
+    return path;
+  }
+
+  if (!hasWorkingOrg(session)) {
+    return null;
+  }
+
+  const requestId = Number(
+    matchPath(Routes.ADMIN_REQUEST, path)?.params.requestId,
+  );
+
+  if (Number.isSafeInteger(requestId)) {
+    const orgId = await orgOfRequest(session, requestId);
+
+    if (orgId === null) {
+      return null;
+    }
+
+    await selectOrg(orgId);
+  }
+
+  selectCabinet("admin");
+
+  return path;
 };

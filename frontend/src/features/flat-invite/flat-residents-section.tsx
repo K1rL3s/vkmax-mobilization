@@ -56,6 +56,7 @@ const Residents = ({ flatId, userId }: { flatId: number; userId: number }) => {
   if (residents.isError) {
     return (
       <ErrorState
+        error={residents.error}
         description="Не получилось загрузить жителей"
         onRetry={() => void residents.refetch()}
       />
@@ -105,6 +106,7 @@ const Invites = ({ flatId }: { flatId: number }) => {
     if (invites.isError) {
       return (
         <ErrorState
+          error={invites.error}
           description="Не получилось загрузить выданные коды"
           onRetry={() => void invites.refetch()}
         />

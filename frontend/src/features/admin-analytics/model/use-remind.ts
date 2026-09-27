@@ -1,4 +1,4 @@
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { orgParams } from "@/shared/model/session";
 
@@ -12,7 +12,7 @@ export const useRemind = () => {
     isPending: remind.isPending,
     queued: remind.isSuccess ? remind.data.queued : null,
     error: remind.isError
-      ? (errorDetail(remind.error) ?? "Не получилось отправить напоминание")
+      ? errorMessage(remind.error, "Не получилось отправить напоминание")
       : null,
     remind: () =>
       remind.mutate({ params: orgParams(), body: { house_ids: [] } }),

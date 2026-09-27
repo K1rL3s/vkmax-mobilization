@@ -52,7 +52,9 @@ const AdminRequestsPage = () => {
       </Flex>
 
       {list.isPending && <LoadingState fill title="Загружаем заявки…" />}
-      {list.isError && <ErrorState fill onRetry={list.retry} />}
+      {list.isError && (
+        <ErrorState error={list.loadError} fill onRetry={list.retry} />
+      )}
 
       {list.isSuccess && list.sections.length === 0 && (
         <EmptyState

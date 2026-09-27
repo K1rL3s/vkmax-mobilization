@@ -65,9 +65,9 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
         </Typography.Text>
       </Flex>
 
-      {form.isFailed && (
+      {form.error && (
         <Typography.Text variant="description" className={styles.Failed}>
-          Ответ не ушёл. Проверьте связь и попробуйте ещё раз.
+          {form.error}
         </Typography.Text>
       )}
 

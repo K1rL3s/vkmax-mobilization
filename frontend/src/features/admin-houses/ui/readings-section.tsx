@@ -59,6 +59,7 @@ export const ReadingsSection = ({ houseId }: { houseId: number }) => {
     if (readings.isError) {
       return (
         <ErrorState
+          error={readings.loadError}
           description="Не получилось загрузить показания. Проверьте связь и попробуйте ещё раз"
           onRetry={readings.retry}
         />

@@ -53,13 +53,13 @@ const dashboard = (span: number): Schemas["DashboardResponse"] => {
         title: "Заявки по категориям",
         unit: "count",
         points: [
-          { label: "Сантехника", value: 64 * scale },
-          { label: "Электрика", value: 41 * scale },
+          { label: "Протечка", value: 64 * scale },
+          { label: "Электричество", value: 41 * scale },
           { label: "Лифт", value: 23 * scale },
-          { label: "Уборка подъезда", value: 17 * scale },
+          { label: "Подъезд", value: 17 * scale },
           { label: "Отопление", value: 9 * scale },
-          { label: "Домофон", value: 0 },
-          { label: "Кровля", value: 0 },
+          { label: "Мусор", value: 0 },
+          { label: "Двор и территория", value: 0 },
         ],
       },
       {

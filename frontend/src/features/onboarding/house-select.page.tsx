@@ -1,5 +1,6 @@
 import { Button, Typography } from "@maxhub/max-ui";
 
+import { errorMessage } from "@/shared/api/errors";
 import { Autocomplete } from "@/shared/ui/autocomplete";
 import { searchOutlineIcon } from "@/shared/ui/icon";
 import { ErrorState } from "@/shared/ui/state";
@@ -10,18 +11,6 @@ import styles from "./house-select.module.css";
 
 const HouseSelectPage = () => {
   const form = useHouseSelect();
-
-  const manualFlatAction = (
-    <Typography.Text asChild variant="detail-strong">
-      <button
-        type="button"
-        className={styles.TextButton}
-        onClick={form.enableManualFlat}
-      >
-        Указать номер вручную
-      </button>
-    </Typography.Text>
-  );
 
   return (
     <div className={styles.Page}>
@@ -51,8 +40,7 @@ const HouseSelectPage = () => {
           onRetry={form.retryFlats}
           loadingText="Ищем квартиру…"
           emptyTitle={form.emptyFlatTitle}
-          emptyDescription="Управляющая компания могла ещё не завести её в системе"
-          emptyAction={manualFlatAction}
+          emptyDescription="Управляющая компания могла ещё не завести её в системе. Если номер верный, нажмите «Далее»"
         />
 
         {form.isAlreadyLinked && (
@@ -61,10 +49,14 @@ const HouseSelectPage = () => {
           </Typography.Text>
         )}
 
-        {form.isLinkFailed && (
+        {form.linkError && (
           <ErrorState
             title="Не получилось добавить дом"
-            description="Проверьте связь и попробуйте ещё раз"
+            description={errorMessage(
+              form.linkError,
+              "Проверьте связь и попробуйте ещё раз",
+            )}
+            error={form.linkError}
             onRetry={form.submit}
           />
         )}

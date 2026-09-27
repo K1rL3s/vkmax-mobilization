@@ -25,6 +25,7 @@ export const ChannelsSection = ({ period }: { period: PeriodDays }) => {
       title="Откуда приходят заявки"
       isPending={channels.isPending}
       isError={channels.isError}
+      error={channels.error}
       onRetry={() => void channels.refetch()}
     >
       {channels.data?.is_empty ? (

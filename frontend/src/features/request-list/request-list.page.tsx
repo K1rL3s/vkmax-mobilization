@@ -24,7 +24,9 @@ const RequestListPage = () => {
 
       {list.isPending && <LoadingState fill title="Загружаем заявки" />}
 
-      {list.isError && <ErrorState fill onRetry={list.retry} />}
+      {list.isError && (
+        <ErrorState error={list.loadError} fill onRetry={list.retry} />
+      )}
 
       {list.isEmpty && (
         <EmptyState

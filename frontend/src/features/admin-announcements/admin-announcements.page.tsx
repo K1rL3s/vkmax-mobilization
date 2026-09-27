@@ -27,7 +27,7 @@ const AdminAnnouncementsPage = () => {
     }
 
     if (list.isError) {
-      return <ErrorState fill onRetry={list.retry} />;
+      return <ErrorState error={list.loadError} fill onRetry={list.retry} />;
     }
 
     if (list.items.length === 0) {

@@ -43,6 +43,7 @@ const AdminAccessPage = () => {
   if (!valid || grid.isError) {
     return (
       <ErrorState
+        error={grid.error}
         fill
         description="Не получилось загрузить сбор доступа"
         onRetry={() => void grid.refetch()}
@@ -134,7 +135,7 @@ const AdminAccessPage = () => {
 
             <Typography.Text variant="description" color="secondary">
               Открыть в них некому: подтверждённого жителя нет или он
-              заблокирован. В сборе этих квартир нет — договоритесь с ними
+              заблокирован. В сборе этих квартир нет - договоритесь с ними
               отдельно
             </Typography.Text>
 
@@ -150,7 +151,7 @@ const AdminAccessPage = () => {
 
             <Typography.Text variant="description" color="secondary">
               Эти квартиры окно ещё не выбрали. Напоминание из кабинета не
-              уходит — договариваться с ними придётся самим
+              уходит - договариваться с ними придётся самим
             </Typography.Text>
 
             <Flats numbers={numbersOf(waiting)} />

@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { errorDetail } from "@/shared/api/errors";
+import { errorMessage } from "@/shared/api/errors";
 import { orgParams } from "@/shared/model/session";
 
 import { INVITABLE_ROLES } from "../domain/roles";
@@ -41,8 +41,10 @@ export const useInviteForm = () => {
     isPending: create.isPending,
     error:
       create.isError &&
-      (errorDetail(create.error) ??
-        "Не получилось создать ссылку. Проверьте связь и попробуйте ещё раз"),
+      errorMessage(
+        create.error,
+        "Не получилось создать ссылку. Проверьте связь и попробуйте ещё раз",
+      ),
     reset: () => {
       create.reset();
       form.reset();

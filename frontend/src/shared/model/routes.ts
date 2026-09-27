@@ -47,4 +47,5 @@ export const Routes = {
   ADMIN_BENCHMARK: "/admin/analytics/benchmark",
   ADMIN_ORG: "/admin/org",
   ADMIN_ORG_INVITES: "/admin/org/invites",
+  REGISTER: "/register/:code",
 } as const;

@@ -55,6 +55,7 @@ export const useVerificationList = () => {
       null,
     isPending: requests.isPending,
     isError: requests.isError,
+    loadError: requests.error,
     retry: () => void requests.refetch(),
     items: [
       ...visible
@@ -79,6 +80,7 @@ export const useVerificationRequest = (id: number | null) => {
   return {
     isPending: requests.isPending,
     isError: requests.isError,
+    loadError: requests.error,
     retry: () => void requests.refetch(),
     request: requests.data?.items.find((item) => item.id === id) ?? null,
   };

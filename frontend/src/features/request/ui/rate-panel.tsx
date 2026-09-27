@@ -25,10 +25,9 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
               {request.feedback}
             </Typography.Text>
 
-            {form.failed === "repeat" && (
+            {form.repeatError && (
               <Typography.Text variant="description" className={styles.Failed}>
-                Повторная заявка не создалась. Проверьте связь и попробуйте ещё
-                раз.
+                {form.repeatError}
               </Typography.Text>
             )}
 
@@ -39,7 +38,7 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
               disabled={!form.canRepeat}
               onClick={form.repeat}
             >
-              Сделано плохо
+              Проблема вернулась
             </Button>
 
             <Typography.Text variant="detail" color="secondary">
@@ -82,11 +81,9 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
         </Typography.Text>
       </Flex>
 
-      {form.failed && (
+      {(form.repeatError || form.rateError) && (
         <Typography.Text variant="description" className={styles.Failed}>
-          {form.failed === "repeat"
-            ? "Повторная заявка не создалась. Проверьте связь и попробуйте ещё раз."
-            : "Оценка не ушла. Проверьте связь и попробуйте ещё раз."}
+          {form.repeatError || form.rateError}
         </Typography.Text>
       )}
 
@@ -108,12 +105,12 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
           disabled={!form.canRepeat}
           onClick={form.repeat}
         >
-          Сделано плохо
+          Проблема вернулась
         </Button>
       </Flex>
 
       <Typography.Text variant="detail" color="secondary">
-        «Сделано плохо» создаст повторную заявку со ссылкой на эту
+        «Проблема вернулась» создаст повторную заявку со ссылкой на эту
       </Typography.Text>
     </div>
   );

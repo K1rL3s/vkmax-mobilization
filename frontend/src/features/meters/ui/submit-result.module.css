@@ -73,8 +73,10 @@
   background-color: var(--icon-tertiary);
 }
 
-.Alert {
-  color: var(--icon-negative);
+.Warning {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: color-mix(in srgb, var(--icon-negative) 12%, transparent);
 }
 
 .Note {

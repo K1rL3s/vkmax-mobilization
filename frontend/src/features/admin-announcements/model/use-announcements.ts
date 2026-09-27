@@ -34,6 +34,7 @@ export const useAnnouncementList = () => {
     items: announcements.data?.pages.flatMap((page) => page.items) ?? [],
     isPending: announcements.isPending,
     isError: announcements.isError,
+    loadError: announcements.error,
     retry: () => void announcements.refetch(),
     hasMore: announcements.hasNextPage,
     isLoadingMore: announcements.isFetchingNextPage,

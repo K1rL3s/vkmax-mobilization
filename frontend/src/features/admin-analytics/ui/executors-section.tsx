@@ -8,7 +8,7 @@ import { Section } from "./section";
 import styles from "./executors-section.module.css";
 
 const dash = (value: number | null | undefined, unit: "minutes" | "points") =>
-  value === null || value === undefined ? "—" : formatMetric(value, unit);
+  value === null || value === undefined ? "-" : formatMetric(value, unit);
 
 export const ExecutorsSection = ({ period }: { period: PeriodDays }) => {
   const executors = useExecutors(period);
@@ -18,6 +18,7 @@ export const ExecutorsSection = ({ period }: { period: PeriodDays }) => {
       title="Исполнители"
       isPending={executors.isPending}
       isError={executors.isError}
+      error={executors.error}
       onRetry={() => void executors.refetch()}
     >
       {executors.data?.length === 0 ? (
