@@ -1,350 +1,314 @@
 # AGENTS.md - zheka backend
 
-Backend of "Жэка Коммуналкин" (MAX messenger hackathon): FastAPI on gunicorn
-serves the mini-app API and the maxo webhook in one process, taskiq over Redis
-runs background work, all code is async. Entities in `zheka/core/models/` know
-nothing of SQLAlchemy: `zheka/infra/database/tables/` maps them imperatively
-and `zheka/infra/database/models/` re-exports them for the repos.
+FastAPI on gunicorn serves the mini-app API and the maxo webhook in one
+process; taskiq over Redis runs background work. `core/models/` entities know
+no SQLAlchemy: `infra/database/tables/` maps them imperatively,
+`infra/database/models/` re-exports them for repos.
 
-`just check` and `just test` stay green. Format only with `just format`: a bare
-`ruff format` leaves the hugged form that COM812 in `just check` rejects.
-`just format` alternates the formatter and the COM812 fix: the fix adds a
-trailing comma to a wrapped construct, the formatter then puts one element per
-line, and a nested construct only unfolds on the next pass; `-q` hides the
-formatter's warning about the COM812 conflict. `just` reads `.env` from the
-repo root, next to `docker-compose.yml`.
-slotscheck's class count drifts on an unchanged tree and proves nothing.
+Keep `just check` and `just test` green (tests need Docker: testcontainers).
+Format only via `just format`: bare `ruff format` leaves hugged forms COM812
+rejects. `just` reads the root `.env`. slotscheck's class count drifts,
+ignore it. zsh: quote globs (`--include='*.py'`).
 
-## Invariants
+## Runtime
 
-### Build and runtime
-
-- Dependencies are pinned `==` with `uv.lock` committed; `maxo==0.9.0` caps
-  `redis<9`, so `redis` and `taskiq-redis` stay at their pins.
-- The api runs only as `gunicorn -c gunicorn.conf.py zheka.api.asgi:app`
-  (gunicorn 26's ASGI worker, no uvicorn). `gunicorn.conf.py` imports nothing
-  from `zheka` and alone owns `bind` (port 7001, which nginx and the
-  healthcheck expect) and `workers`: one per CPU, one under
-  `MAX_BOT_MODE=polling`, since each worker's lifespan polls. `--preload` stays
-  off: each worker builds its own dispatcher, container and connections.
-- The taskiq worker and scheduler share one process, `python -m zheka.broker`,
-  to spare memory on the server. The scheduler kicks through the container's
-  `ZhekaBroker`: `run_scheduler` starts and shuts down its broker, which would
-  run the receiving broker's lifecycle twice.
-- A `python -m` entry point starts through `zheka.runner.run`, which picks
-  uvloop under `PYTHONOPTIMIZE=1` (the Dockerfile) and asyncio otherwise; the
-  api gets uvloop from gunicorn's `asgi_loop = "auto"`.
-- The `fast` group (uvloop, gunicorn's C parser `gunicorn-h1c`) goes into the
-  image; `gunicorn-h1c` ships no Linux wheels, so the build stage keeps gcc.
-  The image precompiles `-O` bytecode for the venv and the code: under
-  `PYTHONDONTWRITEBYTECODE` every process would otherwise compile it all on
-  start.
-- Production is `MAX_BOT_MODE=webhook` with `MAX_WEBHOOK_URL` on 443 and a real
-  certificate. Only the `migrations` compose service runs alembic.
-- `asgi_lifespan = "on"`: a failed webhook startup is an ERROR with traceback
-  and kills the worker, which gunicorn respawns while the healthcheck stays
-  red. Under polling a token MAX rejects is one ERROR line and the API and the
-  mini-app run without the bot.
-- The taskiq worker retries nothing: a MAX send is not idempotent and
-  `MaxSender` already swallows MAX errors per recipient.
-- `zheka/api/asgi.py` builds the app at import and needs a real env; import
-  `app_factory` from `zheka.api.app` instead. Env names follow the family canon
-  (`POSTGRES_*`, `REDIS_DB`, `LOG_LEVEL`).
-- An API change reruns `just openapi`, or a test fails on the stale root
+- Pins `==` + `uv.lock`; `maxo==0.9.0` caps `redis<9`: `redis`, `taskiq-redis`
+  stay pinned.
+- api runs only as `gunicorn -c gunicorn.conf.py zheka.api.asgi:app` (gunicorn
+  26 ASGI worker, no uvicorn, no `--preload`: each worker builds its own
+  dispatcher, container, connections). `gunicorn.conf.py` imports nothing
+  from `zheka`, owns `bind` (7001: nginx, healthcheck) and `workers` (per
+  CPU; 1 under polling, since each lifespan polls).
+- Worker and scheduler: one process, `python -m zheka.broker`; the scheduler
+  kicks via the container's `ZhekaBroker` (`run_scheduler` would run the
+  receiving broker's lifecycle twice).
+- `python -m` entry points go through `zheka.runner.run` (uvloop under
+  `PYTHONOPTIMIZE=1`); api gets uvloop from `asgi_loop = "auto"`. Image: `fast`
+  group, gcc kept (`gunicorn-h1c` has no Linux wheels), `-O` bytecode
+  precompiled (under `PYTHONDONTWRITEBYTECODE` each process would compile
+  everything on start).
+- Prod: `MAX_BOT_MODE=webhook`, `MAX_WEBHOOK_URL` on 443 with a real cert; only
+  the `migrations` service runs alembic. `asgi_lifespan = "on"`: failed webhook
+  startup kills the worker (ERROR + traceback, healthcheck red); under polling
+  a rejected token is one ERROR line and the API runs without the bot.
+- Worker retries nothing: a MAX send is not idempotent; `MaxSender` swallows
+  MAX errors per recipient.
+- `api/asgi.py` builds the app at import (needs a real env): import
+  `app_factory` from `zheka.api.app`. Env names: `POSTGRES_*`, `REDIS_DB`,
+  `LOG_LEVEL`.
+- API change -> `just openapi`, or a test fails on the stale root
   `openapi.yaml`.
-- Every entry point with an APP container closes it (api lifespan, worker and
-  seed in `finally`), which owns the database pool, the bot session and the
-  process's one `aiohttp.ClientSession`. The Yandex clients pass their timeout
-  per request, never on that shared session.
+- Every entry point closes its APP container (api lifespan; worker and seed in
+  `finally`): it owns the db pool, bot session and the process's one
+  `aiohttp.ClientSession`. Yandex clients set timeouts per request, never on
+  that session.
 
-### Code conventions
+## Conventions
 
-- A plain data class inherits `ZhekaType` (`zheka/base.py`: frozen, slotted,
-  kw-only; `class Foo(ZhekaType, frozen=False)` opts out). Entities in
-  `core/models/` use `ZhekaMutableType`, since `map_imperatively` cannot map a
-  frozen or slotted class. Pydantic lives only in `api/schemas/`.
-- A domain error is an axis off `ZhekaError` (`zheka/core/errors.py`) with its
-  default text in the `message` ClassVar; a new axis joins the tuple of the
-  `exception_handlers` comprehension in `api/errors.py`, which answers the class
-  name as `title`.
-  `InvalidRequest` must not inherit `ValueError`, or it answers 409, not 400.
-- Events are `EventType` / `EventSource` members recorded in `core/services/`:
-  a handler or route passes the service `source`, `method` or `entrance`, since
-  recording the event itself doubles the count. The exceptions: bot handlers
-  record `BOT_START` (`commands/start.py`, `deeplinks.py`, never the fallback
-  router or a getter), `BOT_STOPPED`, `BOT_MUTED`, `BOT_UNMUTED`
-  (`lifecycle.py`); the client sends `MINIAPP_OPEN` and `ANNOUNCEMENT_CLICK` to
-  `POST /api/events` (whitelist: `TrackEventRequest`).
-- A repo builds every statement into a named `stmt` and executes it on the next
-  line; no `self._session.get(Model, id)`.
-- Alembic messages and file names are English; every schema change is a new
-  revision.
-- A fractional quantity is a scaled integer with one explicit rounding, never
-  `Decimal` or `float`: money in kopecks, tariff rate in 1/10000 rouble per
-  unit (both `BigInteger`), area in 1/100 m2, volume and readings in 1/1000 m3
-  or kWh, percent in 1/100 (50% = `5000`); only coordinates are
-  `Numeric(9, 6)`. The unit goes in the Russian `Field(description=...)`, not
-  in the name.
+- Data classes inherit `ZhekaType` (`zheka/base.py`: frozen, slotted, kw-only;
+  `frozen=False` opts out); `core/models/` entities `ZhekaMutableType`
+  (`map_imperatively` can't map frozen/slotted). Pydantic only in
+  `api/schemas/`.
+- Domain error = axis off `ZhekaError` (`core/errors.py`), text in the
+  `message` ClassVar; a new axis joins the `exception_handlers` tuple in
+  `api/errors.py` (class name -> `title`). `InvalidRequest` must not inherit
+  `ValueError` (-> 409).
+- Events (`EventType`/`EventSource`) are recorded in `core/services/`; handlers
+  and routes pass `source`/`method`/`entrance` (recording twice doubles
+  counts). Exceptions: bot records `BOT_START` (`commands/start.py`,
+  `deeplinks.py`; never the fallback router or a getter), `BOT_STOPPED`,
+  `BOT_MUTED`, `BOT_UNMUTED` (`lifecycle.py`); the client posts
+  `MINIAPP_OPEN`, `ANNOUNCEMENT_CLICK` to `/api/events` (`TrackEventRequest`).
+- Repos: every statement is a named `stmt`, executed on the next line; no
+  `session.get(Model, id)`.
+- Alembic: English messages and names, a new revision per schema change.
+- Fractions are scaled ints with one explicit rounding, never
+  `Decimal`/`float`: kopecks; tariff 1/10000 rouble per unit (both
+  `BigInteger`); area 1/100 m2; volume, readings 1/1000 m3 or kWh; percent
+  1/100 (50% = `5000`). Only coordinates are `Numeric(9, 6)`. The unit goes in
+  the Russian `Field(description=...)`, not the name.
 
-### Transactions and isolation
+## Transactions and access
 
-- A dishka REQUEST container has exactly one decider that commits, then
-  flushes the `TaskPublisher`, or rolls back on an exception: http
-  `transaction_middleware` (commits below 400), taskiq `CommitMiddleware`, bot
-  `TransactionMiddleware`, and `zheka/seed/__main__.py`, which never flushes.
-  Providers and routes never commit: dishka hands a provider the exception as
-  `agen.asend(exc)`, so it cannot decide. A new entry point with a REQUEST
-  container brings its own decider, or its writes are silently dropped.
-- `API_TEST_TOKEN` (unset or empty disables it): `Authorization: Bearer` with it
-  acts as one synthetic user, `API_CHECKER_MAX_USER_ID` (below every seeded
-  id); anything else needs `WebAppData` or gets 401.
-- Http middleware order lives only in `setup_middlewares` (`zheka/api/app.py`),
-  `trace_id_middleware` outermost. `RequestStateMiddleware` registers last:
-  gunicorn 26 hands every request the worker's one `scope["state"]`, and
-  without it concurrent requests share one dishka container.
-- `EventsService.record` writes on a savepoint and flushes the caller's pending
-  session: call it after the business action's own flush.
-- Cross-org isolation has one tool, `scoped_to_org`
-  (`infra/database/repos/scopes.py`): a repo method taking an id from a path
-  checks no ownership, the caller scopes. A foreign id is `EntityNotFound`
-  (404), never 403.
-- Uploads from the route and the bot go through `save_download`, which counts
-  `max_size_mb` during the write, since `Bot.download` streams unchecked for 30
-  seconds.
+- A REQUEST container has one decider that commits then flushes
+  `TaskPublisher`, or rolls back: http `transaction_middleware` (commits below
+  400), taskiq `CommitMiddleware`, bot `TransactionMiddleware`,
+  `seed/__main__.py` (never flushes). A new entry point brings its own decider
+  or its writes vanish. Providers and routes never commit (dishka hands a
+  provider the exception via `agen.asend(exc)`). Services publish tasks by
+  `TaskName` via `TaskPublisher.publish`, never `.kiq()`, so a rollback sends
+  nothing.
+- `API_TEST_TOKEN` (empty = off): `Bearer` with it is one synthetic user,
+  `API_CHECKER_MAX_USER_ID` (below every seeded id); else `WebAppData` or 401.
+  `/demo/activate` gives it only EMPLOYEE of `API_CHECKER_DEMO_NUMBER`, else
+  403: the token is public and the jury sits in org 1.
+- Middleware order lives only in `setup_middlewares` (`api/app.py`),
+  `trace_id_middleware` outermost, `RequestStateMiddleware` last (gunicorn 26
+  shares one `scope["state"]` per worker; without it concurrent requests share
+  a dishka container).
+- `EventsService.record` writes on a savepoint and flushes the caller's
+  session: call it after the action's own flush.
+- Cross-org isolation has one tool, `scoped_to_org` (`repos/scopes.py`): repo
+  methods taking a path id check no ownership, callers scope. Foreign id ->
+  `EntityNotFound` (404), never 403.
+- Route and bot uploads go through `save_download`, which counts
+  `max_size_mb` while writing (`Bot.download` streams unchecked for 30 s).
 
-### Bot
+## Bot
 
-- The webhook answers 200 within 30 seconds, so IO of unknown length
-  (download, OCR, LLM) goes to a taskiq task.
+- Webhook answers 200 within 30 s: IO of unknown length (download, OCR, LLM)
+  goes to a task.
 - Screens are `maxo.dialogs` `Window`s, never hand-built keyboards or stored
-  message ids; a new flow is a package under `zheka/bot/handlers/` included in
-  `make_dispatcher`.
-- Dialog state goes through the dialog's `BaseDialogData` subclass
-  (`zheka/bot/dialog_data.py`), never a string key. Start data that must
-  outlive the first window is copied into `dialog_data` in `on_start`.
-- Routers are module-level singletons, so a process builds one dispatcher (api
-  `app_factory`, worker `zheka/broker/__main__.py`) and a second
-  `make_dispatcher` raises; maxo refuses `include` and filters after startup.
-  The only `BgManagerFactory` wired to the dialog middlewares is the one in
-  `BotSetup`, and `app_factory` takes a ready `BotSetup`, so a test owns the
-  dispatcher.
-- The transaction and user middlewares are `inner` on `dp.update`: without
-  `setup_maxo_dishka` every update dies on `ctx[CONTAINER_NAME]` and maxo
-  swallows it silently.
-- `private_router`'s observers carry `PRIVATE_ONLY`, so every private router and
-  dialog sits under it and no handler repeats the check; chat, lifecycle and
-  error routers sit outside. `.filter()` on a `Dialog`'s observers replaces its
-  `IntentFilter`: leave them alone.
-- The error router answers every update kind, a message with a reply, and
-  resolves nothing from dishka (the container is closed). It restarts the menu
-  through `ask_in_default_stack`, a fresh update with its own container, and
-  only for a user's own update in a private dialog, so a menu that fails to
-  render is not restarted in a loop. An unexpected error is logged with its
-  traceback and not re-raised.
-- The user middleware upserts `user` only in `ChatType.DIALOG` (house chat
-  members gave no consent) and only reads elsewhere. `upsert_by_max_id` keeps
-  `max_chat_id` with `coalesce` (the mini-app passes none) and, given a chat
-  id, clears `bot_stopped_at`.
+  message ids; a flow is a package in `bot/handlers/` included in
+  `make_dispatcher`. Dialog state lives in the dialog's `BaseDialogData`
+  subclass (`bot/dialog_data.py`), never string keys; start data needed past
+  the first window is copied in `on_start`.
+- Routers are module singletons: one dispatcher per process (api
+  `app_factory`, worker `broker/__main__.py`); a second `make_dispatcher`
+  raises; no `include`/filters after startup. The only `BgManagerFactory` on
+  the dialog middlewares is `BotSetup`'s; `app_factory` takes a ready
+  `BotSetup`, so a test owns the dispatcher.
+- Transaction and user middlewares are `inner` on `dp.update`; without
+  `setup_maxo_dishka` every update dies on `ctx[CONTAINER_NAME]`, silently.
+- `private_router` observers carry `PRIVATE_ONLY`: private routers and dialogs
+  sit under it, no handler rechecks; chat, lifecycle, error routers sit
+  outside. Never `.filter()` a `Dialog`'s observers (replaces its
+  `IntentFilter`).
+- Error router: answers every update kind (a message with a reply), resolves
+  nothing from dishka (container closed), restarts the menu via
+  `ask_in_default_stack` only for a user's own private update (no render
+  loop), logs unexpected errors with traceback, never re-raises.
+- User middleware upserts `user` only in `ChatType.DIALOG` (house chat members
+  gave no consent). `upsert_by_max_id` keeps `max_chat_id` via `coalesce`
+  (mini-app passes none) and, given a chat id, clears `bot_stopped_at`.
 - `deeplinks_router` precedes `commands_router`; an unparsable payload returns
-  `UNHANDLED`, not `None`, to fall through to `/start`. `BotStarted.payload` is
-  `Omittable[str | None]`, read with `is_not_defined`. Consent precedes every
-  way into a house: the payload rides into `Consent.ask` as `start_data` and
-  `on_accept` resumes it; `HousesService.link` refusing a user without
-  `consent_at` is the backstop.
-- `notify` is always explicit, the product default silent. maxo 0.9.0
-  hardcodes `notify=True` for dialog windows, so `ZhekaMessageManager` reads
-  the `dialog_notify` `ContextVar`, raised only by `start_dialog`.
-- `MaxSender` serves broadcasts and task windows, not ordinary handlers, and
-  owns the MAX limits: 30 rps per bot (`BOT_RATE_LIMIT`) and 2 msg/s per chat,
-  keyed on `max_user_id` for private sends and windows alike.
+  `UNHANDLED` (not `None`) to reach `/start`. `BotStarted.payload` is
+  `Omittable[str | None]` (`is_not_defined`). Consent precedes every way into
+  a house: the payload rides into `Consent.ask` as `start_data`, `on_accept`
+  resumes it; `HousesService.link` refusing a user without `consent_at` is the
+  backstop.
+- `notify` is always explicit, default silent. maxo 0.9.0 hardcodes
+  `notify=True` for dialog windows, so `ZhekaMessageManager` reads the
+  `dialog_notify` `ContextVar`, raised only by `start_dialog`.
+- `MaxSender` serves broadcasts and task windows, not handlers, and owns MAX
+  limits: 30 rps per bot (`BOT_RATE_LIMIT`), 2 msg/s per chat keyed on
+  `max_user_id`. `send_message` drops private sends to negative ids (seeded
+  users, the API checker); group sends go (group chat ids are negative too).
 - A task opens a window only via `MaxSender.start_dialog` (`fg()`,
-  `RESET_STACK`): `bg().start()` and `NEW_STACK` go through `call_soon` and let
-  the task commit before the send. Without `stack_id` the window replaces the
-  default stack, so a caller replacing its own window passes its stack id. A
-  window announcing news passes `ShowMode.SEND`, or maxo edits the stack's
-  last message, maybe an old card; a re-render after a tap keeps the default.
-  Users without `max_chat_id` or with `bot_stopped_at` are skipped with a log
-  line. Stack ids are derived from the entity (`review-{request_id}`), never
-  stored.
-- maxo 0.9.0 delivers text and photos only to the default stack, so an input
-  window opens there via `ask_in_default_stack` (`zheka/bot/cards.py`:
-  `bg().start()` with `ShowMode.SEND`, since `fg()` in a handler deadlocks on
-  the `users` row), replacing whatever was there, a request draft included;
-  the service rechecks state. `back_to_menu` sends the result as its own
-  message, then `Menu.main`; «❌ Отмена» (`CANCEL`) returns to `Menu.main` too,
-  since maxo's `Cancel` leaves the stack empty.
-- The service validates every value the bot hands it: `Select` passes raw
-  callback strings and `when=`-hidden buttons still fire from old keyboards.
-- A stale card tap is not an error: executor and review handlers catch
-  `ZhekaError`, answer the callback with its text and let the getter
-  re-render, safe only because those services refuse before their first write.
-- A task that changes a request never renders the window reading it, whose
-  getter would see the pre-commit state: it publishes a follow-up task
+  `RESET_STACK`): `bg().start()` and `NEW_STACK` go through `call_soon` and
+  let the task commit first. It skips users without `max_chat_id` or with
+  `bot_stopped_at` (log line). Without `stack_id` it replaces the default
+  stack; to replace its own window a caller passes its stack id. News windows
+  pass `ShowMode.SEND` (else maxo edits the stack's last message, maybe an old
+  card); tap re-renders keep the default. Stack ids derive from the entity
+  (`review-{request_id}`), never stored.
+- maxo 0.9.0 delivers text and photos only to the default stack: input
+  windows open there via `ask_in_default_stack` (`bot/cards.py`:
+  `bg().start()` + `ShowMode.SEND`; `fg()` in a handler deadlocks on the
+  `users` row), replacing whatever was there, drafts included; the service
+  rechecks state. `back_to_menu` sends the result as its own message, then
+  `Menu.main`; `CANCEL` also returns to `Menu.main` (maxo's `Cancel` empties
+  the stack).
+- Services validate every bot value: `Select` passes raw callback strings;
+  `when=`-hidden buttons still fire from old keyboards. A stale card tap is
+  not an error: executor and review handlers catch `ZhekaError`, answer the
+  callback with its text and re-render (safe: those services refuse before
+  their first write).
+- A task that changes a request never renders the window reading it (the
+  getter sees pre-commit state): it publishes a follow-up
   (`attach_result_photo` -> `send_executor_card`).
-- Bot texts: formal «вы», an emoji and a space opening every message and
-  button (flat numbers, four in a row, go bare), no period ending a message or
-  line. A result is its own message
-  (`back_to_menu`), never a line above the menu. Both `bot_started` handlers
-  set `ShowMode.SEND` first: maxo's AUTO edits the last message for anything
-  but `MessageCreated`.
-- The consent tap edits its message to «✅ Согласие дано», the next window comes
-  as a new one.
-- Every OpenApp button carries `app_payload(path)` (`bot/cards.py`, base64 of
-  `{"path": ...}`) or no payload for the home; the paths are
-  `core/deeplinks.py`'s. A notification takes one as `app_button` and
-  `app_path`; `notify_author` always attaches the request's.
-- The menu reads the profile: the house linked last, the staff line.
-- Every step of the house search and the request draft has «🏠 Меню» and, past
-  the first, «⬅️ Назад» (`TO_MENU`, `BACK`). A search list step also takes
-  typed text: one match is chosen, several narrow the list, none keeps it and
-  says so; `on_back` clears that state.
-- `BOT_COMMANDS` (`bot/handlers/commands/start.py`) is the command menu, set by
-  an `after_startup` hook in every api worker (the taskiq worker feeds no
-  signals); a failure is logged, not raised. A new command joins it, `/seed`
-  never. Tests call the hook directly: a second `AfterStartup` fails in
-  `DialogRegistry.refresh`.
+- Texts: formal «вы»; every message and button opens with an emoji and a
+  space (four-in-a-row flat numbers go bare); no period ending a message or
+  line. A result is its own message (`back_to_menu`), never a line above the
+  menu. Both `bot_started` handlers set `ShowMode.SEND` first (AUTO edits the
+  last message for anything but `MessageCreated`). The consent tap edits its
+  message to «✅ Согласие дано»; the next window is new.
+- OpenApp buttons carry `app_payload(path)` (`bot/cards.py`) or no payload
+  (home); paths come from `core/deeplinks.py`. Notifications take
+  `app_button` + `app_path`; `notify_author` always attaches the request's.
+- The menu reads the profile: the last linked house, the staff line and
+  cabinet button.
+- House search and request draft steps have «🏠 Меню» and, past the first,
+  «⬅️ Назад» (`TO_MENU`, `BACK`). A search list also takes text: one match is
+  chosen, several narrow, none keeps the list and says so; `on_back` clears it.
+- `BOT_COMMANDS` (`commands/start.py`) is set by an `after_startup` hook in
+  every api worker (the taskiq worker feeds no signals); failure is logged. A
+  new command joins it, `/seed` never. Tests call the hook directly (a second
+  `AfterStartup` fails in `DialogRegistry.refresh`).
 
-### Requests and chats
+## Requests and chats
 
-- Executor authority is `executor_user_id` **and** an `OrgRole.EXECUTOR` row in
-  the house's org, since a removed executor keeps the id and a live card:
-  `executor_advance` checks both before its first write, `executor_card`
-  returns `None`.
-- The author's review card is queued only in `AdminRequestsService._move`, the
-  one road into `ON_REVIEW`. `_move` to the current status is a no-op (no log,
-  event, message or notification), so a repeated staff status call answers 200
-  with the card; a backward move stays `InvalidState(BACKWARD)`.
-- A new or repeat request notifies the org's staff, never an executor or the
-  author, under `REQUESTS` and not mandatory. The deadline is
-  `Request.deadline_at`, printed in the house's time.
-- A house not `is_connected` takes no request and no flat verification request
+- Executor authority = `executor_user_id` **and** an `OrgRole.EXECUTOR` row in
+  the house's org (a removed executor keeps the id and a live card):
+  `executor_advance` checks both before writing, `executor_card` returns
+  `None`.
+- The author's review card is queued only in `AdminRequestsService._move`,
+  the one road into `ON_REVIEW`. `_move` to the current status is a no-op (no
+  log, event, message, notification): a repeated staff status call answers 200
+  with the card; backward is `InvalidState(BACKWARD)`.
+- New and repeat requests notify org staff (never executor or author) under
+  `REQUESTS`, not mandatory. Deadline: `Request.deadline_at`, printed in the
+  house's time.
+- A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,
   notifications, review, rating); without one it has no author.
-- The LLM category hint (`YandexClassifier`) is optional: without
-  `YANDEX_API_KEY` / `YANDEX_FOLDER_ID` it makes no call; 401, 403 or a key that
-  cannot be a header disables it for the process; any other failure or an
-  answer outside `RequestCategory` is `category: null`. The key is never
-  logged. The model picks only the category (`CATEGORY_RULES` give the zone),
-  the resident's text is its own `user` message, and there is no per-user
-  limit yet. The bot does not classify.
-- `RequestChannel.CHAT` is written nowhere: the spec has no chat interaction.
-- A chat is bound per `BOUND_CHAT` (`infra/database/repos/chats.py`); the
-  fan-out also needs `bot_is_admin`.
-- Every `bot_added` is a fresh binding: `ChatsRepo.upsert_added` clears the
-  binding, rights and `pins_mid`, and `on_bot_added` unpins the old list
-  without events. `ChatsService.bind` allows staff of the house's org
-  (`is_staff`, not an executor) or its active chairman.
+- LLM hint (`YandexClassifier`) is optional: no call without `YANDEX_API_KEY`
+  / `YANDEX_FOLDER_ID`; 401, 403 or a non-header key disables it per process;
+  other failures or answers outside `RequestCategory` -> `category: null`.
+  Key never logged. The model picks only the category (`CATEGORY_RULES` give
+  the zone), the resident's text is its own `user` message, no per-user limit
+  yet. The bot does not classify.
+- `RequestChannel.CHAT` is written nowhere (no chat interaction in the spec).
+- Chats bind per `BOUND_CHAT` (`repos/chats.py`); fan-out also needs
+  `bot_is_admin`. Every `bot_added` is a fresh binding: `upsert_added` clears
+  binding, rights, `pins_mid`; `on_bot_added` unpins the old list without
+  events. `ChatsService.bind` allows staff of the house's org (`is_staff`, not
+  executors) or its active chairman.
 - The `bot_added` handler only queues `on_bot_added`, which leaves channels and
-  chats whose initiator is unreachable or has no role, then opens the binding
-  window (`ChatBinding.code` waits for text, so on the default stack). Binding
-  windows read title and chat id from `ChatBindingData`, never the `chats` row.
+  chats whose initiator is unreachable or roleless, then opens the binding
+  window (`ChatBinding.code` waits for text: default stack). Binding windows
+  read title and chat id from `ChatBindingData`, never the `chats` row.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap
-  and after each failed chat send. `ChatsService.set_admin` records
-  `CHAT_ADMIN_GRANTED` and queues the welcome only on `false -> true`; a failed
-  send without rights opens `ChatBinding.rights` for `bound_by` with sound.
-- Pins (`/pin`, `/unpin`, `/repin`) work in bound chats only; another group
-  chat ignores them, a private dialog answers `CHAT_COMMANDS_ONLY`.
-  `ChatsService` writes `chat_pins` under the chat row lock (`ChatsRepo.lock`)
-  and refuses a pin once the list would pass `MESSAGE_TEXT_LIMIT` (raw HTML in
-  UTF-16 units). Only `sync_chat_pins` sends the list, rendered from the
-  database. Link previews are off on send (`BotDefaults`); an edit takes no
-  such flag.
-  - `/pin` answers by pinning the list again with sound, a working `/unpin`
-    with a reply; either on the list itself gets a hint.
-  - MAX sends no event for a manual pin or unpin, so every other in-place edit
-    leaves the pin alone and, when the list is not pinned, replies to it
-    (`PINS_HERE`) instead of fighting whoever pinned over it.
-  - A new list message (first list, failed edit, `/repin`) is pinned, silently
-    unless for `/pin`, and deletes the old one. `/repin` exists because a
-    message deleted only for oneself sends no event.
-  - `message_removed` of the list (`chats.pins_mid`) unpins everything and says
-    so (`PINS_ERASED`), of a listed message drops that item. An emptied list is
+  and after each failed chat send. `set_admin` records `CHAT_ADMIN_GRANTED`
+  and queues the welcome only on `false -> true`; a failed send without rights
+  opens `ChatBinding.rights` for `bound_by` with sound.
+- Pins (`/pin`, `/unpin`, `/repin`) work only in bound chats; other groups
+  ignore them, a private dialog answers `CHAT_COMMANDS_ONLY`. `ChatsService`
+  writes `chat_pins` under `ChatsRepo.lock` and refuses a pin past
+  `MESSAGE_TEXT_LIMIT` (raw HTML, UTF-16 units). Only `sync_chat_pins` sends
+  the list, rendered from the db. Previews off on send (`BotDefaults`); edits
+  take no such flag.
+  - `/pin` re-pins the list with sound; a working `/unpin` replies; either on
+    the list itself gets a hint.
+  - MAX sends no manual pin/unpin event: other in-place edits leave the pin
+    alone and, when the list is unpinned, reply to it (`PINS_HERE`) instead of
+    fighting whoever pinned over it.
+  - A new list message (first list, failed edit, `/repin`) is pinned (silent
+    unless `/pin`) and deletes the old one. `/repin` exists because a message
+    deleted only for oneself sends no event.
+  - `message_removed` of the list (`chats.pins_mid`) unpins all and says so
+    (`PINS_ERASED`); of a listed message drops that item. An emptied list is
     deleted, never unpinned.
 
-### Readings, reminders, analytics
+## Readings, reminders, analytics
 
-- `window_period` (`core/services/readings.py`) is the only answer to which
-  period the open window accepts (a window across the month end belongs to the
-  month it opened in).
-- A reminder selects, stamps and queues in one transaction and never sends
-  itself: `RemindersService` stamps (a `*_sent_at` / `*_warned_at` column or a
+- `window_period` (`core/services/readings.py`) alone decides the open
+  window's period (a window across month end belongs to the month it opened).
+- A reminder selects, stamps and queues in one transaction, never sends:
+  `RemindersService` stamps (`*_sent_at` / `*_warned_at` or a
   `READING_REMINDER_SENT` event with `house_id`, `period`, `kind`) and hands
-  the text to `NotificationsService`, which sends after the commit. Date logic
-  takes `today` / `now` as an argument.
-- `House.timezone` (what residents see) and `Organization.timezone` (reception,
-  appointments, dashboard) are IANA names; `Zoned` (`zheka/base.py`) derives
-  every local day, bound and printed time and reads a naive input as local.
-  Schedules are UTC: reminders run hourly and act where the local hour reached
-  the target, and their stamps keep each to one send.
+  the text to `NotificationsService` (sends after commit). Date logic takes
+  `today` / `now` as arguments.
+- `House.timezone` (residents) and `Organization.timezone` (reception,
+  appointments, dashboard) are IANA; `Zoned` (`zheka/base.py`) derives every
+  local day, bound and printed time, naive input read as local. Schedules are
+  UTC: reminders run hourly, act where the local hour reached the target,
+  stamps keep one send each.
 - `broadcast_access_request` is the one broadcast that opens a window
   (`AccessSlots.pick`, `ShowMode.SEND`).
 - `remind_not_submitted` refuses outside the window (`window_open` is only a
-  button hint), stamps `kind: manual` and skips anyone reminded since the
-  house's local midnight.
-- Each analytics metric is one SQL expression in `_METRICS`
-  (`infra/database/repos/analytics.py`), shared by the dashboard and the
-  benchmark; overdue is `overdue_at` (`repos/requests.py`), shared with the
-  admin filter. Recent repeats are a count per house, not a share.
-- The benchmark never exposes a single organization: `MIN_ORGS_FOR_CUT = 3`
-  (caller included) drops a smaller cut in SQL and nulls `platform_median`,
-  `rank` and `total` on a smaller platform, and a cut's complement within its
-  parent (platform for a region; region and platform for a city) must also be
-  0 or at least 3. Peers share the caller's `is_demo`.
+  hint), stamps `kind: manual`, skips anyone reminded since the house's local
+  midnight.
+- Each metric is one SQL expression in `_METRICS` (`repos/analytics.py`),
+  shared by dashboard and benchmark; overdue is `overdue_at`
+  (`repos/requests.py`), shared with the admin filter. Recent repeats: a count
+  per house, not a share.
+- The benchmark never exposes one organization: `MIN_ORGS_FOR_CUT = 3`
+  (caller included) drops smaller cuts in SQL and nulls `platform_median`,
+  `rank`, `total` on a smaller platform; a cut's complement in its parent
+  (platform for a region; region and platform for a city) must be 0 or >= 3.
+  Peers share the caller's `is_demo`.
 
-### Seed and demo
+## Seed and demo
 
-- Real where public, fictional where it would be a claim. Registry
-  organizations are seeded unregistered and without history, linked only to
-  houses whose reformagkh card names them unambiguously; registered ones are
-  fictional «Демо-УК ...» (`is_demo`, checksum-failing INNs). No invented
-  licence or cadastral numbers; images are generated. Fictional organizations
-  replace real links only in Москва, whose one unmanaged house in the flat
-  range is the demo house 61/1 (`test_a_real_manager_is_replaced_only_in_moscow`;
-  moving a peer's second house from Казань to Санкт-Петербург breaks it).
-- Seeded users have negative `max_user_id` and no `max_chat_id`: unreachable.
-  `MaxSender.send_message` drops a private send (`chat_id is None`) to a
-  negative `user_id` (seeded users, the API checker `-10**18`); a group send
-  still goes, since MAX group chat ids are negative too.
-- The seed is one transaction, never touches the network, takes `today` and
-  seeds `random.Random` per entity; after `pg_advisory_xact_lock(SEED_LOCK)`
-  an existing `DEMO_INN` organization makes it return `False`. History rows
-  are written directly, not through the services, and no request is left
-  `ON_REVIEW` (the scheduler would auto-close it and message the author).
-- `/seed` (unadvertised, open to anyone) only queues `seed_demo`, which replies
-  after the commit; `seed()` itself gets no publisher.
-- All five fictional organizations have history in Москва (region = city), so
-  both benchmark cuts survive `MIN_ORGS_FOR_CUT` (`test_seed.py` asserts five
-  distinct ranks per metric).
-- Demo deeplinks are only `demo_{admin,staff,resident}_N`, N 1-5, and grant
-  only their role in demo organization N: `DemoService.join` sets exactly
-  ADMIN or EMPLOYEE, lowering included; `settle` gives the verified flat
-  `Д{user_id}` in the org's first house, filled by `furnish`.
-  `POST /demo/activate` does both for org 1 and keeps an existing role; both
-  are idempotent. `furnish` charges from tariffs, so every demo house has
-  tariffs and every demo org `meter_window_always_open`. No seed is
-  `EntityNotFound`, no `consent_at` is `NotEnoughRights`.
+- Real where public, fictional where it would be a claim. Registry orgs are
+  seeded unregistered, without history, linked only to houses their
+  reformagkh card names unambiguously; registered orgs are fictional
+  «Демо-УК ...» (`is_demo`, checksum-failing INNs). No invented licence or
+  cadastral numbers; images are generated. Fictional orgs replace real links
+  only in Москва, whose one unmanaged house in the flat range is demo house
+  61/1 (`test_a_real_manager_is_replaced_only_in_moscow`; moving a peer's
+  second house from Казань to Санкт-Петербург breaks it).
+- Seeded users: negative `max_user_id`, no `max_chat_id`.
+- The seed is one transaction, offline, takes `today`, seeds `random.Random`
+  per entity; after `pg_advisory_xact_lock(SEED_LOCK)` an existing `DEMO_INN`
+  org makes it return `False`. History rows are written directly, not via
+  services; no request is left `ON_REVIEW` (the scheduler would auto-close
+  and message the author). `/seed` (unadvertised, open) only queues
+  `seed_demo`, which replies after commit; `seed()` gets no publisher.
+- All five demo orgs have history in Москва (region = city), so both benchmark
+  cuts survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: five distinct ranks per
+  metric). They group requests from `REVIEWERS_GROUP_THRESHOLD` flats, not 3:
+  reviewers share an org's first house and file the same category.
+- Demo deeplinks are only `demo_{admin,staff,resident}_N`, N 1-5, granting
+  only that role in demo org N: `DemoService.join` sets exactly ADMIN or
+  EMPLOYEE (lowering too); `settle` gives the verified flat `Д{user_id}` in
+  the org's first house, filled by `furnish` (charges from tariffs: every demo
+  house has tariffs, every demo org `meter_window_always_open`).
+  `POST /demo/activate` (`number`, `admin`) does both, keeping an existing
+  role unless `admin` raises it; both idempotent. No seed ->
+  `EntityNotFound`; no `consent_at` -> `NotEnoughRights`.
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
-  reviewers' flats; the dashboard's rolling 30 days start at the first
-  `/seed`, so seed on the deploy closest to judging.
-  `scripts/fetch_seed_data.py` rewrites `zheka/seed/data/` (a cold run takes
-  about 20 minutes; `backend/.cache/seed/` caches it).
+  reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed
+  on the deploy closest to judging. `scripts/fetch_seed_data.py` rewrites
+  `seed/data/` (cold run ~20 min, cached in `backend/.cache/seed/`).
 
 ## Tests
 
-- Two databases: api tests roll back, bot windows commit for real into
-  `zheka_bot`. The dispatcher is built once per session.
+- Two databases: api tests roll back; bot windows commit for real into
+  `zheka_bot`. One dispatcher per session.
 - Tasks run through the `task_broker` fixture
   (`task.kicker().with_broker(task_broker).kiq(...)`); published follow-ups
-  land in `bot_broker` and the test runs them itself.
+  land in `bot_broker`, the test runs them.
 - `make_org_house_flat_user` registers its org unless `registered=False`.
-- A new guard gets a test that goes red when that one guard is removed, proven
-  by running it and reported per guard. An unkillable guard is an honest gap.
+- A new guard gets a test that goes red when that one guard is removed,
+  proven by running it, reported per guard. An unkillable guard is an honest
+  gap.
 
 ## Orientation
 
-- Plans and block history live in `.superpowers/sdd/` at the repo root
-  (`progress.md` maps blocks to commits).
-- maxo's truth is `.venv/lib/python3.12/site-packages/maxo/`, not the plan or
+- Plans and history: `.superpowers/sdd/` (`progress.md` maps blocks to
+  commits).
+- maxo's truth is `.venv/lib/python3.12/site-packages/maxo/`, not plans or
   memory: `python -c "import inspect, X; print(inspect.getsource(X.f))"`.
-- `grep --include=*.py` fails under zsh (`no matches found`): quote the glob.
