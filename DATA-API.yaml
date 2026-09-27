@@ -1,0 +1,266 @@
+schema_version: "1.0"
+
+solution:
+  name: Жэка Коммуналкин
+  team: Мобилизация
+  track: Умный город
+
+base_url: https://vkmax.k1rles.ru/api
+
+openapi: openapi.yaml
+
+auth:
+  type: bearer
+  header: Authorization
+  format: "Bearer <токен>"
+  token: "[тестовый токен API со служебного слайда]"
+  description: >-
+    Мини-приложение авторизуется подписанной initData из MAX в заголовке WebAppData.
+    Для проверки API без MAX выдан тестовый токен: он открывает одну учетную запись
+    «Проверяющий API», у которой обе роли. Значение токена на служебном слайде
+    презентации, в репозитории его нет. Проверки provision_consent и provision_demo
+    заводят учетную запись и повторяются без побочных эффектов.
+  roles:
+    resident:
+      description: Житель демо-УК №1 с подтвержденной квартирой, начислениями и показаниями за полгода
+    staff:
+      description: Сотрудник демо-УК №1, видит заявки домов своей организации
+
+error_format:
+  content_type: application/json
+  required_fields:
+    - status
+    - trace_id
+    - error.title
+    - error.detail
+
+test_data:
+  house_id: "[id дома демо-квартиры жителя]"
+  flat_id: "[id демо-квартиры жителя]"
+  request_id: "[id заявки жителя, созданной при подготовке]"
+  foreign_request_id: "[id заявки другого жителя другой УК]"
+
+checks:
+  - id: provision_consent
+    description: Согласие на обработку персональных данных, без него API не пускает дальше
+    method: POST
+    path: /me/consent
+    headers:
+      Content-Type: application/json
+    body:
+      version: "1.0"
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [user_id, name, consent_at, consent_version, residencies, orgs, is_demo]
+
+  - id: provision_demo
+    description: Демо-доступ - своя квартира в первом доме демо-УК №1 и роль сотрудника этой УК
+    method: POST
+    path: /demo/activate
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [org.org_id, org.name, org.role, org.is_demo, residency.resident_id, residency.house_id, residency.address]
+
+  - id: healthcheck
+    description: Сервис и база доступны
+    method: GET
+    path: /healthcheck
+    role: null
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [ok]
+
+  - id: profile
+    description: Профиль проверяющего - дома, квартиры и роли в организациях
+    method: GET
+    path: /me
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [user_id, name, consent_at, consent_version, residencies, orgs, is_demo]
+
+  - id: profile_unauthorized
+    description: Без токена API отказывает
+    method: GET
+    path: /me
+    role: null
+    expected_status: [401]
+    response:
+      content_type: application/json
+      required_fields: [status, trace_id, error.title, error.detail]
+
+  - id: request_categories
+    description: Категории заявок и срок выполнения каждой
+    method: GET
+    path: /request-categories
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      type: array
+      required_fields: ["[].category", "[].label", "[].zone", "[].normative_hours"]
+
+  - id: house_search
+    description: Поиск дома по адресу в справочнике
+    method: GET
+    path: /houses
+    query:
+      q: Ленинский проспект
+      limit: 20
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields:
+        - items
+        - total
+        - "items[].id"
+        - "items[].address"
+        - "items[].city"
+        - "items[].street"
+        - "items[].building"
+        - "items[].is_connected"
+
+  - id: house_card
+    description: Карточка дома - УК, тарифы, капремонт, документы
+    method: GET
+    path: /houses/{house_id}
+    path_params:
+      house_id: "{test_data.house_id}"
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, address, region, city, street, building, cadastral_no, entrances, is_connected, demand_count, demand_sent, documents]
+
+  - id: request_create
+    description: Житель подает заявку о протечке и сразу получает номер и срок
+    method: POST
+    path: /requests
+    headers:
+      Content-Type: application/json
+    body:
+      category: leak
+      description: Течет кран в ванной, проверка API
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, created_at, category, category_label, description, status, channel, has_photos, group_size, house_id, address, org_name, normative_hours, photos, result_photos, messages, timeline, can_review, can_rate]
+
+  - id: request_list
+    description: Список заявок жителя со статусами
+    method: GET
+    path: /requests
+    query:
+      limit: 20
+      offset: 0
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields:
+        - items
+        - total
+        - "items[].id"
+        - "items[].created_at"
+        - "items[].category"
+        - "items[].status"
+        - "items[].group_size"
+
+  - id: request_card
+    description: Карточка своей заявки - статус, срок, история
+    method: GET
+    path: /requests/{request_id}
+    path_params:
+      request_id: "{test_data.request_id}"
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, created_at, category, status, house_id, address, normative_hours, timeline, messages]
+
+  - id: request_card_foreign
+    description: Чужая заявка недоступна - данные изолированы по жителю и организации
+    method: GET
+    path: /requests/{request_id}
+    path_params:
+      request_id: "{test_data.foreign_request_id}"
+    role: resident
+    expected_status: [404]
+    response:
+      content_type: application/json
+      required_fields: [status, trace_id, error.title, error.detail]
+
+  - id: meters
+    description: Счетчики квартиры жителя и возможность передать показание
+    method: GET
+    path: /flats/{flat_id}/meters
+    path_params:
+      flat_id: "{test_data.flat_id}"
+    role: resident
+    expected_status: [200]
+    response:
+      content_type: application/json
+      type: array
+      required_fields: ["[].id", "[].flat_id", "[].type", "[].tariff_zones", "[].serial", "[].can_submit", "[].verification_expired"]
+
+  - id: staff_requests
+    description: Входящие заявки домов организации сотрудника
+    method: GET
+    path: /admin/requests
+    query:
+      limit: 20
+      offset: 0
+    role: staff
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields:
+        - items
+        - total
+        - "items[].id"
+        - "items[].status"
+        - "items[].house_id"
+        - "items[].address"
+        - "items[].is_staff_author"
+
+  - id: staff_reply
+    description: Сотрудник отвечает жителю, ответ уходит жителю сообщением бота
+    method: POST
+    path: /admin/requests/{request_id}/reply
+    path_params:
+      request_id: "{test_data.request_id}"
+    headers:
+      Content-Type: application/json
+    body:
+      text: Приняли, мастер придет сегодня
+    role: staff
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, status, messages, timeline, is_staff_author]
+
+  - id: staff_status
+    description: >-
+      Сотрудник принимает заявку в работу. Повторный вызов с тем же статусом
+      ничего не меняет и отвечает той же карточкой
+    method: POST
+    path: /admin/requests/{request_id}/status
+    path_params:
+      request_id: "{test_data.request_id}"
+    headers:
+      Content-Type: application/json
+    body:
+      status: accepted
+    role: staff
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, status, timeline]

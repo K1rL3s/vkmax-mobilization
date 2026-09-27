@@ -8,6 +8,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check submission freeze
+        run: |
+          if [ "$(date +%s)" -ge "$(date -d "$FREEZE_AT" +%s)" ]; then
+            echo "::error::Деплой заморожен с $FREEZE_AT: на проверке должна работать сданная версия"
+            exit 1
+          fi
+        env:
+          FREEZE_AT: 2026-09-30T12:00:00+03:00
+
       - name: Deploy to VPS
         run: |
           mkdir -p ~/.ssh
