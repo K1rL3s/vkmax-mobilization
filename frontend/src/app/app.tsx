@@ -4,7 +4,7 @@ import { Outlet } from "react-router-dom";
 import { useTrack } from "@/shared/lib/analytics";
 import { getMaxLaunch } from "@/shared/lib/max";
 
-import "@maxhub/max-ui/dist/styles.css";
+import "./globals.css";
 
 import styles from "./app.module.css";
 

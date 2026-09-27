@@ -1,13 +1,8 @@
 import { useState } from "react";
 import { Button, Flex, Typography } from "@maxhub/max-ui";
-import {
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+
+import { ChartBox } from "@/shared/ui/chart-box";
 
 import {
   formatMonth,
@@ -63,52 +58,50 @@ export const ConsumptionChart = ({
             Для графика нужно хотя бы два месяца показаний
           </Typography.Text>
         ) : (
-          <div className={styles.Chart}>
-            <ResponsiveContainer width="100%" height={140}>
-              <LineChart
-                data={data}
-                margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
-              >
-                <XAxis
-                  dataKey="month"
-                  axisLine={false}
-                  tickLine={false}
-                  interval={0}
-                  padding={{ left: 12, right: 12 }}
-                  className={styles.Axis}
-                />
-                <YAxis hide domain={["auto", "auto"]} />
-                <Tooltip
-                  formatter={(value) =>
-                    `${formatVolume(Number(value) * 1000)} ${unit}`
-                  }
-                />
-                <Line
-                  type="monotone"
-                  dataKey="house"
-                  name="Среднее по дому"
-                  stroke="var(--icon-tertiary)"
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  dot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="own"
-                  name="Ваш расход"
-                  stroke="var(--button-primary)"
-                  strokeWidth={2}
-                  dot={{
-                    r: 3,
-                    fill: "var(--button-primary)",
-                    stroke: "var(--button-primary)",
-                  }}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartBox height={140}>
+            <LineChart
+              data={data}
+              margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
+            >
+              <XAxis
+                dataKey="month"
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+                padding={{ left: 12, right: 12 }}
+                className={styles.Axis}
+              />
+              <YAxis hide domain={["auto", "auto"]} />
+              <Tooltip
+                formatter={(value) =>
+                  `${formatVolume(Number(value) * 1000)} ${unit}`
+                }
+              />
+              <Line
+                type="monotone"
+                dataKey="house"
+                name="Среднее по дому"
+                stroke="var(--icon-tertiary)"
+                strokeWidth={2}
+                strokeDasharray="4 4"
+                dot={false}
+                isAnimationActive={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="own"
+                name="Ваш расход"
+                stroke="var(--button-primary)"
+                strokeWidth={2}
+                dot={{
+                  r: 3,
+                  fill: "var(--button-primary)",
+                  stroke: "var(--button-primary)",
+                }}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ChartBox>
         )}
 
         <Flex gap={16} wrap="wrap" className={styles.Legend}>

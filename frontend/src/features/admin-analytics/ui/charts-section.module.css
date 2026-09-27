@@ -4,10 +4,6 @@
   background-color: var(--background-card);
 }
 
-.Chart {
-  min-width: 0;
-}
-
 .Axis,
 .BarValue {
   font-size: 11px;
