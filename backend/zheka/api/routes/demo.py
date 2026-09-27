@@ -3,15 +3,17 @@ from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
 from zheka.api.dependencies import CurrentUserDep, RequireConsentDep
-from zheka.api.dependencies.current_user import API_CHECKER_MAX_USER_ID
 from zheka.api.schemas.demo import DemoActivationRequest, DemoActivationResponse
 from zheka.api.schemas.houses import ResidencySummary
 from zheka.api.schemas.orgs import OrgMembership
 from zheka.core.enums import OrgRole
 from zheka.core.errors import NotEnoughRights
-from zheka.core.services.demo import DemoService
-
-API_CHECKER_DEMO_NUMBER = 5
+from zheka.core.services.demo import (
+    API_CHECKER_DEMO_NUMBER,
+    API_CHECKER_MAX_USER_ID,
+    CHECKER_ONLY,
+    DemoService,
+)
 
 router = APIRouter(tags=["Демо"], route_class=DishkaRoute)
 
@@ -27,10 +29,7 @@ async def activate_demo(
     if current_user.user.id == API_CHECKER_MAX_USER_ID and (
         request.number != API_CHECKER_DEMO_NUMBER or request.admin
     ):
-        raise NotEnoughRights(
-            "Тестовый токен получает только роль сотрудника "
-            f"демо-УК №{API_CHECKER_DEMO_NUMBER}",
-        )
+        raise NotEnoughRights(CHECKER_ONLY)
     access = await demo_service.activate(
         current_account.user_id,
         request.number,

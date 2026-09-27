@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,7 @@ from zheka.api.routes.requests import classify_request_text, export_request
 from zheka.api.schemas.requests import (
     AdminRequestCard,
     ClassifyRequestRequest,
+    CreateRequestRequest,
     RequestCard,
 )
 from zheka.broker.publisher import TaskPublisher
@@ -949,3 +951,10 @@ async def test_classify_answers_without_the_model_past_the_hourly_quota(
     assert await ask(other_id) is RequestCategory.HEATING
     clock[0] = QUOTA_WINDOW_SECONDS
     assert await ask(user_id) is RequestCategory.HEATING
+
+
+def test_a_request_description_is_capped() -> None:
+    CreateRequestRequest(category=RequestCategory.LEAK, description="я" * 4000)
+
+    with pytest.raises(ValidationError):
+        CreateRequestRequest(category=RequestCategory.LEAK, description="я" * 4001)

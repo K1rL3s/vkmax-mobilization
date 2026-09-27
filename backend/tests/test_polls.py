@@ -501,3 +501,96 @@ async def test_a_naive_end_is_the_house_time(
     )
 
     assert card.poll.ends_at == ends_at.replace(tzinfo=ZoneInfo("Asia/Vladivostok"))
+
+
+@pytest.mark.parametrize("loss", ["unseated", "blocked", "unlinked"])
+async def test_a_former_chairman_no_longer_manages_the_poll(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    loss: str,
+) -> None:
+    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
+    service = _make_service(session)
+    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
+    residents = ResidentsRepo(session)
+    chairman = await residents.get_for_house(chairman_id, base.house_id)
+    assert chairman is not None
+    if loss == "unseated":
+        await residents.set_chairman(chairman, value=False)
+    elif loss == "blocked":
+        await residents.set_status(chairman, ResidentStatus.BLOCKED, "долг")
+    else:
+        await residents.delete(chairman)
+
+    with pytest.raises(NotEnoughRights):
+        await service.close(card.poll.id, chairman_id)
+    with pytest.raises(NotEnoughRights):
+        await service.non_voters(card.poll.id, chairman_id)
+
+
+async def test_a_blocked_resident_does_not_read_the_poll(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
+    service = _make_service(session)
+    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
+    blocked_id = await add_user(session, "Заблокированный")
+    await add_resident(
+        session,
+        blocked_id,
+        base.house_id,
+        base.flat_id,
+        status=ResidentStatus.BLOCKED,
+    )
+
+    with pytest.raises(NotEnoughRights):
+        await service.get_card(card.poll.id, blocked_id)
+    with pytest.raises(NotEnoughRights):
+        await service.results(card.poll.id, blocked_id)
+
+
+async def test_a_racing_second_ballot_of_one_user_is_not_stored(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
+    service = _make_service(session)
+    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
+    await service.vote(card.poll.id, chairman_id, [card.options[0].id])
+    chairman = await ResidentsRepo(session).get_for_house(chairman_id, base.house_id)
+    assert chairman is not None
+
+    inserted = await PollsRepo(session).add_vote(
+        card.poll.id,
+        [card.options[1].id],
+        chairman_id,
+        chairman.id,
+        base.flat_id,
+        counted_by_area=False,
+    )
+
+    assert inserted == []
+
+
+async def test_a_racing_weighted_ballot_of_a_co_owner_is_not_stored(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
+    service = _make_service(session)
+    card = await service.create(chairman_id, base.house_id, _draft(), org_id=None)
+    await service.vote(card.poll.id, chairman_id, [card.options[0].id])
+    co_owner_id = await add_user(session, "Второй собственник")
+    co_owner = await add_resident(session, co_owner_id, base.house_id, base.flat_id)
+
+    inserted = await PollsRepo(session).add_vote(
+        card.poll.id,
+        [card.options[1].id],
+        co_owner_id,
+        co_owner.id,
+        base.flat_id,
+        counted_by_area=True,
+    )
+
+    assert inserted == []

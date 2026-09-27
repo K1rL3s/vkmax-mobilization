@@ -120,17 +120,12 @@ class PollsRepo(BaseAlchemyRepo):
                         "resident_id": resident_id,
                         "flat_id": flat_id,
                         "counted_by_area": counted_by_area,
+                        "choice_index": choice_index,
                     }
-                    for option_id in option_ids
+                    for choice_index, option_id in enumerate(option_ids)
                 ],
             )
-            .on_conflict_do_nothing(
-                index_elements=[
-                    poll_votes_table.c.poll_id,
-                    poll_votes_table.c.user_id,
-                    poll_votes_table.c.option_id,
-                ],
-            )
+            .on_conflict_do_nothing()
             .returning(PollVote)
         )
         result = await self._session.execute(stmt)

@@ -27,7 +27,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   group, gcc kept (`gunicorn-h1c` has no Linux wheels), `-O` bytecode
   precompiled (under `PYTHONDONTWRITEBYTECODE` each process would compile
   everything on start).
-- Prod: `MAX_BOT_MODE=webhook`, `MAX_WEBHOOK_URL` on 443 with a real cert; only
+- Prod: `MAX_BOT_MODE=webhook`, `MAX_WEBHOOK_URL` on 443 with a real cert and
+  `MAX_SECRET_TOKEN` (config refuses a webhook without it); only
   the `migrations` service runs alembic. `asgi_lifespan = "on"`: failed webhook
   startup kills the worker (ERROR + traceback, healthcheck red); under polling
   a rejected token is one ERROR line and the API runs without the bot.
@@ -83,7 +84,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `/demo/activate` gives it only EMPLOYEE of `API_CHECKER_DEMO_NUMBER`, else
   403: the token is public and the jury sits in org 1. Its own requests stop
   at `ACCEPTED` (`change_request_status`): `DATA-API.yaml` `staff_status`
-  moves the test request there and fails 409 once it is further.
+  moves the test request there and fails 409 once it is further. Demo org
+  `API_CHECKER_DEMO_NUMBER` is the token's alone (`DemoService._org` refuses
+  anyone else) and the token activates no org invite: nobody can block its
+  resident, move its test request or give it a second membership (staff
+  checks send no `X-Org-Id`).
 - Middleware order lives only in `setup_middlewares` (`api/app.py`),
   `trace_id_middleware` outermost, `RequestStateMiddleware` last (gunicorn 26
   shares one `scope["state"]` per worker; without it concurrent requests share
@@ -98,7 +103,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - `HousesService.link` never changes a verified resident's flat or role (УК
   moves them); a blocked resident cannot `unlink` (relinking would shed the
   block). An org invite reopened by a member is free unless it raises the
-  role, which consumes an activation.
+  role, which consumes an activation. A flat invite works only while its
+  issuer is a verified unblocked owner of the flat; a poll's creator manages
+  it only while an active chairman.
+- A poll ballot's rows carry `choice_index` 0..n-1: unique `(poll, user,
+  choice_index)` and `(poll, flat, choice_index) WHERE counted_by_area` make a
+  racing second ballot insert nothing (`add_vote` -> `ALREADY_VOTED`).
 
 ## Bot
 
@@ -291,8 +301,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   cuts survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: five distinct ranks per
   metric). They group requests from `REVIEWERS_GROUP_THRESHOLD` flats, not 3:
   reviewers share an org's first house and file the same category.
-- Demo deeplinks are only `demo_{admin,staff,resident}_N`, N 1-5, granting
-  only that role in demo org N: `DemoService.join` sets exactly ADMIN or
+- Demo deeplinks are only `demo_{admin,staff,resident}_N`, N 1-4 (5 is the
+  API checker's), granting only that role in demo org N: `DemoService.join`
+  sets exactly ADMIN or
   EMPLOYEE (lowering too); `settle` gives the verified flat `Д{user_id}` in
   the org's first house, filled by `furnish` (charges from tariffs: every demo
   house has tariffs, every demo org `meter_window_always_open`).

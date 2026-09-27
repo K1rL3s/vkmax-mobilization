@@ -2,7 +2,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import RequireConsentDep
+from zheka.api.dependencies import CurrentUserDep, RequireConsentDep
 from zheka.api.schemas.orgs import (
     OrgCard,
     OrgLookupRequest,
@@ -10,6 +10,8 @@ from zheka.api.schemas.orgs import (
     OrgMembership,
     RegisterOrgRequest,
 )
+from zheka.core.errors import NotEnoughRights
+from zheka.core.services.demo import API_CHECKER_MAX_USER_ID, CHECKER_ONLY
 from zheka.core.services.orgs import OrgsService
 
 router = APIRouter(tags=["Организации"], route_class=DishkaRoute)
@@ -45,8 +47,11 @@ async def register_org(
 @router.post("/org-invites/{code}/activate", summary="Активировать код сотрудника")
 async def activate_org_invite(
     code: str,
+    current_user: CurrentUserDep,
     current_account: RequireConsentDep,
     orgs_service: FromDishka[OrgsService],
 ) -> OrgMembership:
+    if current_user.user.id == API_CHECKER_MAX_USER_ID:
+        raise NotEnoughRights(CHECKER_ONLY)
     membership = await orgs_service.activate_invite(current_account.user_id, code)
     return OrgMembership.of(membership)

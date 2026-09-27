@@ -4,12 +4,15 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
+    SmallInteger,
     String,
     Table,
     Text,
     UniqueConstraint,
     false,
+    text,
 )
 
 from zheka.core.enums import PollStatus
@@ -66,5 +69,15 @@ poll_votes_table = Table(
     ),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True),
     Column("counted_by_area", Boolean, nullable=False),
+    Column("choice_index", SmallInteger, nullable=False),
     UniqueConstraint("poll_id", "user_id", "option_id"),
+    UniqueConstraint("poll_id", "user_id", "choice_index", name="uq_poll_votes_ballot"),
+    Index(
+        "ix_poll_votes_flat_ballot",
+        "poll_id",
+        "flat_id",
+        "choice_index",
+        unique=True,
+        postgresql_where=text("counted_by_area"),
+    ),
 )

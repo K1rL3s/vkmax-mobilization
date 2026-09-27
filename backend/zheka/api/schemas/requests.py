@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import PHOTOS_DESCRIPTION, FileRef
 from zheka.core.enums import (
     CATEGORY_RULES,
@@ -179,7 +179,7 @@ class RequestCard(RequestListItem):
 
 class CreateRequestRequest(BaseSchema):
     category: RequestCategory
-    description: str
+    description: FreeText
     flat_id: FlatId | None = None
     photos: list[str] = Field(default_factory=list, description=PHOTOS_DESCRIPTION)
     join_group_id: RequestGroupId | None = None
@@ -207,11 +207,11 @@ class SimilarRequestsResponse(BaseSchema):
 
 class RateRequestRequest(BaseSchema):
     rating: int = Field(ge=MIN_RATING, le=MAX_RATING)
-    feedback: str | None = None
+    feedback: FreeText | None = None
 
 
 class RepeatRequestRequest(BaseSchema):
-    description: str | None = None
+    description: FreeText | None = None
     photos: list[str] = Field(default_factory=list, description=PHOTOS_DESCRIPTION)
 
 
@@ -285,7 +285,7 @@ class AssignExecutorRequest(BaseSchema):
 class CreatePhoneRequestRequest(BaseSchema):
     house_id: HouseId
     category: RequestCategory
-    description: str
+    description: FreeText
     flat_id: FlatId | None = None
     caller_name: str | None = None
     caller_phone: str | None = None

@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.core.enums import ResidentRole, ResidentStatus, VerificationStatus
 from zheka.core.ids import FlatId, HouseId, ResidentId, UserId, VerificationRequestId
 from zheka.core.models import FlatInvite
@@ -73,7 +73,7 @@ class VerifyFlatResponse(BaseSchema):
 
 class FlatVerificationRequest(BaseSchema):
     account_no: str
-    comment: str | None = None
+    comment: FreeText | None = None
 
 
 class VerificationRequestItem(BaseSchema):

@@ -14,7 +14,12 @@ from tests.conftest import (
 from zheka.api.schemas.flats import FlatCard
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
-from zheka.core.enums import OrgRole, ResidentRole, VerificationStatus
+from zheka.core.enums import (
+    OrgRole,
+    ResidentRole,
+    ResidentStatus,
+    VerificationStatus,
+)
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -23,7 +28,12 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.core.services.events import EventsService
-from zheka.core.services.flats import ALREADY_VERIFIED_DETAIL, FlatsService
+from zheka.core.services.flats import (
+    ALREADY_VERIFIED_DETAIL,
+    INVITE_ISSUER_GONE,
+    MAX_INVITE_HOURS,
+    FlatsService,
+)
 from zheka.core.services.houses import NOT_CONNECTED
 from zheka.infra.database.models import Flat, Resident, VerificationRequest
 from zheka.infra.database.repos.events import EventsRepo
@@ -426,7 +436,7 @@ async def test_create_invite_needs_a_verified_owner(
 
 @pytest.mark.parametrize(
     ("expires_in_hours", "max_activations"),
-    [(0, 1), (-1, 1), (72, 0), (72, -1)],
+    [(0, 1), (-1, 1), (MAX_INVITE_HOURS + 1, 1), (72, 0), (72, -1)],
 )
 async def test_create_invite_rejects_dead_limits(
     session: AsyncSession,
@@ -668,3 +678,29 @@ async def test_flat_residents_are_listed_only_to_a_verified_resident(
     with pytest.raises(NotEnoughRights):
         await service.list_residents(claimant, own.flat_id)
     assert len(await service.list_residents(own.user_id, own.flat_id)) == 2
+
+
+@pytest.mark.parametrize("loss", ["revoked", "blocked", "unlinked"])
+async def test_an_invite_dies_with_its_issuer_ownership(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    loss: str,
+) -> None:
+    own = await _verified_owner(session, make_org_house_flat_user)
+    service = _make_service(session)
+    invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
+    residents = ResidentsRepo(session)
+    issuer = await residents.get_for_house(own.user_id, own.house_id)
+    assert issuer is not None
+    if loss == "revoked":
+        await residents.revoke_verification(issuer)
+    elif loss == "blocked":
+        await residents.set_status(issuer, ResidentStatus.BLOCKED, "долг")
+    else:
+        await residents.delete(issuer)
+
+    with pytest.raises(InvalidState, match=INVITE_ISSUER_GONE):
+        await service.activate_invite(await add_user(session), invite.code)
+    unused = await InvitesRepo(session).get_flat(invite.code)
+    assert unused is not None
+    assert unused.activations_used == 0

@@ -3,7 +3,6 @@ from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
 from zheka.api.dependencies import CurrentOrgDep, CurrentUserDep
-from zheka.api.dependencies.current_user import API_CHECKER_MAX_USER_ID
 from zheka.api.routes.requests import signed
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.requests import (
@@ -25,6 +24,7 @@ from zheka.core.services.admin_requests import (
     AdminRequestsService,
     PhoneRequestDraft,
 )
+from zheka.core.services.demo import API_CHECKER_MAX_USER_ID
 from zheka.core.services.files import FilesService
 from zheka.infra.database.repos.requests import RequestFilters
 

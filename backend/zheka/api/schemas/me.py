@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Literal, Self
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.houses import ResidencySummary
 from zheka.api.schemas.orgs import OrgMembership
 from zheka.core.enums import (
@@ -68,5 +68,5 @@ class UpdateNotificationSettingsRequest(BaseSchema):
 class TrackEventRequest(BaseSchema):
     type: Literal[EventType.MINIAPP_OPEN, EventType.ANNOUNCEMENT_CLICK]
     source: EventSource | None = None
-    tab: str | None = None
+    tab: FreeText | None = None
     announcement_id: AnnouncementId | None = None

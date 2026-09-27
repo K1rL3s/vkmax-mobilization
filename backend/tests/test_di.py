@@ -16,6 +16,7 @@ from taskiq import InMemoryBroker
 from tests.conftest import empty_bot_setup, make_config
 
 from zheka.api import app as app_module
+from zheka.bot import make_engine
 from zheka.broker import __main__ as worker
 from zheka.config import BotMode, load_config
 from zheka.di import make_container
@@ -96,6 +97,7 @@ async def test_a_rejected_token_fails_the_webhook_startup() -> None:
             config.max,
             mode=BotMode.WEBHOOK,
             webhook_url="https://example.ru/webhook",
+            secret_token="webhook-secret",  # noqa: S106
         ),
     )
     app = app_module.app_factory(config, empty_bot_setup())
@@ -133,3 +135,28 @@ def test_a_register_code_outside_the_start_param_alphabet_is_refused(
 
     with pytest.raises(ValueError, match="DEEPLINK_ORG_REGISTER"):
         load_config(str(tmp_path / ".env"))
+
+
+def test_a_webhook_without_a_secret_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    for name in ("POSTGRES_HOST", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"):
+        monkeypatch.setenv(name, "zheka")
+    monkeypatch.setenv("MAX_BOT_MODE", "webhook")
+    monkeypatch.setenv("MAX_WEBHOOK_URL", "https://example.ru/webhook")
+    monkeypatch.setenv("MAX_SECRET_TOKEN", "")
+
+    with pytest.raises(ValueError, match="MAX_SECRET_TOKEN"):
+        load_config(str(tmp_path / ".env"))
+
+
+def test_a_webhook_engine_without_a_secret_is_refused() -> None:
+    config = replace(
+        make_config().max,
+        mode=BotMode.WEBHOOK,
+        webhook_url="https://example.ru/webhook",
+    )
+
+    with pytest.raises(ValueError, match="MAX_SECRET_TOKEN"):
+        make_engine(empty_bot_setup().dp, Bot("test-token"), config)

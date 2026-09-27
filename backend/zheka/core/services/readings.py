@@ -27,12 +27,14 @@ SPIKE_MIN_HISTORY = 3
 VERIFICATION_WARNING = timedelta(days=30)
 
 HISTORY_LIMIT = 50
+MAX_PHOTOS = 3
 _SPIKE_FETCH_LIMIT = 20
 _HOUSE_AVERAGE_LIMIT = 10_000
 
 BELOW_PREVIOUS_WARNING = "Новое значение меньше предыдущего, уточните показание"
 PERIOD_HAS_CHARGE = "За этот период уже выставлена квитанция"
 WRONG_PERIOD = "Показания подаются за текущий период"
+TOO_MANY_PHOTOS = f"К показанию можно приложить не больше {MAX_PHOTOS} фото"
 
 _ZONES_BY_COUNT: Mapping[int, frozenset[TariffZone]] = {
     1: frozenset({TariffZone.SINGLE}),
@@ -257,6 +259,8 @@ class ReadingsService:
             raise InvalidRequest("Показания не соответствуют тарифным зонам счетчика")
         if not draft.photos:
             raise InvalidRequest("Приложите фото показаний")
+        if len(draft.photos) > MAX_PHOTOS:
+            raise InvalidRequest(TOO_MANY_PHOTOS)
         for name in draft.photos:
             self._files.path_of(name)
 

@@ -17,10 +17,9 @@ from maxo.utils.webapp import (
 
 from zheka.config import Config
 from zheka.core.errors import Unauthorized
-from zheka.core.ids import MaxUserId
+from zheka.core.services.demo import API_CHECKER_MAX_USER_ID
 
 INIT_DATA_TTL = timedelta(days=1)
-API_CHECKER_MAX_USER_ID = MaxUserId(-(10**18))
 API_CHECKER = WebAppInitData(
     chat=WebAppChat(id=API_CHECKER_MAX_USER_ID, type="DIALOG"),
     user=WebAppUser(id=API_CHECKER_MAX_USER_ID, first_name="Проверяющий API"),

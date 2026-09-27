@@ -7,6 +7,7 @@ from zheka.core.enums import (
     EventType,
     NotificationCategory,
     ResidentRole,
+    ResidentStatus,
     VerificationStatus,
 )
 from zheka.core.errors import (
@@ -38,6 +39,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 ACCOUNT_TAIL = 4
+MAX_INVITE_HOURS = 168
 
 ALREADY_VERIFIED_DETAIL = "Квартира уже подтверждена"
 MISMATCH_DETAIL = (
@@ -50,6 +52,7 @@ NO_ACCOUNT_DETAIL = (
 MOVED_OUT = "Житель привязан к другой квартире, переезд оформляет УК"
 NOT_A_RESIDENT = "Вы не житель этой квартиры"
 VERIFY_FIRST = "Сначала подтвердите квартиру"
+INVITE_ISSUER_GONE = "Код приглашения больше не действует"
 
 
 def normalize_account(account_no: str) -> str:
@@ -320,8 +323,10 @@ class FlatsService:
         expires_in_hours: int,
         max_activations: int,
     ) -> FlatInvite:
-        if expires_in_hours <= 0:
-            raise InvalidRequest("Срок жизни кода - больше нуля часов")
+        if not 0 < expires_in_hours <= MAX_INVITE_HOURS:
+            raise InvalidRequest(
+                f"Срок жизни кода - от 1 до {MAX_INVITE_HOURS} часов",
+            )
         if max_activations <= 0:
             raise InvalidRequest("Число активаций - больше нуля")
 
@@ -369,6 +374,10 @@ class FlatsService:
             return await self._residency_view(existing, house, flat)
         if existing is not None and existing.flat_id is not None:
             raise InvalidState(MOVED_OUT)
+        try:
+            await self._verified_owner(invite.created_by, flat_id)
+        except (EntityNotFound, NotEnoughRights) as error:
+            raise InvalidState(INVITE_ISSUER_GONE) from error
 
         consumed = await self._invites.consume_flat(code)
         if consumed is None:
@@ -431,6 +440,8 @@ class FlatsService:
             raise NotEnoughRights("Код приглашения выдает собственник, а не арендатор")
         if resident.verified_at is None:
             raise NotEnoughRights(VERIFY_FIRST)
+        if resident.status is ResidentStatus.BLOCKED:
+            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
         return resident
 
     async def _pending_request(

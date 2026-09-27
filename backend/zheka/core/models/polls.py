@@ -51,3 +51,4 @@ class PollVote(ZhekaMutableType):
     resident_id: ResidentId | None = None
     flat_id: FlatId | None = None
     counted_by_area: bool
+    choice_index: int = 0

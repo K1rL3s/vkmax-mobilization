@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FileRef
 from zheka.core.charges import ChargeLine as DomainChargeLine
 from zheka.core.enums import SERVICE_LABELS, ServiceType
@@ -155,7 +155,7 @@ class ChargeBreakdown(BaseSchema):
 
 
 class DisputeChargeRequest(BaseSchema):
-    comment: str
+    comment: FreeText
     service: ServiceType | None = None
 
 

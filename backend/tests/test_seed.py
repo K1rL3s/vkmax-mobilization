@@ -20,6 +20,9 @@ from zheka.core.enums import OrgRole, RequestStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, MaxUserId, OrgId, UserId
 from zheka.core.services.demo import (
+    API_CHECKER_DEMO_NUMBER,
+    API_CHECKER_MAX_USER_ID,
+    CHECKER_RESERVED,
     DEMO_INN,
     DEMO_INNS,
     DemoService,
@@ -342,7 +345,7 @@ async def test_a_real_manager_is_replaced_only_in_moscow(db: AsyncSession) -> No
 async def test_a_flat_in_the_last_demo_organization_is_charged(
     db: AsyncSession,
 ) -> None:
-    org, residency = await _demo(db).settle(await _positive_user(db), len(PROFILES))
+    org, residency = await _demo(db).settle(await _checker(db), len(PROFILES))
 
     assert org.inn == PROFILES[-1].inn
     flat_id = FlatId(residency.resident.flat_id or 0)
@@ -392,3 +395,32 @@ async def test_a_reviewer_account_cannot_be_derived_from_the_flat(
     assert flat is not None
 
     assert flat.account_no != demo_account_no(flat.number)
+
+
+async def test_the_checker_demo_organization_is_closed_to_everyone_else(
+    db: AsyncSession,
+) -> None:
+    user_id = await _positive_user(db)
+    demo = _demo(db)
+
+    for attempt in (
+        demo.activate(user_id, API_CHECKER_DEMO_NUMBER, OrgRole.ADMIN),
+        demo.join(user_id, API_CHECKER_DEMO_NUMBER, OrgRole.ADMIN),
+        demo.settle(user_id, API_CHECKER_DEMO_NUMBER),
+    ):
+        with pytest.raises(NotEnoughRights, match=CHECKER_RESERVED):
+            await attempt
+
+    access = await demo.activate(await _checker(db), API_CHECKER_DEMO_NUMBER)
+    assert access.membership.org.inn == DEMO_INNS[API_CHECKER_DEMO_NUMBER - 1]
+
+
+async def _checker(session: AsyncSession) -> UserId:
+    user = User(
+        max_user_id=API_CHECKER_MAX_USER_ID,
+        name="Проверяющий API",
+        consent_at=datetime.now(UTC),
+    )
+    session.add(user)
+    await session.flush()
+    return user.id

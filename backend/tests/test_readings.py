@@ -49,6 +49,8 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.meters import MeterDraft, MeterUpdateDraft, MetersService
 from zheka.core.services.readings import (
+    MAX_PHOTOS,
+    TOO_MANY_PHOTOS,
     WRONG_PERIOD,
     ReadingsService,
     SubmitDraft,
@@ -847,3 +849,18 @@ async def test_recognize_answers_without_ocr_past_the_hourly_quota() -> None:
     response = await recognize_reading(account, _StubVision(), body, quota)
 
     assert response.values is None
+
+
+async def test_submit_rejects_more_photos_than_the_limit(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    draft = SubmitDraft(
+        period=_period_back(0),
+        values={TariffZone.SINGLE: 1_000},
+        photos=[photo_name() for _ in range(MAX_PHOTOS + 1)],
+    )
+
+    with pytest.raises(InvalidRequest, match=TOO_MANY_PHOTOS):
+        await _make_service(session).submit(own.user_id, meter_id, draft)

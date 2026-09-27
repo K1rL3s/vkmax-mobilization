@@ -13,10 +13,13 @@ from tests.conftest import empty_bot_setup, make_bot_config, make_config
 
 from zheka.api.app import app_factory
 from zheka.api.dependencies.current_user import INIT_DATA_TTL, parse_init_data
-from zheka.api.routes.demo import API_CHECKER_DEMO_NUMBER
 from zheka.config import ApiConfig, DbConfig
 from zheka.core.consent import CONSENT_VERSION
-from zheka.core.services.demo import NOT_SEEDED
+from zheka.core.services.demo import (
+    API_CHECKER_DEMO_NUMBER,
+    CHECKER_ONLY,
+    NOT_SEEDED,
+)
 
 TOKEN = make_config().max.token
 
@@ -159,3 +162,28 @@ async def test_the_checker_activates_only_its_demo_org(
     assert [response.status_code for response in refused] == [403, 403, 403]
     assert bare.json()["error"]["detail"] == NOT_SEEDED
     assert unknown.status_code == 400
+
+
+async def test_the_checker_cannot_join_an_org_by_an_invite(
+    bot_database_url: str,  # noqa: ARG001
+) -> None:
+    app = _app(CHECKER_TOKEN, make_bot_config().db)
+    checker = {"Authorization": f"Bearer {CHECKER_TOKEN}"}
+    resident = {"WebAppData": signed_init_data(datetime.now(UTC))}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        for headers in (checker, resident):
+            await client.post(
+                "/api/me/consent",
+                headers=headers,
+                json={"version": CONSENT_VERSION},
+            )
+        refused = await client.post("/api/org-invites/any/activate", headers=checker)
+        unknown = await client.post("/api/org-invites/any/activate", headers=resident)
+
+    assert refused.status_code == 403
+    assert refused.json()["error"]["detail"] == CHECKER_ONLY
+    assert unknown.status_code == 404

@@ -397,11 +397,19 @@ class PollsService:
         resident = await self._residents.get_for_house(user_id, poll.house_id)
         if resident is None and not await self._is_poll_staff(poll, user_id):
             raise EntityNotFound(POLL_NOT_FOUND)
+        if resident is not None and resident.status is ResidentStatus.BLOCKED:
+            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
         return poll
 
     async def _can_manage(self, poll: Poll, user_id: UserId) -> bool:
         if poll.created_by_user_id == user_id:
-            return True
+            resident = await self._residents.get_for_house(user_id, poll.house_id)
+            if (
+                resident is not None
+                and resident.status is ResidentStatus.ACTIVE
+                and resident.is_chairman
+            ):
+                return True
         return await self._is_poll_staff(poll, user_id)
 
     async def _require_initiator_or_staff(self, poll: Poll, user_id: UserId) -> None:

@@ -145,4 +145,6 @@ def load_config(env_path: str | None = None) -> Config:
     )
     if config.max.mode is BotMode.WEBHOOK and not config.max.webhook_url:
         raise ValueError("MAX_WEBHOOK_URL обязателен при MAX_BOT_MODE=webhook")
+    if config.max.mode is BotMode.WEBHOOK and not config.max.secret_token:
+        raise ValueError("MAX_SECRET_TOKEN обязателен при MAX_BOT_MODE=webhook")
     return config

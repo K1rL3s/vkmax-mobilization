@@ -14,7 +14,7 @@ from zheka.core.enums import (
     TariffZone,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import UserId
+from zheka.core.ids import MaxUserId, UserId
 from zheka.core.models import Flat, Organization
 from zheka.core.services.houses import CONSENT_REQUIRED, ResidencyView
 from zheka.core.services.profile import OrgMembershipView
@@ -29,6 +29,14 @@ from zheka.infra.database.repos.users import UsersRepo
 DEMO_INNS = ("9900000001", "9900000010", "9900000020", "9900000030", "9900000040")
 DEMO_INN = DEMO_INNS[0]
 NOT_SEEDED = "Демо-доступ еще не готов: демо-данные не загружены"
+API_CHECKER_MAX_USER_ID = MaxUserId(-(10**18))
+API_CHECKER_DEMO_NUMBER = 5
+CHECKER_ONLY = (
+    f"Тестовый токен получает только роль сотрудника демо-УК №{API_CHECKER_DEMO_NUMBER}"
+)
+CHECKER_RESERVED = (
+    f"Демо-УК №{API_CHECKER_DEMO_NUMBER} отведена под проверку API, выберите другую"
+)
 
 CHARGED_MONTHS = 6
 VERIFICATION_SOON = timedelta(days=21)
@@ -285,6 +293,11 @@ class DemoService:
         org = await self._orgs.get_by_inn(DEMO_INNS[number - 1])
         if org is None:
             raise EntityNotFound(NOT_SEEDED)
+        if (
+            number == API_CHECKER_DEMO_NUMBER
+            and user.max_user_id != API_CHECKER_MAX_USER_ID
+        ):
+            raise NotEnoughRights(CHECKER_RESERVED)
         return org
 
 

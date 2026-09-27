@@ -10525,6 +10525,7 @@ components:
           $ref: '#/components/schemas/RequestCategory'
         description:
           type: string
+          maxLength: 4000
           title: Description
         flat_id:
           anyOf:
@@ -10588,6 +10589,7 @@ components:
           $ref: '#/components/schemas/RequestCategory'
         description:
           type: string
+          maxLength: 4000
           title: Description
         flat_id:
           anyOf:
@@ -10721,6 +10723,7 @@ components:
       properties:
         comment:
           type: string
+          maxLength: 4000
           title: Comment
         service:
           anyOf:
@@ -11016,6 +11019,7 @@ components:
         comment:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Comment
       type: object
@@ -12256,6 +12260,7 @@ components:
         feedback:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Feedback
       type: object
@@ -12519,6 +12524,7 @@ components:
         description:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Description
         photos:
@@ -13198,6 +13204,7 @@ components:
         tab:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Tab
         announcement_id:
