@@ -13,6 +13,7 @@ def _cores() -> int:
 polling = os.environ.get("MAX_BOT_MODE", POLLING_VALUE).lower() == POLLING_VALUE
 
 worker_class = "asgi"
+asgi_lifespan = "on"
 
 bind = "{}:{}".format(
     os.environ.get("API_HOST", "0.0.0.0"),  # noqa: S104 # nosec B104

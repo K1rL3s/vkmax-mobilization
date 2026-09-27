@@ -8,6 +8,11 @@ and `zheka/infra/database/models/` re-exports them for the repos.
 
 `just check` and `just test` stay green. Format only with `just format`: a bare
 `ruff format` leaves the hugged form that COM812 in `just check` rejects.
+`just format` alternates the formatter and the COM812 fix: the fix adds a
+trailing comma to a wrapped construct, the formatter then puts one element per
+line, and a nested construct only unfolds on the next pass; `-q` hides the
+formatter's warning about the COM812 conflict. `just` reads `.env` from the
+repo root, next to `docker-compose.yml`.
 slotscheck's class count drifts on an unchanged tree and proves nothing.
 
 ## Invariants
@@ -36,6 +41,12 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   start.
 - Production is `MAX_BOT_MODE=webhook` with `MAX_WEBHOOK_URL` on 443 and a real
   certificate. Only the `migrations` compose service runs alembic.
+- `asgi_lifespan = "on"`: a failed webhook startup is an ERROR with traceback
+  and kills the worker, which gunicorn respawns while the healthcheck stays
+  red. Under polling a token MAX rejects is one ERROR line and the API and the
+  mini-app run without the bot.
+- The taskiq worker retries nothing: a MAX send is not idempotent and
+  `MaxSender` already swallows MAX errors per recipient.
 - `zheka/api/asgi.py` builds the app at import and needs a real env; import
   `app_factory` from `zheka.api.app` instead. Env names follow the family canon
   (`POSTGRES_*`, `REDIS_DB`, `LOG_LEVEL`).
@@ -84,6 +95,9 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   Providers and routes never commit: dishka hands a provider the exception as
   `agen.asend(exc)`, so it cannot decide. A new entry point with a REQUEST
   container brings its own decider, or its writes are silently dropped.
+- `API_TEST_TOKEN` (unset or empty disables it): `Authorization: Bearer` with it
+  acts as one synthetic user, `API_CHECKER_MAX_USER_ID` (below every seeded
+  id); anything else needs `WebAppData` or gets 401.
 - Http middleware order lives only in `setup_middlewares` (`zheka/api/app.py`),
   `trace_id_middleware` outermost. `RequestStateMiddleware` registers last:
   gunicorn 26 hands every request the worker's one `scope["state"]`, and
@@ -121,10 +135,12 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   dialog sits under it and no handler repeats the check; chat, lifecycle and
   error routers sit outside. `.filter()` on a `Dialog`'s observers replaces its
   `IntentFilter`: leave them alone.
-- The error router answers every update kind (a `None` return loses the
-  error), a message with a reply, and resolves nothing from dishka (the
-  container is closed), so the menu window it restarts renders without
-  services.
+- The error router answers every update kind, a message with a reply, and
+  resolves nothing from dishka (the container is closed). It restarts the menu
+  through `ask_in_default_stack`, a fresh update with its own container, and
+  only for a user's own update in a private dialog, so a menu that fails to
+  render is not restarted in a loop. An unexpected error is logged with its
+  traceback and not re-raised.
 - The user middleware upserts `user` only in `ChatType.DIALOG` (house chat
   members gave no consent) and only reads elsewhere. `upsert_by_max_id` keeps
   `max_chat_id` with `coalesce` (the mini-app passes none) and, given a chat
@@ -166,13 +182,18 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   getter would see the pre-commit state: it publishes a follow-up task
   (`attach_result_photo` -> `send_executor_card`).
 - Bot texts: formal «вы», an emoji and a space opening every message and
-  button, no period ending a message or line. A result is its own message
+  button (flat numbers, four in a row, go bare), no period ending a message or
+  line. A result is its own message
   (`back_to_menu`), never a line above the menu. Both `bot_started` handlers
   set `ShowMode.SEND` first: maxo's AUTO edits the last message for anything
   but `MessageCreated`.
 - The consent tap edits its message to «✅ Согласие дано», the next window comes
-  as a new one. The policy button opens the mini-app with `startParam`
-  `{"path":"/privacy"}`, which the frontend does not route yet.
+  as a new one.
+- Every OpenApp button carries `app_payload(path)` (`bot/cards.py`, base64 of
+  `{"path": ...}`) or no payload for the home; the paths are
+  `core/deeplinks.py`'s. A notification takes one as `app_button` and
+  `app_path`; `notify_author` always attaches the request's.
+- The menu reads the profile: the house linked last, the staff line.
 - Every step of the house search and the request draft has «🏠 Меню» and, past
   the first, «⬅️ Назад» (`TO_MENU`, `BACK`). A search list step also takes
   typed text: one match is chosen, several narrow the list, none keeps it and
@@ -190,7 +211,12 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   `executor_advance` checks both before its first write, `executor_card`
   returns `None`.
 - The author's review card is queued only in `AdminRequestsService._move`, the
-  one road into `ON_REVIEW`.
+  one road into `ON_REVIEW`. `_move` to the current status is a no-op (no log,
+  event, message or notification), so a repeated staff status call answers 200
+  with the card; a backward move stays `InvalidState(BACKWARD)`.
+- A new or repeat request notifies the org's staff, never an executor or the
+  author, under `REQUESTS` and not mandatory. The deadline is
+  `Request.deadline_at`, printed in the house's time.
 - A house not `is_connected` takes no request and no flat verification request
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,
@@ -277,6 +303,9 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
   range is the demo house 61/1 (`test_a_real_manager_is_replaced_only_in_moscow`;
   moving a peer's second house from Казань to Санкт-Петербург breaks it).
 - Seeded users have negative `max_user_id` and no `max_chat_id`: unreachable.
+  `MaxSender.send_message` drops a private send (`chat_id is None`) to a
+  negative `user_id` (seeded users, the API checker `-10**18`); a group send
+  still goes, since MAX group chat ids are negative too.
 - The seed is one transaction, never touches the network, takes `today` and
   seeds `random.Random` per entity; after `pg_advisory_xact_lock(SEED_LOCK)`
   an existing `DEMO_INN` organization makes it return `False`. History rows
@@ -315,8 +344,7 @@ slotscheck's class count drifts on an unchanged tree and proves nothing.
 ## Orientation
 
 - Plans and block history live in `.superpowers/sdd/` at the repo root
-  (`progress.md` maps blocks to commits); `refactor-startapp-routing.md` waits
-  for its frontend half.
+  (`progress.md` maps blocks to commits).
 - maxo's truth is `.venv/lib/python3.12/site-packages/maxo/`, not the plan or
   memory: `python -c "import inspect, X; print(inspect.getsource(X.f))"`.
 - `grep --include=*.py` fails under zsh (`no matches found`): quote the glob.

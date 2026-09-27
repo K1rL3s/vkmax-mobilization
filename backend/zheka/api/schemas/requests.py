@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Self
 
 from pydantic import Field
@@ -92,7 +92,7 @@ class RequestListItem(BaseSchema):
             group_id=request.group_id,
             executor_name=None if row.executor is None else row.executor.name,
             rating=request.rating,
-            deadline_at=request.created_at + timedelta(hours=rule.normative_hours),
+            deadline_at=request.deadline_at,
             completion_reason=request.completion_reason,
         )
 

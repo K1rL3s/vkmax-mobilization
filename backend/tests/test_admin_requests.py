@@ -741,3 +741,43 @@ async def test_a_phone_request_refuses_a_flat_other_than_the_residents(
             ),
             await _member(session, own.org_id, OrgRole.EMPLOYEE),
         )
+
+
+async def test_repeating_the_current_status_changes_nothing(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request_id = (await _complain(session, own.user_id, own.house_id)).id
+    service = admin_requests_service(session)
+    await service.change_status(
+        own.org_id,
+        request_id,
+        RequestStatus.ACCEPTED,
+        None,
+        staff,
+    )
+
+    card = await service.change_status(
+        own.org_id,
+        request_id,
+        RequestStatus.ACCEPTED,
+        "Еще раз",
+        staff,
+    )
+
+    assert card.card.request.status is RequestStatus.ACCEPTED
+    assert not card.card.messages
+    assert await _logs(session, request_id) == [
+        RequestStatus.NEW,
+        RequestStatus.ACCEPTED,
+    ]
+    assert len(await events_of(session, EventType.REQUEST_STATUS_CHANGED)) == 1
+    with pytest.raises(InvalidState):
+        await service.change_status(
+            own.org_id,
+            request_id,
+            RequestStatus.NEW,
+            None,
+            staff,
+        )

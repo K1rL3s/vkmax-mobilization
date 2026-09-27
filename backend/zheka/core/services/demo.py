@@ -75,9 +75,16 @@ class DemoService:
         self._charges = charges_repo
         self._users = users_repo
 
-    async def activate(self, user_id: UserId) -> DemoAccess:
-        org, residency = await self.settle(user_id, 1)
-        member = await self._orgs.add_member_or_get(org.id, user_id, OrgRole.EMPLOYEE)
+    async def activate(
+        self,
+        user_id: UserId,
+        number: int = 1,
+        role: OrgRole = OrgRole.EMPLOYEE,
+    ) -> DemoAccess:
+        org, residency = await self.settle(user_id, number)
+        member = await self._orgs.add_member_or_get(org.id, user_id, role)
+        if role is OrgRole.ADMIN:
+            await self._orgs.set_member_role(member, role)
         return DemoAccess(
             membership=OrgMembershipView(member=member, org=org),
             residency=residency,
@@ -244,7 +251,7 @@ class DemoService:
             house_id,
             flat_number,
             area=Random(f"demo-flat:{user_id}").randint(3_800, 7_800),
-            account_no=f"ДЕМО-{house_id}-{flat_number}",
+            account_no=demo_account_no(flat_number),
         )
         if created:
             await self.furnish(
@@ -278,3 +285,7 @@ class DemoService:
         if org is None:
             raise EntityNotFound(NOT_SEEDED)
         return org
+
+
+def demo_account_no(flat_number: str) -> str:
+    return flat_number.zfill(10)

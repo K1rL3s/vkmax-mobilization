@@ -1,17 +1,15 @@
-import json
-
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.kbd import Button, WebApp
 from maxo.dialogs.widgets.text import Const, Format, Multi
-from maxo.utils.payload import encode_payload
 
+from zheka.bot.cards import app_payload
 from zheka.bot.handlers.consent.handlers import get_consent, on_accept
 from zheka.bot.states import Consent
 from zheka.core.consent import CONSENT_TEXT
 
 GIVEN_TEXT = "✅ Согласие дано"
-POLICY_PAYLOAD = encode_payload(json.dumps({"path": "/privacy"}, separators=(",", ":")))
+POLICY_PAYLOAD = app_payload("/privacy")
 
 consent_dialog = Dialog(
     Window(

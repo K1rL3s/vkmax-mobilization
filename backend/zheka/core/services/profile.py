@@ -24,6 +24,18 @@ class MeView(ZhekaType):
     orgs: list[OrgMembershipView]
     is_demo: bool
 
+    @property
+    def latest_residency(self) -> ResidencyView | None:
+        return max(
+            self.residencies,
+            key=lambda item: item.resident.created_at,
+            default=None,
+        )
+
+    @property
+    def is_staff(self) -> bool:
+        return any(membership.member.role.is_staff for membership in self.orgs)
+
 
 class ProfileService:
     __slots__ = ("_events", "_flats", "_houses", "_orgs", "_residents", "_users")

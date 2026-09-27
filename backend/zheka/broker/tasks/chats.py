@@ -1,4 +1,5 @@
 import logging
+from html import escape
 
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
@@ -29,6 +30,11 @@ WELCOME_TEXT = (
 )
 JOIN_HOUSE = "🏠 Присоединиться к дому"
 PINS_HERE = "📌 Список закрепленных никуда не делся, он здесь"
+LEFT_TEXT = (
+    "🚪 Я вышел из чата «{title}»: привязать чат к дому может сотрудник УК, "
+    "председатель или житель этого дома с кодом привязки. Найдите свой дом в "
+    "меню и добавьте меня снова"
+)
 
 
 def chat_stack(chat_id: MaxChatId) -> str:
@@ -51,16 +57,19 @@ async def on_bot_added(
         await bot.leave_chat(chat_id=chat_id)
         return
 
+    title = (await bot.get_chat(chat_id=chat_id)).title or ""
     if await chats_service.bindable_houses(user.id):
         state, stack_id = ChatBinding.house, chat_stack(chat_id)
     elif await chats_service.is_resident(user.id):
         state, stack_id = ChatBinding.code, None
     else:
         await bot.leave_chat(chat_id=chat_id)
+        await sender.send_message(
+            LEFT_TEXT.format(title=escape(title)),
+            user_id=user.max_user_id,
+        )
         return
 
-    chat = await bot.get_chat(chat_id=chat_id)
-    title = chat.title or ""
     await chats_service.on_bot_added(chat_id, title)
     await sender.start_dialog(
         state,

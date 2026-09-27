@@ -3,8 +3,10 @@ from collections.abc import Sequence
 
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
+from maxo.types.buttons import InlineButtons
 from taskiq import async_shared_broker
 
+from zheka.bot.cards import open_app
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import recheck_chat_rights
 from zheka.core.enums import NotificationCategory
@@ -24,6 +26,7 @@ async def _fan_out(
     text: str,
     category: str,
     mandatory: bool,
+    keyboard: Sequence[Sequence[InlineButtons]] | None = None,
 ) -> int:
     recipients = await repo.recipients(user_ids, NotificationCategory(category))
     logger.info("Рассылка %s: получателей %s", category, len(recipients))
@@ -33,7 +36,12 @@ async def _fan_out(
         notify = recipient.level.resolve_notify(mandatory=mandatory)
         if notify is None:
             continue
-        await sender.send_message(text, user_id=recipient.max_user_id, notify=notify)
+        await sender.send_message(
+            text,
+            user_id=recipient.max_user_id,
+            notify=notify,
+            keyboard=keyboard,
+        )
         sent += 1
 
     logger.info("Рассылка %s: отправлено %s из %s", category, sent, len(recipients))
@@ -49,8 +57,20 @@ async def send_to_user(
     mandatory: bool,
     sender: FromDishka[MaxSender],
     repo: FromDishka[NotificationsRepo],
+    bot: FromDishka[Bot],
+    app_button: str | None = None,
+    app_path: str | None = None,
 ) -> int:
-    return await _fan_out(sender, repo, [user_id], text, category, mandatory)
+    keyboard = None if app_button is None else open_app(bot, app_button, app_path)
+    return await _fan_out(
+        sender,
+        repo,
+        [user_id],
+        text,
+        category,
+        mandatory,
+        keyboard,
+    )
 
 
 @async_shared_broker.task(task_name=TaskName.BROADCAST_TO_USERS.value)
@@ -62,8 +82,12 @@ async def broadcast_to_users(
     mandatory: bool,
     sender: FromDishka[MaxSender],
     repo: FromDishka[NotificationsRepo],
+    bot: FromDishka[Bot],
+    app_button: str | None = None,
+    app_path: str | None = None,
 ) -> int:
-    return await _fan_out(sender, repo, user_ids, text, category, mandatory)
+    keyboard = None if app_button is None else open_app(bot, app_button, app_path)
+    return await _fan_out(sender, repo, user_ids, text, category, mandatory, keyboard)
 
 
 @async_shared_broker.task(task_name=TaskName.BROADCAST_TO_CHATS.value)

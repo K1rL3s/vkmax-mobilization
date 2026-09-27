@@ -14,7 +14,7 @@ import pytest
 from dishka import AsyncContainer
 from maxo import Router
 from maxo.dialogs import BgManagerFactory, ShowMode, StartMode
-from maxo.dialogs.api.entities import NewMessage
+from maxo.dialogs.api.entities import DEFAULT_STACK_ID, NewMessage
 from maxo.dialogs.context.media_storage import MediaIdStorage
 from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
@@ -65,10 +65,15 @@ from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
 from zheka.bot.handlers.chats.router import UNPINNED
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.commands.deeplinks import (
+    APP_BUTTON,
+    CABINET_BUTTON,
     DEMO_ADMIN_NOTICE,
     DEMO_RESIDENT_NOTICE,
     DEMO_STAFF_NOTICE,
+    EXECUTOR_JOINED,
     ORG_JOINED,
+    REGISTER_BUTTON,
+    REGISTER_NOTICE,
 )
 from zheka.bot.handlers.commands.start import (
     BOT_COMMANDS,
@@ -76,9 +81,15 @@ from zheka.bot.handlers.commands.start import (
     set_commands_handler,
 )
 from zheka.bot.handlers.consent.windows import GIVEN_TEXT
+from zheka.bot.handlers.errors.router import UNEXPECTED
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
 from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
-from zheka.bot.handlers.menu.windows import MENU_TEXT
+from zheka.bot.handlers.menu.windows import (
+    GREETING,
+    HOUSE_MENU_TEXT,
+    MENU_TEXT,
+    STAFF_TEXT,
+)
 from zheka.bot.handlers.onboarding.handlers import HOUSE_LINKED
 from zheka.bot.handlers.onboarding.windows import (
     CITY_TEXT,
@@ -90,9 +101,16 @@ from zheka.bot.handlers.onboarding.windows import (
     NEARBY_TEXT,
     STREET_TEXT,
 )
+from zheka.bot.handlers.requests.handlers import (
+    NOT_CREATED,
+    NOT_CREATED_UNEXPECTED,
+    SENT_TEXT,
+)
 from zheka.bot.handlers.requests.windows import (
     CATEGORY_TEXT,
     CONFIRM_TEXT,
+    CREATED_TEXT,
+    DESCRIPTION_PHOTOS_TEXT,
     DESCRIPTION_TEXT,
     NOT_CONNECTED_TEXT,
     PHOTO_TEXT,
@@ -102,14 +120,16 @@ from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TE
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.states import Consent, Menu
 from zheka.broker.task_names import TaskName
+from zheka.broker.tasks.bot_requests import create_bot_request
 from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
+    LEFT_TEXT,
     PINS_HERE,
     on_bot_added,
     sync_chat_pins,
     welcome_chat,
 )
-from zheka.broker.tasks.notifications import broadcast_to_chats
+from zheka.broker.tasks.notifications import broadcast_to_chats, send_to_user
 from zheka.broker.tasks.reminders import broadcast_access_request
 from zheka.broker.tasks.requests import (
     attach_result_photo,
@@ -128,6 +148,7 @@ from zheka.core.enums import (
     ChatStatus,
     EventSource,
     EventType,
+    NotificationCategory,
     OrgRole,
     RequestCategory,
     RequestChannel,
@@ -136,7 +157,7 @@ from zheka.core.enums import (
     ResidentRole,
     ResidentStatus,
 )
-from zheka.core.errors import NotEnoughRights
+from zheka.core.errors import HOUSE_NOT_FOUND, NotEnoughRights
 from zheka.core.ids import (
     AccessRequestId,
     AccessSlotId,
@@ -158,8 +179,15 @@ from zheka.core.services.chats import (
     WRONG_CODE,
 )
 from zheka.core.services.demo import DEMO_INNS, NOT_SEEDED, demo_flat_number
-from zheka.core.services.requests import MAX_RATING, MIN_RATING, REJECT_NOT_ON_REVIEW
-from zheka.core.texts import REQUEST_STATUS_LABELS
+from zheka.core.services.events import EventsService
+from zheka.core.services.profile import ProfileService
+from zheka.core.services.requests import (
+    MAX_RATING,
+    MIN_RATING,
+    REJECT_NOT_ON_REVIEW,
+    RequestsService,
+)
+from zheka.core.texts import OPEN_REQUEST, REQUEST_STATUS_LABELS
 from zheka.infra.database.models import (
     Chat,
     ChatPin,
@@ -194,6 +222,7 @@ class _RecordingBot(FakeBot):
         self.texts: list[str | None] = []
         self.chat_ids: list[Any] = []
         self.links: list[Any] = []
+        self.buttons: list[list[Any]] = []
 
     async def send_message(  # type: ignore[mutable-override]
         self,
@@ -204,6 +233,14 @@ class _RecordingBot(FakeBot):
         self.texts.append(kwargs.get("text"))
         self.chat_ids.append(kwargs.get("chat_id"))
         self.links.append(kwargs.get("link"))
+        self.buttons.append(
+            [
+                button
+                for attachment in kwargs.get("attachments") or []
+                for row in attachment.payload.buttons
+                for button in row
+            ],
+        )
         return SendMessageResult(
             message=Message(
                 recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=1),
@@ -374,7 +411,7 @@ async def test_a_tap_on_a_dead_window_restarts_the_menu(
 
     await client.click(stale, ACCEPT)
 
-    assert MENU_TEXT in _text(message_manager)
+    await _rendered(message_manager, MENU_TEXT)
 
 
 async def test_the_start_is_recorded_once_and_a_loose_message_is_not_a_start(
@@ -564,7 +601,7 @@ async def test_the_request_goes_to_the_house_the_resident_linked_last(
     enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)
     assert enqueued[-1]["house_id"] == int(last)
     await client.click(message_manager.last_message(), TO_MENU)
-    assert MENU_TEXT in _text(message_manager)
+    assert HOUSE_MENU_TEXT.format(address=address) in _text(message_manager)
 
 
 DEPART = InlineButtonTextLocator("🚗 Выехал")
@@ -756,7 +793,7 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
     [repeat] = await _repeats_of(bot_session, request_id)
     assert repeat.channel is RequestChannel.BOT
     assert repeat.description == "Кран все еще течет"
-    assert MENU_TEXT in _text(message_manager)
+    assert GREETING in _text(message_manager)
     assert repeat_sent(repeat.id) in notices.texts
 
 
@@ -804,7 +841,7 @@ async def test_a_stale_rejection_prompt_files_no_repeat(
     await client.send("Спасибо, все хорошо")
 
     assert await _repeats_of(bot_session, request_id) == []
-    assert MENU_TEXT in _text(message_manager)
+    assert GREETING in _text(message_manager)
     assert REJECT_NOT_ON_REVIEW in notices.texts
 
 
@@ -1082,7 +1119,7 @@ async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
     window = message_manager.last_message()
     assert HOUSE_TEXT.format(title=CHAT_TITLE) in (window.body.text or "")
     assert _shown(shows, HOUSE_TEXT.format(title=CHAT_TITLE))[0] is ShowMode.SEND
-    house_button = InlineButtonTextLocator(re.escape(f"🏢 {house.address}"))
+    house_button = InlineButtonTextLocator(re.escape(f"🏢 {house.street_address}"))
     await client.click(window, house_button)
     await client.click(message_manager.last_message(), RIGHTS_DONE)
     assert NO_RIGHTS_YET in _text(message_manager)
@@ -1091,7 +1128,7 @@ async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
 
     text = _text(message_manager)
     assert BOUND_TEXT.format(title=CHAT_TITLE) in text
-    assert MENU_TEXT not in text
+    assert GREETING not in text
     chat = await ChatsRepo(bot_session).get(chat_id)
     assert chat is not None
     assert chat.house_id == house_id
@@ -1122,7 +1159,7 @@ async def test_a_resident_binds_the_chat_by_code(
     chat_api.is_admin = True
     await client.click(message_manager.last_message(), RIGHTS_DONE)
 
-    assert MENU_TEXT in _text(message_manager)
+    assert GREETING in _text(message_manager)
     assert BOUND_TEXT.format(title=CHAT_TITLE) in notices.texts
     bot_session.expire_all()
     chat = await ChatsRepo(bot_session).get(chat_id)
@@ -1275,7 +1312,7 @@ async def test_a_code_for_a_chat_the_bot_left_ends_on_the_menu(
 
     await client.send(code)
 
-    assert MENU_TEXT in _text(message_manager)
+    assert GREETING in _text(message_manager)
     assert CHAT_TAKEN in notices.texts
 
 
@@ -1295,7 +1332,7 @@ async def test_rights_for_a_chat_the_bot_left_end_on_the_menu(
 
     await client.click(message_manager.last_message(), RIGHTS_DONE)
 
-    assert _shown(shows, MENU_TEXT)[0] is ShowMode.SEND
+    assert _shown(shows, GREETING)[0] is ShowMode.SEND
     assert CHAT_NOT_BOUND in notices.texts
     assert notices.chat_ids == [client.chat.chat_id]
 
@@ -1348,6 +1385,7 @@ async def test_the_bot_leaves_a_chat_added_by_an_executor(
     task_broker: InMemoryBroker,
     chat_api: _ChatApi,
     bot_session: AsyncSession,
+    notices: _RecordingBot,
 ) -> None:
     await _staff(bot_session, client, OrgRole.EXECUTOR)
     chat_id = _chat_id()
@@ -1355,6 +1393,7 @@ async def test_the_bot_leaves_a_chat_added_by_an_executor(
     await _added_by(task_broker, chat_id, initiator_max_user_id=client.user.id)
 
     assert chat_api.left == [chat_id]
+    assert notices.texts == [LEFT_TEXT.format(title=CHAT_TITLE)]
 
 
 @pytest.mark.parametrize("chairman", [False, True])
@@ -1554,7 +1593,7 @@ async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
     await _bot_started(client, "demo_resident_2")
 
     user = await _user(bot_session, client)
-    assert MENU_TEXT in _text(message_manager)
+    assert HOUSE_MENU_TEXT.format(address=address) in _text(message_manager)
     assert (
         DEMO_RESIDENT_NOTICE.format(
             flat=demo_flat_number(user.id),
@@ -1563,6 +1602,7 @@ async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
         )
         in notices.texts
     )
+    assert _opened(notices.buttons[-1]) == [(APP_BUTTON, None)]
     houses = await HousesRepo(bot_session).list_for_org(org_id)
     assert await _demo_roles(bot_session, client) == ([], [houses[0].id])
     starts = await _starts_of(bot_session, client)
@@ -2081,6 +2121,7 @@ async def test_a_deeplink_result_is_its_own_message_before_the_menu(
 
     notice = DEMO_STAFF_NOTICE.format(org="Демо-УК «1»")
     assert notices.texts == [notice]
+    assert _opened(notices.buttons[-1]) == [(CABINET_BUTTON, "/admin/requests")]
     assert notices.notifies == [False]
     assert notices.chat_ids == [client.chat.chat_id]
     mode, text, *_ = _shown(shows, MENU_TEXT)
@@ -2106,11 +2147,17 @@ async def test_a_consent_survives_a_deeplink_target_that_refuses(
     assert MENU_TEXT in _text(message_manager)
 
 
+@pytest.mark.parametrize(
+    ("role", "joined"),
+    [(OrgRole.EMPLOYEE, ORG_JOINED), (OrgRole.EXECUTOR, EXECUTOR_JOINED)],
+)
 async def test_the_org_name_is_escaped_in_the_invite_notice(
     client: BotClient,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
     notices: _RecordingBot,
+    role: OrgRole,
+    joined: str,
 ) -> None:
     user_id = await _started(bot_session, client)
     org_name = f"УК <{secrets.token_hex(4)}> & {secrets.token_hex(4)}"
@@ -2120,7 +2167,7 @@ async def test_the_org_name_is_escaped_in_the_invite_notice(
         OrgInvite(
             code=code,
             org_id=org_id,
-            role=OrgRole.EMPLOYEE,
+            role=role,
             expires_at=datetime.now(UTC) + timedelta(days=1),
             max_activations=1,
             created_by=user_id,
@@ -2131,7 +2178,7 @@ async def test_the_org_name_is_escaped_in_the_invite_notice(
 
     await _bot_started(client, org_invite_payload(code))
 
-    assert notices.texts == [ORG_JOINED.format(name=escape(org_name))]
+    assert notices.texts == [joined.format(name=escape(org_name))]
 
 
 FIND_HOUSE = InlineButtonTextLocator("🔎 Найти дом")
@@ -2307,16 +2354,16 @@ async def test_a_flat_picked_from_the_list_is_linked(
 
     assert _text(message_manager) == FLAT_LIST_TEXT.format(address=address)
     assert _button_texts(message_manager.last_message()) == [
-        "🚪 1",
-        "🚪 2",
-        "🚪 10",
+        "1",
+        "2",
+        "10",
         "⏭ Пропустить",
         *NAVIGATION,
     ]
     await client.click(message_manager.last_message(), BACK_BUTTON)
     assert SEARCH_HOUSE_TEXT.format(street=f"Улица{tag}") in _text(message_manager)
     await client.send("1")
-    await client.click(message_manager.last_message(), InlineButtonTextLocator("🚪 10"))
+    await client.click(message_manager.last_message(), InlineButtonTextLocator("10"))
 
     user = await _user(bot_session, client)
     flat = await HousesRepo(bot_session).get_flat_by_number(house_id, "10")
@@ -2354,10 +2401,10 @@ async def test_back_and_menu_walk_the_request_draft(
     assert PHOTO_TEXT.format(photos=0) in _text(message_manager)
 
     await client.click(message_manager.last_message(), TO_MENU)
-    assert MENU_TEXT in _text(message_manager)
+    assert GREETING in _text(message_manager)
     await client.click(message_manager.last_message(), NEW_REQUEST)
     await client.click(message_manager.last_message(), TO_MENU)
-    assert MENU_TEXT in _text(message_manager)
+    assert GREETING in _text(message_manager)
 
 
 async def test_houses_near_a_location_are_listed_and_typing_filters_them_all(
@@ -2510,7 +2557,7 @@ async def test_cancelling_the_rejection_prompt_opens_the_menu(
 
     await client.click(message_manager.last_message(), CANCEL)
 
-    assert MENU_TEXT in _text(message_manager)
+    assert GREETING in _text(message_manager)
     assert (await _status(bot_session, request_id)).status is RequestStatus.ON_REVIEW
 
 
@@ -2629,3 +2676,326 @@ async def _forbidden(**_: Any) -> Any:
 def _join_house(bot: FakeBot, house_id: HouseId) -> list[list[LinkButton]]:
     url = create_start_link(bot, house_payload(house_id))
     return [[LinkButton(text=JOIN_HOUSE, url=url)]]
+
+
+def _opened(buttons: list[Any]) -> list[tuple[str, str | None]]:
+    return [
+        (
+            button.text,
+            json.loads(decode_payload(button.payload))["path"]
+            if isinstance(button.payload, str)
+            else None,
+        )
+        for button in buttons
+        if isinstance(button, OpenAppButton)
+    ]
+
+
+async def _resident_of_a_connected_house(
+    session: AsyncSession,
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> tuple[HouseId, str]:
+    await _consented(client, message_manager)
+    house_id, address = await _bot_house(session, org_id=await _org(session))
+    await _linked(session, client, house_id, datetime.now(UTC))
+    return house_id, address
+
+
+async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+
+    await client.send("/start")
+
+    assert _text(message_manager) == HOUSE_MENU_TEXT.format(address=address)
+    assert _button_texts(message_manager.last_message()) == [
+        "📝 Подать заявку",
+        "📱 Открыть приложение",
+        "🔎 Другой дом",
+    ]
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    assert house.org_id is not None
+    user = await _user(bot_session, client)
+    bot_session.add(
+        OrgMember(org_id=house.org_id, user_id=user.id, role=OrgRole.EMPLOYEE),
+    )
+    await bot_session.commit()
+
+    await client.send("/start")
+
+    assert _text(message_manager) == (
+        f"{HOUSE_MENU_TEXT.format(address=address)}\n\n{STAFF_TEXT}"
+    )
+
+
+async def test_every_category_is_one_tap_away(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+
+    assert _button_texts(message_manager.last_message()) == [
+        *(CATEGORY_RULES[category].caption for category in RequestCategory),
+        "🏠 Меню",
+    ]
+
+
+async def _send_photo(client: BotClient, caption: str | None) -> None:
+    photo = PhotoAttachmentPayload(photo_id=1, token=PHOTO_TOKEN, url=RESULT_URL)
+    message = Message(
+        sender=client.user,
+        recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=client.chat.chat_id),
+        timestamp=datetime.now(UTC),
+        body=MessageBody(
+            mid=secrets.token_hex(4),
+            seq=1,
+            text=caption,
+            attachments=[PhotoAttachment(payload=photo)],
+        ),
+    )
+    await _feed(client, MessageCreated(message=message, timestamp=datetime.now(UTC)))
+
+
+async def test_a_photo_at_the_description_step_is_kept_and_its_caption_describes(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+
+    await _send_photo(client, None)
+    assert _text(message_manager) == (
+        f"{DESCRIPTION_TEXT}\n\n{DESCRIPTION_PHOTOS_TEXT.format(photos=1)}"
+    )
+    await _send_photo(client, "Течет из-под ванны")
+
+    assert _text(message_manager) == PHOTO_TEXT.format(photos=2)
+    await client.click(message_manager.last_message(), NEXT)
+    assert "Течет из-под ванны" in _text(message_manager)
+
+
+async def test_a_bot_request_is_confirmed_with_its_deadline_and_a_link_to_it(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await _draft_request(client, message_manager)
+    assert SENT_TEXT in _text(message_manager)
+
+    await _run(
+        task_broker,
+        create_bot_request,
+        **bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1],
+    )
+
+    user = await _user(bot_session, client)
+    stmt = select(Request).where(requests_table.c.author_user_id == user.id)
+    request = (await bot_session.execute(stmt)).scalar_one()
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    deadline = house.local(request.deadline_at)
+    assert _text(message_manager) == CREATED_TEXT.format(
+        request_id=request.id,
+        deadline=f"{deadline:%H:%M %d.%m}",
+    )
+    assert _opened(_buttons(message_manager.last_message())) == [
+        (OPEN_REQUEST, f"/requests/{request.id}"),
+    ]
+    assert [
+        button.web_app
+        for button in _buttons(message_manager.last_message())
+        if isinstance(button, OpenAppButton)
+    ] == [fake_bot.state.info.username]
+
+
+async def _create_for_a_stranger_house(
+    task_broker: InMemoryBroker,
+    session: AsyncSession,
+    client: BotClient,
+) -> Any:
+    user_id = await _started(session, client)
+    house_id, _ = await _bot_house(session, org_id=await _org(session))
+    task: Any = create_bot_request
+    sent = (
+        await task.kicker()
+        .with_broker(task_broker)
+        .kiq(
+            user_id=user_id,
+            house_id=house_id,
+            flat_id=None,
+            category=RequestCategory.LEAK.value,
+            description="Течет кран",
+            photo_urls=[],
+            channel=RequestChannel.BOT.value,
+            stack_id=DEFAULT_STACK_ID,
+        )
+    )
+    return await sent.wait_result(timeout=5)
+
+
+async def test_a_refused_bot_request_says_why_and_leads_to_the_menu(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    result = await _create_for_a_stranger_house(task_broker, bot_session, client)
+
+    assert not result.is_err
+    assert _text(message_manager) == NOT_CREATED.format(reason=HOUSE_NOT_FOUND)
+    assert _button_texts(message_manager.last_message()) == ["🏠 Меню"]
+
+
+async def test_an_unexpected_failure_of_a_bot_request_still_answers(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def broken(*_: Any, **__: Any) -> None:
+        raise RuntimeError(PROBE_DENIED)
+
+    monkeypatch.setattr(RequestsService, "create", broken)
+
+    result = await _create_for_a_stranger_house(task_broker, bot_session, client)
+
+    assert result.is_err
+    assert _text(message_manager) == NOT_CREATED_UNEXPECTED
+
+
+async def test_an_unexpected_error_is_answered_and_the_menu_restarts(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    notices: _RecordingBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await client.send("/start")
+
+    async def broken(*_: Any, **__: Any) -> None:
+        raise RuntimeError(PROBE_DENIED)
+
+    monkeypatch.setattr(EventsService, "record", broken)
+    message_manager.reset_history()
+
+    await client.send("/start")
+
+    assert notices.texts == [UNEXPECTED]
+    await _rendered(message_manager, MENU_TEXT)
+
+
+async def test_the_registration_link_opens_its_page_in_the_mini_app(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    notices: _RecordingBot,
+) -> None:
+    await _consented(client, message_manager)
+
+    await _bot_started(client, "reg_secret-code")
+
+    assert notices.texts == [REGISTER_NOTICE]
+    assert _opened(notices.buttons[-1]) == [
+        (REGISTER_BUTTON, "/register/secret-code"),
+    ]
+
+
+async def test_a_request_notification_carries_the_button_to_the_request(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    user_id = await _started(bot_session, client)
+
+    await _run(
+        task_broker,
+        send_to_user,
+        user_id=user_id,
+        text="🔔 Проба",
+        category=NotificationCategory.REQUESTS.value,
+        mandatory=True,
+        app_button=OPEN_REQUEST,
+        app_path="/requests/1",
+    )
+
+    assert notices.texts == ["🔔 Проба"]
+    assert _opened(notices.buttons[-1]) == [(OPEN_REQUEST, "/requests/1")]
+
+
+UNEXPECTED_PROBE_COMMAND = "unexpectedprobe"
+
+
+@error_probe_router.message_created(Command(UNEXPECTED_PROBE_COMMAND))
+async def unexpected_probe_handler(_update: MessageCreated) -> None:
+    raise RuntimeError(PROBE_DENIED)
+
+
+async def test_an_unexpected_error_in_a_house_chat_opens_no_menu_there(
+    client: BotClient,
+    bot_setup: BotSetup,
+    message_manager: MockMessageManager,
+) -> None:
+    await _consented(client, message_manager)
+    recorder = _RecordingBot()
+    outside = _in_chat(bot_setup, recorder, _chat_id(), client.user.id)
+    message_manager.reset_history()
+
+    await outside.send(f"/{UNEXPECTED_PROBE_COMMAND}")
+    await asyncio.sleep(0.1)
+
+    assert recorder.texts == [UNEXPECTED]
+    assert message_manager.sent_messages == []
+
+
+async def test_a_menu_that_fails_to_render_is_not_restarted_in_a_loop(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    notices: _RecordingBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _consented(client, message_manager)
+    calls: list[UserId] = []
+
+    async def broken(_: ProfileService, user_id: UserId) -> None:
+        calls.append(user_id)
+        raise RuntimeError(PROBE_DENIED)
+
+    monkeypatch.setattr(ProfileService, "me", broken)
+
+    await client.send("/start")
+    await asyncio.sleep(0.2)
+
+    assert notices.texts == [UNEXPECTED]
+    assert len(calls) == 2
+
+
+async def test_a_user_without_a_max_account_gets_nothing_but_a_group_does() -> None:
+    recorder = _RecordingBot()
+    sender = MaxSender(recorder, cast(BgManagerFactory, _NotifyProbe()))
+
+    assert await sender.send_message("Заявка", user_id=MaxUserId(-5)) is None
+    await sender.send_message("Объявление", chat_id=MaxChatId(-70))
+
+    assert recorder.texts == ["Объявление"]

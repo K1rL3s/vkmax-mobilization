@@ -2,6 +2,8 @@ from collections.abc import Mapping, Sequence
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
+from zheka.core import texts
+from zheka.core.deeplinks import request_app_path
 from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
 from zheka.core.ids import AccessRequestId, HouseId, MaxChatId, RequestId, UserId
 from zheka.core.models import Request
@@ -55,6 +57,8 @@ class NotificationsService:
         *,
         category: NotificationCategory,
         mandatory: bool,
+        app_button: str | None = None,
+        app_path: str | None = None,
     ) -> None:
         self._publisher.publish(
             TaskName.SEND_TO_USER,
@@ -62,6 +66,8 @@ class NotificationsService:
             text=text,
             category=category.value,
             mandatory=mandatory,
+            app_button=app_button,
+            app_path=app_path,
         )
 
     def notify_users(
@@ -71,6 +77,8 @@ class NotificationsService:
         *,
         category: NotificationCategory,
         mandatory: bool,
+        app_button: str | None = None,
+        app_path: str | None = None,
     ) -> None:
         if not user_ids:
             return
@@ -80,6 +88,8 @@ class NotificationsService:
             text=text,
             category=category.value,
             mandatory=mandatory,
+            app_button=app_button,
+            app_path=app_path,
         )
 
     def notify_chats(self, chat_ids: Sequence[MaxChatId], text: str) -> None:
@@ -139,4 +149,6 @@ class NotificationsService:
                 text,
                 category=NotificationCategory.REQUESTS,
                 mandatory=True,
+                app_button=texts.OPEN_REQUEST,
+                app_path=request_app_path(request.id),
             )

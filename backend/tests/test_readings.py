@@ -458,6 +458,22 @@ async def test_submit_accepts_and_flags_a_value_below_the_previous_one(
     assert result.warning is not None
 
 
+async def test_a_value_below_the_previous_one_costs_nothing(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await add_reading(session, meter_id, _period_back(12), 5_000, own.user_id)
+    await add_tariff(session, own.house_id, 100_000)
+    service = _make_service(session)
+
+    result = await service.submit(own.user_id, meter_id, _draft(4_000))
+    history = await service.history(own.user_id, meter_id)
+
+    assert result.row.consumption == {TariffZone.SINGLE: -1_000}
+    assert result.row.amount == history[0].amount == 0
+
+
 async def test_resubmission_wins_over_the_earlier_row(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,

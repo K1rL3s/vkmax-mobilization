@@ -72,6 +72,8 @@ class NewRequestData(BaseDialogData):
     description: str = ""
     photos: list[str] = field(default_factory=list)
     request_id: int | None = None
+    deadline: str | None = None
+    error: str | None = None
 
 
 class ExecutorCardData(BaseDialogData):

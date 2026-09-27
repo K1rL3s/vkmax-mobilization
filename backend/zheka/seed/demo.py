@@ -52,7 +52,7 @@ from zheka.core.models import (
     Tariff,
     User,
 )
-from zheka.core.services.demo import DEMO_INN, DEMO_INNS, DemoService
+from zheka.core.services.demo import DEMO_INN, DEMO_INNS, DemoService, demo_account_no
 from zheka.core.services.readings import current_period
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.seed.directory import DATA_DIR, DirectoryHouse, load_directory
@@ -390,7 +390,7 @@ class Seeder:
                 number=str(number),
                 entrance=(number - 1) // per_entrance + 1,
                 area=average * rng.randint(75, 125) // 100,
-                account_no=f"ДЕМО-{house.id}-{number}",
+                account_no=demo_account_no(str(number)),
             )
             for number in range(1, count + 1)
         ]

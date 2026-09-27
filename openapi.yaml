@@ -64,12 +64,16 @@ paths:
       - Профиль
       summary: 'Профиль: дома, квартиры и организации'
       operationId: get_me
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -126,12 +130,16 @@ paths:
       - Профиль
       summary: Согласие на обработку персональных данных
       operationId: accept_consent
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -194,12 +202,16 @@ paths:
       - Профиль
       summary: Настройки уведомлений
       operationId: get_notification_settings
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -255,12 +267,16 @@ paths:
       - Профиль
       summary: Изменить настройки уведомлений
       operationId: update_notification_settings
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -323,12 +339,16 @@ paths:
       - Профиль
       summary: Записать событие мини-аппа
       operationId: track_event
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -391,6 +411,8 @@ paths:
       - Дома
       summary: Города для поиска дома
       operationId: list_cities
+      security:
+      - ApiTestToken: []
       parameters:
       - name: q
         in: query
@@ -410,9 +432,11 @@ paths:
           title: Region
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -472,6 +496,8 @@ paths:
       - Дома
       summary: Улицы города
       operationId: list_streets
+      security:
+      - ApiTestToken: []
       parameters:
       - name: city
         in: query
@@ -497,9 +523,11 @@ paths:
           title: Q
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -559,6 +587,8 @@ paths:
       - Дома
       summary: Поиск дома по адресу
       operationId: search_houses
+      security:
+      - ApiTestToken: []
       parameters:
       - name: q
         in: query
@@ -615,9 +645,11 @@ paths:
         description: Сдвиг от начала списка
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -674,6 +706,8 @@ paths:
       - Дома
       summary: Дома рядом по геопозиции
       operationId: search_houses_nearby
+      security:
+      - ApiTestToken: []
       parameters:
       - name: lat
         in: query
@@ -709,9 +743,11 @@ paths:
         description: Размер страницы
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -771,6 +807,8 @@ paths:
       - Дома
       summary: Карточка дома
       operationId: get_house_card
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -780,9 +818,11 @@ paths:
           title: House Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -839,6 +879,8 @@ paths:
       - Дома
       summary: Привязать себя к дому
       operationId: link_house
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -848,9 +890,11 @@ paths:
           title: House Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -913,6 +957,8 @@ paths:
       - Дома
       summary: Отвязаться от дома
       operationId: unlink_house
+      security:
+      - ApiTestToken: []
       parameters:
       - name: resident_id
         in: path
@@ -922,9 +968,11 @@ paths:
           title: Resident Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -981,6 +1029,8 @@ paths:
       - Дома
       summary: Сообщить о спросе на дом без УК
       operationId: create_demand_signal
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -990,9 +1040,11 @@ paths:
           title: House Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1049,6 +1101,8 @@ paths:
       - Дома
       summary: Квартиры дома
       operationId: list_house_flats
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -1095,9 +1149,11 @@ paths:
         description: Сдвиг от начала списка
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1154,6 +1210,8 @@ paths:
       - Квартиры
       summary: Карточка квартиры
       operationId: get_flat_card
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -1163,9 +1221,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1222,6 +1282,8 @@ paths:
       - Квартиры
       summary: Подтвердить квартиру лицевым счетом
       operationId: verify_flat
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -1231,9 +1293,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -1296,6 +1360,8 @@ paths:
       - Квартиры
       summary: Запросить подтверждение квартиры у УК
       operationId: request_flat_verification
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -1305,9 +1371,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -1370,6 +1438,8 @@ paths:
       - Квартиры
       summary: Жители квартиры
       operationId: list_flat_residents
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -1379,9 +1449,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1441,6 +1513,8 @@ paths:
       - Квартиры
       summary: Код приглашения в квартиру
       operationId: create_flat_invite
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -1450,9 +1524,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -1514,6 +1590,8 @@ paths:
       - Квартиры
       summary: Коды приглашения в квартиру
       operationId: list_flat_invites
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -1523,9 +1601,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1585,6 +1665,8 @@ paths:
       - Квартиры
       summary: Отозвать код приглашения
       operationId: revoke_flat_invite
+      security:
+      - ApiTestToken: []
       parameters:
       - name: code
         in: path
@@ -1594,9 +1676,11 @@ paths:
           title: Code
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1653,6 +1737,8 @@ paths:
       - Квартиры
       summary: Активировать код квартиры
       operationId: activate_flat_invite
+      security:
+      - ApiTestToken: []
       parameters:
       - name: code
         in: path
@@ -1662,9 +1748,11 @@ paths:
           title: Code
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1721,12 +1809,16 @@ paths:
       - Заявки
       summary: Категории заявок и нормативы
       operationId: list_request_categories
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1786,6 +1878,8 @@ paths:
       - Заявки
       summary: Мои заявки
       operationId: list_my_requests
+      security:
+      - ApiTestToken: []
       parameters:
       - name: status
         in: query
@@ -1826,9 +1920,11 @@ paths:
           title: X-House-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -1884,6 +1980,8 @@ paths:
       - Заявки
       summary: Новая заявка
       operationId: create_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-House-Id
         in: header
@@ -1895,9 +1993,11 @@ paths:
           title: X-House-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -1960,6 +2060,8 @@ paths:
       - Заявки
       summary: Соседи уже жаловались
       operationId: find_similar_requests
+      security:
+      - ApiTestToken: []
       parameters:
       - name: category
         in: query
@@ -1976,9 +2078,11 @@ paths:
           title: X-House-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -2035,6 +2139,8 @@ paths:
       - Заявки
       summary: Карточка заявки
       operationId: get_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -2044,9 +2150,11 @@ paths:
           title: Request Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -2103,6 +2211,8 @@ paths:
       - Заявки
       summary: Оценить заявку
       operationId: rate_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -2112,9 +2222,11 @@ paths:
           title: Request Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -2177,6 +2289,8 @@ paths:
       - Заявки
       summary: Повторная заявка
       operationId: create_repeat_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -2186,9 +2300,11 @@ paths:
           title: Request Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -2251,6 +2367,8 @@ paths:
       - Заявки
       summary: Принять работу
       operationId: accept_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -2260,9 +2378,11 @@ paths:
           title: Request Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -2319,6 +2439,8 @@ paths:
       - Заявки
       summary: Данные заявки для печати
       operationId: export_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -2328,9 +2450,11 @@ paths:
           title: Request Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -2387,12 +2511,16 @@ paths:
       - Заявки
       summary: Подсказать категорию по описанию
       operationId: classify_request_text
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -2455,6 +2583,8 @@ paths:
       - Счетчики
       summary: Счетчики квартиры
       operationId: list_flat_meters
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -2464,9 +2594,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -2525,6 +2657,8 @@ paths:
       - Счетчики
       summary: Завести счетчик
       operationId: add_meter
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -2534,9 +2668,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -2599,6 +2735,8 @@ paths:
       - Счетчики
       summary: Периоды подачи показаний
       operationId: list_reading_periods
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -2608,9 +2746,11 @@ paths:
           title: Flat Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -2670,6 +2810,8 @@ paths:
       - Счетчики
       summary: История показаний счетчика
       operationId: list_meter_readings
+      security:
+      - ApiTestToken: []
       parameters:
       - name: meter_id
         in: path
@@ -2679,9 +2821,11 @@ paths:
           title: Meter Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -2740,6 +2884,8 @@ paths:
       - Счетчики
       summary: Передать показание
       operationId: submit_reading
+      security:
+      - ApiTestToken: []
       parameters:
       - name: meter_id
         in: path
@@ -2749,9 +2895,11 @@ paths:
           title: Meter Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -2814,12 +2962,16 @@ paths:
       - Счетчики
       summary: Распознать показание по фото
       operationId: recognize_reading
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -2882,6 +3034,8 @@ paths:
       - Счетчики
       summary: Изменить счетчик
       operationId: update_meter
+      security:
+      - ApiTestToken: []
       parameters:
       - name: meter_id
         in: path
@@ -2891,9 +3045,11 @@ paths:
           title: Meter Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -2956,6 +3112,8 @@ paths:
       - Начисления
       summary: Тарифы дома
       operationId: list_house_tariffs
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -2965,9 +3123,11 @@ paths:
           title: House Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3027,6 +3187,8 @@ paths:
       - Начисления
       summary: Начисления квартиры
       operationId: list_flat_charges
+      security:
+      - ApiTestToken: []
       parameters:
       - name: flat_id
         in: path
@@ -3057,9 +3219,11 @@ paths:
         description: Сдвиг от начала списка
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3116,6 +3280,8 @@ paths:
       - Начисления
       summary: Квитанция за период
       operationId: get_charge
+      security:
+      - ApiTestToken: []
       parameters:
       - name: charge_id
         in: path
@@ -3125,9 +3291,11 @@ paths:
           title: Charge Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3184,6 +3352,8 @@ paths:
       - Начисления
       summary: Разбор начисления
       operationId: get_charge_breakdown
+      security:
+      - ApiTestToken: []
       parameters:
       - name: charge_id
         in: path
@@ -3193,9 +3363,11 @@ paths:
           title: Charge Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3252,6 +3424,8 @@ paths:
       - Начисления
       summary: Оспорить начисление
       operationId: dispute_charge
+      security:
+      - ApiTestToken: []
       parameters:
       - name: charge_id
         in: path
@@ -3261,9 +3435,11 @@ paths:
           title: Charge Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -3326,6 +3502,8 @@ paths:
       - Начисления
       summary: Демо-оплата квитанции
       operationId: pay_charge_demo
+      security:
+      - ApiTestToken: []
       parameters:
       - name: charge_id
         in: path
@@ -3335,9 +3513,11 @@ paths:
           title: Charge Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3394,6 +3574,8 @@ paths:
       - Опросы
       summary: Опросы дома
       operationId: list_polls
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -3411,9 +3593,11 @@ paths:
           title: Status
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3472,6 +3656,8 @@ paths:
       - Опросы
       summary: Создать опрос дома
       operationId: create_poll
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -3481,9 +3667,11 @@ paths:
           title: House Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -3546,6 +3734,8 @@ paths:
       - Опросы
       summary: Карточка опроса
       operationId: get_poll
+      security:
+      - ApiTestToken: []
       parameters:
       - name: poll_id
         in: path
@@ -3555,9 +3745,11 @@ paths:
           title: Poll Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3614,6 +3806,8 @@ paths:
       - Опросы
       summary: Проголосовать
       operationId: vote_in_poll
+      security:
+      - ApiTestToken: []
       parameters:
       - name: poll_id
         in: path
@@ -3623,9 +3817,11 @@ paths:
           title: Poll Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -3688,6 +3884,8 @@ paths:
       - Опросы
       summary: Результаты и прогноз кворума
       operationId: get_poll_results
+      security:
+      - ApiTestToken: []
       parameters:
       - name: poll_id
         in: path
@@ -3697,9 +3895,11 @@ paths:
           title: Poll Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3756,6 +3956,8 @@ paths:
       - Опросы
       summary: Непроголосовавшие квартиры
       operationId: list_poll_non_voters
+      security:
+      - ApiTestToken: []
       parameters:
       - name: poll_id
         in: path
@@ -3765,9 +3967,11 @@ paths:
           title: Poll Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3827,6 +4031,8 @@ paths:
       - Опросы
       summary: Закрыть опрос
       operationId: close_poll
+      security:
+      - ApiTestToken: []
       parameters:
       - name: poll_id
         in: path
@@ -3836,9 +4042,11 @@ paths:
           title: Poll Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3895,6 +4103,8 @@ paths:
       - Объявления
       summary: Объявления УК по дому
       operationId: list_announcements
+      security:
+      - ApiTestToken: []
       parameters:
       - name: limit
         in: query
@@ -3927,9 +4137,11 @@ paths:
           title: X-House-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -3987,6 +4199,8 @@ paths:
       summary: Свободные слоты приема
       description: Без даты - слоты на две недели вперед, с датой - только на этот день. Занятый слот приходит с is_free=false, прошедший не приходит вовсе
       operationId: list_reception_slots
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -4005,9 +4219,11 @@ paths:
           title: On Date
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4067,6 +4283,8 @@ paths:
       - Прием и доступ
       summary: Мои записи на прием
       operationId: list_my_appointments
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-House-Id
         in: header
@@ -4078,9 +4296,11 @@ paths:
           title: X-House-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4140,6 +4360,8 @@ paths:
       summary: Записаться на прием
       description: request_id - заявка жителя по этому дому, чтобы обсудить ее
       operationId: book_appointment
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-House-Id
         in: header
@@ -4151,9 +4373,11 @@ paths:
           title: X-House-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -4217,6 +4441,8 @@ paths:
       summary: Отменить запись на прием
       description: Отмена освобождает слот для следующего жителя
       operationId: cancel_appointment
+      security:
+      - ApiTestToken: []
       parameters:
       - name: appointment_id
         in: path
@@ -4226,9 +4452,11 @@ paths:
           title: Appointment Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4285,6 +4513,8 @@ paths:
       - Прием и доступ
       summary: Запросы доступа в мою квартиру
       operationId: list_my_access_requests
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-House-Id
         in: header
@@ -4296,9 +4526,11 @@ paths:
           title: X-House-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4359,6 +4591,8 @@ paths:
       summary: Выбрать слот доступа
       description: Выбор можно поменять, пока в окне есть места
       operationId: pick_access_slot
+      security:
+      - ApiTestToken: []
       parameters:
       - name: access_request_id
         in: path
@@ -4374,9 +4608,11 @@ paths:
           title: Slot Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4433,12 +4669,16 @@ paths:
       - Организации
       summary: Найти УК по ИНН или лицензии
       operationId: lookup_org
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -4501,12 +4741,16 @@ paths:
       - Организации
       summary: Зарегистрировать УК
       operationId: register_org
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -4569,6 +4813,8 @@ paths:
       - Организации
       summary: Активировать код сотрудника
       operationId: activate_org_invite
+      security:
+      - ApiTestToken: []
       parameters:
       - name: code
         in: path
@@ -4578,9 +4824,11 @@ paths:
           title: Code
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4637,13 +4885,25 @@ paths:
       - Демо
       summary: Выдать демо-доступ жителя и сотрудника
       operationId: activate_demo
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/DemoActivationRequest'
+              - type: 'null'
+              title: Body
       responses:
         '200':
           description: Successful Response
@@ -4699,6 +4959,8 @@ paths:
       - 'Админка: организация'
       summary: Карточка организации
       operationId: get_org
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -4710,9 +4972,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4769,6 +5033,8 @@ paths:
       - 'Админка: организация'
       summary: Настройки организации
       operationId: get_org_settings
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -4780,9 +5046,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4838,6 +5106,8 @@ paths:
       - 'Админка: организация'
       summary: Изменить настройки организации
       operationId: update_org_settings
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -4849,9 +5119,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -4914,6 +5186,8 @@ paths:
       - 'Админка: организация'
       summary: Сотрудники организации
       operationId: list_org_members
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -4925,9 +5199,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -4987,6 +5263,8 @@ paths:
       - 'Админка: организация'
       summary: Исключить сотрудника
       operationId: remove_org_member
+      security:
+      - ApiTestToken: []
       parameters:
       - name: user_id
         in: path
@@ -5004,9 +5282,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5063,6 +5343,8 @@ paths:
       - 'Админка: организация'
       summary: Приглашения сотрудников
       operationId: list_org_invites
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -5074,9 +5356,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5135,6 +5419,8 @@ paths:
       - 'Админка: организация'
       summary: Создать приглашение сотрудника
       operationId: create_org_invite
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -5146,9 +5432,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -5211,6 +5499,8 @@ paths:
       - 'Админка: организация'
       summary: Отозвать приглашение
       operationId: revoke_org_invite
+      security:
+      - ApiTestToken: []
       parameters:
       - name: code
         in: path
@@ -5228,9 +5518,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5287,6 +5579,8 @@ paths:
       - 'Админка: дома'
       summary: Дома организации
       operationId: list_org_houses
+      security:
+      - ApiTestToken: []
       parameters:
       - name: q
         in: query
@@ -5327,9 +5621,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5386,6 +5682,8 @@ paths:
       - 'Админка: дома'
       summary: Карточка дома в админке
       operationId: get_admin_house_card
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -5403,9 +5701,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5462,6 +5762,8 @@ paths:
       - 'Админка: дома'
       summary: Перевыпустить код привязки чата
       operationId: rotate_house_binding_code
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -5479,9 +5781,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5538,6 +5842,8 @@ paths:
       - 'Админка: дома'
       summary: Жители дома
       operationId: list_house_residents
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -5584,9 +5890,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5643,6 +5951,8 @@ paths:
       - 'Админка: дома'
       summary: Заблокировать жителя
       operationId: block_resident
+      security:
+      - ApiTestToken: []
       parameters:
       - name: resident_id
         in: path
@@ -5660,9 +5970,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -5725,6 +6037,8 @@ paths:
       - 'Админка: дома'
       summary: Разблокировать жителя
       operationId: unblock_resident
+      security:
+      - ApiTestToken: []
       parameters:
       - name: resident_id
         in: path
@@ -5742,9 +6056,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -5801,6 +6117,8 @@ paths:
       - 'Админка: дома'
       summary: Отозвать подтверждение квартиры
       operationId: revoke_flat_verification
+      security:
+      - ApiTestToken: []
       parameters:
       - name: resident_id
         in: path
@@ -5818,9 +6136,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -5883,6 +6203,8 @@ paths:
       - 'Админка: дома'
       summary: Назначить председателя
       operationId: set_chairman
+      security:
+      - ApiTestToken: []
       parameters:
       - name: resident_id
         in: path
@@ -5900,9 +6222,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -5965,6 +6289,8 @@ paths:
       - 'Админка: дома'
       summary: Запросы подтверждения квартир
       operationId: list_verification_requests
+      security:
+      - ApiTestToken: []
       parameters:
       - name: status
         in: query
@@ -6013,9 +6339,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -6072,6 +6400,8 @@ paths:
       - 'Админка: дома'
       summary: Подтвердить квартиру жителю
       operationId: approve_verification_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: verification_id
         in: path
@@ -6089,9 +6419,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -6148,6 +6480,8 @@ paths:
       - 'Админка: дома'
       summary: Отклонить запрос подтверждения
       operationId: reject_verification_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: verification_id
         in: path
@@ -6165,9 +6499,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -6230,6 +6566,8 @@ paths:
       - 'Админка: заявки'
       summary: Входящие заявки организации
       operationId: list_org_requests
+      security:
+      - ApiTestToken: []
       parameters:
       - name: status
         in: query
@@ -6316,9 +6654,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -6375,6 +6715,8 @@ paths:
       - 'Админка: заявки'
       summary: Карточка заявки в админке
       operationId: get_org_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -6392,9 +6734,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -6451,6 +6795,8 @@ paths:
       - 'Админка: заявки'
       summary: Сменить статус заявки
       operationId: change_request_status
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -6468,9 +6814,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -6533,6 +6881,8 @@ paths:
       - 'Админка: заявки'
       summary: Ответить жителю
       operationId: reply_to_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -6550,9 +6900,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -6615,6 +6967,8 @@ paths:
       - 'Админка: заявки'
       summary: Назначить исполнителя
       operationId: assign_request_executor
+      security:
+      - ApiTestToken: []
       parameters:
       - name: request_id
         in: path
@@ -6632,9 +6986,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -6697,6 +7053,8 @@ paths:
       - 'Админка: заявки'
       summary: Группа заявок
       operationId: get_request_group
+      security:
+      - ApiTestToken: []
       parameters:
       - name: group_id
         in: path
@@ -6714,9 +7072,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -6773,6 +7133,8 @@ paths:
       - 'Админка: заявки'
       summary: Сменить статус всей группе
       operationId: change_request_group_status
+      security:
+      - ApiTestToken: []
       parameters:
       - name: group_id
         in: path
@@ -6790,9 +7152,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -6855,6 +7219,8 @@ paths:
       - 'Админка: заявки'
       summary: Заявка по звонку
       operationId: create_phone_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -6866,9 +7232,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -6931,6 +7299,8 @@ paths:
       - 'Админка: заявки'
       summary: Исполнители организации
       operationId: list_org_executors
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -6942,9 +7312,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7004,6 +7376,8 @@ paths:
       - 'Админка: счетчики'
       summary: Показания по дому
       operationId: list_house_readings
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: path
@@ -7066,9 +7440,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7125,6 +7501,8 @@ paths:
       - 'Админка: объявления'
       summary: Объявления организации
       operationId: list_org_announcements
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: query
@@ -7165,9 +7543,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7223,6 +7603,8 @@ paths:
       - 'Админка: объявления'
       summary: Создать объявление
       operationId: create_announcement
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -7234,9 +7616,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -7299,6 +7683,8 @@ paths:
       - 'Админка: опросы'
       summary: Опросы организации
       operationId: list_org_polls
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: query
@@ -7347,9 +7733,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7405,6 +7793,8 @@ paths:
       - 'Админка: опросы'
       summary: Создать опрос от организации
       operationId: create_org_poll
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -7416,9 +7806,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -7481,6 +7873,8 @@ paths:
       - 'Админка: прием и доступ'
       summary: Часы приема организации
       operationId: list_reception_windows
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -7492,9 +7886,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7554,6 +7950,8 @@ paths:
       summary: Задать часы приема
       description: Заменяет всю сетку целиком. Несколько окон в один день - это обеденный перерыв, пустой список - прием не ведется. capacity - сколько жителей принимают в один слот
       operationId: set_reception_windows
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -7565,9 +7963,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -7634,6 +8034,8 @@ paths:
       summary: Записи на прием
       description: Без даты - на сегодня
       operationId: list_org_appointments
+      security:
+      - ApiTestToken: []
       parameters:
       - name: on_date
         in: query
@@ -7662,9 +8064,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7725,6 +8129,8 @@ paths:
       summary: Собрать доступ в квартиры
       description: Ячейку получают только квартиры с подтвержденным жителем, остальные возвращаются в flats_without_residents
       operationId: create_access_request
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -7736,9 +8142,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -7800,6 +8208,8 @@ paths:
       - 'Админка: прием и доступ'
       summary: Запросы доступа организации
       operationId: list_org_access_requests
+      security:
+      - ApiTestToken: []
       parameters:
       - name: house_id
         in: query
@@ -7819,9 +8229,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7881,6 +8293,8 @@ paths:
       - 'Админка: прием и доступ'
       summary: Сетка квартир по слотам доступа
       operationId: get_access_request_grid
+      security:
+      - ApiTestToken: []
       parameters:
       - name: access_request_id
         in: path
@@ -7898,9 +8312,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -7957,6 +8373,8 @@ paths:
       - 'Админка: аналитика'
       summary: Дашборд организации
       operationId: get_dashboard
+      security:
+      - ApiTestToken: []
       parameters:
       - name: date_from
         in: query
@@ -7994,9 +8412,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -8053,6 +8473,8 @@ paths:
       - 'Админка: аналитика'
       summary: Сезон подачи показаний
       operationId: get_meters_season
+      security:
+      - ApiTestToken: []
       parameters:
       - name: period
         in: query
@@ -8073,9 +8495,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -8132,6 +8556,8 @@ paths:
       - 'Админка: аналитика'
       summary: Напомнить не сдавшим показания
       operationId: remind_not_submitted
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -8143,9 +8569,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -8208,6 +8636,8 @@ paths:
       - 'Админка: аналитика'
       summary: Статистика по исполнителям
       operationId: get_executors_stats
+      security:
+      - ApiTestToken: []
       parameters:
       - name: date_from
         in: query
@@ -8237,9 +8667,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -8299,6 +8731,8 @@ paths:
       - 'Админка: аналитика'
       summary: Заявки по каналам
       operationId: get_channels_split
+      security:
+      - ApiTestToken: []
       parameters:
       - name: date_from
         in: query
@@ -8328,9 +8762,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -8387,6 +8823,8 @@ paths:
       - 'Админка: аналитика'
       summary: Обезличенный бенчмарк платформы
       operationId: get_benchmark
+      security:
+      - ApiTestToken: []
       parameters:
       - name: X-Org-Id
         in: header
@@ -8398,9 +8836,11 @@ paths:
           title: X-Org-Id
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       responses:
         '200':
@@ -8457,12 +8897,16 @@ paths:
       - Файлы
       summary: Загрузить фото
       operationId: upload_file
+      security:
+      - ApiTestToken: []
       parameters:
       - name: WebAppData
         in: header
-        required: true
+        required: false
         schema:
-          type: string
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Webappdata
       requestBody:
         required: true
@@ -10246,6 +10690,22 @@ components:
       - house_id
       - total
       title: DemandSignalResponse
+    DemoActivationRequest:
+      properties:
+        number:
+          type: integer
+          maximum: 5.0
+          minimum: 1.0
+          title: Number
+          description: Номер демо-УК, как N в ссылке demo_..._N
+          default: 1
+        admin:
+          type: boolean
+          title: Admin
+          description: Выдать роль администратора, а не сотрудника
+          default: false
+      type: object
+      title: DemoActivationRequest
     DemoActivationResponse:
       properties:
         org:
@@ -12929,6 +13389,11 @@ components:
       required:
       - option_ids
       title: VoteRequest
+  securitySchemes:
+    ApiTestToken:
+      type: http
+      description: 'Тестовый токен из API_TEST_TOKEN для автоматической проверки API: запросы идут от одного синтетического пользователя. Мини-приложение передает заголовок WebAppData'
+      scheme: bearer
 tags:
 - name: Healthcheck
   description: Проверка связи с базой, без авторизации

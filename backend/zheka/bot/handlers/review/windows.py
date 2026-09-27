@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import TextInput
@@ -15,9 +17,14 @@ from zheka.bot.handlers.review.handlers import (
     on_rejection,
 )
 from zheka.bot.states import Review
+from zheka.core.services.requests import AUTO_CLOSE_AFTER
 
 CARD_TEXT = "📋 Заявка №{request_id}: {status_label}\n\n{description}"
-ASK_TEXT = "🔍 Исполнитель закончил работу. Проверьте и примите ее"
+ASK_TEXT = (
+    "🔍 Исполнитель закончил работу. Проверьте и примите ее\n"
+    "⏳ Без ответа заявка закроется сама через "
+    f"{AUTO_CLOSE_AFTER // timedelta(hours=1)} ч"
+)
 REJECTED_TEXT = "↩️ Повторная заявка ушла в УК"
 RATED_TEXT = "⭐ Ваша оценка: {rating}"
 RATING_TEXT = "⭐ Оцените работу"

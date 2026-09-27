@@ -1,15 +1,23 @@
 import asyncio
 import contextlib
+import logging
+from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import aiohttp
 import pytest
 from dishka import AsyncContainer, Provider
+from maxo import Bot
+from maxo.bot.api_client import MaxApiClient
+from maxo.errors import MaxBotUnauthorizedError
 from taskiq import InMemoryBroker
 
 from tests.conftest import empty_bot_setup, make_config
 
+from zheka.api import app as app_module
 from zheka.broker import __main__ as worker
+from zheka.config import BotMode, load_config
 from zheka.di import make_container
 
 
@@ -49,3 +57,79 @@ async def test_the_worker_closes_the_http_session_on_shutdown(
     with pytest.raises(asyncio.CancelledError):
         await main
     assert http.closed
+
+
+async def _rejected(_: Bot) -> None:
+    raise MaxBotUnauthorizedError(
+        code="verify.token",
+        error="",
+        message="Invalid access_token",
+    )
+
+
+@pytest.fixture
+def rejected_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Bot, "start", _rejected)
+    monkeypatch.setattr(app_module, "setup_logger", lambda _: None)
+
+
+@pytest.mark.usefixtures("rejected_token")
+async def test_a_rejected_token_leaves_the_api_up_without_the_bot_in_polling(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = app_module.app_factory(make_config(), empty_bot_setup())
+
+    async with app.router.lifespan_context(app):
+        pass
+
+    assert [
+        record.levelno for record in caplog.records if "MAX_TOKEN" in record.message
+    ] == [logging.ERROR]
+
+
+@pytest.mark.usefixtures("rejected_token")
+async def test_a_rejected_token_fails_the_webhook_startup() -> None:
+    config = make_config()
+    config = replace(
+        config,
+        max=replace(
+            config.max,
+            mode=BotMode.WEBHOOK,
+            webhook_url="https://example.ru/webhook",
+        ),
+    )
+    app = app_module.app_factory(config, empty_bot_setup())
+
+    with pytest.raises(MaxBotUnauthorizedError):
+        async with app.router.lifespan_context(app):
+            pass
+
+
+async def test_a_rejected_token_closes_the_bot_http_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clients: list[MaxApiClient] = []
+
+    async def rejected(bot: Bot) -> None:
+        clients.append(bot.state.api_client)
+        await _rejected(bot)
+
+    monkeypatch.setattr(Bot, "get_my_info", rejected)
+    monkeypatch.setattr(app_module, "setup_logger", lambda _: None)
+    app = app_module.app_factory(make_config(), empty_bot_setup())
+
+    async with app.router.lifespan_context(app):
+        pass
+
+    [client] = clients
+    assert client._session.closed  # noqa: SLF001
+
+
+def test_a_register_code_outside_the_start_param_alphabet_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("DEEPLINK_ORG_REGISTER", "reg.code")
+
+    with pytest.raises(ValueError, match="DEEPLINK_ORG_REGISTER"):
+        load_config(str(tmp_path / ".env"))

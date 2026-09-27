@@ -21,5 +21,5 @@ class MaxBotProvider(Provider):
     async def bot(self, config: MaxConfig) -> AsyncIterable[Bot]:
         defaults = BotDefaults(text_format=TextFormat.HTML, disable_link_preview=True)
         bot = Bot(token=config.token, defaults=defaults)
-        async with bot:
+        async with bot.context():
             yield bot

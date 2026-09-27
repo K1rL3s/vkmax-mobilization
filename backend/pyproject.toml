@@ -20,21 +20,18 @@ dependencies = [
     "adaptix==3.0.0b12",
     "environs==15.2.0",
     "dishka==1.10.1",
-    #
     "fastapi==0.141.1",
     "pydantic==2.13.5",
     "gunicorn==26.2.0",
-    #
     "sqlalchemy[asyncio]==2.0.53",
     "psycopg[binary]==3.3.5",
     "greenlet==3.5.6",
     "alembic==1.20.0",
     "alembic-postgresql-enum==1.10.0",
-    #
     "taskiq==0.12.6",
     "taskiq-redis==1.2.3",
     "redis==8.1.0",
-    "python-multipart==0.0.20",
+    "python-multipart==0.0.31",
     "aiohttp==3.14.3",
 ]
 
@@ -107,50 +104,50 @@ line-ending = "auto"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    "ANN401", # https://docs.astral.sh/ruff/rules/any-type/
-    "FBT", # https://docs.astral.sh/ruff/rules/#flake8-boolean-trap-fbt
-    "A001", # https://docs.astral.sh/ruff/rules/builtin-variable-shadowing/
-    "A002", # https://docs.astral.sh/ruff/rules/builtin-argument-shadowing/
-    "A003", # https://docs.astral.sh/ruff/rules/builtin-attribute-shadowing/
-    "A006", # https://docs.astral.sh/ruff/rules/builtin-lambda-argument-shadowing/
-    "CPY001", # https://docs.astral.sh/ruff/rules/missing-copyright-notice/
-    "EM", # https://docs.astral.sh/ruff/rules/#flake8-errmsg-em
-    "FIX", # https://docs.astral.sh/ruff/rules/#flake8-fixme-fix
-    "FA", # https://docs.astral.sh/ruff/rules/#flake8-future-annotations-fa
-    "ICN", # https://docs.astral.sh/ruff/rules/#flake8-import-conventions-icn
-    "LOG014", # https://docs.astral.sh/ruff/rules/exc-info-outside-except-handler/
-    "TD001", # https://docs.astral.sh/ruff/rules/invalid-todo-tag/
-    "TD002", # https://docs.astral.sh/ruff/rules/missing-todo-author/
-    "TD003", # https://docs.astral.sh/ruff/rules/missing-todo-link/
-    "TC001", # https://docs.astral.sh/ruff/rules/typing-only-first-party-import/
-    "TC002", # https://docs.astral.sh/ruff/rules/typing-only-third-party-import/
-    "TC003", # https://docs.astral.sh/ruff/rules/typing-only-standard-library-import/
-    "TC006", # https://docs.astral.sh/ruff/rules/runtime-cast-value/
-    "TC007", # https://docs.astral.sh/ruff/rules/unquoted-type-alias/
-    "C901", # https://docs.astral.sh/ruff/rules/complex-structure/
-    "PERF203", # https://docs.astral.sh/ruff/rules/try-except-in-loop/
-    "DOC", # https://docs.astral.sh/ruff/rules/#pydoclint-doc
-    "D", # https://docs.astral.sh/ruff/rules/#pydocstyle-d
-    "PLR0904", # https://docs.astral.sh/ruff/rules/too-many-public-methods/
-    "PLR0911", # https://docs.astral.sh/ruff/rules/too-many-return-statements/
-    "PLR0912", # https://docs.astral.sh/ruff/rules/too-many-branches/
-    "PLR0913", # https://docs.astral.sh/ruff/rules/too-many-arguments/
-    "PLR0914", # https://docs.astral.sh/ruff/rules/too-many-locals/
-    "PLR0915", # https://docs.astral.sh/ruff/rules/too-many-statements/
-    "PLR0916", # https://docs.astral.sh/ruff/rules/too-many-boolean-expressions/
-    "PLR0917", # https://docs.astral.sh/ruff/rules/too-many-positional-arguments/
-    "PLR1702", # https://docs.astral.sh/ruff/rules/too-many-nested-blocks/
-    "PLR6301", # https://docs.astral.sh/ruff/rules/no-self-use/
-    "RUF001", # https://docs.astral.sh/ruff/rules/ambiguous-unicode-character-string/
-    "RUF002", # https://docs.astral.sh/ruff/rules/ambiguous-unicode-character-docstring/
-    "RUF003", # https://docs.astral.sh/ruff/rules/ambiguous-unicode-character-comment/
-    "TRY003", # https://docs.astral.sh/ruff/rules/raise-vanilla-args/
-    "TRY300", # https://docs.astral.sh/ruff/rules/try-consider-else/
-    "N818", # https://docs.astral.sh/ruff/rules/error-suffix-on-exception-name/
-    "S311", # https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage/
-    "UP046", # https://docs.astral.sh/ruff/rules/non-pep695-generic-class/
-    "DTZ007", # https://docs.astral.sh/ruff/rules/call-datetime-strptime-without-zone/
-    "FAST003", # https://docs.astral.sh/ruff/rules/fast-api-unused-path-parameter/
+    "ANN401",
+    "FBT",
+    "A001",
+    "A002",
+    "A003",
+    "A006",
+    "CPY001",
+    "EM",
+    "FIX",
+    "FA",
+    "ICN",
+    "LOG014",
+    "TD001",
+    "TD002",
+    "TD003",
+    "TC001",
+    "TC002",
+    "TC003",
+    "TC006",
+    "TC007",
+    "C901",
+    "PERF203",
+    "DOC",
+    "D",
+    "PLR0904",
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0914",
+    "PLR0915",
+    "PLR0916",
+    "PLR0917",
+    "PLR1702",
+    "PLR6301",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "TRY003",
+    "TRY300",
+    "N818",
+    "S311",
+    "UP046",
+    "DTZ007",
+    "FAST003",
 ]
 
 [tool.ruff.lint.isort]
@@ -162,7 +159,6 @@ split-on-trailing-comma = true
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "PLR2004", "D", "A005"]
 "migrations/**/*.py" = ["ARG001", "E501", "INP001", "N999"]
-# разовый скрипт выгрузки данных сида, не пакет
 "scripts/*.py" = ["INP001"]
 "zheka/bot/middlewares/*.py" = ["ARG002"]
 "zheka/broker/middlewares.py" = ["ARG002"]
@@ -173,7 +169,6 @@ target-version = ["py312"]
 include = 'zheka/.*\.py$|migrations/.*\.py$|tests/.*\.py$'
 
 [tool.codespell]
-# asend - это метод асинхронного генератора, им финализирует провайдеры dishka
 ignore-words-list = "dependant,selectin,ba,asend"
 
 [tool.bandit]

@@ -138,7 +138,9 @@ def is_spike(current: int, history: Sequence[int]) -> bool:
 
 
 def _kopecks(consumption_map: Mapping[TariffZone, int], tariff_value: int) -> int:
-    return to_kopecks(sum(consumption_map.values()) * tariff_value)
+    return to_kopecks(
+        sum(max(volume, 0) for volume in consumption_map.values()) * tariff_value,
+    )
 
 
 class ReadingsService:

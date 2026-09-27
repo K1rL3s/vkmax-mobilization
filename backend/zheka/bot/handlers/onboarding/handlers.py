@@ -26,11 +26,7 @@ def _house_items(found: Sequence[HouseFound], *, by_geo: bool) -> list[HouseItem
     return [
         HouseItem(
             id=int(item.house.id),
-            title=(
-                f"{item.house.street}, {item.house.building}"
-                if by_geo
-                else item.house.building
-            ),
+            title=item.house.street_address if by_geo else item.house.building,
         )
         for item in found
     ]

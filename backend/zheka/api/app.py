@@ -8,7 +8,8 @@ from dishka import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from maxo import Bot
+from maxo import Bot, Dispatcher
+from maxo.errors import MaxBotUnauthorizedError
 from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
 from maxo.routing.utils import collect_used_updates
 
@@ -91,27 +92,24 @@ def app_factory(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        bot = await container.get(Bot)
-
-        if config.max.mode is BotMode.WEBHOOK:
-            engine = make_engine(dp, bot, config.max)
-            engine.register(app)
-            await engine.on_startup(app)
-            await engine.set_webhook(update_types=list(collect_used_updates(dp)))
-            logger.info("Вебхук зарегистрирован на %s", config.max.webhook_url)
-            yield
-            await engine.on_shutdown(app)
-        else:
-            polling = asyncio.create_task(
-                dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True),
-            )
-            logger.info("Бот работает лонг-поллингом")
-            yield
-            polling.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await polling
-
-        await container.close()
+        try:
+            if config.max.mode is BotMode.WEBHOOK:
+                engine = make_engine(dp, await container.get(Bot), config.max)
+                engine.register(app)
+                await engine.on_startup(app)
+                await engine.set_webhook(update_types=list(collect_used_updates(dp)))
+                logger.info("Вебхук зарегистрирован на %s", config.max.webhook_url)
+                yield
+                await engine.on_shutdown(app)
+            else:
+                polling = await start_polling(container, dp)
+                yield
+                if polling is not None:
+                    polling.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await polling
+        finally:
+            await container.close()
 
     app = FastAPI(
         title="Жэка Коммуналкин",
@@ -180,3 +178,22 @@ def setup_middlewares(
 
     setup_dishka(container, app)
     app.add_middleware(RequestStateMiddleware)
+
+
+async def start_polling(
+    container: AsyncContainer,
+    dp: Dispatcher,
+) -> asyncio.Task[None] | None:
+    try:
+        bot = await container.get(Bot)
+    except MaxBotUnauthorizedError:
+        logger.error(  # noqa: TRY400
+            "Бот не запущен: MAX отверг токен из MAX_TOKEN. "
+            "API и мини-приложение работают без бота",
+        )
+        return None
+    polling = asyncio.create_task(
+        dp.start_polling(bot, auto_close_bot=False, drop_pending_updates=True),
+    )
+    logger.info("Бот работает лонг-поллингом")
+    return polling

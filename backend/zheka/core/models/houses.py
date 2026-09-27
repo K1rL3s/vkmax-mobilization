@@ -29,7 +29,11 @@ class House(ZhekaMutableType, Zoned):
 
     @property
     def address(self) -> str:
-        return f"{self.city}, {self.street}, {self.building}"
+        return f"{self.city}, {self.street_address}"
+
+    @property
+    def street_address(self) -> str:
+        return f"{self.street}, {self.building}"
 
 
 class Flat(ZhekaMutableType):

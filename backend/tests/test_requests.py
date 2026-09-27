@@ -839,3 +839,44 @@ async def test_create_refuses_a_house_whose_org_is_not_connected(
 
     _, total = await service.list_mine(own.user_id, own.house_id, None, 20, 0)
     assert total == 0
+
+
+async def test_a_new_and_a_repeat_request_notify_the_staff_but_not_executors(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    roles = (OrgRole.ADMIN, OrgRole.EMPLOYEE, OrgRole.EXECUTOR)
+    staff = {role: await add_user(session) for role in roles}
+    session.add_all(
+        OrgMember(org_id=own.org_id, user_id=user_id, role=role)
+        for role, user_id in staff.items()
+    )
+    session.add(OrgMember(org_id=own.org_id, user_id=own.user_id, role=OrgRole.ADMIN))
+    await session.flush()
+    service = requests_service(session, publisher)
+
+    created = await service.create(own.user_id, own.house_id, _draft())
+    await _mark_done(session, created.request.id)
+    repeated = await service.repeat(own.user_id, created.request.id, None, [])
+
+    await publisher.flush()
+    house = await HousesRepo(session).get(own.house_id)
+    assert house is not None
+    queued = broker.enqueued(TaskName.BROADCAST_TO_USERS)
+    assert [message["app_path"] for message in queued] == [
+        f"/admin/requests/{created.request.id}",
+        f"/admin/requests/{repeated.request.id}",
+    ]
+    first = queued[0]
+    assert sorted(first["user_ids"]) == sorted(
+        [staff[OrgRole.ADMIN], staff[OrgRole.EMPLOYEE]],
+    )
+    assert first["mandatory"] is False
+    assert first["category"] == "requests"
+    deadline = house.local(created.request.deadline_at)
+    assert first["text"] == (
+        f"🆕 Заявка №{created.request.id} «💧 Протечка»\n🏢 {house.address}\n"
+        f"⏱ Срок: до {deadline:%H:%M %d.%m}"
+    )

@@ -95,6 +95,8 @@ async def test_the_task_seeds_today_and_tells_the_caller(
         "text": reply,
         "category": NotificationCategory.ANNOUNCEMENTS.value,
         "mandatory": True,
+        "app_button": None,
+        "app_path": None,
     }
 
 

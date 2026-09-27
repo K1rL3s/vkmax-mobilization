@@ -151,7 +151,7 @@ onboarding_dialog = Dialog(
         Format(FLAT_NUMBER_TEXT, when=~F["flats"]),
         ScrollingGroup(
             Select(
-                Format("🚪 {item.number}"),
+                Format("{item.number}"),
                 id="flat",
                 item_id_getter=lambda flat: flat.id,
                 type_factory=int,

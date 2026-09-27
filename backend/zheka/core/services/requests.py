@@ -3,8 +3,10 @@ from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
+from zheka.core.deeplinks import admin_request_app_path
 from zheka.core.enums import (
     EventType,
+    NotificationCategory,
     RequestActorRole,
     RequestCategory,
     RequestChannel,
@@ -199,6 +201,7 @@ class RequestsService:
                 house_id=house_id,
                 category=draft.category.value,
             )
+        await self._notify_staff(request, house)
         return await self._built_card(request, house)
 
     async def repeat(
@@ -256,6 +259,7 @@ class RequestsService:
             is_repeat=True,
             parent_request_id=parent.id,
         )
+        await self._notify_staff(request, house)
         return await self._built_card(request, house)
 
     async def rate(
@@ -532,6 +536,28 @@ class RequestsService:
                 category=category.value,
             )
         return category
+
+    async def _notify_staff(self, request: Request, house: House) -> None:
+        if house.org_id is None:
+            return
+        members = await self._orgs.list_members(house.org_id)
+        self._notifications.notify_users(
+            [
+                member.user_id
+                for member in members
+                if member.role.is_staff and member.user_id != request.author_user_id
+            ],
+            texts.request_created(
+                request.id,
+                request.category,
+                house.address,
+                house.local(request.deadline_at),
+            ),
+            category=NotificationCategory.REQUESTS,
+            mandatory=False,
+            app_button=texts.OPEN_REQUEST,
+            app_path=admin_request_app_path(request.id),
+        )
 
 
 async def build_rows(

@@ -3,11 +3,12 @@ from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import MessageInput, TextInput
 from maxo.dialogs.widgets.kbd import (
     Button,
+    Column,
     Row,
-    ScrollingGroup,
     Select,
     Start,
     SwitchTo,
+    WebApp,
 )
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
@@ -20,31 +21,36 @@ from zheka.bot.handlers.requests.handlers import (
     get_sent,
     on_category,
     on_description,
+    on_description_photo,
     on_photo,
     on_send,
 )
 from zheka.bot.states import NewRequest, Onboarding
-
-PAGE = 6
+from zheka.core.texts import OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
 CATEGORY_TEXT = "🏢 {address}\n\n🛠 Что случилось?"
 NOT_CONNECTED_TEXT = (
     "🏢 {address}\n\n😔 Управляющая компания этого дома еще не подключена к "
-    "Жэке, заявку передать некому. Нажмите «Мне нужен» в карточке дома в "
+    "Жэке, заявку передать некому. Нажмите «Мне нужен» на главной в "
     "приложении - так УК узнает, что сервис здесь ждут"
 )
 DESCRIPTION_TEXT = "✍️ Опишите проблему одним сообщением"
+DESCRIPTION_PHOTOS_TEXT = "📷 Фото приложено: {photos}"
 PHOTO_TEXT = "📷 Пришлите фото, если есть. Приложено: {photos}"
 CONFIRM_TEXT = "📋 Проверьте заявку\n\n{category}\n\n{description}\n\nФото: {photos}"
-CREATED_TEXT = "✅ Заявка №{request_id} принята"
+CREATED_TEXT = (
+    "✅ Заявка №{request_id} отправлена в УК\n"
+    "⏱ Срок: до {deadline}\n"
+    "Сообщу, когда ее примут в работу"
+)
 
 request_dialog = Dialog(
     Window(
         Const(NO_HOUSE_TEXT, when=~F["address"]),
         Format(NOT_CONNECTED_TEXT, when=F["address"] & ~F["connected"]),
         Format(CATEGORY_TEXT, when=F["connected"]),
-        ScrollingGroup(
+        Column(
             Select(
                 Format("{item[label]}"),
                 id="category",
@@ -52,9 +58,6 @@ request_dialog = Dialog(
                 items="categories",
                 on_click=on_category,
             ),
-            id="categories_scroll",
-            width=1,
-            height=PAGE,
         ),
         Start(
             Const("🔎 Найти дом"),
@@ -67,10 +70,16 @@ request_dialog = Dialog(
         getter=get_category,
     ),
     Window(
-        Const(DESCRIPTION_TEXT),
+        Multi(
+            Const(DESCRIPTION_TEXT),
+            Format(DESCRIPTION_PHOTOS_TEXT, when=F["photos"]),
+            sep="\n\n",
+        ),
+        MessageInput(on_description_photo, content_types=[AttachmentType.IMAGE]),
         TextInput(id="description", on_success=on_description),
         Row(SwitchTo(BACK, id="to_category", state=NewRequest.category), TO_MENU),
         state=NewRequest.description,
+        getter=get_draft,
     ),
     Window(
         Format(PHOTO_TEXT),
@@ -89,8 +98,15 @@ request_dialog = Dialog(
     ),
     Window(
         Multi(
-            Const(SENT_TEXT, when=~F["request_id"]),
+            Const(SENT_TEXT, when=~F["request_id"] & ~F["error"]),
             Format(CREATED_TEXT, when=F["request_id"]),
+            Format("{error}", when=F["error"]),
+        ),
+        WebApp(
+            Const(OPEN_REQUEST),
+            Format("{bot_username}"),
+            payload=Format("{request_payload}"),
+            when=F["request_payload"] & F["bot_username"],
         ),
         TO_MENU,
         state=NewRequest.sent,

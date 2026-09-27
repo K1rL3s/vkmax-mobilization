@@ -1,3 +1,4 @@
+import hmac
 import urllib.parse
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -5,13 +6,36 @@ from typing import Annotated
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import Depends, Header
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from maxo.errors import InvalidWebAppInitDataError
-from maxo.utils.webapp import WebAppInitData, safe_parse_webapp_init_data
+from maxo.utils.webapp import (
+    WebAppChat,
+    WebAppInitData,
+    WebAppUser,
+    safe_parse_webapp_init_data,
+)
 
-from zheka.config import MaxConfig
+from zheka.config import Config
 from zheka.core.errors import Unauthorized
+from zheka.core.ids import MaxUserId
 
 INIT_DATA_TTL = timedelta(days=1)
+API_CHECKER_MAX_USER_ID = MaxUserId(-(10**18))
+API_CHECKER = WebAppInitData(
+    chat=WebAppChat(id=API_CHECKER_MAX_USER_ID, type="DIALOG"),
+    user=WebAppUser(id=API_CHECKER_MAX_USER_ID, first_name="Проверяющий API"),
+    hash="",
+)
+
+test_token_scheme = HTTPBearer(
+    auto_error=False,
+    scheme_name="ApiTestToken",
+    description=(
+        "Тестовый токен из API_TEST_TOKEN для автоматической проверки API: "
+        "запросы идут от одного синтетического пользователя. Мини-приложение "
+        "передает заголовок WebAppData"
+    ),
+)
 
 
 def parse_init_data(token: str, raw: str) -> WebAppInitData:
@@ -28,11 +52,24 @@ def parse_init_data(token: str, raw: str) -> WebAppInitData:
 @inject
 async def get_current_user(
     *,
-    config: FromDishka[MaxConfig],
-    raw_init_data: str = Header(alias="WebAppData"),
+    config: FromDishka[Config],
+    raw_init_data: Annotated[str | None, Header(alias="WebAppData")] = None,
+    bearer: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(test_token_scheme),
+    ] = None,
 ) -> WebAppInitData:
+    test_token = config.api.test_token
+    if (
+        bearer is not None
+        and test_token
+        and hmac.compare_digest(bearer.credentials.encode(), test_token.encode())
+    ):
+        return API_CHECKER
+    if raw_init_data is None:
+        raise Unauthorized("Нужна initData в заголовке WebAppData или тестовый токен")
     try:
-        return parse_init_data(config.token, raw_init_data)
+        return parse_init_data(config.max.token, raw_init_data)
     except (InvalidWebAppInitDataError, ValueError) as error:
         raise Unauthorized("Невалидная или устаревшая initData") from error
 

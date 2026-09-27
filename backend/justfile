@@ -1,10 +1,6 @@
-# Cross-platform shell configuration
-# Use PowerShell on Windows (higher precedence than shell setting)
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
-# Use sh on Unix-like systems
 set shell := ["sh", "-c"]
 
-# .env лежит в корне репозитория, рядом с docker-compose.yml
 set dotenv-load := true
 set dotenv-filename := "../.env"
 
@@ -26,10 +22,6 @@ lock:
 upgrade:
     uv lock --upgrade
 
-# COM812 ставит запятую в перенесенную конструкцию,
-# и форматтер раскладывает ее по элементу на строку.
-# Вложенная раскладывается только на втором проходе.
-# -q глушит предупреждение форматтера о конфликте с COM812
 format:
     uv run ruff format -q .
     uv run ruff check --select COM812 --fix -q .

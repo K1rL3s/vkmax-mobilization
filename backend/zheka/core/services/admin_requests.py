@@ -182,7 +182,7 @@ class AdminRequestsService:
         )
         self._notifications.notify_author(
             request,
-            texts.request_reply(request.id, reply),
+            texts.request_reply(request.id, request.category, reply),
         )
         return await self._card(request)
 
@@ -332,6 +332,8 @@ class AdminRequestsService:
         notify_author: bool = True,
     ) -> None:
         current = request.status
+        if target is current:
+            return
         check_transition(
             current,
             target,
@@ -362,10 +364,17 @@ class AdminRequestsService:
             return
         if target is RequestStatus.ON_REVIEW and request.author_user_id is not None:
             self._notifications.open_review_card(request.id)
-        else:
+        elif request.author_user_id is not None:
+            house = await self._house(request.house_id)
             self._notifications.notify_author(
                 request,
-                texts.request_status_changed(request.id, target, note),
+                texts.request_status_changed(
+                    request.id,
+                    request.category,
+                    target,
+                    house.local(request.deadline_at),
+                    note,
+                ),
             )
 
     async def _card(self, request: Request) -> AdminRequestCardData:

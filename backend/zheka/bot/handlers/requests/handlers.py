@@ -2,22 +2,28 @@ from html import escape
 from typing import Any
 
 from dishka import FromDishka
+from maxo import Bot
 from maxo.dialogs import DialogManager
 from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import ManagedTextInput, MessageInput
 from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import MessageCallback, MessageCreated, PhotoAttachment
 
+from zheka.bot.cards import app_payload, web_app_name
 from zheka.bot.dialog_data import NewRequestData
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import NewRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
+from zheka.core.deeplinks import request_app_path
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestChannel
+from zheka.core.ids import RequestId
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.requests import MAX_PHOTOS
 
 SENT_TEXT = "⏳ Принял, оформляю"
+NOT_CREATED = "😔 Заявку не удалось оформить: {reason}"
+NOT_CREATED_UNEXPECTED = "😔 Заявку не удалось оформить, попробуйте еще раз"
 
 
 @inject
@@ -27,10 +33,10 @@ async def get_category(
     **_: Any,
 ) -> dict[str, Any]:
     me = await profile_service.me(dialog_user_id(dialog_manager))
-    if not me.residencies:
+    residency = me.latest_residency
+    if residency is None:
         return {"address": None, "connected": False, "categories": []}
 
-    residency = max(me.residencies, key=lambda item: item.resident.created_at)
     address = escape(residency.house.address)
     if not residency.is_connected:
         return {"address": address, "connected": False, "categories": []}
@@ -58,8 +64,23 @@ async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
     }
 
 
-async def get_sent(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    return {"request_id": NewRequestData.load_start(dialog_manager).request_id}
+async def get_sent(
+    bot: Bot,
+    dialog_manager: DialogManager,
+    **_: Any,
+) -> dict[str, Any]:
+    data = NewRequestData.load_start(dialog_manager)
+    return {
+        "request_id": data.request_id,
+        "deadline": data.deadline,
+        "error": data.error,
+        "bot_username": web_app_name(bot),
+        "request_payload": (
+            None
+            if data.request_id is None
+            else app_payload(request_app_path(RequestId(data.request_id)))
+        ),
+    }
 
 
 async def on_category(
@@ -115,3 +136,17 @@ async def on_send(
         stack_id=dialog_manager.current_stack().id,
     )
     await dialog_manager.switch_to(NewRequest.sent)
+
+
+async def on_description_photo(
+    update: MessageCreated,
+    widget: MessageInput,
+    dialog_manager: DialogManager,
+) -> None:
+    await on_photo(update, widget, dialog_manager)
+    caption = (update.message.body.text or "").strip()
+    if not caption:
+        return
+    with NewRequestData.proxy(dialog_manager) as data:
+        data.description = caption
+    await dialog_manager.switch_to(NewRequest.photo)

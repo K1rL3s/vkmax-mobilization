@@ -19,7 +19,13 @@ from zheka.core.charges import parse_lines
 from zheka.core.enums import OrgRole, RequestStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import FlatId, MaxUserId, OrgId, UserId
-from zheka.core.services.demo import DEMO_INN, DemoService, demo_flat_number
+from zheka.core.services.demo import (
+    DEMO_INN,
+    DEMO_INNS,
+    DemoService,
+    demo_account_no,
+    demo_flat_number,
+)
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess
@@ -300,7 +306,7 @@ async def test_a_reviewer_account_never_equals_a_seeded_one(db: AsyncSession) ->
 
     assert all(number.isdigit() for number, _account in seeded)
     assert flat.account_no is not None
-    assert not flat.account_no.rsplit("-", 1)[1].isdigit()
+    assert not flat.account_no.isdigit()
     assert flat.account_no not in {account for _number, account in seeded}
 
 
@@ -353,3 +359,26 @@ async def test_the_mini_app_activation_keeps_a_demo_admin(db: AsyncSession) -> N
     access = await _demo(db).activate(user_id)
 
     assert access.membership.member.role is OrgRole.ADMIN
+
+
+async def test_a_seeded_account_is_the_flat_number_padded_with_zeros(
+    db: AsyncSession,
+) -> None:
+    stmt = select(flats_table.c.number, flats_table.c.account_no).where(
+        flats_table.c.number == "12",
+    )
+    accounts = {account for _number, account in (await db.execute(stmt)).all()}
+
+    assert accounts == {demo_account_no("12")} == {"0000000012"}
+
+
+async def test_the_mini_app_activation_follows_the_link_number_and_role(
+    db: AsyncSession,
+) -> None:
+    user_id = await _positive_user(db)
+
+    access = await _demo(db).activate(user_id, 3, OrgRole.ADMIN)
+
+    assert access.membership.org.inn == DEMO_INNS[2]
+    assert access.membership.member.role is OrgRole.ADMIN
+    assert access.residency.house.org_id == access.membership.org.id

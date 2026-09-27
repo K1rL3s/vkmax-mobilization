@@ -40,7 +40,9 @@ async def get_houses(
     houses = await chats_service.bindable_houses(dialog_user_id(dialog_manager))
     return {
         **await get_binding(dialog_manager, **kwargs),
-        "houses": [HouseItem(id=house.id, title=house.address) for house in houses],
+        "houses": [
+            HouseItem(id=house.id, title=house.street_address) for house in houses
+        ],
     }
 
 

@@ -68,8 +68,11 @@ class MaxSender:
         recipient = chat_id if chat_id is not None else user_id
         if recipient is None:
             raise ValueError("Нужен либо chat_id, либо user_id")
+        if chat_id is None and recipient < 0:
+            logger.debug("У пользователя %s нет аккаунта MAX, пропускаю", user_id)
+            return None
 
-        attachments = None if keyboard is None else _keyboard(keyboard)
+        attachments = None if keyboard is None else keyboard_attachments(keyboard)
         link = (
             None
             if reply_to is None
@@ -143,7 +146,7 @@ class MaxSender:
                 await self._bot.edit_message(
                     message_id=mid,
                     text=text,
-                    attachments=_keyboard(keyboard),
+                    attachments=keyboard_attachments(keyboard),
                     notify=False,
                 )
                 done = True
@@ -188,7 +191,7 @@ async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:
     return member.is_admin
 
 
-def _keyboard(
+def keyboard_attachments(
     keyboard: Sequence[Sequence[InlineButtons]],
 ) -> list[AttachmentsRequests | Attachments]:
     return [InlineKeyboardAttachmentRequest.factory([list(row) for row in keyboard])]

@@ -1,3 +1,4 @@
+import re
 from enum import StrEnum
 
 from environs import Env
@@ -6,6 +7,7 @@ from sqlalchemy import URL
 from zheka.base import ZhekaType
 
 YANDEX_DEFAULT_MODEL = "yandexgpt-5-lite"
+REGISTER_CODE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 class BotMode(StrEnum):
@@ -25,6 +27,7 @@ class LogConfig(ZhekaType):
 
 class ApiConfig(ZhekaType):
     cors: tuple[str, ...]
+    test_token: str | None = None
 
 
 class DbConfig(ZhekaType):
@@ -96,15 +99,20 @@ def load_config(env_path: str | None = None) -> Config:
     env.read_env(env_path, recurse=True)
 
     org_register = env.str("DEEPLINK_ORG_REGISTER")
-    if not org_register.isascii():
-        raise ValueError("DEEPLINK_ORG_REGISTER должен состоять только из ASCII")
+    if not REGISTER_CODE.fullmatch(org_register):
+        raise ValueError(
+            "DEEPLINK_ORG_REGISTER: от 1 до 64 символов из латиницы, цифр, _ и -",
+        )
 
     config = Config(
         log=LogConfig(
             level=env.str("LOG_LEVEL", "INFO").upper(),
             format=LogFormat(env.str("LOG_FORMAT", LogFormat.JSON).upper()),
         ),
-        api=ApiConfig(cors=tuple(env.list("API_CORS", []))),
+        api=ApiConfig(
+            cors=tuple(env.list("API_CORS", [])),
+            test_token=env.str("API_TEST_TOKEN", "") or None,
+        ),
         db=DbConfig(
             host=env.str("POSTGRES_HOST"),
             port=env.int("POSTGRES_PORT", 5432),

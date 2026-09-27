@@ -2,10 +2,12 @@ from collections.abc import Mapping
 from datetime import date, datetime
 from html import escape
 
-from zheka.core.enums import RequestStatus
+from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
 
 BLOCKED = "УК закрыла вам доступ к этому дому"
+OPEN_REQUEST = "📱 Открыть заявку"
+MOMENT = "%H:%M %d.%m"
 
 REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
     RequestStatus.NEW: "Новая",
@@ -16,19 +18,35 @@ REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
 }
 
 
+REQUEST_STATUS_NEWS: Mapping[RequestStatus, str] = {
+    RequestStatus.NEW: "новая",
+    RequestStatus.ACCEPTED: "принята в работу",
+    RequestStatus.IN_PROGRESS: "исполнитель приступил к работе",
+    RequestStatus.ON_REVIEW: "работа выполнена, проверьте ее",
+    RequestStatus.DONE: "выполнена",
+}
+
+
 def request_status_changed(
     request_id: RequestId,
+    category: RequestCategory,
     status: RequestStatus,
+    deadline: datetime,
     comment: str | None,
 ) -> str:
-    text = f"🔔 Заявка №{request_id}: {REQUEST_STATUS_LABELS[status]}"
+    text = f"🔔 Заявка {_request(request_id, category)}: {REQUEST_STATUS_NEWS[status]}"
+    if status is not RequestStatus.DONE:
+        text = f"{text}\n{_deadline(deadline)}"
     if comment:
         text = f"{text}\n\n{escape(comment)}"
     return text
 
 
-def request_reply(request_id: RequestId, text: str) -> str:
-    return f"💬 Ответ УК по заявке №{request_id}\n\n{escape(text)}"
+def request_reply(request_id: RequestId, category: RequestCategory, text: str) -> str:
+    return (
+        f"💬 Ответ УК по заявке {_request(request_id, category)}\n\n{escape(text)}\n\n"
+        "↩️ Ответить можно в приложении"
+    )
 
 
 def flat_verified(flat_number: str, address: str) -> str:
@@ -148,3 +166,23 @@ def flat_verification_revoked(address: str, reason: str, contact: str) -> str:
         f"⚠️ УК отозвала подтверждение вашей квартиры в доме {escape(address)}\n\n"
         f"Причина: {escape(reason)}\n\n{contact}"
     )
+
+
+def request_created(
+    request_id: RequestId,
+    category: RequestCategory,
+    address: str,
+    deadline: datetime,
+) -> str:
+    return (
+        f"🆕 Заявка {_request(request_id, category)}\n🏢 {escape(address)}\n"
+        f"{_deadline(deadline)}"
+    )
+
+
+def _request(request_id: RequestId, category: RequestCategory) -> str:
+    return f"№{request_id} «{CATEGORY_RULES[category].caption}»"
+
+
+def _deadline(deadline: datetime) -> str:
+    return f"⏱ Срок: до {deadline:{MOMENT}}"

@@ -6,7 +6,7 @@ from typing import Any
 
 from dishka.integrations.taskiq import ContainerMiddleware
 from maxo.integrations.dishka import setup_dishka as setup_maxo_dishka
-from taskiq import SmartRetryMiddleware, TaskiqScheduler, async_shared_broker
+from taskiq import TaskiqScheduler, async_shared_broker
 from taskiq.api import run_receiver_task
 from taskiq.cli.common_args import LogLevel
 from taskiq.cli.scheduler.args import SchedulerArgs
@@ -46,7 +46,6 @@ async def main() -> None:
     broker = make_broker(config.redis).with_middlewares(
         ContextVarsMiddleware(),
         ContainerMiddleware(container),
-        SmartRetryMiddleware(use_delay_exponent=True),
         CommitMiddleware(),
     )
 

@@ -35,6 +35,7 @@ from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.request_status import transition_path
+from zheka.core.texts import OPEN_REQUEST, REQUEST_STATUS_NEWS
 from zheka.infra.database.models import Event, Request, RequestGroup, User
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -198,7 +199,14 @@ async def test_notify_user_reaches_the_broker(
 
     await publisher.flush()
     assert broker.enqueued(TaskName.SEND_TO_USER) == [
-        {"user_id": 1, "text": TEXT, "category": "requests", "mandatory": True},
+        {
+            "user_id": 1,
+            "text": TEXT,
+            "category": "requests",
+            "mandatory": True,
+            "app_button": None,
+            "app_path": None,
+        },
     ]
 
 
@@ -276,7 +284,11 @@ async def test_status_change_notifies_the_author_once(
     assert len(enqueued) == 1
     assert enqueued[0]["user_id"] == data.user_id
     assert enqueued[0]["mandatory"] is True
-    assert "Принята" in enqueued[0]["text"]
+    assert enqueued[0]["text"].startswith(
+        f"🔔 Заявка №{request.id} «💧 Протечка»: принята в работу\n⏱ Срок: до ",
+    )
+    assert enqueued[0]["app_button"] == OPEN_REQUEST
+    assert enqueued[0]["app_path"] == f"/requests/{request.id}"
 
 
 async def test_group_catch_up_notifies_the_author_once(
@@ -304,7 +316,7 @@ async def test_group_catch_up_notifies_the_author_once(
     await publisher.flush()
     enqueued = broker.enqueued(TaskName.SEND_TO_USER)
     assert len(enqueued) == 1
-    assert "В работе" in enqueued[0]["text"]
+    assert REQUEST_STATUS_NEWS[RequestStatus.IN_PROGRESS] in enqueued[0]["text"]
     assert "Сделаем завтра" in enqueued[0]["text"]
 
 
@@ -334,6 +346,8 @@ async def test_reply_reaches_the_author(
     assert enqueued[0]["user_id"] == data.user_id
     assert enqueued[0]["mandatory"] is True
     assert answer in enqueued[0]["text"]
+    assert enqueued[0]["text"].endswith("↩️ Ответить можно в приложении")
+    assert enqueued[0]["app_path"] == f"/requests/{request.id}"
 
 
 class _FlakyBroker(RecordingBroker):
