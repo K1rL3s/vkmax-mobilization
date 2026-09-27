@@ -1,0 +1,10 @@
+@import "@maxhub/max-ui/dist/styles.css";
+
+:root {
+  color-scheme: light dark;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(:focus) {
+  outline: none;
+}

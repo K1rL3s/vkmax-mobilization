@@ -21,6 +21,7 @@ export const folderStructureConfig = createFolderStructure({
         { name: "{kebab-case}.tsx" },
         { name: "{kebab-case}.ts" },
         { name: "{kebab-case}.module.css" },
+        { name: "globals.css" },
       ],
     },
     { name: "features", children: [{ ruleId: "feature" }] },
