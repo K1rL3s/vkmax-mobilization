@@ -86,9 +86,13 @@ export const isImplausiblyHigh = (
   period: string,
   consumption: number,
 ): boolean => {
-  const months = meter.last_period
-    ? Math.max(1, monthsBetween(meter.last_period, period))
-    : 1;
+  const since = baselineOf(meter, period).period;
+  const months = since ? Math.max(1, monthsBetween(since, period)) : 1;
 
   return consumption > TYPICAL_MONTH[meter.type] * 10 * months * MILLI;
 };
+
+export const baselineOf = (meter: Meter, period: string) =>
+  meter.last_period === period
+    ? { period: meter.prior_period, values: meter.prior_values }
+    : { period: meter.last_period, values: meter.last_values };

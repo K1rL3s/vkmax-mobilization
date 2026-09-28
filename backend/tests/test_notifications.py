@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from maxo.enums import ChatType
+from maxo.types import Message, MessageBody, Recipient
 from maxo.types.send_message_result import SendMessageResult
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,11 +51,20 @@ from zheka.infra.max import MaxSender
 
 TEXT = "Проверка связи"
 
+ACCEPTED = SendMessageResult(
+    message=Message(
+        recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=1),
+        timestamp=datetime.now(UTC),
+        body=MessageBody(mid="1", seq=1, text=TEXT),
+    ),
+)
+
 
 class _FakeSender(MaxSender):
-    __slots__ = ("sent",)
+    __slots__ = ("refuse", "sent")
 
-    def __init__(self) -> None:
+    def __init__(self, *, refuse: bool = False) -> None:
+        self.refuse = refuse
         self.sent: list[tuple[MaxUserId | None, bool]] = []
 
     async def send_message(
@@ -65,7 +76,7 @@ class _FakeSender(MaxSender):
         **kwargs: Any,  # noqa: ARG002
     ) -> SendMessageResult | None:
         self.sent.append((user_id, notify))
-        return None
+        return None if self.refuse else ACCEPTED
 
 
 async def _add_user(session: AsyncSession, name: str = "Сосед") -> User:
@@ -414,3 +425,25 @@ async def test_group_catch_up_to_review_opens_one_card_per_member(
         card["request_id"] for card in broker.enqueued(TaskName.SEND_REVIEW_CARD)
     ) == sorted([first.id, second.id])
     assert broker.enqueued(TaskName.SEND_TO_USER) == []
+
+
+async def test_fan_out_does_not_count_a_refused_send(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    data = await make_org_house_flat_user()
+    repo = NotificationsRepo(session)
+    sender = _FakeSender(refuse=True)
+    category = NotificationCategory.REQUESTS.value
+
+    count = await _fan_out(
+        sender,
+        repo,
+        [data.user_id],
+        TEXT,
+        category,
+        mandatory=True,
+    )
+
+    assert len(sender.sent) == 1
+    assert count == 0

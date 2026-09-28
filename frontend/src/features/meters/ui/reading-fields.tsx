@@ -3,6 +3,7 @@ import { Flex, Input, Typography } from "@maxhub/max-ui";
 import { Icon, alertIcon } from "@/shared/ui/icon";
 
 import {
+  baselineOf,
   formatReading,
   isImplausiblyHigh,
   parseReading,
@@ -31,7 +32,7 @@ export const ReadingFields = ({
   return (
     <Flex direction="column" align="stretch" gap={16}>
       {zones.map((zone) => {
-        const previous = meter.last_values?.[zone];
+        const previous = baselineOf(meter, period).values?.[zone];
         const current = parseReading(valueOf(zone));
         const isBelow =
           previous !== undefined && current !== null && current < previous;

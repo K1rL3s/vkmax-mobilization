@@ -124,10 +124,13 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
     fresh = await _complain(session, own.user_id, own.house_id)
     late = await _complain(session, own.user_id, own.house_id)
     done = await _complain(session, own.user_id, own.house_id)
+    review = await _complain(session, own.user_id, own.house_id)
     normative = CATEGORY_RULES[RequestCategory.LEAK].normative_hours
     await _age(session, late.id, normative + 1)
     await _age(session, done.id, normative + 2)
+    await _age(session, review.id, normative + 3)
     done.status = RequestStatus.DONE
+    review.status = RequestStatus.ON_REVIEW
     await session.flush()
     service = admin_requests_service(session)
 
@@ -140,7 +143,7 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
         0,
     )
 
-    assert [row.request.id for row in rows] == [late.id, fresh.id, done.id]
+    assert [row.request.id for row in rows] == [late.id, fresh.id, done.id, review.id]
     assert [row.request.id for row in second] == [fresh.id]
     assert total == 1
     assert [row.request.id for row in only_overdue] == [late.id]

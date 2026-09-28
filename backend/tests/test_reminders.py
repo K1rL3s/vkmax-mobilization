@@ -449,7 +449,7 @@ def _texts(bot_broker: RecordingBroker, user_id: UserId) -> list[str]:
     ("due_in", "warned_ago", "expected"),
     [
         (10, None, "{due:%d.%m.%Y} истекает поверка"),
-        (0, 30, "Истекла поверка"),
+        (-1, 30, "Истекла поверка"),
         (10, 365, "{due:%d.%m.%Y} истекает поверка"),
     ],
 )
@@ -870,3 +870,22 @@ async def test_a_verification_due_in_thirty_one_days_waits(
 
     assert _texts(bot_broker, user_id) == []
     assert await _warned_at(bot_session, meter_id) is None
+
+
+async def test_verification_expires_only_the_day_after_the_due_date(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    flat_id, user_id = await _resident(session, await _house(session))
+    meter_id = await _meter(session, flat_id, due=date(2026, 10, 15))
+    service = reminders_service(session, publisher)
+
+    for day in (15, 16, 17):
+        await service.warn_verification(datetime(2026, 10, day, 6, tzinfo=UTC))
+        await publisher.flush()
+
+    soon, expired = _texts(broker, user_id)
+    assert "15.10.2026 истекает поверка" in soon
+    assert "Истекла поверка" in expired
+    assert await _warned_at(session, meter_id) == date(2026, 10, 16)

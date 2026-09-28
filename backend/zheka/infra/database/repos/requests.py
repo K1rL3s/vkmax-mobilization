@@ -63,7 +63,7 @@ def overdue_at(now: datetime) -> ColumnElement[bool]:
                 for category, rule in CATEGORY_RULES.items()
             ],
         ),
-        requests_table.c.status != RequestStatus.DONE,
+        requests_table.c.status.not_in((RequestStatus.DONE, RequestStatus.ON_REVIEW)),
     )
 
 

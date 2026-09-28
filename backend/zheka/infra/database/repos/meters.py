@@ -196,7 +196,7 @@ class MetersRepo(BaseAlchemyRepo):
                 or_(
                     meters_table.c.verification_warned_at.is_(None),
                     meters_table.c.verification_warned_at
-                    < meters_table.c.next_verification_date,
+                    <= meters_table.c.next_verification_date,
                 ),
             )
             .order_by(meters_table.c.id)

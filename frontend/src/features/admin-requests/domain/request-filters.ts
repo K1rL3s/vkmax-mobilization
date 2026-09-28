@@ -1,6 +1,7 @@
 import {
   deadlineLeft,
   isFinished,
+  isOnReview,
   type RequestStatus,
 } from "@/features/request";
 
@@ -28,7 +29,7 @@ const STATUSES: Record<
 };
 
 export const overdueNote = (request: AdminRequestItem): string | null => {
-  if (isFinished(request.status)) return null;
+  if (isFinished(request.status) || isOnReview(request.status)) return null;
   const left = deadlineLeft(request.deadline_at);
   return left?.overdue ? left.text : null;
 };

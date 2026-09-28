@@ -11373,6 +11373,22 @@ components:
           - type: 'null'
           title: Last Values
           description: Показание в тысячных долях единицы измерения
+        prior_period:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Prior Period
+        prior_values:
+          anyOf:
+          - additionalProperties:
+              type: integer
+            propertyNames:
+              $ref: '#/components/schemas/TariffZone'
+            type: object
+          - type: 'null'
+          title: Prior Values
+          description: Показание в тысячных долях единицы измерения
       type: object
       required:
       - id

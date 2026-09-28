@@ -36,13 +36,14 @@ async def _fan_out(
         notify = recipient.level.resolve_notify(mandatory=mandatory)
         if notify is None:
             continue
-        await sender.send_message(
+        result = await sender.send_message(
             text,
             user_id=recipient.max_user_id,
             notify=notify,
             keyboard=keyboard,
         )
-        sent += 1
+        if result is not None:
+            sent += 1
 
     logger.info("Рассылка %s: отправлено %s из %s", category, sent, len(recipients))
     return sent

@@ -864,3 +864,24 @@ async def test_submit_rejects_more_photos_than_the_limit(
 
     with pytest.raises(InvalidRequest, match=TOO_MANY_PHOTOS):
         await _make_service(session).submit(own.user_id, meter_id, draft)
+
+
+async def test_the_meter_card_keeps_the_reading_before_the_last_period(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    await add_reading(session, meter_id, _period_back(1), 5_000, own.user_id)
+    service = _make_service(session)
+    await service.submit(own.user_id, meter_id, _draft(6_000))
+
+    [card] = await service.list_meters(own.flat_id)
+
+    assert (card.last_period, card.last_values) == (
+        _period_back(0),
+        {TariffZone.SINGLE: 6_000},
+    )
+    assert (card.prior_period, card.prior_values) == (
+        _period_back(1),
+        {TariffZone.SINGLE: 5_000},
+    )

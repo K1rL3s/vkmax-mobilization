@@ -196,7 +196,7 @@ class RemindersService:
             if local.hour < VERIFICATION_HOUR or due > today + VERIFICATION_WARNING:
                 continue
             label = SERVICE_LABELS[SERVICE_OF_METER[meter.type]]
-            if today >= due:
+            if today > due:
                 text = texts.verification_expired(label, meter.serial)
             elif (
                 meter.verification_warned_at is None

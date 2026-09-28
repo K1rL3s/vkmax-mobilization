@@ -384,12 +384,19 @@ async def test_overdue_counts_by_the_category_hours(session: AsyncSession) -> No
         created_at=NOW - timedelta(hours=10),
         status=RequestStatus.DONE,
     )
+    await _request(
+        session,
+        house_id,
+        category=RequestCategory.LEAK,
+        created_at=NOW - timedelta(hours=10),
+        status=RequestStatus.ON_REVIEW,
+    )
 
     dashboard = await _service(session).dashboard(org_id, None, None, None, NOW)
 
     tiles = {tile.key: tile.value for tile in dashboard.tiles}
     assert tiles["overdue"] == 1
-    assert tiles["active"] == 3
+    assert tiles["active"] == 4
 
 
 async def test_the_tiles_average_and_share_are_rounded_once(

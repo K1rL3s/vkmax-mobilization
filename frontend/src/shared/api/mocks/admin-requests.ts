@@ -248,6 +248,7 @@ export const adminRequestsConfigs = [
             item.executor_user_id === number(request.query.executor_user_id)) &&
           (request.query.overdue !== "true" ||
             (item.status !== "done" &&
+              item.status !== "on_review" &&
               !!item.deadline_at &&
               Date.parse(item.deadline_at) < Date.now())),
       )

@@ -29,6 +29,11 @@ class MeterItem(BaseSchema):
         default=None,
         description=_READING,
     )
+    prior_period: date | None = None
+    prior_values: dict[TariffZone, int] | None = Field(
+        default=None,
+        description=_READING,
+    )
 
     @classmethod
     def of(cls, card: MeterCard) -> Self:
@@ -44,6 +49,8 @@ class MeterItem(BaseSchema):
             next_verification_date=meter.next_verification_date,
             last_period=card.last_period,
             last_values=card.last_values,
+            prior_period=card.prior_period,
+            prior_values=card.prior_values,
         )
 
 

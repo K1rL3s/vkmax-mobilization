@@ -3041,6 +3041,15 @@ export interface components {
       last_values?: {
         [key: string]: number;
       } | null;
+      /** Prior Period */
+      prior_period?: string | null;
+      /**
+       * Prior Values
+       * @description Показание в тысячных долях единицы измерения
+       */
+      prior_values?: {
+        [key: string]: number;
+      } | null;
     };
     /**
      * MeterType
