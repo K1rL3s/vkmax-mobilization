@@ -26,6 +26,7 @@ from zheka.core.services.reception import ReceptionService
 from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
+from zheka.core.services.retention import RetentionService
 from zheka.infra.quota import UploadQuota
 
 
@@ -57,6 +58,7 @@ class ServicesProvider(Provider):
         RemindersService,
         AnalyticsService,
         DemoService,
+        RetentionService,
     )
     upload_quota = provide(UploadQuota, scope=Scope.APP)
 

@@ -21,10 +21,9 @@ from tests.test_charges import _make_service as charges_service
 from zheka.core.charges import parse_lines
 from zheka.core.enums import OrgRole, RequestStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import FlatId, MaxUserId, OrgId, UserId
+from zheka.core.ids import API_CHECKER_MAX_USER_ID, FlatId, MaxUserId, OrgId, UserId
 from zheka.core.services.demo import (
     API_CHECKER_DEMO_NUMBER,
-    API_CHECKER_MAX_USER_ID,
     CHECKER_RESERVED,
     DEMO_INN,
     DEMO_INNS,

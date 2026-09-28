@@ -23,6 +23,7 @@ from zheka.bot.handlers import (
     error_router,
     executor_dialog,
     fallback_router,
+    forget_dialog,
     lifecycle_router,
     menu_dialog,
     onboarding_dialog,
@@ -96,6 +97,7 @@ def make_dispatcher(
         review_dialog,
         chat_binding_dialog,
         access_dialog,
+        forget_dialog,
         fallback_router,
     )
 

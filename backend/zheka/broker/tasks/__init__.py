@@ -1,6 +1,7 @@
 from zheka.broker.tasks import (
     bot_requests,
     chats,
+    files,
     notifications,
     reminders,
     requests,
@@ -11,6 +12,7 @@ from zheka.broker.tasks import (
 __all__ = (
     "bot_requests",
     "chats",
+    "files",
     "notifications",
     "reminders",
     "requests",

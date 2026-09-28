@@ -69,6 +69,7 @@ class EventType(StrEnum):
     CHARGE_DISPUTED = "charge_disputed"
 
     CONSENT_GIVEN = "consent_given"
+    ACCOUNT_DELETED = "account_deleted"
 
 
 class EventSource(StrEnum):

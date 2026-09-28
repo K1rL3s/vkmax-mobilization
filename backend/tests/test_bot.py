@@ -92,6 +92,7 @@ from zheka.bot.handlers.executor.windows import (
     NOT_YOURS_TEXT,
     RESULT_PHOTO_TEXT,
 )
+from zheka.bot.handlers.forget.handlers import FORGOTTEN_TEXT
 from zheka.bot.handlers.menu.windows import (
     CALL_NOTE_TEXT,
     EMERGENCY_PHONE_TEXT,
@@ -237,7 +238,7 @@ from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
-from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
 from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.events import events_table
@@ -3695,3 +3696,50 @@ async def test_a_resident_who_stopped_the_bot_is_not_counted_as_delivered(
 
     assert notices.texts == ["Отключат воду"]
     assert await _delivered(bot_session, announcement_id) == (1, None)
+
+
+async def test_delete_forgets_the_user_and_the_next_start_asks_for_consent(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _consented(client, message_manager)
+    user_id = (await _user(bot_session, client)).id
+
+    await client.send("/delete")
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator("🗑 Удалить"),
+    )
+
+    assert notices.texts == [FORGOTTEN_TEXT]
+    bot_session.expire_all()
+    forgotten = await UsersRepo(bot_session).get_by_id(user_id)
+    assert forgotten is not None
+    assert forgotten.name == FORGOTTEN_NAME
+    await client.send("/start")
+    assert _text(message_manager).startswith(CONSENT_TEXT)
+    assert (await _user(bot_session, client)).id != user_id
+
+
+async def test_delete_cancel_returns_to_the_entry_screen(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await client.send("/delete")
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator("↩️ Отмена"),
+    )
+
+    assert CONSENT_TEXT in _text(message_manager)
+
+    await client.click(message_manager.last_message(), ACCEPT)
+    await client.send("/delete")
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator("↩️ Отмена"),
+    )
+
+    assert GREETING in _text(message_manager)

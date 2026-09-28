@@ -100,6 +100,19 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `EntityNotFound` (404), never 403.
 - Route and bot uploads go through `save_download`, which counts
   `max_size_mb` while writing (`Bot.download` streams unchecked for 30 s).
+- Daily `purge_files` first deletes upload-named files older than a day that
+  no row names (`FilesRepo.referenced_names`), then drops request photos
+  `PHOTO_TTL` after `done_at` and reading photos `PHOTO_TTL` after
+  `submitted_at`; their files go on the next run, so a rollback loses none. A
+  new column holding a file name joins `referenced_names`, or its files go.
+- `ProfileService.forget` (`DELETE /api/me`, bot `/delete`) deletes the
+  user's residents, verification requests and revocations, demand signals,
+  notification settings and org roles, cancels their upcoming booked
+  appointments, clears `caller_name`/`caller_phone` on requests they authored,
+  and tombstones the `users` row (`FORGOTTEN_NAME`,
+  `max_user_id = API_CHECKER_MAX_USER_ID - id`): nothing is sent to it and a
+  return is a new row. Requests, readings, votes and events
+  stay. It refuses an org creator and the API checker, not a blocked resident.
 - `HousesService.link` never changes a verified resident's flat or role (УК
   moves them); a blocked resident cannot `unlink` (relinking would shed the
   block). An org invite reopened by a member is free unless it raises the
@@ -159,7 +172,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - `MaxSender` serves broadcasts and task windows, not handlers, and owns MAX
   limits: 30 rps per bot (`BOT_RATE_LIMIT`), 2 msg/s per chat keyed on
   `max_user_id`. `send_message` drops private sends to negative ids (seeded
-  users, the API checker); group sends go (group chat ids are negative too).
+  and forgotten users, the API checker); group sends go (group chat ids are
+  negative too).
 - A task opens a window only via `MaxSender.start_dialog` (`fg()`,
   `RESET_STACK`): `bg().start()` and `NEW_STACK` go through `call_soon` and
   let the task commit first. It skips users without `max_chat_id` or with

@@ -53,3 +53,7 @@ class ChatBinding(StatesGroup):
 
 class AccessSlots(StatesGroup):
     pick = State()
+
+
+class Forget(StatesGroup):
+    confirm = State()
