@@ -296,10 +296,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   seeded unregistered, without history, linked only to houses their
   reformagkh card names unambiguously; registered orgs are fictional
   «Демо-УК ...» (`is_demo`, checksum-failing INNs). No invented licence or
-  cadastral numbers; images are generated. Fictional orgs replace real links
-  only in Москва, whose one unmanaged house in the flat range is demo house
-  61/1 (`test_a_real_manager_is_replaced_only_in_moscow`; moving a peer's
-  second house from Казань to Санкт-Петербург breaks it).
+  cadastral numbers; images are generated. Fictional orgs take only unmanaged
+  houses in the flat range, earliest in `houses.csv` first: demo house
+  Ленинский проспект 61/1 leads Москва (`test_no_real_manager_is_replaced`).
 - Seeded users: negative `max_user_id`, no `max_chat_id`.
 - The seed is one transaction, offline, takes `today`, seeds `random.Random`
   per entity; after `pg_advisory_xact_lock(SEED_LOCK)` an existing `DEMO_INN`
@@ -328,7 +327,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
   reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed
   on the deploy closest to judging. `scripts/fetch_seed_data.py` rewrites
-  `seed/data/` (cold run ~20 min, cached in `backend/.cache/seed/`).
+  `seed/data/` (12 streets per city, 55 houses each; cold run over an hour,
+  cached in `backend/.cache/seed/`). New streets go after the existing ones,
+  or the demo houses move. reformagkh.ru cards sit behind a captcha now: a
+  card missing from the cache leaves its house without manager, entrances
+  estimated.
 
 ## Tests
 

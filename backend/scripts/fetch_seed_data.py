@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -24,6 +25,10 @@ NOMINATIM = "https://nominatim.openstreetmap.org/search"
 OVERPASS = "https://overpass-api.de/api/interpreter"
 USER_AGENT = "zheka-seed-fetch/1.0 (MAX hackathon demo seed, one-off run)"
 REQUEST_INTERVAL = 1.1
+RETRIES = 5
+RETRY_PAUSE = 30
+TOO_MANY_REQUESTS = 429
+SERVER_ERROR = 500
 REGISTRY_EXPORT = 1
 BBOX_PAD = 0.01
 HOUSES_PER_STREET = 55
@@ -74,6 +79,336 @@ STREETS = (
         mun_obr="г. Казань",
         timezone="Europe/Moscow",
     ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Дмитровское шоссе",
+        prefix="Дмитровское шоссе ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Профсоюзная улица",
+        prefix="Профсоюзная ул. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Каширское шоссе",
+        prefix="Каширское шоссе ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Варшавское шоссе",
+        prefix="Варшавское шоссе ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="проспект Мира",
+        prefix="Мира просп. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Ленинградский проспект",
+        prefix="Ленинградский просп. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Волгоградский проспект",
+        prefix="Волгоградский просп. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Чертановская улица",
+        prefix="Чертановская ул. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Дубнинская улица",
+        prefix="Дубнинская ул. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Севастопольский проспект",
+        prefix="Севастопольский просп. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=184,
+        subject_rf="город Москва",
+        region="Москва",
+        city="Москва",
+        street="Новокосинская улица",
+        prefix="Новокосинская ул. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="Лиговский проспект",
+        prefix="Лиговский пр., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="Московский проспект",
+        prefix="Московский пр., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="проспект Стачек",
+        prefix="Стачек пр., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="проспект Ветеранов",
+        prefix="Ветеранов пр., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="Невский проспект",
+        prefix="Невский пр., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="проспект Народного Ополчения",
+        prefix="Народного Ополчения пр., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="Краснопутиловская улица",
+        prefix="Краснопутиловская ул., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="бульвар Новаторов",
+        prefix="Новаторов Бульвар, д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="улица Лёни Голикова",
+        prefix="Лёни Голикова ул., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="улица Савушкина",
+        prefix="Савушкина ул., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=250,
+        subject_rf="город Санкт-Петербург",
+        region="Санкт-Петербург",
+        city="Санкт-Петербург",
+        street="Садовая улица",
+        prefix="Садовая ул., д. ",
+        mun_obr="",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Восстания",
+        prefix="ул. Восстания, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Рихарда Зорге",
+        prefix="ул. Рихарда Зорге, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Юлиуса Фучика",
+        prefix="ул. Юлиуса Фучика, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="проспект Хусаина Ямашева",
+        prefix="пр-кт. Ямашева, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Маршала Чуйкова",
+        prefix="ул. Маршала Чуйкова, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Фатыха Амирхана",
+        prefix="ул. Фатыха Амирхана, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Адоратского",
+        prefix="ул. Адоратского, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="проспект Ибрагимова",
+        prefix="пр-кт. Ибрагимова, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Декабристов",
+        prefix="ул. Декабристов, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="улица Космонавтов",
+        prefix="ул. Космонавтов, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
+    Street(
+        export_id=220,
+        subject_rf="Республика Татарстан",
+        region="Республика Татарстан",
+        city="Казань",
+        street="Чистопольская улица",
+        prefix="ул. Чистопольская, д. ",
+        mun_obr="г. Казань",
+        timezone="Europe/Moscow",
+    ),
 )
 
 HOUSE_FIELDS = (
@@ -100,6 +435,7 @@ LOCAL_DIGITS = 7
 AREA_CODES = {"город Санкт-Петербург": "812", "Республика Татарстан": "843"}
 
 _last_request = 0.0
+_cards_blocked = False
 
 
 def _get(url: str) -> bytes:
@@ -109,11 +445,24 @@ def _get(url: str) -> bytes:
         time.sleep(wait)
     headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
     request = urllib.request.Request(url, headers=headers)  # noqa: S310
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
-            return bytes(response.read())
-    finally:
-        _last_request = time.monotonic()
+    for attempt in range(RETRIES):
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+                return bytes(response.read())
+        except (urllib.error.URLError, TimeoutError) as error:
+            if (
+                isinstance(error, urllib.error.HTTPError)
+                and error.code != TOO_MANY_REQUESTS
+                and error.code < SERVER_ERROR
+            ):
+                raise
+            if attempt == RETRIES - 1:
+                raise
+            log.info("%s, повтор через %s с", error, RETRY_PAUSE)
+            time.sleep(RETRY_PAUSE)
+        finally:
+            _last_request = time.monotonic()
+    raise AssertionError
 
 
 def _cached(name: str, url: str) -> bytes:
@@ -146,10 +495,18 @@ def _building_key(building: str) -> tuple[int, str]:
 
 
 def _card(source_id: str) -> tuple[int | None, str | None]:
-    page = _cached(
-        f"card-{source_id}.html",
-        f"{REFORMA}/myhouse/profile/view/{source_id}",
-    ).decode("utf-8")
+    global _cards_blocked  # noqa: PLW0603
+    name = f"card-{source_id}.html"
+    if _cards_blocked and not (CACHE_DIR / name).exists():
+        return None, None
+    try:
+        page = _cached(name, f"{REFORMA}/myhouse/profile/view/{source_id}").decode(
+            "utf-8",
+        )
+    except urllib.error.URLError as error:
+        log.info("карточки недоступны до конца прогона: %s", error)
+        _cards_blocked = True
+        return None, None
     entrances, manager = parse_card(page)
     if manager is None and "Домом управляет" in page:
         log.info("карточка %s называет УК, но имя не разобрано", source_id)
@@ -244,7 +601,10 @@ def main() -> None:
         street_houses: list[dict[str, str | int]] = []
         for row in _pick(street):
             building = _clean(row["address"][len(street.prefix) :])
-            building = building.replace(", корп.", " корп.")
+            building = building.replace(", корп.", " корп.").replace(
+                ", литера",
+                " литера",
+            )
             entrances, manager = _card(row["house_id"])
             floors = int(row["number_floors_max"])
             living_flats = int(row["living_rooms_amount"])
@@ -345,7 +705,7 @@ def _fill_from_osm(street: Street, houses: list[dict[str, str | int]]) -> None:
         "out center tags;"
     )
     raw = _cached(
-        f"osm-{street.export_id}.json",
+        f"osm-{street.export_id}-{street.street}.json",
         f"{OVERPASS}?{urllib.parse.urlencode({'data': query})}",
     )
     addresses = {}

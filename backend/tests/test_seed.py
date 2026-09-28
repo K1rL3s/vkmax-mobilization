@@ -324,22 +324,22 @@ async def test_a_result_photo_shows_the_work_of_its_request(db: AsyncSession) ->
     assert all(category in RESULT_PHOTOS[path] for path, category in rows)
 
 
-async def test_a_real_manager_is_replaced_only_in_moscow(db: AsyncSession) -> None:
+async def test_no_real_manager_is_replaced(db: AsyncSession) -> None:
     with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
         managed = {
-            (row["city"], row["building"])
+            (row["city"], row["street"], row["building"])
             for row in csv.DictReader(file)
             if row["org_inn"]
         }
     stmt = (
-        select(houses_table.c.city, houses_table.c.building)
+        select(houses_table.c.city, houses_table.c.street, houses_table.c.building)
         .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
         .where(organizations_table.c.inn.in_([profile.inn for profile in PROFILES]))
     )
     taken = set((await db.execute(stmt)).tuples().all())
 
-    replaced = {city for city, building in taken if (city, building) in managed}
-    assert replaced == {"Москва"}
+    assert taken
+    assert not taken & managed
 
 
 async def test_a_flat_in_the_last_demo_organization_is_charged(

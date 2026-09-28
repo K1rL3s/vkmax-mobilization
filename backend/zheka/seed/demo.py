@@ -158,7 +158,7 @@ PROFILES = (
         phone_percent=35,
         repeat_percent=18,
         recent_repeats=5,
-        auto_close_percent=40,
+        auto_close_percent=50,
         ratings=(4, 3, 3, 2, 5),
         overdue=4,
     ),
