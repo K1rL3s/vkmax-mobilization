@@ -367,6 +367,7 @@ async def test_admin_house_surface(
             description="Течет",
             status=RequestStatus.NEW,
             channel=RequestChannel.MINIAPP,
+            deadline_at=datetime.now(UTC),
         ),
     )
     await _make_chairman(session, own)

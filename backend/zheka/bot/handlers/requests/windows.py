@@ -47,7 +47,7 @@ PHOTO_TEXT = "📷 Пришлите фото, если есть. Приложе�
 CONFIRM_TEXT = "📋 Проверьте заявку\n\n{category}\n\n{description}\n\nФото: {photos}"
 CREATED_TEXT = (
     "✅ Заявка №{request_id} отправлена в УК\n"
-    "⏰ Срок: до {deadline}\n"
+    "{deadline}\n"
     "Сообщу, когда ее примут в работу"
 )
 

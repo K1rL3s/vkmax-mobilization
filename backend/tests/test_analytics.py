@@ -1,6 +1,7 @@
 import secrets
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,7 @@ from zheka.api.schemas.analytics import (
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
+    CATEGORY_RULES,
     AnalyticsMetric,
     EventType,
     MeterType,
@@ -142,6 +144,10 @@ async def _request(
         parent_request_id=parent_request_id,
         executor_user_id=executor_user_id,
         created_at=created_at,
+        deadline_at=CATEGORY_RULES[category].deadlines(
+            created_at,
+            ZoneInfo("Europe/Moscow"),
+        )[1],
         accepted_at=None if accepted_after is None else created_at + accepted_after,
         reviewed_at=reviewed_at,
         done_at=done_at,
@@ -362,32 +368,32 @@ async def test_a_foreign_house_in_the_reminder_is_not_found(
         await _service(session).remind_not_submitted(org_id, [own, foreign], None, NOW)
 
 
-async def test_overdue_counts_by_the_category_hours(session: AsyncSession) -> None:
+async def test_overdue_counts_by_the_stored_deadline(session: AsyncSession) -> None:
     org_id, house_id = await _org(session)
     await _request(
         session,
         house_id,
-        category=RequestCategory.LEAK,
+        category=RequestCategory.WATER_SUPPLY,
         created_at=NOW - timedelta(hours=5),
     )
     await _request(
         session,
         house_id,
-        category=RequestCategory.LEAK,
+        category=RequestCategory.WATER_SUPPLY,
         created_at=NOW - timedelta(hours=3),
     )
     await _request(session, house_id, created_at=NOW - timedelta(hours=5))
     await _request(
         session,
         house_id,
-        category=RequestCategory.LEAK,
+        category=RequestCategory.WATER_SUPPLY,
         created_at=NOW - timedelta(hours=10),
         status=RequestStatus.DONE,
     )
     await _request(
         session,
         house_id,
-        category=RequestCategory.LEAK,
+        category=RequestCategory.WATER_SUPPLY,
         created_at=NOW - timedelta(hours=10),
         status=RequestStatus.ON_REVIEW,
     )

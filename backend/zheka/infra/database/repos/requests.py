@@ -1,5 +1,5 @@
 from collections.abc import Collection, Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
@@ -16,6 +16,7 @@ from zheka.core.enums import (
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
 from zheka.infra.database.models import (
+    House,
     Request,
     RequestGroup,
     RequestMessage,
@@ -53,16 +54,7 @@ class RequestFilters(ZhekaType):
 
 def overdue_at(now: datetime) -> ColumnElement[bool]:
     return and_(
-        or_(
-            *[
-                and_(
-                    requests_table.c.category == category,
-                    requests_table.c.created_at
-                    < now - timedelta(hours=rule.normative_hours),
-                )
-                for category, rule in CATEGORY_RULES.items()
-            ],
-        ),
+        requests_table.c.deadline_at < now,
         requests_table.c.status.not_in((RequestStatus.DONE, RequestStatus.ON_REVIEW)),
     )
 
@@ -70,7 +62,7 @@ def overdue_at(now: datetime) -> ColumnElement[bool]:
 class RequestsRepo(BaseAlchemyRepo):
     async def create(
         self,
-        house_id: HouseId,
+        house: House,
         flat_id: FlatId | None,
         author_user_id: UserId | None,
         category: RequestCategory,
@@ -83,8 +75,14 @@ class RequestsRepo(BaseAlchemyRepo):
         caller_name: str | None = None,
         caller_phone: str | None = None,
     ) -> Request:
+        now = datetime.now(UTC)
+        react_deadline_at, deadline_at = CATEGORY_RULES[category].deadlines(
+            now,
+            house.zone,
+        )
         request = Request(
-            house_id=house_id,
+            created_at=now,
+            house_id=house.id,
             flat_id=flat_id,
             author_user_id=author_user_id,
             category=category,
@@ -96,6 +94,8 @@ class RequestsRepo(BaseAlchemyRepo):
             is_staff_author=is_staff_author,
             caller_name=caller_name,
             caller_phone=caller_phone,
+            deadline_at=deadline_at,
+            react_deadline_at=react_deadline_at,
         )
         self._session.add(request)
         await self._session.flush()

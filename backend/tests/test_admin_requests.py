@@ -125,7 +125,7 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
     late = await _complain(session, own.user_id, own.house_id)
     done = await _complain(session, own.user_id, own.house_id)
     review = await _complain(session, own.user_id, own.house_id)
-    normative = CATEGORY_RULES[RequestCategory.LEAK].normative_hours
+    normative = CATEGORY_RULES[RequestCategory.LEAK].fix_hours
     await _age(session, late.id, normative + 1)
     await _age(session, done.id, normative + 2)
     await _age(session, review.id, normative + 3)

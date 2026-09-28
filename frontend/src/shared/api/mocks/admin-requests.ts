@@ -12,6 +12,7 @@ import {
 } from "./reply";
 import {
   addressOf,
+  categoryDeadline,
   findFlat,
   findHouse,
   houseRequests,
@@ -92,10 +93,10 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     rating: null,
     feedback: null,
     completion_reason: null,
-    normative_hours: category.normative_hours,
-    deadline_at: new Date(
-      Date.now() + category.normative_hours * 3600000,
-    ).toISOString(),
+    deadline_text: category.deadline_text,
+    deadline_basis: category.deadline_basis,
+    react_deadline_at: null,
+    deadline_at: categoryDeadline(category.category),
     messages: [],
     timeline: [{ at, to_status: "new", by_role: "staff" }],
     can_review: false,
@@ -120,7 +121,8 @@ for (const groupId of new Set(
         category: first.category,
         category_label: first.category_label,
         description: first.description,
-        normative_hours: first.normative_hours,
+        deadline_text: first.deadline_text,
+        deadline_basis: first.deadline_basis,
         deadline_at: first.deadline_at,
         group_id: groupId,
         group_size: count,

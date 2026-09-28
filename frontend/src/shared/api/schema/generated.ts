@@ -1985,8 +1985,21 @@ export interface components {
       address: string;
       /** Org Name */
       org_name: string | null;
-      /** Normative Hours */
-      normative_hours: number;
+      /**
+       * Deadline Text
+       * @description Срок устранения, например «3 суток»
+       */
+      deadline_text: string;
+      /**
+       * Deadline Basis
+       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       */
+      deadline_basis?: string | null;
+      /**
+       * React Deadline At
+       * @description Срок реакции (принять заявку); пусто - не нормирован
+       */
+      react_deadline_at?: string | null;
       /** Photos */
       photos: components["schemas"]["FileRef"][];
       /** Result Photos */
@@ -3801,8 +3814,21 @@ export interface components {
       address: string;
       /** Org Name */
       org_name: string | null;
-      /** Normative Hours */
-      normative_hours: number;
+      /**
+       * Deadline Text
+       * @description Срок устранения, например «3 суток»
+       */
+      deadline_text: string;
+      /**
+       * Deadline Basis
+       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       */
+      deadline_basis?: string | null;
+      /**
+       * React Deadline At
+       * @description Срок реакции (принять заявку); пусто - не нормирован
+       */
+      react_deadline_at?: string | null;
       /** Photos */
       photos: components["schemas"]["FileRef"][];
       /** Result Photos */
@@ -3849,8 +3875,21 @@ export interface components {
       /** Label */
       label: string;
       zone: components["schemas"]["ResponsibilityZone"];
-      /** Normative Hours */
-      normative_hours: number;
+      /**
+       * Deadline Text
+       * @description Срок устранения, например «3 суток»
+       */
+      deadline_text: string;
+      /**
+       * React Text
+       * @description Срок реакции, например «30 минут»; пусто - не нормирован
+       */
+      react_text?: string | null;
+      /**
+       * Deadline Basis
+       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       */
+      deadline_basis?: string | null;
     };
     /**
      * RequestChannel

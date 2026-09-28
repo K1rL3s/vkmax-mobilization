@@ -32,3 +32,5 @@ export const ZONE_LABEL: Record<ResponsibilityZone, string> = {
   utility: "Ресурсоснабжающая организация",
   municipality: "Муниципалитет",
 };
+
+export const NO_NORM = "Срок сервиса, норматива нет";

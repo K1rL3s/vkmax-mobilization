@@ -170,7 +170,7 @@ class RequestsService:
         group_id = await self._checked_group(draft.group_id, house_id, draft.category)
 
         request = await self._requests.create(
-            house_id,
+            house,
             draft.flat_id,
             user_id,
             draft.category,
@@ -238,7 +238,7 @@ class RequestsService:
             )
 
         request = await self._requests.create(
-            house_id,
+            house,
             parent.flat_id,
             user_id,
             parent.category,
@@ -549,12 +549,7 @@ class RequestsService:
                 for member in members
                 if member.role.is_staff and member.user_id != request.author_user_id
             ],
-            texts.request_created(
-                request.id,
-                request.category,
-                house.address,
-                house.local(request.deadline_at),
-            ),
+            texts.request_created(request, house),
             category=NotificationCategory.REQUESTS,
             mandatory=False,
             app_button=texts.OPEN_REQUEST,

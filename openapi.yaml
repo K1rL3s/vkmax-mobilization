@@ -9519,9 +9519,23 @@ components:
           - type: string
           - type: 'null'
           title: Org Name
-        normative_hours:
-          type: integer
-          title: Normative Hours
+        deadline_text:
+          type: string
+          title: Deadline Text
+          description: Срок устранения, например «3 суток»
+        deadline_basis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deadline Basis
+          description: Норма права под сроком; пусто - срок сервиса, норматива нет
+        react_deadline_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: React Deadline At
+          description: Срок реакции (принять заявку); пусто - не нормирован
         photos:
           items:
             $ref: '#/components/schemas/FileRef'
@@ -9607,7 +9621,7 @@ components:
       - house_id
       - address
       - org_name
-      - normative_hours
+      - deadline_text
       - photos
       - result_photos
       - messages
@@ -12643,9 +12657,23 @@ components:
           - type: string
           - type: 'null'
           title: Org Name
-        normative_hours:
-          type: integer
-          title: Normative Hours
+        deadline_text:
+          type: string
+          title: Deadline Text
+          description: Срок устранения, например «3 суток»
+        deadline_basis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deadline Basis
+          description: Норма права под сроком; пусто - срок сервиса, норматива нет
+        react_deadline_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: React Deadline At
+          description: Срок реакции (принять заявку); пусто - не нормирован
         photos:
           items:
             $ref: '#/components/schemas/FileRef'
@@ -12708,7 +12736,7 @@ components:
       - house_id
       - address
       - org_name
-      - normative_hours
+      - deadline_text
       - photos
       - result_photos
       - messages
@@ -12740,15 +12768,28 @@ components:
           title: Label
         zone:
           $ref: '#/components/schemas/ResponsibilityZone'
-        normative_hours:
-          type: integer
-          title: Normative Hours
+        deadline_text:
+          type: string
+          title: Deadline Text
+          description: Срок устранения, например «3 суток»
+        react_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: React Text
+          description: Срок реакции, например «30 минут»; пусто - не нормирован
+        deadline_basis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deadline Basis
+          description: Норма права под сроком; пусто - срок сервиса, норматива нет
       type: object
       required:
       - category
       - label
       - zone
-      - normative_hours
+      - deadline_text
       title: RequestCategoryItem
     RequestChannel:
       type: string

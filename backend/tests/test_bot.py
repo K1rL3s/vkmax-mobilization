@@ -659,6 +659,7 @@ async def _request(
         status=status,
         channel=RequestChannel.MINIAPP,
         reviewed_at=datetime.now(UTC) if status is RequestStatus.ON_REVIEW else None,
+        deadline_at=datetime.now(UTC),
     )
     session.add(request)
     await session.flush()
@@ -2842,10 +2843,15 @@ async def test_a_bot_request_is_confirmed_with_its_deadline_and_a_link_to_it(
     request = (await bot_session.execute(stmt)).scalar_one()
     house = await HousesRepo(bot_session).get(house_id)
     assert house is not None
+    assert request.react_deadline_at is not None
+    react = house.local(request.react_deadline_at)
     deadline = house.local(request.deadline_at)
     assert _text(message_manager) == CREATED_TEXT.format(
         request_id=request.id,
-        deadline=f"{deadline:%H:%M %d.%m}",
+        deadline=(
+            f"⏱ Принять до {react:%H:%M %d.%m}\n⏰ Срок: до {deadline:%H:%M %d.%m}\n"
+            "📜 ПП РФ № 416, п. 13"
+        ),
     )
     assert _opened(_buttons(message_manager.last_message())) == [
         (OPEN_REQUEST, f"/requests/{request.id}"),

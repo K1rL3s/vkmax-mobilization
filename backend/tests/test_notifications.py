@@ -251,6 +251,8 @@ async def _add_request(
         status=RequestStatus.NEW,
         channel=RequestChannel.MINIAPP,
         group_id=group_id,
+        deadline_at=datetime.now(UTC),
+        react_deadline_at=datetime.now(UTC),
     )
     session.add(request)
     await session.flush()

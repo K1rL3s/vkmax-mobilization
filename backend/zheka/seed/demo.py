@@ -685,8 +685,8 @@ class Seeder:
             index
             for index, created in enumerate(moments)
             if created >= self._now - RECENT
-            and created
-            + timedelta(hours=CATEGORY_RULES[categories[index]].normative_hours + 1)
+            and CATEGORY_RULES[categories[index]].deadlines(created, house.zone)[1]
+            + timedelta(hours=1)
             < self._now
         ]
         overdue = set(
@@ -932,8 +932,14 @@ class Seeder:
             and rng.randint(1, 100) <= RATED_PERCENT
         ):
             rating = rng.choice(profile.ratings)
+        react_deadline_at, deadline_at = CATEGORY_RULES[category].deadlines(
+            created,
+            house.zone,
+        )
         request = Request(
             created_at=created,
+            deadline_at=deadline_at,
+            react_deadline_at=react_deadline_at,
             house_id=house.id,
             flat_id=None if author is None else author.flat_id,
             author_user_id=None if author is None else author.user_id,

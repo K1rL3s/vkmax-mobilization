@@ -221,8 +221,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   log, event, message, notification): a repeated staff status call answers 200
   with the card; backward is `InvalidState(BACKWARD)`.
 - New and repeat requests notify org staff (never executor or author) under
-  `REQUESTS`, not mandatory. Deadline: `Request.deadline_at`, printed in the
-  house's time.
+  `REQUESTS`, not mandatory. Deadline: `Request.deadline_at` (and
+  `react_deadline_at`), stored at creation from `CategoryRule.deadlines`,
+  printed in the house's time; a rule without `basis` is a service deadline.
+  `fix_working_days` counts from the next local day to its end by
+  `core/workdays.py`, a static calendar: add each year's transfer decree
+  there (the 2026.09.29 migration backfill has its own copy).
 - A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,

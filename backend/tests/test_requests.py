@@ -1,5 +1,6 @@
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import ValidationError
@@ -164,7 +165,10 @@ async def _age(session: AsyncSession, request_id: RequestId, hours: int) -> None
     stmt = (
         update(requests_table)
         .where(requests_table.c.id == request_id)
-        .values(created_at=datetime.now(UTC) - timedelta(hours=hours))
+        .values(
+            created_at=requests_table.c.created_at - timedelta(hours=hours),
+            deadline_at=requests_table.c.deadline_at - timedelta(hours=hours),
+        )
     )
     await session.execute(stmt)
     await session.flush()
@@ -395,13 +399,13 @@ async def test_card_takes_the_current_house_org_and_the_category_hours(
     )
 
     assert card.org_name == org.name
-    assert card.normative_hours == 24
+    assert (card.deadline_text, card.deadline_basis) == ("24 часа", None)
     admin_card = AdminRequestCard.of_admin(
         await admin_requests_service(session).card(other.org_id, created.request.id),
         [],
         [],
     )
-    assert (admin_card.org_name, admin_card.normative_hours) == (org.name, 24)
+    assert (admin_card.org_name, admin_card.deadline_text) == (org.name, "24 часа")
     house.org_id = None
     await session.flush()
     orphan = await service.get_card(own.user_id, created.request.id)
@@ -880,10 +884,13 @@ async def test_a_new_and_a_repeat_request_notify_the_staff_but_not_executors(
     )
     assert first["mandatory"] is False
     assert first["category"] == "requests"
+    react = created.request.react_deadline_at
+    assert react is not None
     deadline = house.local(created.request.deadline_at)
     assert first["text"] == (
         f"🆕 Заявка №{created.request.id} «💧 Протечка»\n🏢 {house.address}\n"
-        f"⏰ Срок: до {deadline:%H:%M %d.%m}"
+        f"⏱ Принять до {house.local(react):%H:%M %d.%m}\n"
+        f"⏰ Срок: до {deadline:%H:%M %d.%m}\n📜 ПП РФ № 416, п. 13"
     )
 
 
@@ -958,3 +965,98 @@ def test_a_request_description_is_capped() -> None:
 
     with pytest.raises(ValidationError):
         CreateRequestRequest(category=RequestCategory.LEAK, description="я" * 4001)
+
+
+def test_a_leak_is_accepted_in_half_an_hour_and_fixed_in_three_days() -> None:
+    rule = CATEGORY_RULES[RequestCategory.LEAK]
+    created = datetime(2026, 9, 28, 20, 10, tzinfo=UTC)
+
+    react, fix = rule.deadlines(created, MOSCOW)
+
+    assert react == created + timedelta(minutes=30)
+    assert fix == created + timedelta(days=3)
+    assert (rule.react_text, rule.deadline_text, rule.basis) == (
+        "30 минут",
+        "3 суток",
+        "ПП РФ № 416, п. 13",
+    )
+
+
+@pytest.mark.parametrize(
+    ("category", "text", "basis"),
+    [
+        (RequestCategory.WATER_SUPPLY, "4 часа", "ПП РФ № 354, прил. 1, п. 1, 4"),
+        (RequestCategory.HEATING, "16 часов", "ПП РФ № 354, прил. 1, п. 14"),
+        (RequestCategory.ELECTRICITY, "24 часа", "ПП РФ № 354, прил. 1, п. 9"),
+        (RequestCategory.ELEVATOR, "24 часа", None),
+        (RequestCategory.YARD, "3 суток", None),
+        (RequestCategory.ENTRANCE, "3 суток", None),
+        (RequestCategory.METER_ERROR, "10 рабочих дней", "ПП РФ № 354, п. 31 «е(2)»"),
+        (RequestCategory.OTHER, "10 рабочих дней", "ПП РФ № 416, п. 36"),
+    ],
+)
+def test_a_deadline_names_its_norm_or_none(
+    category: RequestCategory,
+    text: str,
+    basis: str | None,
+) -> None:
+    rule = CATEGORY_RULES[category]
+
+    assert (rule.deadline_text, rule.basis, rule.react_text) == (text, basis, None)
+
+
+async def test_a_card_carries_the_stored_deadline_and_its_basis(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    leak = await service.create(own.user_id, own.house_id, _draft())
+    yard = await service.create(
+        own.user_id,
+        own.house_id,
+        _draft(category=RequestCategory.YARD),
+    )
+
+    leak_card = RequestCard.of(leak, [], [])
+    yard_card = RequestCard.of(yard, [], [])
+
+    created = leak.request.created_at
+    assert (leak_card.deadline_at, leak_card.react_deadline_at) == (
+        created + timedelta(days=3),
+        created + timedelta(minutes=30),
+    )
+    assert leak_card.deadline_basis == "ПП РФ № 416, п. 13"
+    assert yard_card.deadline_at == yard.request.created_at + timedelta(hours=72)
+    assert (yard_card.react_deadline_at, yard_card.deadline_basis) == (None, None)
+
+
+MOSCOW = ZoneInfo("Europe/Moscow")
+
+
+@pytest.mark.parametrize(
+    ("created", "deadline"),
+    [
+        (datetime(2026, 9, 28, 9, tzinfo=UTC), date(2026, 10, 12)),
+        (datetime(2026, 12, 25, 9, tzinfo=UTC), date(2027, 1, 19)),
+        (datetime(2026, 12, 29, 9, tzinfo=UTC), date(2027, 1, 21)),
+        (datetime(2027, 2, 15, 9, tzinfo=UTC), date(2027, 3, 2)),
+        (datetime(2026, 9, 27, 20, 59, tzinfo=UTC), date(2026, 10, 9)),
+        (datetime(2026, 9, 27, 21, 1, tzinfo=UTC), date(2026, 10, 12)),
+        (datetime(2027, 12, 24, 9, tzinfo=UTC), date(2028, 1, 17)),
+    ],
+)
+def test_an_answer_is_due_by_the_end_of_the_tenth_working_day(
+    created: datetime,
+    deadline: date,
+) -> None:
+    rule = CATEGORY_RULES[RequestCategory.CHARGE_DISPUTE]
+
+    react, fix = rule.deadlines(created, MOSCOW)
+
+    assert react is None
+    local = fix.astimezone(MOSCOW)
+    assert (local.date(), local.time()) == (deadline, time.max)
+    assert rule.deadline_text == "10 рабочих дней"
+    assert rule.basis is not None
+    assert "ПП РФ № 416, п. 36" in rule.basis
+    assert "п. 31 «д»" in rule.basis

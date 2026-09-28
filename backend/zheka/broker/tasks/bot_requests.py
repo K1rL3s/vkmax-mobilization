@@ -17,7 +17,7 @@ from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.core.models import User
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestDraft, RequestsService
-from zheka.core.texts import MOMENT
+from zheka.core.texts import deadline_lines
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
 
@@ -67,8 +67,10 @@ async def create_bot_request(
         raise
 
     request_id = card.request.id
-    deadline = card.house.local(card.request.deadline_at)
-    outcome = NewRequestData(request_id=request_id, deadline=f"{deadline:{MOMENT}}")
+    outcome = NewRequestData(
+        request_id=request_id,
+        deadline=deadline_lines(card.request, card.house),
+    )
     await _show_outcome(sender, user, stack_id, outcome)
     return request_id
 

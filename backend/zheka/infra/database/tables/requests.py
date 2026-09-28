@@ -58,6 +58,8 @@ requests_table = Table(
         server_default=false(),
         nullable=False,
     ),
+    Column("deadline_at", DateTime(timezone=True), nullable=False),
+    Column("react_deadline_at", DateTime(timezone=True), nullable=True),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),

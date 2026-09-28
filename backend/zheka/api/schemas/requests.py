@@ -39,13 +39,20 @@ from zheka.core.services.requests import (
 )
 
 UNKNOWN_AUTHOR = "Пользователь"
+DEADLINE_TEXT = "Срок устранения, например «3 суток»"
+DEADLINE_BASIS = "Норма права под сроком; пусто - срок сервиса, норматива нет"
 
 
 class RequestCategoryItem(BaseSchema):
     category: RequestCategory
     label: str
     zone: ResponsibilityZone
-    normative_hours: int
+    deadline_text: str = Field(description=DEADLINE_TEXT)
+    react_text: str | None = Field(
+        default=None,
+        description="Срок реакции, например «30 минут»; пусто - не нормирован",
+    )
+    deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
 
     @classmethod
     def of(cls, category: RequestCategory, rule: CategoryRule) -> Self:
@@ -53,7 +60,9 @@ class RequestCategoryItem(BaseSchema):
             category=category,
             label=rule.label,
             zone=rule.zone,
-            normative_hours=rule.normative_hours,
+            deadline_text=rule.deadline_text,
+            react_text=rule.react_text,
+            deadline_basis=rule.basis,
         )
 
 
@@ -124,7 +133,12 @@ class RequestCard(RequestListItem):
     house_id: HouseId
     address: str
     org_name: str | None
-    normative_hours: int
+    deadline_text: str = Field(description=DEADLINE_TEXT)
+    deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
+    react_deadline_at: datetime | None = Field(
+        default=None,
+        description="Срок реакции (принять заявку); пусто - не нормирован",
+    )
     photos: list[FileRef]
     result_photos: list[FileRef]
     messages: list[RequestMessageItem]
@@ -147,6 +161,7 @@ class RequestCard(RequestListItem):
         result_photos: list[FileRef],
     ) -> Self:
         request = card.request
+        rule = CATEGORY_RULES[request.category]
         base = RequestListItem.of_row(
             RequestRow(
                 request=request,
@@ -161,7 +176,9 @@ class RequestCard(RequestListItem):
             house_id=request.house_id,
             address=card.house.address,
             org_name=None if card.org is None else card.org.name,
-            normative_hours=CATEGORY_RULES[request.category].normative_hours,
+            deadline_text=rule.deadline_text,
+            deadline_basis=rule.basis,
+            react_deadline_at=request.react_deadline_at,
             photos=photos,
             result_photos=result_photos,
             messages=[RequestMessageItem.of(view) for view in card.messages],

@@ -210,23 +210,80 @@ const requests: MockRequest[] = [
 
 const CATEGORY_RULES: Record<
   Schemas["RequestCategory"],
-  { label: string; zone: Schemas["ResponsibilityZone"]; hours: number }
+  {
+    label: string;
+    zone: Schemas["ResponsibilityZone"];
+    hours: number;
+    text: string;
+    react?: string;
+    basis?: string;
+  }
 > = {
-  leak: { label: "Протечка", zone: "management", hours: 4 },
-  elevator: { label: "Лифт", zone: "management", hours: 24 },
-  garbage: { label: "Мусор", zone: "management", hours: 24 },
-  heating: { label: "Отопление", zone: "management", hours: 24 },
-  water_supply: { label: "Водоснабжение", zone: "utility", hours: 8 },
-  electricity: { label: "Электричество", zone: "management", hours: 24 },
-  entrance: { label: "Подъезд", zone: "management", hours: 72 },
-  yard: { label: "Двор и территория", zone: "management", hours: 72 },
-  meter_error: { label: "Ошибка в показаниях", zone: "management", hours: 72 },
+  leak: {
+    label: "Протечка",
+    zone: "management",
+    hours: 72,
+    text: "3 суток",
+    react: "30 минут",
+    basis: "ПП РФ № 416, п. 13",
+  },
+  elevator: { label: "Лифт", zone: "management", hours: 24, text: "24 часа" },
+  garbage: { label: "Мусор", zone: "management", hours: 24, text: "24 часа" },
+  heating: {
+    label: "Отопление",
+    zone: "management",
+    hours: 16,
+    text: "16 часов",
+    basis: "ПП РФ № 354, прил. 1, п. 14",
+  },
+  water_supply: {
+    label: "Водоснабжение",
+    zone: "utility",
+    hours: 4,
+    text: "4 часа",
+    basis: "ПП РФ № 354, прил. 1, п. 1, 4",
+  },
+  electricity: {
+    label: "Электричество",
+    zone: "management",
+    hours: 24,
+    text: "24 часа",
+    basis: "ПП РФ № 354, прил. 1, п. 9",
+  },
+  entrance: {
+    label: "Подъезд",
+    zone: "management",
+    hours: 72,
+    text: "3 суток",
+  },
+  yard: {
+    label: "Двор и территория",
+    zone: "management",
+    hours: 72,
+    text: "3 суток",
+  },
+  meter_error: {
+    label: "Ошибка в показаниях",
+    zone: "management",
+    hours: 336,
+    text: "10 рабочих дней",
+    basis: "ПП РФ № 354, п. 31 «е(2)»",
+  },
   charge_dispute: {
     label: "Спор по начислению",
     zone: "management",
-    hours: 72,
+    hours: 336,
+    text: "10 рабочих дней",
+    basis:
+      "ПП РФ № 416, п. 36; проверка начисления - при обращении или по договоренности до 1 месяца, ПП РФ № 354, п. 31 «д»",
   },
-  other: { label: "Другое", zone: "management", hours: 72 },
+  other: {
+    label: "Другое",
+    zone: "management",
+    hours: 336,
+    text: "10 рабочих дней",
+    basis: "ПП РФ № 416, п. 36",
+  },
 };
 
 let nextRequestId = 150;
@@ -320,7 +377,11 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     house_id: item.house_id,
     address: addressOf(item.house_id),
     org_name: findHouse(item.house_id)?.org?.name ?? null,
-    normative_hours: CATEGORY_RULES[item.category].hours,
+    deadline_text: CATEGORY_RULES[item.category].text,
+    deadline_basis: CATEGORY_RULES[item.category].basis ?? null,
+    react_deadline_at: CATEGORY_RULES[item.category].react
+      ? shift(item.created_at, 30)
+      : null,
     photos: requestPhotos(item),
     result_photos: item.has_result_photos ? [RESULT_PHOTO] : [],
     messages: item.messages.map((message) => ({
@@ -391,7 +452,7 @@ export const createRequest = (
     description: body.description,
     status: "new",
     created_at: minutes(0),
-    deadline_at: minutes(CATEGORY_RULES[body.category].hours * 60),
+    deadline_at: categoryDeadline(body.category),
     flat_number: residencyForHouse(houseId)?.flat_number ?? null,
     group_id: body.join_group_id ?? null,
     has_photos: (body.photos?.length ?? 0) > 0,
@@ -425,7 +486,7 @@ export const repeatRequest = (
     description: description?.trim() || `Повторно по заявке №${item.id}`,
     status: "new",
     created_at: minutes(0),
-    deadline_at: minutes(CATEGORY_RULES[item.category].hours * 60),
+    deadline_at: categoryDeadline(item.category),
     flat_number: item.flat_number,
     parent_request_id: item.id,
     has_photos: photos.length > 0,
@@ -441,5 +502,10 @@ export const requestCategories = (): Schemas["RequestCategoryItem"][] =>
     category: category as Schemas["RequestCategory"],
     label: rule.label,
     zone: rule.zone,
-    normative_hours: rule.hours,
+    deadline_text: rule.text,
+    react_text: rule.react ?? null,
+    deadline_basis: rule.basis ?? null,
   }));
+
+export const categoryDeadline = (category: Schemas["RequestCategory"]) =>
+  minutes(CATEGORY_RULES[category].hours * 60);

@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import (
-    CATEGORY_RULES,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
@@ -44,11 +43,8 @@ class Request(ZhekaMutableType):
     done_at: datetime | None = None
     reviewed_at: datetime | None = None
     is_staff_author: bool = False
-
-    @property
-    def deadline_at(self) -> datetime:
-        hours = CATEGORY_RULES[self.category].normative_hours
-        return self.created_at + timedelta(hours=hours)
+    deadline_at: datetime
+    react_deadline_at: datetime | None = None
 
 
 class RequestGroup(ZhekaMutableType):

@@ -274,7 +274,7 @@ class AdminRequestsService:
 
         author = None if resident is None else resident.user_id
         request = await self._requests.create(
-            draft.house_id,
+            house,
             flat_id,
             author,
             draft.category,
@@ -372,13 +372,7 @@ class AdminRequestsService:
             house = await self._house(request.house_id)
             self._notifications.notify_author(
                 request,
-                texts.request_status_changed(
-                    request.id,
-                    request.category,
-                    target,
-                    house.local(request.deadline_at),
-                    note,
-                ),
+                texts.request_status_changed(request, house, note),
             )
 
     async def _card(self, request: Request) -> AdminRequestCardData:

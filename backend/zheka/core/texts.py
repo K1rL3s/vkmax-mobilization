@@ -4,6 +4,7 @@ from html import escape
 
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
+from zheka.core.models import House, Request
 
 BLOCKED = "УК закрыла вам доступ к этому дому"
 OPEN_REQUEST = "📱 Открыть заявку"
@@ -13,6 +14,7 @@ VOTE = "🗳 Проголосовать"
 MY_APPOINTMENTS = "📅 Мои записи"
 CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
 MOMENT = "%H:%M %d.%m"
+NO_NORM = "Срок сервиса, норматива нет"
 
 REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
     RequestStatus.NEW: "Новая",
@@ -33,15 +35,16 @@ REQUEST_STATUS_NEWS: Mapping[RequestStatus, str] = {
 
 
 def request_status_changed(
-    request_id: RequestId,
-    category: RequestCategory,
-    status: RequestStatus,
-    deadline: datetime,
+    request: Request,
+    house: House,
     comment: str | None,
 ) -> str:
-    text = f"🔔 Заявка {_request(request_id, category)}: {REQUEST_STATUS_NEWS[status]}"
-    if status is not RequestStatus.DONE:
-        text = f"{text}\n{_deadline(deadline)}"
+    text = (
+        f"🔔 Заявка {_request(request.id, request.category)}: "
+        f"{REQUEST_STATUS_NEWS[request.status]}"
+    )
+    if request.status is not RequestStatus.DONE:
+        text = f"{text}\n{deadline_lines(request, house)}"
     if comment:
         text = f"{text}\n\n{escape(comment)}"
     return text
@@ -169,15 +172,10 @@ def flat_verification_revoked(address: str, reason: str, contact: str) -> str:
     )
 
 
-def request_created(
-    request_id: RequestId,
-    category: RequestCategory,
-    address: str,
-    deadline: datetime,
-) -> str:
+def request_created(request: Request, house: House) -> str:
     return (
-        f"🆕 Заявка {_request(request_id, category)}\n🏢 {escape(address)}\n"
-        f"{_deadline(deadline)}"
+        f"🆕 Заявка {_request(request.id, request.category)}\n"
+        f"🏢 {escape(house.address)}\n{deadline_lines(request, house)}"
     )
 
 
@@ -185,12 +183,21 @@ def _request(request_id: RequestId, category: RequestCategory) -> str:
     return f"№{request_id} «{CATEGORY_RULES[category].caption}»"
 
 
-def _deadline(deadline: datetime) -> str:
-    return f"⏰ Срок: до {deadline:{MOMENT}}"
-
-
 def verification_today(meter: str, serial: str) -> str:
     return (
         f"⏰ Сегодня последний день поверки счетчика «{meter}» №{escape(serial)}. "
         "С завтрашнего дня начисление пойдет по нормативу"
     )
+
+
+def deadline_lines(request: Request, house: House) -> str:
+    lines = [
+        f"⏰ Срок: до {house.local(request.deadline_at):{MOMENT}}",
+        f"📜 {CATEGORY_RULES[request.category].basis or NO_NORM}",
+    ]
+    if request.status is RequestStatus.NEW and request.react_deadline_at is not None:
+        lines.insert(
+            0,
+            f"⏱ Принять до {house.local(request.react_deadline_at):{MOMENT}}",
+        )
+    return "\n".join(lines)
