@@ -247,6 +247,7 @@ class ReadingsService:
         user_id: UserId,
         meter_id: MeterId,
         draft: SubmitDraft,
+        channel: str = "miniapp",
     ) -> SubmitResult:
         meter = await self._access.get_meter(meter_id)
         resident = await self._access.verified_resident(user_id, meter.flat_id)
@@ -323,6 +324,7 @@ class ReadingsService:
             ocr_accepted=draft.ocr_accepted,
             is_below_previous=below,
             out_of_window=out_of_window,
+            channel=channel,
         )
 
         row = ReadingRow(

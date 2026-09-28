@@ -96,14 +96,17 @@ def request_auto_closed(request_id: RequestId) -> str:
     )
 
 
+METER_PHOTO_HINT = "📷 Или пришлите фото счетчика сюда"
+
+
 def reading_window_opened() -> str:
-    return "📟 Открыт прием показаний счетчиков"
+    return f"📟 Открыт прием показаний счетчиков\n{METER_PHOTO_HINT}"
 
 
 def reading_window_closing(days: int) -> str:
     return (
         f"⏰ Через {_days(days)} закрывается прием показаний, а ваших еще нет. "
-        "Без них начисление пойдет по нормативу"
+        f"Без них начисление пойдет по нормативу\n{METER_PHOTO_HINT}"
     )
 
 
@@ -151,6 +154,7 @@ def _days(count: int) -> str:
 def reading_reminder_manual() -> str:
     return (
         "📟 Управляющая организация напоминает: прием показаний открыт, а ваших еще нет"
+        f"\n{METER_PHOTO_HINT}"
     )
 
 

@@ -57,3 +57,11 @@ class AccessSlots(StatesGroup):
 
 class Forget(StatesGroup):
     confirm = State()
+
+
+class MeterPhoto(StatesGroup):
+    meter = State()
+    photo = State()
+    wait = State()
+    confirm = State()
+    edit = State()

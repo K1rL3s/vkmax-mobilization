@@ -109,6 +109,28 @@ class NewRequestData(BaseDialogData):
         return draft
 
 
+class MeterPhotoData(BaseDialogData):
+    period: str | None = None
+    meter_id: int | None = None
+    photo_url: str | None = None
+    photo_name: str | None = None
+    value: int | None = None
+    recognized: int | None = None
+    anomaly_ack: bool = False
+    notice: str | None = None
+
+    @staticmethod
+    def photo_of(body: MessageBody) -> str | None:
+        return next(
+            (
+                item.payload.url
+                for item in body.attachments or []
+                if isinstance(item, PhotoAttachment)
+            ),
+            None,
+        )
+
+
 class ExecutorCardData(BaseDialogData):
     request_id: int
 

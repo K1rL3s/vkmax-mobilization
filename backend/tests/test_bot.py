@@ -4,7 +4,7 @@ import re
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from html import escape
 from typing import Any, cast
@@ -62,11 +62,11 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from taskiq import InMemoryBroker
 
-from tests.conftest import PROBE_ROUTERS, RecordingBroker
+from tests.conftest import PROBE_ROUTERS, RecordingBroker, photo_name
 
 from zheka.bot import BotSetup
 from zheka.bot.cards import VotePayload, app_payload
-from zheka.bot.dialog_data import NewRequestData
+from zheka.bot.dialog_data import MeterPhotoData, NewRequestData
 from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
@@ -109,6 +109,11 @@ from zheka.bot.handlers.menu.windows import (
     ORG_PHONE_TEXT,
     STAFF_TEXT,
 )
+from zheka.bot.handlers.meter_photo.handlers import ANOMALY_TEXT
+from zheka.bot.handlers.meter_photo.windows import (
+    UNREADABLE_TEXT as METER_UNREADABLE_TEXT,
+    WAIT_TEXT as METER_WAIT_TEXT,
+)
 from zheka.bot.handlers.onboarding.handlers import HOUSE_LINKED
 from zheka.bot.handlers.onboarding.windows import (
     CITY_TEXT,
@@ -142,7 +147,7 @@ from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.states import Consent, Menu
 from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
 from zheka.broker.task_names import TaskName
-from zheka.broker.tasks import bot_requests
+from zheka.broker.tasks import bot_requests, meters as meter_tasks
 from zheka.broker.tasks.bot_requests import create_bot_request, transcribe_voice
 from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
@@ -154,6 +159,7 @@ from zheka.broker.tasks.chats import (
     sync_chat_pins,
     welcome_chat,
 )
+from zheka.broker.tasks.meters import recognize_meter_photo
 from zheka.broker.tasks.notifications import (
     broadcast_to_chats,
     broadcast_to_users,
@@ -179,6 +185,7 @@ from zheka.core.enums import (
     ChatStatus,
     EventSource,
     EventType,
+    MeterType,
     NotificationCategory,
     OrgRole,
     RequestCategory,
@@ -187,6 +194,7 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
     ResidentStatus,
+    TariffZone,
 )
 from zheka.core.errors import HOUSE_NOT_FOUND, NotEnoughRights
 from zheka.core.ids import (
@@ -197,6 +205,7 @@ from zheka.core.ids import (
     HouseId,
     MaxChatId,
     MaxUserId,
+    MeterId,
     OrgId,
     PollId,
     PollOptionId,
@@ -221,6 +230,7 @@ from zheka.core.services.demo import (
     demo_flat_number,
 )
 from zheka.core.services.events import EventsService
+from zheka.core.services.meter_photo import NOT_VERIFIED
 from zheka.core.services.polls import ALREADY_VOTED
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.reminders import DEMO_ADDRESS, DEMO_SERIAL
@@ -254,6 +264,7 @@ from zheka.infra.database.models import (
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
+from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -268,6 +279,7 @@ from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
 from zheka.infra.max.sender import _chat_rate_limit, dialog_notify, is_chat_admin
+from zheka.infra.yandex.vision import VisionClient
 
 
 class _RecordingBot(FakeBot):
@@ -313,6 +325,9 @@ FIRST_CATEGORY = InlineButtonTextLocator(
 NEXT = InlineButtonTextLocator("➡️ Дальше")
 SEND = InlineButtonTextLocator("📨 Отправить")
 TO_MENU = InlineButtonTextLocator("🏠 Меню")
+SEND_READING = InlineButtonTextLocator("✅ Отправить")
+SEND_ANYWAY = InlineButtonTextLocator("✅ Всё верно, отправить")
+EDIT_READING = InlineButtonTextLocator("✏️ Исправить")
 
 
 def _max_id() -> MaxUserId:
@@ -4316,3 +4331,177 @@ async def test_a_voice_in_the_menu_starts_a_request_or_waits_for_the_transcript(
 
     assert notices.texts[-1] == VOICE_PENDING
     assert bot_broker.enqueued(TaskName.TRANSCRIBE_VOICE)[-1]["in_draft"] is False
+
+
+async def _meter_owner(
+    session: AsyncSession,
+    client: BotClient,
+    message_manager: MockMessageManager,
+    *,
+    last: int | None = None,
+) -> MeterId:
+    await _consented(client, message_manager)
+    user_id = (await _user(session, client)).id
+    _, house_id = await _org_house(session)
+    flat = Flat(house_id=house_id, number="9")
+    session.add(flat)
+    await session.flush()
+    session.add(
+        Resident(
+            user_id=user_id,
+            house_id=house_id,
+            flat_id=flat.id,
+            role=ResidentRole.OWNER,
+            verified_at=datetime.now(UTC),
+        ),
+    )
+    meter = await MetersRepo(session).add(
+        flat.id,
+        MeterType.COLD_WATER,
+        1,
+        "SN-9",
+        None,
+    )
+    assert meter is not None
+    if last is not None:
+        await MetersRepo(session).add_reading(
+            meter.id,
+            date(2020, 1, 1),
+            {TariffZone.SINGLE: last},
+            [],
+            ocr_used=False,
+            ocr_accepted=False,
+            is_below_previous=False,
+            submitted_at=datetime.now(UTC),
+            submitted_by=user_id,
+        )
+    meter_id = meter.id
+    await session.commit()
+    return meter_id
+
+
+async def test_a_meter_photo_in_the_menu_waits_for_recognition(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    meter_id = await _meter_owner(bot_session, client, message_manager)
+    await client.send("/start")
+
+    await _send_photo(client, None)
+
+    assert _text(message_manager) == METER_WAIT_TEXT
+    queued = bot_broker.enqueued(TaskName.RECOGNIZE_METER_PHOTO)[-1]
+    assert queued["data"]["meter_id"] == meter_id
+    assert queued["data"]["photo_url"] == RESULT_URL
+
+
+async def test_a_meter_photo_without_a_verified_flat_is_refused(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.send("/start")
+
+    await _send_photo(client, None)
+
+    assert NOT_VERIFIED in notices.texts
+
+
+@pytest.fixture
+def recognized(monkeypatch: pytest.MonkeyPatch) -> list[int | None]:
+    values: list[int | None] = [12_345]
+
+    async def save(*_: Any) -> list[str]:
+        return [photo_name()]
+
+    async def recognize(_self: Any, _name: str) -> dict[TariffZone, int] | None:
+        value = values[0]
+        return None if value is None else {TariffZone.SINGLE: value}
+
+    monkeypatch.setattr(meter_tasks, "save_photos", save)
+    monkeypatch.setattr(VisionClient, "recognize", recognize)
+    return values
+
+
+async def _recognized_card(
+    session: AsyncSession,
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    meter_id: MeterId,
+) -> None:
+    choice_period = datetime.now(UTC).date().replace(day=1)
+    await _run(
+        task_broker,
+        recognize_meter_photo,
+        user_id=(await _user(session, client)).id,
+        data=MeterPhotoData(
+            period=choice_period.isoformat(),
+            meter_id=meter_id,
+            photo_url=RESULT_URL,
+        ).to_data(),
+    )
+
+
+@pytest.mark.usefixtures("recognized")
+async def test_a_recognized_reading_is_confirmed_and_submitted(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    meter_id = await _meter_owner(bot_session, client, message_manager)
+
+    await _recognized_card(bot_session, client, task_broker, meter_id)
+
+    assert "12,345 м³" in _text(message_manager)
+    await client.click(message_manager.last_message(), SEND_READING)
+    assert any(
+        (text or "").startswith("✅ Показание передано") for text in notices.texts
+    )
+    bot_session.expire_all()
+    [reading] = await MetersRepo(bot_session).list_readings(meter_id, 5)
+    assert reading.values == {"single": 12_345}
+    assert (reading.ocr_used, reading.ocr_accepted) == (True, True)
+
+
+async def test_an_unreadable_photo_takes_a_typed_reading(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    recognized: list[int | None],
+) -> None:
+    recognized[0] = None
+    meter_id = await _meter_owner(bot_session, client, message_manager)
+
+    await _recognized_card(bot_session, client, task_broker, meter_id)
+    assert METER_UNREADABLE_TEXT in _text(message_manager)
+    await client.click(message_manager.last_message(), EDIT_READING)
+    await client.send("123,4")
+
+    assert "123,400 м³" in _text(message_manager)
+
+
+@pytest.mark.usefixtures("recognized")
+async def test_a_reading_below_the_last_one_needs_a_second_tap(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    meter_id = await _meter_owner(bot_session, client, message_manager, last=50_000)
+
+    await _recognized_card(bot_session, client, task_broker, meter_id)
+    await client.click(message_manager.last_message(), SEND_READING)
+
+    assert ANOMALY_TEXT["below"] in _text(message_manager)
+    bot_session.expire_all()
+    assert len(await MetersRepo(bot_session).list_readings(meter_id, 5)) == 1
+    await client.click(message_manager.last_message(), SEND_ANYWAY)
+    bot_session.expire_all()
+    assert len(await MetersRepo(bot_session).list_readings(meter_id, 5)) == 2

@@ -9,9 +9,11 @@ from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import MessageInput
 from maxo.dialogs.widgets.kbd import CopyText, Start, SwitchTo, WebApp
 from maxo.dialogs.widgets.text import Const, Format, Multi
+from maxo.enums import AttachmentType
 
 from zheka.bot.cards import EMERGENCY, TO_MENU, app_payload, web_app_name
 from zheka.bot.handlers.fallback import on_free_text
+from zheka.bot.handlers.meter_photo.handlers import on_meter_photo
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.core.deeplinks import ADMIN_APP_PATH
@@ -95,6 +97,7 @@ menu_dialog = Dialog(
             Const(STAFF_TEXT, when=F["staff"]),
             sep="\n\n",
         ),
+        MessageInput(on_meter_photo, content_types=[AttachmentType.IMAGE]),
         MessageInput(on_free_text),
         SwitchTo(EMERGENCY, id="emergency", state=Menu.emergency),
         Start(

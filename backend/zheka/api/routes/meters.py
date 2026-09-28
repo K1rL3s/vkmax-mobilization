@@ -100,6 +100,7 @@ async def submit_reading(
         current_account.user_id,
         meter_id,
         SubmitDraft(**body.model_dump()),
+        channel="miniapp",
     )
     return SubmitReadingResponse(
         reading=_reading_item(result.row, files_service),

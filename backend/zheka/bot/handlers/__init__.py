@@ -8,6 +8,7 @@ from zheka.bot.handlers.fallback import router as fallback_router
 from zheka.bot.handlers.forget import forget_dialog
 from zheka.bot.handlers.lifecycle import router as lifecycle_router
 from zheka.bot.handlers.menu import menu_dialog
+from zheka.bot.handlers.meter_photo import meter_photo_dialog
 from zheka.bot.handlers.onboarding import onboarding_dialog
 from zheka.bot.handlers.requests import request_dialog
 from zheka.bot.handlers.review import review_dialog
@@ -25,6 +26,7 @@ __all__ = (
     "forget_dialog",
     "lifecycle_router",
     "menu_dialog",
+    "meter_photo_dialog",
     "onboarding_dialog",
     "request_dialog",
     "review_dialog",

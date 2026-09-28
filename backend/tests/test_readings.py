@@ -576,6 +576,7 @@ async def test_submit_records_the_reading_submitted_event(
     assert len(events) == 1
     assert events[0].payload == {
         "meter_type": MeterType.COLD_WATER.value,
+        "channel": "miniapp",
         "ocr_used": True,
         "ocr_accepted": True,
         "is_below_previous": False,

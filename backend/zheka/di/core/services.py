@@ -16,6 +16,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
 from zheka.core.services.houses import HousesService
 from zheka.core.services.meter_access import MeterAccess
+from zheka.core.services.meter_photo import MeterPhotoService
 from zheka.core.services.meters import MetersService
 from zheka.core.services.moderation import ModerationService
 from zheka.core.services.notifications import NotificationsService
@@ -57,6 +58,7 @@ class ServicesProvider(Provider):
         AccessService,
         ChatsService,
         ChatCardsService,
+        MeterPhotoService,
         RemindersService,
         AnalyticsService,
         DemoService,

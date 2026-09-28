@@ -226,6 +226,15 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   (`get_message_by_id`), then opens the next draft step or asks for text; the
   audio is never downloaded. Unverified on a live client: MAX may never fill
   `transcription` for bots.
+- A photo sent to `Menu.main` without a free-text caption is a meter reading
+  (`meter_photo` flow; only the menu takes it, so a draft's photo stays the
+  draft's): the latest residency must be a verified active flat of a
+  connected house with a submittable single-tariff meter
+  (`MeterPhotoService.meters`, else a refusal and «📟 Мои счетчики»).
+  `recognize_meter_photo` saves the photo, runs `VisionClient` and opens the
+  confirm window; «Отправить» asks once more on the app's anomaly rules
+  (below the last value or over ten typical months), then submits with
+  `channel=bot`. Two-tariff meters go to the app.
 - House search and request draft steps have «🏠 Меню» and, past the first,
   «⬅️ Назад» (`TO_MENU`, `BACK`). A search list also takes text: one match is
   chosen, several narrow, none keeps the list and says so; `on_back` clears it.
