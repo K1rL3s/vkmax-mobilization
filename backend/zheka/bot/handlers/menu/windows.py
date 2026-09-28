@@ -6,10 +6,12 @@ from magic_filter import F
 from maxo import Bot
 from maxo.dialogs import Dialog, DialogManager, Window
 from maxo.dialogs.integrations.dishka import inject
+from maxo.dialogs.widgets.input import MessageInput
 from maxo.dialogs.widgets.kbd import Start, WebApp
 from maxo.dialogs.widgets.text import Const, Format, Multi
 
 from zheka.bot.cards import app_payload, web_app_name
+from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.core.deeplinks import ADMIN_APP_PATH
@@ -25,7 +27,8 @@ MENU_TEXT = (
 HOUSE_MENU_TEXT = (
     f"{GREETING}\n\n"
     "🏢 {address}\n"
-    "Заявку можно подать здесь, показания, начисления и опросы - в приложении"
+    "Заявку можно подать здесь, показания, начисления и опросы - в приложении\n"
+    "✍️ Можно просто написать, что случилось, - я оформлю заявку"
 )
 STAFF_TEXT = "🧑‍💼 Кабинет УК - в приложении"
 
@@ -54,6 +57,7 @@ menu_dialog = Dialog(
             Const(STAFF_TEXT, when=F["staff"]),
             sep="\n\n",
         ),
+        MessageInput(on_free_text),
         Start(
             Const("🔎 Найти дом"),
             id="find_house",

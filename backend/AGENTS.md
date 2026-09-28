@@ -194,6 +194,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `app_button` + `app_path`; `notify_author` always attaches the request's.
 - The menu reads the profile: the last linked house, the staff line and
   cabinet button.
+- A dialog swallows every message sent to its window: the fallback router gets
+  only updates with no dialog open. Free text (`NewRequestData.from_free_text`:
+  15+ chars, not a command, a photo caption counts) opens `NewRequest.category`
+  with it as the description from the menu, `NewRequest.category` and
+  `NewRequest.sent` (`on_free_text`, consent checked first) and the fallback;
+  `on_category` then skips to the photo.
 - House search and request draft steps have «🏠 Меню» and, past the first,
   «⬅️ Назад» (`TO_MENU`, `BACK`). A search list also takes text: one match is
   chosen, several narrow, none keeps the list and says so; `on_back` clears it.

@@ -59,6 +59,7 @@ from taskiq import InMemoryBroker
 from tests.conftest import PROBE_ROUTERS, RecordingBroker
 
 from zheka.bot import BotSetup
+from zheka.bot.dialog_data import NewRequestData
 from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
@@ -112,7 +113,9 @@ from zheka.bot.handlers.requests.windows import (
     DESCRIPTION_PHOTOS_TEXT,
     DESCRIPTION_TEXT,
     NOT_CONNECTED_TEXT,
+    NO_HOUSE_TEXT,
     PHOTO_TEXT,
+    PROBLEM_TEXT,
 )
 from zheka.bot.handlers.review.handlers import repeat_sent
 from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TEXT
@@ -3006,3 +3009,211 @@ async def test_a_user_without_a_max_account_gets_nothing_but_a_group_does() -> N
     await sender.send_message("Объявление", chat_id=MaxChatId(-70))
 
     assert recorder.texts == ["Объявление"]
+
+
+PROBLEM = "В третьем подъезде не горит свет на 5 этаже"
+
+
+async def test_a_free_text_quotes_the_problem_and_skips_the_description(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+
+    await client.send(PROBLEM)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=PROBLEM,
+    )
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    assert _text(message_manager) == PHOTO_TEXT.format(photos=0)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["description"] == PROBLEM
+
+
+async def test_a_photo_with_a_caption_starts_a_request_with_the_photo(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+
+    await _send_photo(client, PROBLEM)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=PROBLEM,
+    )
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    assert _text(message_manager) == PHOTO_TEXT.format(photos=1)
+
+
+async def test_a_long_problem_is_quoted_short_and_escaped_but_sent_whole(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    problem = f"Течет <вода> & {'капает ' * 40}".strip()
+
+    await client.send(problem)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=f"{escape(problem[:200])}…",
+    )
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["description"] == problem
+
+
+@pytest.mark.parametrize("text", ["Спасибо", "/помогите, течет кран на кухне"])
+async def test_a_short_text_or_a_command_opens_the_menu(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    text: str,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+
+    await client.send(text)
+
+    assert _text(message_manager) == HOUSE_MENU_TEXT.format(address=address)
+
+
+async def test_a_free_text_without_consent_asks_for_it(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await client.send(PROBLEM)
+
+    assert CONSENT_TEXT in _text(message_manager)
+
+
+async def test_a_free_text_without_a_house_sends_to_the_house_search(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await _consented(client, message_manager)
+
+    await client.send(PROBLEM)
+
+    assert _text(message_manager) == NO_HOUSE_TEXT
+
+
+async def test_a_free_text_with_no_window_open_starts_a_request(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    users = UsersRepo(bot_session)
+    user = await users.upsert_by_max_id(MaxUserId(client.user.id), "Житель", None)
+    await users.set_consent(user.id, CONSENT_VERSION)
+    await bot_session.commit()
+    house_id, address = await _bot_house(bot_session, org_id=await _org(bot_session))
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    await client.send(PROBLEM)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=PROBLEM,
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "drafted"),
+    [(" Течет кран тут ", False), (" Течет кран дома ", True)],
+)
+def test_a_draft_takes_a_free_text_of_fifteen_characters(
+    text: str,
+    drafted: bool,
+) -> None:
+    body = MessageBody(mid="1", seq=1, text=text)
+
+    assert (NewRequestData.from_free_text(body) is not None) is drafted
+
+
+async def test_a_free_text_on_the_category_step_quotes_the_problem(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    assert _text(message_manager) == CATEGORY_TEXT.format(address=address)
+
+    await client.send(PROBLEM)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=PROBLEM,
+    )
+
+
+async def test_a_free_text_after_a_sent_request_starts_a_new_one(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await client.send(PROBLEM)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    assert SENT_TEXT in _text(message_manager)
+    problem = "Во дворе третий день не вывозят мусор"
+
+    await client.send(problem)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=problem,
+    )
+
+
+async def test_a_free_text_in_the_menu_without_consent_asks_for_it(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    user = await _user(bot_session, client)
+    user.consent_at = None
+    await bot_session.commit()
+
+    await client.send(PROBLEM)
+
+    assert CONSENT_TEXT in _text(message_manager)
