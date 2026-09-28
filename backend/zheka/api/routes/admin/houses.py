@@ -2,7 +2,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 from maxo import Bot
-from maxo.utils.deeplink import create_start_link
+from maxo.utils.deeplink import create_start_link, create_startapp_link
 
 from zheka.api.dependencies import AdminOrgDep
 from zheka.api.schemas.base import Limit, Offset, Page
@@ -14,10 +14,16 @@ from zheka.api.schemas.houses import (
     BlockResidentRequest,
     EntranceQr,
     HouseResidentItem,
+    ObjectQr,
     RevokeVerificationRequest,
     SetChairmanRequest,
 )
-from zheka.core.deeplinks import entrance_qr_payload, house_payload
+from zheka.core.deeplinks import (
+    OBJECT_QR_CATEGORIES,
+    entrance_qr_payload,
+    house_payload,
+    object_qr_payload,
+)
 from zheka.core.enums import VerificationStatus
 from zheka.core.ids import HouseId, ResidentId, VerificationRequestId
 from zheka.core.services.flats import FlatsService
@@ -55,7 +61,26 @@ async def get_admin_house_card(
         )
         for entrance in range(1, card.house.entrances + 1)
     ]
-    return AdminHouseCard.of(card, entrance_qrs)
+    return AdminHouseCard.of(
+        card,
+        entrance_qrs,
+        object_qrs(bot, house_id, card.house.entrances),
+    )
+
+
+def object_qrs(bot: Bot, house_id: HouseId, entrances: int) -> list[ObjectQr]:
+    return [
+        ObjectQr(
+            entrance=entrance,
+            category=category,
+            deeplink=create_startapp_link(
+                bot,
+                object_qr_payload(house_id, entrance, category),
+            ),
+        )
+        for category in OBJECT_QR_CATEGORIES
+        for entrance in range(1, entrances + 1)
+    ]
 
 
 @router.post(

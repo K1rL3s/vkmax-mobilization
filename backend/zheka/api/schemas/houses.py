@@ -7,6 +7,7 @@ from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FileRef
 from zheka.core.enums import (
     EventSource,
+    RequestCategory,
     ResidentRole,
     ResidentStatus,
     VerificationStatus,
@@ -275,6 +276,12 @@ class EntranceQr(BaseSchema):
     deeplink: str
 
 
+class ObjectQr(BaseSchema):
+    entrance: int
+    category: RequestCategory
+    deeplink: str = Field(description="Ссылка startapp на форму заявки")
+
+
 class AdminHouseCard(BaseSchema):
     id: HouseId
     address: str
@@ -292,6 +299,9 @@ class AdminHouseCard(BaseSchema):
     chat_bound: bool
     chat_binding_code: str
     entrance_qrs: list[EntranceQr]
+    object_qrs: list[ObjectQr] = Field(
+        description="QR на объектах подъезда: лифт, свет, уборка",
+    )
     built_year: int | None = None
     floors: int | None = None
     area: int | None = Field(
@@ -302,7 +312,12 @@ class AdminHouseCard(BaseSchema):
     chat_title: str | None = None
 
     @classmethod
-    def of(cls, card: AdminHouseCardData, entrance_qrs: list[EntranceQr]) -> Self:
+    def of(
+        cls,
+        card: AdminHouseCardData,
+        entrance_qrs: list[EntranceQr],
+        object_qrs: list[ObjectQr] | None = None,
+    ) -> Self:
         house = card.house
         return cls(
             id=house.id,
@@ -321,6 +336,7 @@ class AdminHouseCard(BaseSchema):
             chat_bound=card.chat_bound,
             chat_binding_code=house.chat_binding_code,
             entrance_qrs=entrance_qrs,
+            object_qrs=object_qrs or [],
             built_year=house.built_year,
             floors=house.floors,
             area=house.area,

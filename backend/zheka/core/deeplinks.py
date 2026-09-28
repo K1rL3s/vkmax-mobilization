@@ -66,6 +66,21 @@ def entrance_qr_payload(house_id: HouseId, entrance: int) -> str:
     return f"{DeeplinkKind.ENTRANCE_QR}_{house_id}_{entrance}"
 
 
+OBJECT_QR_CATEGORIES = (
+    RequestCategory.ELEVATOR,
+    RequestCategory.ELECTRICITY,
+    RequestCategory.ENTRANCE,
+)
+
+
+def object_qr_payload(
+    house_id: HouseId,
+    entrance: int,
+    category: RequestCategory,
+) -> str:
+    return f"obj_{house_id}_{entrance}_{category}"
+
+
 def parse_deeplink(payload: str) -> Deeplink | None:
     demo_kind, _, number = payload.rpartition("_")
     if demo_kind in _DEMO:

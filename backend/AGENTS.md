@@ -278,6 +278,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   caps classify and OCR together per user per api worker (`QUOTA_CALLS` an
   hour); past it the route answers as if Yandex were off. The bot does not
   classify. OCR gets the photo's real type and skips types it can't read.
+- Object QRs (`obj_<house>_<entrance>_<category>`, lift, light, entrance
+  cleaning) are startapp links only the mini-app parses: it links the house
+  like an entrance QR (or picks an existing residency) and opens the request
+  form with that category and «Подъезд N: »; `parse_deeplink` never sees them.
 - `RequestChannel.CHAT` is written nowhere (no chat interaction in the spec).
 - Chats bind per `BOUND_CHAT` (`repos/chats.py`); fan-out also needs
   `bot_is_admin`. Every `bot_added` is a fresh binding: `upsert_added` clears

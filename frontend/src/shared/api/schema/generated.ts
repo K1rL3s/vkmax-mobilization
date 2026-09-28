@@ -1918,6 +1918,11 @@ export interface components {
       chat_binding_code: string;
       /** Entrance Qrs */
       entrance_qrs: components["schemas"]["EntranceQr"][];
+      /**
+       * Object Qrs
+       * @description QR на объектах подъезда: лифт, свет, уборка
+       */
+      object_qrs: components["schemas"]["ObjectQr"][];
       /** Built Year */
       built_year?: number | null;
       /** Floors */
@@ -3252,6 +3257,17 @@ export interface components {
     NotificationSettingsResponse: {
       /** Settings */
       settings: components["schemas"]["NotificationSettingItem"][];
+    };
+    /** ObjectQr */
+    ObjectQr: {
+      /** Entrance */
+      entrance: number;
+      category: components["schemas"]["RequestCategory"];
+      /**
+       * Deeplink
+       * @description Ссылка startapp на форму заявки
+       */
+      deeplink: string;
     };
     /** OkResponse */
     OkResponse: {

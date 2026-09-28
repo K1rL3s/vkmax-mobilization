@@ -5,11 +5,14 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from maxo.dialogs.test_tools.bot_client import FakeBot
+from maxo.utils.deeplink import create_startapp_link
 from sqlalchemy import Column, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, add_user
 
+from zheka.api.routes.admin.houses import object_qrs
 from zheka.api.schemas.houses import (
     AdminHouseCard,
     AdminHouseListItem,
@@ -18,6 +21,7 @@ from zheka.api.schemas.houses import (
     ResidencySummary,
 )
 from zheka.core.consent import CONSENT_VERSION
+from zheka.core.deeplinks import OBJECT_QR_CATEGORIES
 from zheka.core.enums import (
     ChatStatus,
     EventSource,
@@ -678,3 +682,17 @@ async def test_an_unregistered_org_shows_no_stats(
 
     assert card.org is not None
     assert card.org_stats is None
+
+
+def test_object_qrs_open_the_request_form_per_entrance_and_object(
+    fake_bot: FakeBot,
+) -> None:
+    house_id = HouseId(7)
+
+    qrs = object_qrs(fake_bot, house_id, 2)
+
+    assert [(qr.category, qr.entrance) for qr in qrs] == [
+        (category, entrance) for category in OBJECT_QR_CATEGORIES for entrance in (1, 2)
+    ]
+    assert qrs[0].deeplink == create_startapp_link(fake_bot, "obj_7_1_elevator")
+    assert all("startapp=obj_7_" in qr.deeplink for qr in qrs)

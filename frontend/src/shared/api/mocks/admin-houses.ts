@@ -269,6 +269,14 @@ export const adminHousesConfigs = [
         code: `qr_${house.id}_${index + 1}`,
         deeplink: `${BOT_LINK}qr_${house.id}_${index + 1}`,
       })),
+      object_qrs: (["elevator", "electricity", "entrance"] as const).flatMap(
+        (category) =>
+          Array.from({ length: house.entrances }, (_, index) => ({
+            entrance: index + 1,
+            category,
+            deeplink: `${BOT_LINK.replace("start=", "startapp=")}obj_${house.id}_${index + 1}_${category}`,
+          })),
+      ),
       built_year: house.built_year,
       floors: house.floors,
       area: house.area,

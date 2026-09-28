@@ -9691,6 +9691,12 @@ components:
             $ref: '#/components/schemas/EntranceQr'
           type: array
           title: Entrance Qrs
+        object_qrs:
+          items:
+            $ref: '#/components/schemas/ObjectQr'
+          type: array
+          title: Object Qrs
+          description: 'QR на объектах подъезда: лифт, свет, уборка'
         built_year:
           anyOf:
           - type: integer
@@ -9735,6 +9741,7 @@ components:
       - chat_bound
       - chat_binding_code
       - entrance_qrs
+      - object_qrs
       title: AdminHouseCard
     AdminHouseListItem:
       properties:
@@ -12023,6 +12030,23 @@ components:
       required:
       - settings
       title: NotificationSettingsResponse
+    ObjectQr:
+      properties:
+        entrance:
+          type: integer
+          title: Entrance
+        category:
+          $ref: '#/components/schemas/RequestCategory'
+        deeplink:
+          type: string
+          title: Deeplink
+          description: Ссылка startapp на форму заявки
+      type: object
+      required:
+      - entrance
+      - category
+      - deeplink
+      title: ObjectQr
     OkResponse:
       properties:
         ok:

@@ -52,15 +52,21 @@ export const useNewRequest = () => {
   const [searchParams] = useSearchParams();
   const preset =
     requestCategorySchema.safeParse(searchParams.get("category")).data ?? null;
+  const entrance = z.coerce
+    .number()
+    .int()
+    .positive()
+    .safeParse(searchParams.get("entrance") ?? undefined).data;
   const { currentResidency: residency } = useSession();
-  const [description, setDescription] = useState("");
+  const prefill = entrance === undefined ? "" : `Подъезд ${entrance}: `;
+  const [description, setDescription] = useState(prefill);
   const [picked, setPicked] = useState<RequestCategory | null>(
     dispute?.category ?? preset,
   );
   const photos = usePhotos();
 
   useClosingConfirmation(
-    description.trim().length > 0 || photos.names.length > 0,
+    description.trim() !== prefill.trim() || photos.names.length > 0,
   );
 
   const categories = useRequestCategories();

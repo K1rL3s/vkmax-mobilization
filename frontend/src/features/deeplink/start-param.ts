@@ -52,6 +52,25 @@ const qrStartParamSchema = startParam(qrStartParamPattern).transform(
   },
 );
 
+const objStartParamPattern = /^obj_([1-9]\d*)_([1-9]\d*)_([a-z_]+)$/;
+
+const objStartParamSchema = startParam(objStartParamPattern).transform(
+  (raw, context) => {
+    const [, id = "", rawEntrance = "", rawCategory] =
+      objStartParamPattern.exec(raw) ?? [];
+    const houseId = positiveInteger(id);
+    const entrance = positiveInteger(rawEntrance);
+    const category = requestCategorySchema.safeParse(rawCategory).data;
+
+    if (houseId === null || entrance === null || category === undefined) {
+      context.addIssue({ code: "custom", message: "Некорректный QR объекта" });
+      return z.NEVER;
+    }
+
+    return { kind: "obj", houseId, entrance, category } as const;
+  },
+);
+
 const codeStartParamSchema = <Kind extends string>(
   prefix: string,
   kind: Kind,
@@ -122,6 +141,7 @@ const pathStartParamSchema = startParam(/^[A-Za-z0-9_-]+$/).transform(
 const startParamSchema = z.union([
   houseStartParamSchema,
   qrStartParamSchema,
+  objStartParamSchema,
   codeStartParamSchema("flat", "flat"),
   codeStartParamSchema("inv", "invite"),
   codeStartParamSchema("reg", "register"),

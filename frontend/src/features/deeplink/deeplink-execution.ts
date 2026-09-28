@@ -103,10 +103,11 @@ const residencyIn = async (houseId: number) =>
   );
 
 const executeHouseDeeplink = async (
-  command: Extract<StartParam, { kind: "house" | "qr" }>,
+  command: Extract<StartParam, { kind: "house" | "qr" | "obj" }>,
 ): Promise<DeeplinkExecution> => {
   const existing =
-    command.kind === "house" && command.category !== null
+    command.kind === "obj" ||
+    (command.kind === "house" && command.category !== null)
       ? await residencyIn(command.houseId)
       : undefined;
 
@@ -121,8 +122,8 @@ const executeHouseDeeplink = async (
       params: { ...authParams(), path: { house_id: command.houseId } },
       body: {
         role: "owner",
-        source: command.kind === "qr" ? "qr" : "chat",
-        ...(command.kind === "qr" ? { entrance: command.entrance } : {}),
+        source: command.kind === "house" ? "chat" : "qr",
+        ...(command.kind === "house" ? {} : { entrance: command.entrance }),
       },
     })
     .catch(expectedFailure);
@@ -189,6 +190,7 @@ export const executeDeeplink = (
       return executeDemoDeeplink(command);
     case "house":
     case "qr":
+    case "obj":
       return executeHouseDeeplink(command);
   }
 };
