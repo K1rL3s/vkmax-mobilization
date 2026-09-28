@@ -56,6 +56,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/me/phone": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Подтвердить номер телефона из MAX
+     * @description Тело - ответ WebApp.requestContact(). Подпись HMAC-SHA256 токеном бота над authDate, phone без «+» и userId, не старше суток. Номер видят только сотрудники УК домов жителя
+     */
+    post: operations["verify_phone"];
+    /** Удалить номер телефона */
+    delete: operations["forget_phone"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/me/notifications": {
     parameters: {
       query?: never;
@@ -2121,6 +2142,8 @@ export interface components {
       is_staff_author: boolean;
       /** Author Name */
       author_name?: string | null;
+      /** Author Phone */
+      author_phone?: string | null;
       /** Caller Name */
       caller_name?: string | null;
       /** Caller Phone */
@@ -2176,6 +2199,8 @@ export interface components {
       is_staff_author: boolean;
       /** Author Name */
       author_name?: string | null;
+      /** Author Phone */
+      author_phone?: string | null;
       /** Caller Name */
       caller_name?: string | null;
       /** Caller Phone */
@@ -3107,6 +3132,8 @@ export interface components {
       flat_number?: string | null;
       /** Block Reason */
       block_reason?: string | null;
+      /** Phone */
+      phone?: string | null;
     };
     /** LinkHouseRequest */
     LinkHouseRequest: {
@@ -3139,6 +3166,11 @@ export interface components {
       orgs: components["schemas"]["OrgMembership"][];
       /** Is Demo */
       is_demo: boolean;
+      /**
+       * Phone
+       * @description Номер, подтвержденный MAX, в формате +79991234567
+       */
+      phone?: string | null;
     };
     /** MeterItem */
     MeterItem: {
@@ -4483,6 +4515,18 @@ export interface components {
       detail: string;
       verification_status?: components["schemas"]["VerificationStatus"] | null;
     };
+    /** VerifyPhoneRequest */
+    VerifyPhoneRequest: {
+      /** Phone */
+      phone: string;
+      /**
+       * Auth Date
+       * @description authDate из requestContact
+       */
+      auth_date: string;
+      /** Hash */
+      hash: string;
+    };
     /** VoteRequest */
     VoteRequest: {
       /** Option Ids */
@@ -4762,6 +4806,180 @@ export interface operations {
         "application/json": components["schemas"]["ConsentRequest"];
       };
     };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MeResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  verify_phone: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VerifyPhoneRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MeResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  forget_phone: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       /** @description Successful Response */
       200: {

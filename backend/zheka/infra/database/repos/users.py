@@ -127,4 +127,16 @@ class UsersRepo(BaseAlchemyRepo):
         user.max_chat_id = None
         user.consent_version = None
         user.consent_at = None
+        user.phone = None
+        user.phone_verified_at = None
+        await self._session.flush()
+
+    async def set_phone(
+        self,
+        user: User,
+        phone: str | None,
+        at: datetime | None,
+    ) -> None:
+        user.phone = phone
+        user.phone_verified_at = at
         await self._session.flush()

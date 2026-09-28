@@ -51,6 +51,12 @@ export const ResidentSheet = ({
           <Typography.Text variant="description" color="secondary">
             {residentPlace(resident)}
           </Typography.Text>
+
+          {resident.phone && (
+            <Typography.Text asChild variant="description" color="primary">
+              <a href={`tel:${resident.phone}`}>{resident.phone}</a>
+            </Typography.Text>
+          )}
         </Flex>
 
         {residentActions(resident).map((action) => (

@@ -24,6 +24,7 @@ import {
 } from "@/shared/ui/icon";
 import { StatusPill } from "@/shared/ui/status-pill";
 
+import { PhonePanel } from "./phone-panel";
 import { useForgetMe } from "./use-forget-me";
 import {
   ALWAYS_DELIVERED,
@@ -179,6 +180,8 @@ const ProfilePage = () => {
           </section>
         </Flex>
       )}
+
+      <PhonePanel />
 
       <Flex asChild align="stretch" direction="column" gap={8}>
         <section>

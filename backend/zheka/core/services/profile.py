@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from zheka.base import ZhekaType
 from zheka.core.consent import CONSENT_VERSION
 from zheka.core.enums import EventSource, EventType, OrgRole, VerificationStatus
@@ -142,6 +144,24 @@ class ProfileService:
             source=source.value,
             version=version,
         )
+        return await self.me(user_id)
+
+    async def set_phone(self, user_id: UserId, phone: str | None) -> MeView:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise EntityNotFound("Пользователь не найден")
+        if phone == user.phone:
+            return await self.me(user_id)
+        had = user.phone is not None
+        await self._users.set_phone(
+            user,
+            phone,
+            None if phone is None else datetime.now(UTC),
+        )
+        if phone is not None:
+            await self._events.record(EventType.PHONE_VERIFIED, user_id=user_id)
+        elif had:
+            await self._events.record(EventType.PHONE_FORGOTTEN, user_id=user_id)
         return await self.me(user_id)
 
     async def forget(self, user_id: UserId) -> None:

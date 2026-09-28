@@ -1,5 +1,5 @@
 import { badRequest, endpoint, ok } from "./reply";
-import { acceptConsent, activateDemoAccess, me } from "./state";
+import { acceptConsent, activateDemoAccess, me, user } from "./state";
 
 export const meConfigs = [
   endpoint("get", "/me", () => ok(me())),
@@ -11,6 +11,22 @@ export const meConfigs = [
     }
 
     acceptConsent(version);
+
+    return ok(me());
+  }),
+  endpoint("post", "/me/phone", (request) => {
+    const phone = request.body.phone;
+
+    if (typeof phone !== "string" || phone.trim() === "") {
+      return badRequest("Номер не подтвержден MAX, попробуйте еще раз");
+    }
+
+    user.phone = `+${phone.replace(/^\+/, "")}`;
+
+    return ok(me());
+  }),
+  endpoint("delete", "/me/phone", () => {
+    user.phone = null;
 
     return ok(me());
   }),

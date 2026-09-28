@@ -264,6 +264,7 @@ class AdminRequestListItem(RequestListItem):
     address: str
     is_staff_author: bool
     author_name: str | None = None
+    author_phone: str | None = None
     caller_name: str | None = None
     caller_phone: str | None = None
 
@@ -278,6 +279,7 @@ class AdminRequestListItem(RequestListItem):
             address=row.house.address,
             is_staff_author=request.is_staff_author,
             author_name=None if row.author is None else row.author.name,
+            author_phone=None if row.author is None else row.author.phone,
             caller_name=request.caller_name,
             caller_phone=request.caller_phone,
         )
@@ -286,6 +288,7 @@ class AdminRequestListItem(RequestListItem):
 class AdminRequestCard(RequestCard):
     is_staff_author: bool
     author_name: str | None = None
+    author_phone: str | None = None
     caller_name: str | None = None
     caller_phone: str | None = None
     executor_user_id: UserId | None = None
@@ -303,6 +306,7 @@ class AdminRequestCard(RequestCard):
             **base.model_dump(),
             is_staff_author=request.is_staff_author,
             author_name=None if data.author is None else data.author.name,
+            author_phone=None if data.author is None else data.author.phone,
             caller_name=request.caller_name,
             caller_phone=request.caller_phone,
             executor_user_id=request.executor_user_id,

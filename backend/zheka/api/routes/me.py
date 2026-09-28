@@ -1,10 +1,11 @@
+from datetime import UTC, datetime
 from http import HTTPStatus
 
 from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import CurrentAccountDep, RequireConsentDep
+from zheka.api.dependencies import CurrentAccountDep, CurrentUserDep, RequireConsentDep
 from zheka.api.schemas.base import OkResponse
 from zheka.api.schemas.me import (
     ConsentRequest,
@@ -12,7 +13,10 @@ from zheka.api.schemas.me import (
     NotificationSettingsResponse,
     TrackEventRequest,
     UpdateNotificationSettingsRequest,
+    VerifyPhoneRequest,
 )
+from zheka.config import Config
+from zheka.core.contact import verify_bridge_contact
 from zheka.core.enums import EventSource
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
@@ -41,6 +45,43 @@ async def accept_consent(
         EventSource.MINIAPP,
     )
     return MeResponse.of(view)
+
+
+@router.post(
+    "/me/phone",
+    summary="Подтвердить номер телефона из MAX",
+    description=(
+        "Тело - ответ WebApp.requestContact(). Подпись HMAC-SHA256 токеном бота "
+        "над authDate, phone без «+» и userId, не старше суток. Номер видят "
+        "только сотрудники УК домов жителя"
+    ),
+)
+async def verify_phone(
+    current_account: RequireConsentDep,
+    current_user: CurrentUserDep,
+    body: VerifyPhoneRequest,
+    config: FromDishka[Config],
+    profile_service: FromDishka[ProfileService],
+) -> MeResponse:
+    phone = verify_bridge_contact(
+        body.phone,
+        body.auth_date,
+        body.hash,
+        current_user.user.id,
+        config.max.token,
+        datetime.now(UTC),
+    )
+    return MeResponse.of(
+        await profile_service.set_phone(current_account.user_id, phone),
+    )
+
+
+@router.delete("/me/phone", summary="Удалить номер телефона")
+async def forget_phone(
+    current_account: RequireConsentDep,
+    profile_service: FromDishka[ProfileService],
+) -> MeResponse:
+    return MeResponse.of(await profile_service.set_phone(current_account.user_id, None))
 
 
 @router.get("/me/notifications", summary="Настройки уведомлений")

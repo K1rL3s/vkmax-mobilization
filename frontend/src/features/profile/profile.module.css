@@ -66,3 +66,16 @@
     color: var(--icon-secondary);
   }
 }
+
+.PhonePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Failed {
+  color: var(--text-negative);
+}

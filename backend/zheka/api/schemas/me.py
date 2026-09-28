@@ -2,6 +2,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Literal, Self
 
+from pydantic import Field
+
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.houses import ResidencySummary
 from zheka.api.schemas.orgs import OrgMembership
@@ -23,6 +25,10 @@ class MeResponse(BaseSchema):
     residencies: list[ResidencySummary]
     orgs: list[OrgMembership]
     is_demo: bool
+    phone: str | None = Field(
+        default=None,
+        description="Номер, подтвержденный MAX, в формате +79991234567",
+    )
 
     @classmethod
     def of(cls, view: MeView) -> Self:
@@ -36,7 +42,14 @@ class MeResponse(BaseSchema):
             ],
             orgs=[OrgMembership.of(membership) for membership in view.orgs],
             is_demo=view.is_demo,
+            phone=view.user.phone,
         )
+
+
+class VerifyPhoneRequest(BaseSchema):
+    phone: str = Field(max_length=32)
+    auth_date: str = Field(max_length=32, description="authDate из requestContact")
+    hash: str = Field(max_length=128)
 
 
 class ConsentRequest(BaseSchema):

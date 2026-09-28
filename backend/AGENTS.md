@@ -105,11 +105,18 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `PHOTO_TTL` after `done_at` and reading photos `PHOTO_TTL` after
   `submitted_at`; their files go on the next run, so a rollback loses none. A
   new column holding a file name joins `referenced_names`, or its files go.
+- `POST /api/me/phone` takes `WebApp.requestContact()` as is and keeps the
+  phone only when `core/contact.py` verifies it: hex HMAC-SHA256 by the bot
+  token over `authDate=…\nphone=…\nuserId=…` (phone without «+», the caller's
+  MAX id), `authDate` in s or ms, within a day. Encoding and units come from
+  hnnsly, not MAX docs: check on a live client. Staff see it as
+  `author_phone` and a resident's `phone`, scoped like the rest of the card.
+  Sharing it is its own consent; `consent_version` stays.
 - `ProfileService.forget` (`DELETE /api/me`, bot `/delete`) deletes the
   user's residents, verification requests and revocations, demand signals,
   notification settings and org roles, cancels their upcoming booked
   appointments, clears `caller_name`/`caller_phone` on requests they authored,
-  and tombstones the `users` row (`FORGOTTEN_NAME`,
+  and tombstones the `users` row (`FORGOTTEN_NAME`, no phone,
   `max_user_id = API_CHECKER_MAX_USER_ID - id`): nothing is sent to it and a
   return is a new row. Requests, readings, votes and events
   stay. It refuses an org creator and the API checker, not a blocked resident.

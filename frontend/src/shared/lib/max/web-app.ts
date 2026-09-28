@@ -22,6 +22,7 @@ interface MaxWebApp {
 
   close(): void;
   shareMaxContent(params: MaxShareText): Promise<void>;
+  requestContact?(): Promise<unknown>;
   enableClosingConfirmation?(): void;
   disableClosingConfirmation?(): void;
 }

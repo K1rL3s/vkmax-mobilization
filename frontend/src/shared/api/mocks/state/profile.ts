@@ -34,6 +34,7 @@ export const user = {
   name: "Тестовый Житель",
   consent_at: null as string | null,
   consent_version: null as string | null,
+  phone: null as string | null,
 };
 
 const residencyList: MockResidency[] = [];

@@ -357,6 +357,7 @@ class HouseResidentItem(BaseSchema):
     flat_id: FlatId | None = None
     flat_number: str | None = None
     block_reason: str | None = None
+    phone: str | None = None
 
     @classmethod
     def of(cls, view: HouseResidentView) -> Self:
@@ -375,6 +376,7 @@ class HouseResidentItem(BaseSchema):
                 resident.flat_number if view.flat is None else view.flat.number
             ),
             block_reason=resident.block_reason,
+            phone=view.user.phone,
         )
 
 

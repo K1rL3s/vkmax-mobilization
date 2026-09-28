@@ -71,6 +71,8 @@ class EventType(StrEnum):
 
     CONSENT_GIVEN = "consent_given"
     ACCOUNT_DELETED = "account_deleted"
+    PHONE_VERIFIED = "phone_verified"
+    PHONE_FORGOTTEN = "phone_forgotten"
 
 
 class EventSource(StrEnum):

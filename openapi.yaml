@@ -257,6 +257,144 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/me/phone:
+    post:
+      tags:
+      - Профиль
+      summary: Подтвердить номер телефона из MAX
+      description: Тело - ответ WebApp.requestContact(). Подпись HMAC-SHA256 токеном бота над authDate, phone без «+» и userId, не старше суток. Номер видят только сотрудники УК домов жителя
+      operationId: verify_phone
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyPhoneRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+    delete:
+      tags:
+      - Профиль
+      summary: Удалить номер телефона
+      operationId: forget_phone
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/me/notifications:
     get:
       tags:
@@ -10049,6 +10187,11 @@ components:
           - type: string
           - type: 'null'
           title: Author Name
+        author_phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author Phone
         caller_name:
           anyOf:
           - type: string
@@ -10167,6 +10310,11 @@ components:
           - type: string
           - type: 'null'
           title: Author Name
+        author_phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author Phone
         caller_name:
           anyOf:
           - type: string
@@ -11749,6 +11897,11 @@ components:
           - type: string
           - type: 'null'
           title: Block Reason
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
       type: object
       required:
       - resident_id
@@ -11822,6 +11975,12 @@ components:
         is_demo:
           type: boolean
           title: Is Demo
+        phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Phone
+          description: Номер, подтвержденный MAX, в формате +79991234567
       type: object
       required:
       - user_id
@@ -14085,6 +14244,27 @@ components:
       - verified
       - detail
       title: VerifyFlatResponse
+    VerifyPhoneRequest:
+      properties:
+        phone:
+          type: string
+          maxLength: 32
+          title: Phone
+        auth_date:
+          type: string
+          maxLength: 32
+          title: Auth Date
+          description: authDate из requestContact
+        hash:
+          type: string
+          maxLength: 128
+          title: Hash
+      type: object
+      required:
+      - phone
+      - auth_date
+      - hash
+      title: VerifyPhoneRequest
     VoteRequest:
       properties:
         option_ids:

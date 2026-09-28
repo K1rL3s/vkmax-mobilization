@@ -16,6 +16,8 @@ class User(ZhekaMutableType):
     consent_at: datetime | None = None
     bot_stopped_at: datetime | None = None
     max_chat_id: MaxChatId | None = None
+    phone: str | None = None
+    phone_verified_at: datetime | None = None
 
 
 class NotificationSetting(ZhekaMutableType):

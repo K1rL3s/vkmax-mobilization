@@ -137,6 +137,13 @@ const AdminRequestPage = () => {
           <Fact label={request.author_name ? "Житель" : "Звонил в УК"}>
             {request.author_name ?? request.caller_name ?? "не записан"}
           </Fact>
+          {request.author_phone && (
+            <Fact label="Телефон жителя">
+              <a className={styles.Link} href={`tel:${request.author_phone}`}>
+                {request.author_phone}
+              </a>
+            </Fact>
+          )}
           {request.caller_phone && (
             <Fact label="Телефон">
               <a className={styles.Link} href={`tel:${request.caller_phone}`}>

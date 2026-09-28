@@ -30,6 +30,8 @@ users_table = Table(
     Column("consent_at", DateTime(timezone=True), nullable=True),
     Column("bot_stopped_at", DateTime(timezone=True), nullable=True),
     Column("max_chat_id", BigInteger, nullable=True),
+    Column("phone", String(16), nullable=True),
+    Column("phone_verified_at", DateTime(timezone=True), nullable=True),
 )
 
 notification_settings_table = Table(
