@@ -64,5 +64,9 @@
   .Answer {
     margin: -8px 0 0;
     padding: 0 16px 14px;
+
+    a {
+      color: var(--text-themed);
+    }
   }
 }
