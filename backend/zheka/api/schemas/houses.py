@@ -241,7 +241,10 @@ class FlatListItem(BaseSchema):
         default=None,
         description="Площадь в сотых долях квадратного метра",
     )
-    is_taken: bool = False
+    is_taken: bool = Field(
+        default=False,
+        description="В квартире уже есть житель; видят только жители дома",
+    )
 
     @classmethod
     def of(cls, flat: Flat, is_taken: bool) -> Self:

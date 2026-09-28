@@ -5,7 +5,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter, Query
 
-from zheka.api.dependencies import RequireConsentDep, ResidencyForHouseDep
+from zheka.api.dependencies import RequireConsentDep
 from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.houses import (
@@ -160,7 +160,7 @@ async def create_demand_signal(
 @router.get("/houses/{house_id}/flats", summary="Квартиры дома")
 async def list_house_flats(
     house_id: HouseId,
-    residency: ResidencyForHouseDep,
+    current_account: RequireConsentDep,
     houses_service: FromDishka[HousesService],
     q: str | None = None,
     entrance: int | None = None,
@@ -168,7 +168,7 @@ async def list_house_flats(
     offset: Offset = 0,
 ) -> Page[FlatListItem]:
     flats, total, taken = await houses_service.flats(
-        residency.user_id,
+        current_account.user_id,
         house_id,
         q,
         entrance,

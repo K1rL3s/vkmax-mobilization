@@ -41,7 +41,7 @@ from zheka.core.errors import (
 from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService, ResidencyView
-from zheka.infra.database.models import Chat, Flat, House, Request
+from zheka.infra.database.models import Chat, Flat, House, Request, Resident
 from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -418,14 +418,25 @@ async def test_admin_house_surface(
         await houses_service.admin_card(own.org_id, other.house_id)
 
 
-async def test_flats_are_listed_to_a_resident_and_hidden_from_a_stranger(
+async def test_flats_are_listed_to_anyone_and_taken_only_to_a_resident(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     stranger = await make_org_house_flat_user()
+    blocked = await make_org_house_flat_user()
     free_flat = Flat(house_id=own.house_id, number="2")
-    session.add(free_flat)
+    session.add_all(
+        [
+            free_flat,
+            Resident(
+                user_id=blocked.user_id,
+                house_id=own.house_id,
+                role=ResidentRole.TENANT,
+                status=ResidentStatus.BLOCKED,
+            ),
+        ],
+    )
     await session.flush()
     service = _make_service(session)
 
@@ -441,8 +452,20 @@ async def test_flats_are_listed_to_a_resident_and_hidden_from_a_stranger(
     assert total == 2
     assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
     assert taken == {own.flat_id}
+    for outsider in (stranger, blocked):
+        flats, total, taken = await service.flats(
+            outsider.user_id,
+            own.house_id,
+            None,
+            None,
+            50,
+            0,
+        )
+        assert total == 2
+        assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
+        assert taken == set()
     with pytest.raises(EntityNotFound):
-        await service.flats(stranger.user_id, own.house_id, None, None, 50, 0)
+        await service.flats(stranger.user_id, HouseId(0), None, None, 50, 0)
 
 
 async def test_a_chat_the_bot_was_removed_from_is_not_bound(

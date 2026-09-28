@@ -412,6 +412,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `chat_bound`, and `pending` filters nothing; `flats_count` goes to every
   staff role (an access request picks a flat). `GET /api/admin/houses` is
   open to EMPLOYEE with `residents_count` null.
+- `GET /api/houses/{id}/flats` needs only consent (a newcomer and a staff
+  phone request pick a flat before any residency, as the bot's flat list
+  does); `is_taken` goes only to an active resident of that house.
 
 ## Seed and demo
 

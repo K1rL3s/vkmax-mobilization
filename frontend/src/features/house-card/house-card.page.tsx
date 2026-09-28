@@ -9,6 +9,7 @@ import {
   type HouseCard,
   useHouseCard,
 } from "@/features/house";
+import { HouseMapPreview } from "@/features/house-map";
 import { cn } from "@/shared/lib/css";
 import {
   duration,
@@ -347,6 +348,10 @@ const HouseCardPage = () => {
       />
 
       <OutagesPanel outages={house.outages} />
+
+      {house.lat != null && house.lon != null && (
+        <HouseMapPreview lat={house.lat} lon={house.lon} />
+      )}
 
       <Facts house={house} />
 

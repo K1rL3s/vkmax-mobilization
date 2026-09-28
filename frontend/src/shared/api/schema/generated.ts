@@ -3177,6 +3177,7 @@ export interface components {
       area?: number | null;
       /**
        * Is Taken
+       * @description В квартире уже есть житель; видят только жители дома
        * @default false
        */
       is_taken: boolean;

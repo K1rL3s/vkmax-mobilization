@@ -1,6 +1,7 @@
 import type { AutocompleteOption } from "@/shared/ui/autocomplete";
 import { houseOutlineIcon } from "@/shared/ui/icon";
 
+import type { House } from "./types";
 import { useFlatSearch } from "./use-flat-search";
 import { useHouseLink } from "./use-house-link";
 import { useHouseSearch } from "./use-house-search";
@@ -30,6 +31,10 @@ export const useHouseSelect = () => {
     retryHouses: houseSearch.retry,
     selectHouse: (option: AutocompleteOption) => {
       houseSearch.select(option);
+      flatSearch.reset();
+    },
+    pickHouse: (picked: House) => {
+      houseSearch.pick(picked);
       flatSearch.reset();
     },
 

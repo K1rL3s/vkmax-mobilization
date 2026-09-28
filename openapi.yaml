@@ -12283,6 +12283,7 @@ components:
         is_taken:
           type: boolean
           title: Is Taken
+          description: В квартире уже есть житель; видят только жители дома
           default: false
       type: object
       required:

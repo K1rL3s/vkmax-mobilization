@@ -338,10 +338,7 @@ class HousesService:
         limit: int,
         offset: int,
     ) -> tuple[Sequence[Flat], int, set[FlatId]]:
-        resident = await self._residents.get_for_house(user_id, house_id)
-        if resident is None:
-            raise EntityNotFound("Дом не найден")
-
+        await self._get_house(house_id)
         flats, total = await self._houses.list_flats(
             house_id,
             query,
@@ -349,6 +346,10 @@ class HousesService:
             limit,
             offset,
         )
+        resident = await self._residents.get_for_house(user_id, house_id)
+        if resident is None or resident.status is ResidentStatus.BLOCKED:
+            return flats, total, set()
+
         residents = await self._residents.list_for_house(house_id)
         taken = {
             resident.flat_id for resident in residents if resident.flat_id is not None
