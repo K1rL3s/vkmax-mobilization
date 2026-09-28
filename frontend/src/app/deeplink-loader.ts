@@ -14,6 +14,9 @@ import { getMaxLaunch } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { loadSession } from "@/shared/model/session";
 
+const newRequestRoute = (category: string) =>
+  `${Routes.REQUEST_NEW}?${new URLSearchParams({ category }).toString()}`;
+
 export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
   const raw = getMaxLaunch().startParam;
   const command = parseStartParam(raw);
@@ -71,6 +74,10 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
       hasResidency: session.residencies.length > 0,
       error: attempt.error,
     };
+  }
+
+  if (command.kind === "house" && command.category !== null) {
+    throw redirect(newRequestRoute(command.category));
   }
 
   throw redirect(

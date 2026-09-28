@@ -286,6 +286,15 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - `user_added` (MAX sends it only where the bot is admin) welcomes the member
   by name with the join button, unless the chat is unbound, the bot lost
   rights, the member is a bot or already an active resident of the house.
+- Chat cards (`chat_cards`, one message per `(chat, kind, ref_id)`) are sent
+  only by `sync_chat_card`, rendered from the db by `ChatCardsService` under
+  `ChatsRepo.lock`: it edits a card it has and posts one only with
+  `post=True`; a failed send or edit rechecks rights. `TaskPublisher` drops an
+  exact duplicate of a `RENDERED_FROM_DB` task within a transaction, so a
+  group status change queues one sync. A group card is posted on forming and
+  every join, edited by `_move` and `_complete_review` of its members; no
+  flats, names or descriptions in it. `bot_added` and deleting the card
+  message forget it. «✋ У меня тоже» is a startapp `house_<id>_<category>`.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap
   and after each failed chat send. `set_admin` records `CHAT_ADMIN_GRANTED`
   and queues the welcome only on `false -> true`; a failed send without rights

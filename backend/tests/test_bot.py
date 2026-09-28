@@ -145,6 +145,7 @@ from zheka.broker.tasks.chats import (
     PINS_HERE,
     WELCOME_MEMBER_TEXT,
     on_bot_added,
+    sync_chat_card,
     sync_chat_pins,
     welcome_chat,
 )
@@ -159,6 +160,7 @@ from zheka.broker.tasks.requests import (
     send_executor_card,
     send_review_card,
 )
+from zheka.core import texts
 from zheka.core.consent import CONSENT_TEXT, CONSENT_VERSION
 from zheka.core.deeplinks import (
     DeeplinkKind,
@@ -168,6 +170,7 @@ from zheka.core.deeplinks import (
 )
 from zheka.core.enums import (
     CATEGORY_RULES,
+    ChatCardKind,
     ChatStatus,
     EventSource,
     EventType,
@@ -190,6 +193,7 @@ from zheka.core.ids import (
     MaxChatId,
     MaxUserId,
     OrgId,
+    RequestGroupId,
     RequestId,
     UserId,
 )
@@ -220,6 +224,7 @@ from zheka.core.services.requests import (
 )
 from zheka.core.texts import (
     CABINET_BUTTON,
+    ME_TOO,
     OPEN_REQUEST,
     REQUEST_STATUS_LABELS,
     VOTE,
@@ -227,6 +232,7 @@ from zheka.core.texts import (
 from zheka.infra.database.models import (
     Announcement,
     Chat,
+    ChatCard,
     ChatPin,
     Flat,
     House,
@@ -244,6 +250,7 @@ from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
 from zheka.infra.database.tables.announcements import announcements_table
+from zheka.infra.database.tables.chats import chat_cards_table
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
@@ -1867,6 +1874,125 @@ async def test_the_welcome_carries_the_link_to_the_house(
     assert message["notify"] is False
     [attachment] = message["attachments"]
     assert attachment.payload.buttons == _join_house(fake_bot, house_id)
+
+
+async def _grouped_chat(
+    session: AsyncSession,
+    client: BotClient,
+    status: RequestStatus = RequestStatus.NEW,
+) -> tuple[MaxChatId, HouseId, RequestGroupId]:
+    chat_id = await _bound_chat(session, client)
+    chat = await ChatsRepo(session).get(chat_id)
+    assert chat is not None
+    assert chat.house_id is not None
+    house_id = chat.house_id
+    flats = [Flat(house_id=house_id, number=number) for number in ("5", "6")]
+    session.add_all(flats)
+    await session.flush()
+    repo = RequestsRepo(session)
+    group = await repo.create_group(house_id, RequestCategory.LEAK, datetime.now(UTC))
+    requests = [
+        Request(
+            house_id=house_id,
+            flat_id=flat.id,
+            category=RequestCategory.LEAK,
+            description="Течет стояк",
+            status=status,
+            channel=RequestChannel.MINIAPP,
+            deadline_at=datetime.now(UTC),
+            group_id=group.id,
+        )
+        for flat in flats
+    ]
+    session.add_all(requests)
+    await session.flush()
+    group_id = group.id
+    await session.commit()
+    return chat_id, house_id, group_id
+
+
+async def _cards(session: AsyncSession, chat_id: MaxChatId) -> list[str]:
+    session.expire_all()
+    stmt = select(chat_cards_table.c.mid).where(chat_cards_table.c.chat_id == chat_id)
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def test_the_group_card_is_posted_once_and_then_edited_in_place(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    fake_bot: FakeBot,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, house_id, group_id = await _grouped_chat(bot_session, client)
+    card = {"kind": ChatCardKind.GROUP, "ref_id": group_id}
+
+    await _run(task_broker, sync_chat_card, **card, post=True)
+    await _run(task_broker, sync_chat_card, **card, post=True)
+
+    [sent] = pin_api.sent
+    assert sent["chat_id"] == chat_id
+    assert sent["notify"] is False
+    assert sent["text"] == texts.group_card(RequestCategory.LEAK, 2, RequestStatus.NEW)
+    [attachment] = sent["attachments"]
+    me_too = create_startapp_link(fake_bot, f"house_{house_id}_leak")
+    assert attachment.payload.buttons == [
+        [LinkButton(text=ME_TOO, url=me_too)],
+        *_join_house(fake_bot, house_id),
+    ]
+    [edited] = pin_api.edited
+    assert edited["message_id"] == "list-1"
+    assert await _cards(bot_session, chat_id) == ["list-1"]
+
+
+async def test_a_status_sync_edits_only_a_posted_card(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, _, group_id = await _grouped_chat(bot_session, client)
+
+    await _run(
+        task_broker,
+        sync_chat_card,
+        kind=ChatCardKind.GROUP,
+        ref_id=group_id,
+        post=False,
+    )
+
+    assert pin_api.sent == []
+    assert await _cards(bot_session, chat_id) == []
+
+
+async def test_a_reviewed_group_card_says_done_and_drops_the_buttons(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, _, group_id = await _grouped_chat(
+        bot_session,
+        client,
+        RequestStatus.ON_REVIEW,
+    )
+    bot_session.add(
+        ChatCard(chat_id=chat_id, kind=ChatCardKind.GROUP, ref_id=group_id, mid="c-1"),
+    )
+    await bot_session.commit()
+
+    await _run(
+        task_broker,
+        sync_chat_card,
+        kind=ChatCardKind.GROUP,
+        ref_id=group_id,
+        post=False,
+    )
+
+    [edited] = pin_api.edited
+    assert edited["message_id"] == "c-1"
+    assert edited["text"] == texts.group_card_done(RequestCategory.LEAK, 2)
+    assert edited["attachments"] == []
 
 
 async def _listed_chat(

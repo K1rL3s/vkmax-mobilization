@@ -284,3 +284,42 @@ def request_escalated_author(request: Request) -> str:
         f"{_request(request.id, request.category)}\n"
         "📄 Если ничего не изменится, можно подать жалобу в ГЖИ"
     )
+
+
+ME_TOO = "✋ У меня тоже"
+CARD_HASHTAG = "#заявка"
+
+
+_TEENS = range(11, 15)
+_FEW = range(2, 5)
+
+
+def _plural(count: int, one: str, few: str, many: str) -> str:
+    if count % 100 in _TEENS:
+        return many
+    if count % 10 == 1:
+        return one
+    return few if count % 10 in _FEW else many
+
+
+def flats_count(count: int) -> str:
+    return f"{count} {_plural(count, 'квартира', 'квартиры', 'квартир')}"
+
+
+def group_card(category: RequestCategory, flats: int, status: RequestStatus) -> str:
+    rule = CATEGORY_RULES[category]
+    told = _plural(flats, "сообщила", "сообщили", "сообщили")
+    return (
+        f"{rule.caption}: о проблеме {told} {flats_count(flats)}\n"
+        "УК получила заявки. Статус: "
+        f"{REQUEST_STATUS_LABELS[status].lower()}\n"
+        f"Если у вас то же самое, нажмите «{ME_TOO[2:]}»\n"
+        f"{CARD_HASHTAG}"
+    )
+
+
+def group_card_done(category: RequestCategory, flats: int) -> str:
+    return (
+        f"✅ {CATEGORY_RULES[category].label}: УК отметила работы выполненными "
+        f"(сообщали {flats_count(flats)})"
+    )

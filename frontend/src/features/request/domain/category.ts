@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
   bulbIcon,
   buildingIcon,
@@ -26,6 +28,10 @@ export const CATEGORY_ICON: Record<RequestCategory, string> = {
   charge_dispute: receiptIcon,
   other: wrenchIcon,
 };
+
+export const requestCategorySchema = z.enum(
+  Object.keys(CATEGORY_ICON) as [RequestCategory, ...RequestCategory[]],
+);
 
 export const ZONE_LABEL: Record<ResponsibilityZone, string> = {
   management: "Управляющая компания",

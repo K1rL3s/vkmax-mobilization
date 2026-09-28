@@ -5,6 +5,7 @@ from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.deeplinks import admin_request_app_path, request_app_path
 from zheka.core.enums import (
+    ChatCardKind,
     EventType,
     NotificationCategory,
     OrgRole,
@@ -361,6 +362,12 @@ class RequestsService:
             **{"from": RequestStatus.ON_REVIEW.value, "to": RequestStatus.DONE.value},
             by_role=by_role.value,
         )
+        if request.group_id is not None:
+            self._notifications.sync_chat_card(
+                ChatCardKind.GROUP,
+                request.group_id,
+                post=False,
+            )
         if auto:
             await self._events.record(
                 EventType.REQUEST_AUTO_CLOSED,

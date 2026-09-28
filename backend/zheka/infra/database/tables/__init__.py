@@ -7,7 +7,11 @@ from zheka.infra.database.tables.access import (
 from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.base import mapper_registry, metadata
 from zheka.infra.database.tables.charges import charges_table, tariffs_table
-from zheka.infra.database.tables.chats import chat_pins_table, chats_table
+from zheka.infra.database.tables.chats import (
+    chat_cards_table,
+    chat_pins_table,
+    chats_table,
+)
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
 from zheka.infra.database.tables.invites import flat_invites_table, org_invites_table
@@ -54,6 +58,7 @@ mapper_registry.map_imperatively(models.Tariff, tariffs_table)
 mapper_registry.map_imperatively(models.Charge, charges_table)
 mapper_registry.map_imperatively(models.Chat, chats_table)
 mapper_registry.map_imperatively(models.ChatPin, chat_pins_table)
+mapper_registry.map_imperatively(models.ChatCard, chat_cards_table)
 mapper_registry.map_imperatively(models.Event, events_table)
 mapper_registry.map_imperatively(models.House, houses_table)
 mapper_registry.map_imperatively(models.Flat, flats_table)

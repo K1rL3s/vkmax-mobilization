@@ -31,5 +31,6 @@ RequestMessageId = NewType("RequestMessageId", int)
 DemandSignalId = NewType("DemandSignalId", int)
 NotificationSettingId = NewType("NotificationSettingId", int)
 ChatPinId = NewType("ChatPinId", int)
+ChatCardId = NewType("ChatCardId", int)
 
 API_CHECKER_MAX_USER_ID = MaxUserId(-(10**18))

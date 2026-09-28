@@ -8,6 +8,7 @@ from zheka.core.services.analytics import AnalyticsService
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.charges import ChargesService
+from zheka.core.services.chat_cards import ChatCardsService
 from zheka.core.services.chats import ChatsService
 from zheka.core.services.demo import DemoService
 from zheka.core.services.events import EventsService
@@ -55,6 +56,7 @@ class ServicesProvider(Provider):
         ReceptionService,
         AccessService,
         ChatsService,
+        ChatCardsService,
         RemindersService,
         AnalyticsService,
         DemoService,

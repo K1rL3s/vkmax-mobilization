@@ -4,7 +4,12 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core import texts
 from zheka.core.deeplinks import request_app_path
-from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
+from zheka.core.enums import (
+    ChatCardKind,
+    EventType,
+    NotificationCategory,
+    NotificationLevel,
+)
 from zheka.core.ids import (
     AccessRequestId,
     AnnouncementId,
@@ -167,6 +172,14 @@ class NotificationsService:
             chat_id=chat_id,
             notify=notify,
             resend=resend,
+        )
+
+    def sync_chat_card(self, kind: ChatCardKind, ref_id: int, *, post: bool) -> None:
+        self._publisher.publish(
+            TaskName.SYNC_CHAT_CARD,
+            kind=kind,
+            ref_id=ref_id,
+            post=post,
         )
 
     def notify_author(self, request: Request, text: str) -> None:

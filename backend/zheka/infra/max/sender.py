@@ -146,7 +146,7 @@ class MaxSender:
                 await self._bot.edit_message(
                     message_id=mid,
                     text=text,
-                    attachments=keyboard_attachments(keyboard),
+                    attachments=keyboard_attachments(keyboard) if keyboard else [],
                     notify=False,
                 )
                 done = True

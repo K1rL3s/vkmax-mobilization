@@ -97,9 +97,25 @@ const expectedFailure = (error: unknown): never => {
     : error;
 };
 
+const residencyIn = async (houseId: number) =>
+  (await reloadSession()).residencies.find(
+    (residency) => residency.house_id === houseId,
+  );
+
 const executeHouseDeeplink = async (
   command: Extract<StartParam, { kind: "house" | "qr" }>,
 ): Promise<DeeplinkExecution> => {
+  const existing =
+    command.kind === "house" && command.category !== null
+      ? await residencyIn(command.houseId)
+      : undefined;
+
+  if (existing) {
+    await selectResidency(existing.resident_id);
+
+    return { target: "resident" };
+  }
+
   const { data, error } = await fetchClient
     .POST("/api/houses/{house_id}/link", {
       params: { ...authParams(), path: { house_id: command.houseId } },

@@ -18,6 +18,7 @@ from tests.conftest import (
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
+    ChatCardKind,
     ChatStatus,
     EventType,
     OrgRole,
@@ -44,7 +45,7 @@ from zheka.core.services.chats import (
     pins_text,
 )
 from zheka.core.services.events import EventsService
-from zheka.infra.database.models import Chat, ChatPin, Resident, User
+from zheka.infra.database.models import Chat, ChatCard, ChatPin, Resident, User
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -660,3 +661,24 @@ async def _pin_three(
             MessageRef(mid=f"m-{seq}", seq=seq),
             None,
         )
+
+
+async def test_a_deleted_card_and_a_re_add_forget_the_chat_cards(
+    session: AsyncSession,
+) -> None:
+    chat_id = await _added(session)
+    repo = ChatsRepo(session)
+    for kind, mid in ((ChatCardKind.GROUP, "c-1"), (ChatCardKind.POLL, "c-2")):
+        await repo.add_card(ChatCard(chat_id=chat_id, kind=kind, ref_id=1, mid=mid))
+    service = _service(session)
+
+    await service.on_message_removed(chat_id, "c-1")
+
+    session.expire_all()
+    assert await repo.get_card(chat_id, ChatCardKind.GROUP, 1) is None
+    assert await repo.get_card(chat_id, ChatCardKind.POLL, 1) is not None
+
+    await service.on_bot_added(chat_id, "Дом")
+
+    session.expire_all()
+    assert await repo.get_card(chat_id, ChatCardKind.POLL, 1) is None

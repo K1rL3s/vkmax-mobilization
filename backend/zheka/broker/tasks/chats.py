@@ -6,16 +6,20 @@ from maxo import Bot
 from maxo.dialogs import ShowMode
 from maxo.errors import MaxBotApiError, MaxBotNetworkError
 from maxo.types.link_button import LinkButton
-from maxo.utils.deeplink import create_start_link
+from maxo.utils.deeplink import create_start_link, create_startapp_link
 from taskiq import async_shared_broker
 
 from zheka.bot.dialog_data import ChatBindingData
 from zheka.bot.states import ChatBinding
 from zheka.broker.task_names import TaskName
-from zheka.core.deeplinks import house_payload
+from zheka.core.deeplinks import house_category_payload, house_payload
+from zheka.core.enums import ChatCardKind
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId
+from zheka.core.models import ChatCard
+from zheka.core.services.chat_cards import ChatCardView, ChatCardsService
 from zheka.core.services.chats import ChatsService, pins_text
+from zheka.core.texts import ME_TOO
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
@@ -160,6 +164,59 @@ async def sync_chat_pins(
             await sender.delete_message(chat_id, old)
     if not await sender.pin_message(chat_id, mid, notify=notify):
         await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+
+
+@async_shared_broker.task(task_name=TaskName.SYNC_CHAT_CARD.value)
+@inject(patch_module=True)
+async def sync_chat_card(
+    kind: ChatCardKind,
+    ref_id: int,
+    post: bool,
+    bot: FromDishka[Bot],
+    cards: FromDishka[ChatCardsService],
+    chats_service: FromDishka[ChatsService],
+    chats_repo: FromDishka[ChatsRepo],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> None:
+    view = await cards.render(kind, ref_id)
+    if view is None:
+        return
+    keyboard = _card_keyboard(bot, view)
+    for chat in await chats_repo.list_for_houses([view.house_id]):
+        chat_id = chat.chat_id
+        await chats_repo.lock(chat_id)
+        card = await chats_repo.get_card(chat_id, kind, ref_id)
+        if card is not None:
+            done = await sender.edit_message(chat_id, card.mid, view.text, keyboard)
+        elif post:
+            sent = await sender.send_message(
+                view.text,
+                chat_id=chat_id,
+                notify=False,
+                keyboard=keyboard,
+            )
+            done = sent is not None
+            if sent is not None:
+                mid = sent.message.body.mid
+                await chats_repo.add_card(
+                    ChatCard(chat_id=chat_id, kind=kind, ref_id=ref_id, mid=mid),
+                )
+        else:
+            continue
+        if not done:
+            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+
+
+def _card_keyboard(bot: Bot, view: ChatCardView) -> list[list[LinkButton]]:
+    keyboard: list[list[LinkButton]] = []
+    if view.me_too is not None:
+        payload = house_category_payload(view.house_id, view.me_too)
+        url = create_startapp_link(bot, payload)
+        keyboard.append([LinkButton(text=ME_TOO, url=url)])
+    if view.join:
+        keyboard.extend(_join_keyboard(bot, view.house_id))
+    return keyboard
 
 
 async def recheck_chat_rights(

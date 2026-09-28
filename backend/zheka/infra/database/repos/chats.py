@@ -1,14 +1,18 @@
 from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from zheka.core.enums import ChatStatus
+from zheka.core.enums import ChatCardKind, ChatStatus
 from zheka.core.ids import HouseId, MaxChatId, UserId
-from zheka.infra.database.models import Chat, ChatPin
+from zheka.infra.database.models import Chat, ChatCard, ChatPin
 from zheka.infra.database.repos.base import BaseAlchemyRepo
-from zheka.infra.database.tables.chats import chat_pins_table, chats_table
+from zheka.infra.database.tables.chats import (
+    chat_cards_table,
+    chat_pins_table,
+    chats_table,
+)
 
 BOUND_CHAT = and_(
     chats_table.c.house_id.is_not(None),
@@ -105,3 +109,39 @@ class ChatsRepo(BaseAlchemyRepo):
     async def set_pins_mid(self, chat: Chat, mid: str | None) -> None:
         chat.pins_mid = mid
         await self._session.flush()
+
+    async def get_card(
+        self,
+        chat_id: MaxChatId,
+        kind: ChatCardKind,
+        ref_id: int,
+    ) -> ChatCard | None:
+        stmt = select(ChatCard).where(
+            chat_cards_table.c.chat_id == chat_id,
+            chat_cards_table.c.kind == kind,
+            chat_cards_table.c.ref_id == ref_id,
+        )
+        card: ChatCard | None = await self._session.scalar(stmt)
+        return card
+
+    async def list_cards(
+        self,
+        kind: ChatCardKind,
+        ref_id: int,
+    ) -> Sequence[ChatCard]:
+        stmt = select(ChatCard).where(
+            chat_cards_table.c.kind == kind,
+            chat_cards_table.c.ref_id == ref_id,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def add_card(self, card: ChatCard) -> None:
+        self._session.add(card)
+        await self._session.flush()
+
+    async def drop_cards(self, chat_id: MaxChatId, mid: str | None = None) -> None:
+        stmt = delete(chat_cards_table).where(chat_cards_table.c.chat_id == chat_id)
+        if mid is not None:
+            stmt = stmt.where(chat_cards_table.c.mid == mid)
+        await self._session.execute(stmt)

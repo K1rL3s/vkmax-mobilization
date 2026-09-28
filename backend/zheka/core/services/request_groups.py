@@ -2,10 +2,11 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from zheka.base import ZhekaType
-from zheka.core.enums import EventType, RequestCategory
+from zheka.core.enums import ChatCardKind, EventType, RequestCategory
 from zheka.core.ids import FlatId, HouseId, RequestGroupId, UserId
 from zheka.core.models import OrgSettings, Request
 from zheka.core.services.events import EventsService
+from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.requests import RequestsRepo
 
 DEFAULT_GROUP_THRESHOLD = 3
@@ -47,15 +48,17 @@ def complaint_sources(requests: Sequence[Request]) -> set[tuple[str, int]]:
 
 
 class GroupingService:
-    __slots__ = ("_events", "_requests")
+    __slots__ = ("_events", "_notifications", "_requests")
 
     def __init__(
         self,
         requests_repo: RequestsRepo,
         events_service: EventsService,
+        notifications_service: NotificationsService,
     ) -> None:
         self._requests = requests_repo
         self._events = events_service
+        self._notifications = notifications_service
 
     async def attach(
         self,
@@ -89,6 +92,7 @@ class GroupingService:
             category=request.category.value,
             size=len(open_requests),
         )
+        self._notifications.sync_chat_card(ChatCardKind.GROUP, group.id, post=True)
 
     async def similar(
         self,
@@ -130,3 +134,4 @@ class GroupingService:
             group_id=group_id,
             group_size=sizes.get(group_id, 0),
         )
+        self._notifications.sync_chat_card(ChatCardKind.GROUP, group_id, post=True)

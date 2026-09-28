@@ -487,6 +487,17 @@ class StubClassifier(YandexClassifier):
         return self._category
 
 
+def grouping_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> GroupingService:
+    return GroupingService(
+        RequestsRepo(session),
+        EventsService(EventsRepo(session)),
+        make_notifications_service(session, publisher),
+    )
+
+
 def requests_service(
     session: AsyncSession,
     publisher: TaskPublisher | None = None,
@@ -499,7 +510,7 @@ def requests_service(
         UsersRepo(session),
         OrgsRepo(session),
         FilesService(make_config().files, "test-token"),
-        GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        grouping_service(session, publisher),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
         classifier or StubClassifier(None),
@@ -517,7 +528,7 @@ def admin_requests_service(
         UsersRepo(session),
         OrgsRepo(session),
         ResidentsRepo(session),
-        GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        grouping_service(session, publisher),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
         category_executors_service(session, publisher),

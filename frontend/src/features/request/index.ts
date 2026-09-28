@@ -1,4 +1,9 @@
-export { CATEGORY_ICON, NO_NORM, ZONE_LABEL } from "./domain/category";
+export {
+  CATEGORY_ICON,
+  NO_NORM,
+  requestCategorySchema,
+  ZONE_LABEL,
+} from "./domain/category";
 export { deadlineLeft, deadlineProgress } from "./domain/format";
 export { buildTimeline } from "./domain/timeline";
 export { DeadlinePanel } from "./ui/deadline-panel";

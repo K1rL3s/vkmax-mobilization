@@ -5,6 +5,7 @@ from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.deeplinks import admin_request_app_path
 from zheka.core.enums import (
+    ChatCardKind,
     EventType,
     NotificationCategory,
     OrgRole,
@@ -380,6 +381,12 @@ class AdminRequestsService:
             **{"from": current.value, "to": target.value},
             by_role=by_role.value,
         )
+        if request.group_id is not None:
+            self._notifications.sync_chat_card(
+                ChatCardKind.GROUP,
+                request.group_id,
+                post=False,
+            )
         if not notify_author:
             return
         if target is RequestStatus.ON_REVIEW and request.author_user_id is not None:

@@ -12,6 +12,12 @@ class ChatBinder(StrEnum):
     CODE = "code"
 
 
+class ChatCardKind(StrEnum):
+    REQUEST = "request"
+    GROUP = "group"
+    POLL = "poll"
+
+
 class UnpinMethod(StrEnum):
     REPLY = "reply"
     NUMBER = "number"

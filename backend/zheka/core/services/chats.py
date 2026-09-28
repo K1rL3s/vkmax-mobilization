@@ -116,6 +116,7 @@ class ChatsService:
 
     async def on_bot_added(self, chat_id: MaxChatId, title: str) -> None:
         await self._chats.upsert_added(chat_id, title)
+        await self._chats.drop_cards(chat_id)
         await self._chats.unpin(await self._chats.list_pins(chat_id), datetime.now(UTC))
 
     async def on_bot_removed(self, chat_id: MaxChatId) -> None:
@@ -307,6 +308,7 @@ class ChatsService:
         chat = await self._chats.lock(chat_id)
         if chat is None:
             return
+        await self._chats.drop_cards(chat_id, mid)
         pins = await self._chats.list_pins(chat_id)
         if chat.pins_mid == mid:
             method = UnpinMethod.LIST_DELETED

@@ -1,7 +1,8 @@
 from datetime import datetime
 
 from zheka.base import UNSET, ZhekaMutableType
-from zheka.core.ids import ChatPinId, HouseId, MaxChatId, UserId
+from zheka.core.enums import ChatCardKind
+from zheka.core.ids import ChatCardId, ChatPinId, HouseId, MaxChatId, UserId
 
 
 class Chat(ZhekaMutableType):
@@ -25,3 +26,12 @@ class ChatPin(ZhekaMutableType):
     text: str | None = None
     pinned_by: UserId
     unpinned_at: datetime | None = None
+
+
+class ChatCard(ZhekaMutableType):
+    id: ChatCardId = UNSET
+    created_at: datetime = UNSET
+    chat_id: MaxChatId
+    kind: ChatCardKind
+    ref_id: int
+    mid: str

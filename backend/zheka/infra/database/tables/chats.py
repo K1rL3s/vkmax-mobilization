@@ -7,6 +7,7 @@ from sqlalchemy import (
     Index,
     String,
     Table,
+    UniqueConstraint,
     false,
     text,
 )
@@ -52,4 +53,16 @@ chat_pins_table = Table(
         unique=True,
         postgresql_where=text("unpinned_at IS NULL"),
     ),
+)
+
+chat_cards_table = Table(
+    "chat_cards",
+    metadata,
+    id_column(),
+    created_at_column(),
+    Column("chat_id", BigInteger, ForeignKey("chats.chat_id"), nullable=False),
+    Column("kind", String(16), nullable=False),
+    Column("ref_id", BigInteger, nullable=False),
+    Column("mid", String, nullable=False),
+    UniqueConstraint("chat_id", "kind", "ref_id"),
 )

@@ -1,9 +1,18 @@
 import { useState } from "react";
 import { useDebounceValue } from "@siberiacancode/reactuse";
-import { generatePath, useLocation, useNavigate } from "react-router-dom";
+import {
+  generatePath,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { z } from "zod";
 
-import { useRequestCategories, type RequestCategory } from "@/features/request";
+import {
+  requestCategorySchema,
+  useRequestCategories,
+  type RequestCategory,
+} from "@/features/request";
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
@@ -40,10 +49,13 @@ export const useNewRequest = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
   const dispute = handoverSchema.safeParse(state).data ?? null;
+  const [searchParams] = useSearchParams();
+  const preset =
+    requestCategorySchema.safeParse(searchParams.get("category")).data ?? null;
   const { currentResidency: residency } = useSession();
   const [description, setDescription] = useState("");
   const [picked, setPicked] = useState<RequestCategory | null>(
-    dispute?.category ?? null,
+    dispute?.category ?? preset,
   );
   const photos = usePhotos();
 

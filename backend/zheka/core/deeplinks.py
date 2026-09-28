@@ -2,7 +2,7 @@ from enum import StrEnum
 from urllib.parse import quote
 
 from zheka.base import ZhekaType
-from zheka.core.enums import EventSource
+from zheka.core.enums import EventSource, RequestCategory
 from zheka.core.ids import HouseId, PollId, RequestId
 from zheka.core.services.demo import DEMO_INNS
 
@@ -56,6 +56,10 @@ def flat_invite_payload(code: str) -> str:
 
 def house_payload(house_id: HouseId) -> str:
     return f"{DeeplinkKind.HOUSE}_{house_id}"
+
+
+def house_category_payload(house_id: HouseId, category: RequestCategory) -> str:
+    return f"{DeeplinkKind.HOUSE}_{house_id}_{category}"
 
 
 def entrance_qr_payload(house_id: HouseId, entrance: int) -> str:

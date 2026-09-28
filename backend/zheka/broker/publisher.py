@@ -8,6 +8,8 @@ from zheka.broker.task_names import TaskName
 
 logger = logging.getLogger(__name__)
 
+RENDERED_FROM_DB = frozenset({TaskName.SYNC_CHAT_CARD})
+
 
 class TaskPublisher:
     __slots__ = ("_broker", "_pending")
@@ -17,6 +19,8 @@ class TaskPublisher:
         self._pending: list[tuple[TaskName, dict[str, Any]]] = []
 
     def publish(self, name: TaskName, **kwargs: Any) -> None:
+        if name in RENDERED_FROM_DB and (name, kwargs) in self._pending:
+            return
         self._pending.append((name, kwargs))
 
     async def flush(self) -> None:

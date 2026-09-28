@@ -15,6 +15,7 @@ from tests.conftest import (
     OrgHouseFlatUser,
     RecordingBroker,
     category_executors_service,
+    grouping_service,
     make_notifications_service,
 )
 
@@ -36,7 +37,6 @@ from zheka.core.ids import MaxUserId, RequestGroupId, UserId
 from zheka.core.notifications import DEFAULT_LEVEL
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
-from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.request_status import transition_path
 from zheka.core.texts import OPEN_REQUEST, REQUEST_STATUS_NEWS
 from zheka.infra.database.models import Event, Request, RequestGroup, User
@@ -232,7 +232,7 @@ def _admin_service(
         UsersRepo(session),
         OrgsRepo(session),
         ResidentsRepo(session),
-        GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
+        grouping_service(session, publisher),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
         category_executors_service(session, publisher),

@@ -1,6 +1,7 @@
 import { matchPath } from "react-router-dom";
 import { z } from "zod";
 
+import { requestCategorySchema } from "@/features/request";
 import { Routes } from "@/shared/model/routes";
 
 const startParam = (pattern: RegExp) => z.string().max(512).regex(pattern);
@@ -11,16 +12,26 @@ const positiveInteger = (value: string): number | null => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
-const houseStartParamSchema = startParam(/^house_([1-9]\d*)$/).transform(
-  (raw, context) => {
-    const houseId = positiveInteger(raw.slice("house_".length));
+const houseStartParamPattern = /^house_([1-9]\d*)(?:_([a-z_]+))?$/;
 
-    if (houseId === null) {
-      context.addIssue({ code: "custom", message: "Некорректный ID дома" });
+const houseStartParamSchema = startParam(houseStartParamPattern).transform(
+  (raw, context) => {
+    const [, id = "", rawCategory] = houseStartParamPattern.exec(raw) ?? [];
+    const houseId = positiveInteger(id);
+    const category =
+      rawCategory === undefined
+        ? null
+        : (requestCategorySchema.safeParse(rawCategory).data ?? undefined);
+
+    if (houseId === null || category === undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Некорректная ссылка на дом",
+      });
       return z.NEVER;
     }
 
-    return { kind: "house", houseId } as const;
+    return { kind: "house", houseId, category } as const;
   },
 );
 
