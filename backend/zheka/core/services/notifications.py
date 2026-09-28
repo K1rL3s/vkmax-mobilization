@@ -135,11 +135,18 @@ class NotificationsService:
     def open_review_card(self, request_id: RequestId) -> None:
         self._publisher.publish(TaskName.SEND_REVIEW_CARD, request_id=request_id)
 
-    def welcome_chat(self, chat_id: MaxChatId, house_id: HouseId) -> None:
+    def welcome_chat(
+        self,
+        chat_id: MaxChatId,
+        house_id: HouseId,
+        *,
+        member: str | None = None,
+    ) -> None:
         self._publisher.publish(
             TaskName.WELCOME_CHAT,
             chat_id=chat_id,
             house_id=house_id,
+            member=member,
         )
 
     def open_access_slots(self, access_request_id: AccessRequestId) -> None:

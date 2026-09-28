@@ -283,6 +283,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   chats whose initiator is unreachable or roleless, then opens the binding
   window (`ChatBinding.code` waits for text: default stack). Binding windows
   read title and chat id from `ChatBindingData`, never the `chats` row.
+- `user_added` (MAX sends it only where the bot is admin) welcomes the member
+  by name with the join button, unless the chat is unbound, the bot lost
+  rights, the member is a bot or already an active resident of the house.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap
   and after each failed chat send. `set_admin` records `CHAT_ADMIN_GRANTED`
   and queues the welcome only on `false -> true`; a failed send without rights

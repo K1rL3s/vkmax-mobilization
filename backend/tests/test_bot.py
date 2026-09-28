@@ -46,10 +46,12 @@ from maxo.types import (
     Recipient,
     RequestGeoLocationButton,
     SendMessageResult,
+    UserAddedToChat,
 )
 from maxo.types.chat import Chat as MaxChat
 from maxo.types.link_button import LinkButton
 from maxo.types.simple_query_result import SimpleQueryResult
+from maxo.types.user import User as MaxUser
 from maxo.utils.deeplink import create_start_link, create_startapp_link
 from maxo.utils.link import id_to_message_url
 from maxo.utils.payload import decode_payload
@@ -141,6 +143,7 @@ from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
     LEFT_TEXT,
     PINS_HERE,
+    WELCOME_MEMBER_TEXT,
     on_bot_added,
     sync_chat_pins,
     welcome_chat,
@@ -1178,6 +1181,7 @@ async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
     assert bot_broker.enqueued(TaskName.WELCOME_CHAT)[-1] == {
         "chat_id": chat_id,
         "house_id": house_id,
+        "member": None,
     }
     assert chat_api.left == []
 
@@ -1245,6 +1249,83 @@ async def test_a_bot_that_is_no_longer_in_the_chat_is_not_its_admin(
     monkeypatch.setattr(fake_bot, "get_membership", _forbidden)
 
     assert await is_chat_admin(fake_bot, _chat_id()) is False
+
+
+async def _member_added(
+    client: BotClient,
+    chat_id: MaxChatId,
+    *,
+    is_bot: bool = False,
+) -> BotClient:
+    member = BotClient(client.dp, user_id=_max_id(), bot=client.bot)
+    user = MaxUser(user_id=member.user.id, first_name="Анна <3", is_bot=is_bot)
+    await _feed(
+        member,
+        UserAddedToChat(
+            chat_id=chat_id,
+            is_channel=False,
+            user=user,
+            timestamp=datetime.now(UTC),
+        ),
+    )
+    return member
+
+
+def _welcomes(broker: RecordingBroker, chat_id: MaxChatId) -> list[dict[str, Any]]:
+    return [
+        task
+        for task in broker.enqueued(TaskName.WELCOME_CHAT)
+        if task["chat_id"] == chat_id
+    ]
+
+
+async def test_a_member_added_to_a_bound_chat_is_welcomed_by_name(
+    client: BotClient,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+
+    member = await _member_added(client, chat_id)
+    await _member_added(client, chat_id, is_bot=True)
+
+    assert _welcomes(bot_broker, chat_id) == [
+        {"chat_id": chat_id, "house_id": chat.house_id, "member": "Анна <3"},
+    ]
+    assert await UsersRepo(bot_session).get_by_max_id(MaxUserId(member.user.id)) is None
+
+
+async def test_a_member_added_to_an_unbound_chat_is_not_welcomed(
+    client: BotClient,
+    bot_broker: RecordingBroker,
+) -> None:
+    chat_id = _chat_id()
+
+    await _member_added(client, chat_id)
+
+    assert _welcomes(bot_broker, chat_id) == []
+
+
+async def test_the_member_welcome_escapes_the_name(
+    task_broker: InMemoryBroker,
+    notices: _RecordingBot,
+) -> None:
+    task: Any = welcome_chat
+    sent = (
+        await task.kicker()
+        .with_broker(task_broker)
+        .kiq(
+            chat_id=_chat_id(),
+            house_id=1,
+            member="Анна <3",
+        )
+    )
+    result = await sent.wait_result(timeout=5)
+    assert not result.is_err, result.error
+
+    assert notices.texts == [WELCOME_MEMBER_TEXT.format(name="Анна &lt;3")]
 
 
 async def _bound_chat(session: AsyncSession, client: BotClient) -> MaxChatId:

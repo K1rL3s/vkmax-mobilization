@@ -25,7 +25,7 @@ from zheka.core.enums import (
     ResidentStatus,
 )
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
-from zheka.core.ids import MaxChatId
+from zheka.core.ids import MaxChatId, MaxUserId
 from zheka.core.services.chats import (
     CHAT_TAKEN,
     MESSAGE_TEXT_LIMIT,
@@ -44,12 +44,13 @@ from zheka.core.services.chats import (
     pins_text,
 )
 from zheka.core.services.events import EventsService
-from zheka.infra.database.models import Chat, ChatPin
+from zheka.infra.database.models import Chat, ChatPin, Resident, User
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
+from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.chats import chat_pins_table
 from zheka.infra.database.tables.events import events_table
 
@@ -63,6 +64,7 @@ def _service(
         HousesRepo(session),
         OrgsRepo(session),
         ResidentsRepo(session),
+        UsersRepo(session),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
     )
@@ -213,8 +215,65 @@ async def test_the_rights_are_granted_once_over_two_grants(
     assert (await _chat(session, chat_id)).bot_is_admin is True
     await publisher.flush()
     assert broker.enqueued(TaskName.WELCOME_CHAT) == [
-        {"chat_id": chat_id, "house_id": data.house_id},
+        {"chat_id": chat_id, "house_id": data.house_id, "member": None},
     ]
+
+
+@pytest.mark.parametrize(
+    ("status", "welcomed"),
+    [(None, True), (ResidentStatus.ACTIVE, False), (ResidentStatus.BLOCKED, True)],
+    ids=["stranger", "active_resident", "blocked_resident"],
+)
+async def test_a_new_member_is_welcomed_unless_already_living_in_the_house(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    status: ResidentStatus | None,
+    welcomed: bool,
+) -> None:
+    staff = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _added(session)
+    service = _service(session, publisher)
+    await service.bind(staff.user_id, chat_id, staff.house_id)
+    await service.set_admin(chat_id, True)
+    user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Анна")
+    session.add(user)
+    await session.flush()
+    if status is not None:
+        session.add(
+            Resident(
+                user_id=user.id,
+                house_id=staff.house_id,
+                flat_id=staff.flat_id,
+                role=ResidentRole.OWNER,
+                status=status,
+            ),
+        )
+        await session.flush()
+
+    await service.welcome_member(chat_id, user.max_user_id, "Анна")
+
+    await publisher.flush()
+    members = [task["member"] for task in broker.enqueued(TaskName.WELCOME_CHAT)]
+    assert members == ([None, "Анна"] if welcomed else [None])
+
+
+async def test_a_new_member_is_not_welcomed_where_the_bot_is_no_admin(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _added(session)
+    service = _service(session, publisher)
+    await service.bind(staff.user_id, chat_id, staff.house_id)
+
+    await service.welcome_member(chat_id, MaxUserId(secrets.randbits(48)), "Анна")
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.WELCOME_CHAT) == []
 
 
 @pytest.mark.parametrize("removed", [True, False])

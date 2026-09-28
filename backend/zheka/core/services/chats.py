@@ -13,7 +13,7 @@ from zheka.core.enums import (
     UnpinMethod,
 )
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
-from zheka.core.ids import HouseId, MaxChatId, UserId
+from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.models import Chat, ChatPin, House
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
@@ -21,6 +21,7 @@ from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
+from zheka.infra.database.repos.users import UsersRepo
 
 CHAT_TAKEN = "Этот чат уже привязан или бота из него удалили"
 WRONG_CODE = "Код не подошел. Проверьте его на карточке дома и пришлите еще раз"
@@ -72,6 +73,7 @@ class ChatsService:
         "_notifications",
         "_orgs",
         "_residents",
+        "_users",
     )
 
     def __init__(
@@ -80,6 +82,7 @@ class ChatsService:
         houses_repo: HousesRepo,
         orgs_repo: OrgsRepo,
         residents_repo: ResidentsRepo,
+        users_repo: UsersRepo,
         notifications_service: NotificationsService,
         events_service: EventsService,
     ) -> None:
@@ -87,6 +90,7 @@ class ChatsService:
         self._houses = houses_repo
         self._orgs = orgs_repo
         self._residents = residents_repo
+        self._users = users_repo
         self._notifications = notifications_service
         self._events = events_service
 
@@ -157,6 +161,26 @@ class ChatsService:
             )
             self._notifications.welcome_chat(chat_id, house_id)
         return chat
+
+    async def welcome_member(
+        self,
+        chat_id: MaxChatId,
+        max_user_id: MaxUserId,
+        name: str,
+    ) -> None:
+        bound = await self._bound(chat_id)
+        if bound is None or not bound[0].bot_is_admin:
+            return
+        house_id = bound[1]
+        user = await self._users.get_by_max_id(max_user_id)
+        resident = (
+            None
+            if user is None
+            else await self._residents.get_for_house(user.id, house_id)
+        )
+        if resident is not None and resident.status is ResidentStatus.ACTIVE:
+            return
+        self._notifications.welcome_chat(chat_id, house_id, member=name)
 
     async def _free_chat(self, chat_id: MaxChatId) -> Chat:
         chat = await self._chats.get(chat_id)

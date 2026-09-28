@@ -28,6 +28,11 @@ WELCOME_TEXT = (
     "объявления УК и напоминания об опросах, а заявки, показания и "
     "начисления - в личке со мной"
 )
+WELCOME_MEMBER_TEXT = (
+    "👋 {name}, добро пожаловать в чат дома! Я бот дома: публикую здесь "
+    "объявления УК и опросы. Заявки, показания счетчиков и начисления - в "
+    "личке со мной. Нажмите «Присоединиться к дому», чтобы начать"
+)
 JOIN_HOUSE = "🏠 Присоединиться к дому"
 PINS_HERE = "📌 Список закрепленных никуда не делся, он здесь"
 LEFT_TEXT = (
@@ -88,9 +93,15 @@ async def welcome_chat(
     house_id: HouseId,
     bot: FromDishka[Bot],
     sender: FromDishka[MaxSender],
+    member: str | None = None,
 ) -> None:
+    text = (
+        WELCOME_TEXT
+        if member is None
+        else WELCOME_MEMBER_TEXT.format(name=escape(member))
+    )
     await sender.send_message(
-        WELCOME_TEXT,
+        text,
         chat_id=chat_id,
         notify=False,
         keyboard=_join_keyboard(bot, house_id),

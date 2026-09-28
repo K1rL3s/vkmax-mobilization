@@ -11,11 +11,12 @@ from maxo.types import (
     BotRemovedFromChat,
     MessageCreated,
     MessageRemoved,
+    UserAddedToChat,
 )
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
-from zheka.core.ids import MaxChatId
+from zheka.core.ids import MaxChatId, MaxUserId
 from zheka.core.models import User
 from zheka.core.services.chats import ChatsService, MessageRef
 
@@ -43,6 +44,20 @@ async def bot_removed_handler(
     chats_service: FromDishka[ChatsService],
 ) -> None:
     await chats_service.on_bot_removed(MaxChatId(update.chat_id))
+
+
+@router.user_added_to_chat()
+async def user_added_handler(
+    update: UserAddedToChat,
+    chats_service: FromDishka[ChatsService],
+) -> None:
+    if update.is_channel or update.user.is_bot:
+        return
+    await chats_service.welcome_member(
+        MaxChatId(update.chat_id),
+        MaxUserId(update.user.id),
+        update.user.first_name,
+    )
 
 
 IN_CHAT = MagicData(F.update_context.chat_type == ChatType.CHAT)
