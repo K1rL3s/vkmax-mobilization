@@ -23,11 +23,13 @@ from zheka.bot.handlers.requests.handlers import (
     on_category,
     on_description,
     on_description_photo,
+    on_description_voice,
     on_photo,
     on_send,
     on_start,
 )
 from zheka.bot.states import Menu, NewRequest, Onboarding
+from zheka.bot.voice import VOICE_PENDING
 from zheka.core.texts import OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
@@ -80,11 +82,14 @@ request_dialog = Dialog(
     ),
     Window(
         Multi(
+            Format("{error}", when=F["error"]),
             Const(DESCRIPTION_TEXT),
             Format(DESCRIPTION_PHOTOS_TEXT, when=F["photos"]),
+            Const(VOICE_PENDING, when=F["voice_pending"]),
             sep="\n\n",
         ),
         MessageInput(on_description_photo, content_types=[AttachmentType.IMAGE]),
+        MessageInput(on_description_voice, content_types=[AttachmentType.AUDIO]),
         TextInput(id="description", on_success=on_description),
         Row(SwitchTo(BACK, id="to_category", state=NewRequest.category), TO_MENU),
         state=NewRequest.description,

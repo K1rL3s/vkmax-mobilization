@@ -25,6 +25,7 @@ from maxo.omit import Omittable, Omitted
 from maxo.routing.filters import Command
 from maxo.routing.signals import MaxoUpdate
 from maxo.types import (
+    AudioAttachment,
     BotAddedToChat,
     BotCommand,
     BotRemovedFromChat,
@@ -139,8 +140,10 @@ from zheka.bot.handlers.review.handlers import repeat_sent
 from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TEXT
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.states import Consent, Menu
+from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
 from zheka.broker.task_names import TaskName
-from zheka.broker.tasks.bot_requests import create_bot_request
+from zheka.broker.tasks import bot_requests
+from zheka.broker.tasks.bot_requests import create_bot_request, transcribe_voice
 from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
     LEFT_TEXT,
@@ -4143,3 +4146,173 @@ async def test_delete_cancel_returns_to_the_entry_screen(
     )
 
     assert GREETING in _text(message_manager)
+
+
+VOICE = "Лифт застрял на седьмом этаже"
+
+
+def _voice(transcription: str | None = None) -> AudioAttachment:
+    return AudioAttachment.factory(
+        url="https://max.test/voice.ogg",
+        token=secrets.token_hex(4),
+        transcription=Omitted() if transcription is None else transcription,
+    )
+
+
+async def _on_description(
+    session: AsyncSession,
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await _resident_of_a_connected_house(session, client, message_manager)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    assert DESCRIPTION_TEXT in _text(message_manager)
+
+
+async def test_a_transcribed_voice_describes_the_request(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _on_description(bot_session, client, message_manager)
+
+    await _send(client, _voice(VOICE))
+
+    assert _text(message_manager) == PHOTO_TEXT.format(photos=0)
+    await client.click(message_manager.last_message(), NEXT)
+    assert VOICE in _text(message_manager)
+    await client.click(message_manager.last_message(), SEND)
+    assert bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]["description"] == VOICE
+
+
+async def test_a_voice_without_a_transcript_waits_for_it(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _on_description(bot_session, client, message_manager)
+
+    await _send(client, _voice())
+
+    assert VOICE_PENDING in _text(message_manager)
+    queued = bot_broker.enqueued(TaskName.TRANSCRIBE_VOICE)[-1]
+    assert queued["in_draft"] is True
+    assert queued["draft"]["category"] == next(iter(RequestCategory)).value
+    assert queued["user_id"] == (await _user(bot_session, client)).id
+
+
+@pytest.fixture
+def instant_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(bot_requests, "VOICE_RETRY_DELAYS", (0, 0))
+
+
+def _reread(
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    transcriptions: list[str | None],
+) -> list[str]:
+    asked: list[str] = []
+
+    async def get_message_by_id(*, message_id: str) -> Message:
+        asked.append(message_id)
+        return Message(
+            recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=1),
+            timestamp=datetime.now(UTC),
+            body=MessageBody(
+                mid=message_id,
+                seq=1,
+                text=None,
+                attachments=[_voice(transcriptions.pop(0))],
+            ),
+        )
+
+    monkeypatch.setattr(fake_bot, "get_message_by_id", get_message_by_id)
+    return asked
+
+
+@pytest.mark.usefixtures("instant_retries")
+@pytest.mark.parametrize("in_draft", [True, False])
+async def test_a_late_transcript_opens_the_next_step(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+    in_draft: bool,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    asked = _reread(fake_bot, monkeypatch, [None, VOICE])
+    category = next(iter(RequestCategory))
+    draft = NewRequestData(category=category if in_draft else None)
+
+    await _run(
+        task_broker,
+        transcribe_voice,
+        user_id=(await _user(bot_session, client)).id,
+        mid="voice-1",
+        draft=draft.to_data(),
+        in_draft=in_draft,
+    )
+
+    assert asked == ["voice-1", "voice-1"]
+    if in_draft:
+        assert _text(message_manager) == PHOTO_TEXT.format(photos=0)
+    else:
+        assert f"«{VOICE}»" in _text(message_manager)
+
+
+@pytest.mark.usefixtures("instant_retries")
+async def test_a_voice_never_transcribed_asks_for_text(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    _reread(fake_bot, monkeypatch, [None, None])
+
+    await _run(
+        task_broker,
+        transcribe_voice,
+        user_id=(await _user(bot_session, client)).id,
+        mid="voice-1",
+        draft=NewRequestData(category=next(iter(RequestCategory))).to_data(),
+        in_draft=True,
+    )
+
+    text = _text(message_manager)
+    assert text.startswith(VOICE_FAILED)
+    assert DESCRIPTION_TEXT in text
+
+
+async def test_a_voice_in_the_menu_starts_a_request_or_waits_for_the_transcript(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    notices: _RecordingBot,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await client.send("/start")
+
+    await _send(client, _voice(VOICE))
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=VOICE,
+    )
+    await client.send("/start")
+    await _send(client, _voice())
+
+    assert notices.texts[-1] == VOICE_PENDING
+    assert bot_broker.enqueued(TaskName.TRANSCRIBE_VOICE)[-1]["in_draft"] is False

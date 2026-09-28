@@ -10,9 +10,10 @@ from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import MessageCallback, MessageCreated
 
 from zheka.bot.cards import app_payload, web_app_name
-from zheka.bot.dialog_data import NewRequestData
+from zheka.bot.dialog_data import NewRequestData, transcript
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import NewRequest
+from zheka.bot.voice import publish_transcription
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.deeplinks import request_app_path
@@ -65,6 +66,8 @@ async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
         ),
         "description": escape(data.description),
         "photos": len(data.photos),
+        "voice_pending": data.voice_pending,
+        "error": data.error,
     }
 
 
@@ -107,9 +110,39 @@ async def on_description(
     dialog_manager: DialogManager,
     description: str,
 ) -> None:
+    await _describe(dialog_manager, description)
+
+
+async def _describe(dialog_manager: DialogManager, description: str) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
         data.description = description
+        data.error = None
+        data.voice_pending = False
     await dialog_manager.switch_to(NewRequest.photo)
+
+
+@inject
+async def on_description_voice(
+    update: MessageCreated,
+    _widget: MessageInput,
+    dialog_manager: DialogManager,
+    publisher: FromDishka[TaskPublisher],
+) -> None:
+    text = transcript(update.message.body)
+    if text:
+        await _describe(dialog_manager, text)
+        return
+    with NewRequestData.proxy(dialog_manager) as data:
+        data.voice_pending = True
+        data.error = None
+        draft = data.to_data()
+    publish_transcription(
+        publisher,
+        dialog_user_id(dialog_manager),
+        update.message.body.mid,
+        draft,
+        in_draft=True,
+    )
 
 
 async def on_photo(

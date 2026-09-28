@@ -214,6 +214,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   with it as the description from the menu and its emergency window,
   `NewRequest.category` and `NewRequest.sent` (`on_free_text`, consent checked
   first) and the fallback; `on_category` then skips to the photo.
+- A voice counts as free text by MAX's `transcription` (`transcript`, any
+  length). Without one, `transcribe_voice` rereads the message after 1, 2, 4 s
+  (`get_message_by_id`), then opens the next draft step or asks for text; the
+  audio is never downloaded. Unverified on a live client: MAX may never fill
+  `transcription` for bots.
 - House search and request draft steps have «🏠 Меню» and, past the first,
   «⬅️ Назад» (`TO_MENU`, `BACK`). A search list also takes text: one match is
   chosen, several narrow, none keeps the list and says so; `on_back` clears it.

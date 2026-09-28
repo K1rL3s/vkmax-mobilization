@@ -1,15 +1,23 @@
+import asyncio
 import logging
 from collections.abc import Sequence
 from functools import partial
 from html import escape
+from typing import Any
 
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
+from maxo.dialogs import ShowMode
+from maxo.errors import MaxBotApiError, MaxBotNetworkError
 from taskiq import async_shared_broker
 
-from zheka.bot.dialog_data import NewRequestData
-from zheka.bot.handlers.requests.handlers import NOT_CREATED, NOT_CREATED_UNEXPECTED
+from zheka.bot.dialog_data import NewRequestData, transcript
+from zheka.bot.handlers.requests.handlers import (
+    NOT_CREATED,
+    NOT_CREATED_UNEXPECTED,
+)
 from zheka.bot.states import NewRequest
+from zheka.bot.voice import VOICE_FAILED
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import RequestCategory, RequestChannel
 from zheka.core.errors import InvalidRequest, ZhekaError
@@ -24,6 +32,58 @@ from zheka.infra.max import MaxSender
 logger = logging.getLogger(__name__)
 
 PHOTO_MIME = "image/jpeg"
+VOICE_RETRY_DELAYS = (1, 2, 4)
+
+
+@async_shared_broker.task(task_name=TaskName.TRANSCRIBE_VOICE.value)
+@inject(patch_module=True)
+async def transcribe_voice(
+    user_id: UserId,
+    mid: str,
+    draft: dict[str, Any],
+    in_draft: bool,
+    bot: FromDishka[Bot],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> bool:
+    user = await users_repo.get_by_id(user_id)
+    if user is None:
+        return False
+    text = await _read_transcript(bot, mid)
+    data = NewRequestData.retort.load(draft, NewRequestData)
+    data.voice_pending = False
+    if text:
+        data.description = text
+        state = NewRequest.photo if in_draft else NewRequest.category
+    elif in_draft:
+        data.error = VOICE_FAILED
+        state = NewRequest.description
+    else:
+        await sender.send_message(VOICE_FAILED, user_id=user.max_user_id)
+        return False
+    await sender.start_dialog(
+        state,
+        user,
+        notify=False,
+        data=data.to_data(),
+        show_mode=ShowMode.SEND,
+    )
+    return bool(text)
+
+
+async def _read_transcript(bot: Bot, mid: str) -> str:
+    for delay in VOICE_RETRY_DELAYS:
+        await asyncio.sleep(delay)
+        try:
+            message = await bot.get_message_by_id(message_id=mid)
+        except (MaxBotApiError, MaxBotNetworkError):
+            logger.warning("Голосовое %s не перечитано", mid)
+            continue
+        text = transcript(message.body)
+        if text:
+            return text
+    logger.info("MAX не расшифровал голосовое %s", mid)
+    return ""
 
 
 @async_shared_broker.task(task_name=TaskName.CREATE_BOT_REQUEST.value)

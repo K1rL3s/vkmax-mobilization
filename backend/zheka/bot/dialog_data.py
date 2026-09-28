@@ -5,7 +5,8 @@ from typing import Any, ClassVar, Self
 
 from adaptix import Retort
 from maxo.dialogs import DialogManager
-from maxo.types import MessageBody, PhotoAttachment
+from maxo.omit import is_defined
+from maxo.types import AudioAttachment, MessageBody, PhotoAttachment
 
 from zheka.base import ZhekaMutableType, ZhekaType
 from zheka.core.enums import EventSource, RequestCategory
@@ -13,6 +14,17 @@ from zheka.core.ids import HouseId
 from zheka.core.services.requests import MAX_PHOTOS
 
 MIN_REQUEST_TEXT = 15
+
+
+def has_voice(body: MessageBody) -> bool:
+    return any(isinstance(item, AudioAttachment) for item in body.attachments or [])
+
+
+def transcript(body: MessageBody) -> str:
+    for item in body.attachments or []:
+        if isinstance(item, AudioAttachment) and is_defined(item.transcription):
+            return (item.transcription or "").strip()
+    return ""
 
 
 class BaseDialogData(ZhekaMutableType, slots=True):
@@ -78,6 +90,7 @@ class NewRequestData(BaseDialogData):
     request_id: int | None = None
     deadline: str | None = None
     error: str | None = None
+    voice_pending: bool = False
 
     def attach_photos(self, body: MessageBody) -> None:
         for attach in body.attachments or []:
@@ -88,6 +101,8 @@ class NewRequestData(BaseDialogData):
     def from_free_text(cls, body: MessageBody) -> Self | None:
         text = (body.text or "").strip()
         if len(text) < MIN_REQUEST_TEXT or text.startswith("/"):
+            text = transcript(body)
+        if not text:
             return None
         draft = cls(description=text)
         draft.attach_photos(body)

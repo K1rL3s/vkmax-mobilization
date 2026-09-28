@@ -7,6 +7,7 @@ class TaskName(StrEnum):
     BROADCAST_TO_USERS = "broadcast_to_users"
     BROADCAST_TO_CHATS = "broadcast_to_chats"
     CREATE_BOT_REQUEST = "create_bot_request"
+    TRANSCRIBE_VOICE = "transcribe_voice"
     SEND_EXECUTOR_CARD = "send_executor_card"
     SEND_REVIEW_CARD = "send_review_card"
     ATTACH_RESULT_PHOTO = "attach_result_photo"
