@@ -25,6 +25,7 @@ from zheka.core.services.reception import ReceptionService
 from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
+from zheka.infra.quota import UploadQuota
 
 
 class ServicesProvider(Provider):
@@ -55,6 +56,7 @@ class ServicesProvider(Provider):
         AnalyticsService,
         DemoService,
     )
+    upload_quota = provide(UploadQuota, scope=Scope.APP)
 
     @provide(scope=Scope.APP)
     def files_service(self, config: FilesConfig, max_config: MaxConfig) -> FilesService:

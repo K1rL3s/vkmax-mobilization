@@ -5,9 +5,13 @@ import pytest
 
 from tests.conftest import photo_name
 
+from zheka.api.dependencies.current_account import CurrentAccount
+from zheka.api.routes.files import upload_file
 from zheka.config import FilesConfig
-from zheka.core.errors import EntityNotFound, InvalidRequest
+from zheka.core.errors import EntityNotFound, InvalidRequest, TooManyRequests
+from zheka.core.ids import UserId
 from zheka.core.services.files import FilesService
+from zheka.infra.quota import UPLOAD_CALLS, UploadQuota
 
 _TOKEN = "test-max-token"  # noqa: S105
 
@@ -105,3 +109,15 @@ def test_a_name_that_is_not_generated_is_neither_served_nor_signed(
         service.sign(name)
     with pytest.raises(EntityNotFound):
         service.verify(name, exp, service._sign(name, exp))  # noqa: SLF001
+
+
+async def test_uploads_past_the_hourly_quota_are_refused(tmp_path: Path) -> None:
+    service = _make_service(tmp_path, max_size_mb=10)
+    account = CurrentAccount(user_id=UserId(1), consent_at=None)
+    quota = UploadQuota()
+    for _ in range(UPLOAD_CALLS):
+        await upload_file(account, _FakeUpload("image/png", 16), service, quota)  # type: ignore[arg-type]
+
+    with pytest.raises(TooManyRequests):
+        await upload_file(account, _FakeUpload("image/png", 16), service, quota)  # type: ignore[arg-type]
+    assert len(list(tmp_path.iterdir())) == UPLOAD_CALLS  # noqa: ASYNC240

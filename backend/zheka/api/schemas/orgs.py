@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.houses import HouseListItem
 from zheka.core.enums import OrgRole
 from zheka.core.ids import OrgId, UserId
@@ -133,7 +133,7 @@ class UpdateOrgSettingsRequest(BaseSchema):
     group_threshold: int
     group_window_hours: int
     phone: str
-    reception_note: str | None = None
+    reception_note: FreeText | None = None
 
 
 class OrgMemberItem(BaseSchema):

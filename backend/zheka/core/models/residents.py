@@ -47,3 +47,9 @@ class DemandSignal(ZhekaMutableType):
     created_at: datetime = UNSET
     house_id: HouseId
     user_id: UserId
+
+
+class VerificationRevocation(ZhekaMutableType):
+    created_at: datetime = UNSET
+    user_id: UserId
+    flat_id: FlatId

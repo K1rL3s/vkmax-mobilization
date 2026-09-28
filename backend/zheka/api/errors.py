@@ -15,6 +15,7 @@ from zheka.core.errors import (
     InvalidRequest,
     InvalidValue,
     NotEnoughRights,
+    TooManyRequests,
     Unauthorized,
     ZhekaError,
 )
@@ -97,6 +98,7 @@ exception_handlers: dict[Any, Any] = {
             (EntityNotFound, status.HTTP_404_NOT_FOUND),
             (InvalidRequest, status.HTTP_400_BAD_REQUEST),
             (InvalidValue, status.HTTP_409_CONFLICT),
+            (TooManyRequests, status.HTTP_429_TOO_MANY_REQUESTS),
         )
     },
     ValueError: value_error_handler,

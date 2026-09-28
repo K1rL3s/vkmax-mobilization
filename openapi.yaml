@@ -9994,6 +9994,7 @@ components:
       properties:
         reason:
           type: string
+          maxLength: 4000
           title: Reason
       type: object
       required:
@@ -10031,6 +10032,7 @@ components:
         comment:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Comment
       type: object
@@ -10044,6 +10046,7 @@ components:
         comment:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Comment
       type: object
@@ -10406,6 +10409,7 @@ components:
           title: House Id
         reason:
           type: string
+          maxLength: 4000
           title: Reason
         date:
           type: string
@@ -10487,10 +10491,12 @@ components:
       properties:
         title:
           type: string
+          maxLength: 4000
           title: Title
         options:
           items:
             type: string
+            maxLength: 4000
           type: array
           title: Options
         ends_at:
@@ -10500,6 +10506,7 @@ components:
         description:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Description
         is_multiple:
@@ -10535,11 +10542,13 @@ components:
         caller_name:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Caller Name
         caller_phone:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Caller Phone
         resident_id:
@@ -10558,10 +10567,12 @@ components:
       properties:
         title:
           type: string
+          maxLength: 4000
           title: Title
         options:
           items:
             type: string
+            maxLength: 4000
           type: array
           title: Options
         ends_at:
@@ -10571,6 +10582,7 @@ components:
         description:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Description
         is_multiple:
@@ -12490,6 +12502,7 @@ components:
       properties:
         reason:
           type: string
+          maxLength: 4000
           title: Reason
       type: object
       required:
@@ -12539,6 +12552,7 @@ components:
       properties:
         text:
           type: string
+          maxLength: 4000
           title: Text
       type: object
       required:
@@ -13002,6 +13016,7 @@ components:
       properties:
         reason:
           type: string
+          maxLength: 4000
           title: Reason
       type: object
       required:
@@ -13286,6 +13301,7 @@ components:
         reception_note:
           anyOf:
           - type: string
+            maxLength: 4000
           - type: 'null'
           title: Reception Note
       type: object

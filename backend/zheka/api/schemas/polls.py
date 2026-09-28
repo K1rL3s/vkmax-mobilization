@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.core.enums import PollStatus
 from zheka.core.ids import FlatId, HouseId, PollId, PollOptionId
 from zheka.core.models import Flat
@@ -84,10 +84,10 @@ class PollCard(PollListItem):
 
 
 class CreatePollRequest(BaseSchema):
-    title: str
-    options: list[str]
+    title: FreeText
+    options: list[FreeText]
     ends_at: datetime
-    description: str | None = None
+    description: FreeText | None = None
     is_multiple: bool = False
 
     def draft(self) -> PollDraft:

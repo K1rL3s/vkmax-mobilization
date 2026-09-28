@@ -939,7 +939,7 @@ async def test_classify_answers_without_the_model_past_the_hourly_quota(
     service = requests_service(session, classifier=classifier)
     quota = YandexQuota()
     clock = [0.0]
-    monkeypatch.setattr("zheka.infra.yandex.quota.monotonic", lambda: clock[0])
+    monkeypatch.setattr("zheka.infra.quota.monotonic", lambda: clock[0])
 
     async def ask(who: UserId) -> RequestCategory | None:
         body = ClassifyRequestRequest(text="Батареи холодные")

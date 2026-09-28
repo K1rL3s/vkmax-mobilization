@@ -110,7 +110,7 @@ class VerificationRequestItem(BaseSchema):
 
 
 class RejectVerificationRequest(BaseSchema):
-    reason: str
+    reason: FreeText
 
 
 class FlatResidentItem(BaseSchema):

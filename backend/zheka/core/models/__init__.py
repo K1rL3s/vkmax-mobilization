@@ -16,7 +16,12 @@ from zheka.core.models.requests import (
     RequestPhoto,
     RequestStatusLog,
 )
-from zheka.core.models.residents import DemandSignal, Resident, VerificationRequest
+from zheka.core.models.residents import (
+    DemandSignal,
+    Resident,
+    VerificationRequest,
+    VerificationRevocation,
+)
 from zheka.core.models.users import NotificationSetting, User
 
 __all__ = (
@@ -53,4 +58,5 @@ __all__ = (
     "Tariff",
     "User",
     "VerificationRequest",
+    "VerificationRevocation",
 )

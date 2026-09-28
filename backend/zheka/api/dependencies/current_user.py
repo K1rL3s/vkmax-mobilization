@@ -39,9 +39,9 @@ test_token_scheme = HTTPBearer(
 
 def parse_init_data(token: str, raw: str) -> WebAppInitData:
     try:
-        init_data = safe_parse_webapp_init_data(token, raw)
+        init_data = _signed_init_data(token, raw)
     except (InvalidWebAppInitDataError, ValueError):
-        init_data = safe_parse_webapp_init_data(token, urllib.parse.unquote(raw))
+        init_data = _signed_init_data(token, urllib.parse.unquote(raw))
     signed_at = datetime.fromtimestamp(int(init_data.auth_date or 0), UTC)
     if datetime.now(UTC) - signed_at > INIT_DATA_TTL:
         raise InvalidWebAppInitDataError("initData старше суток")
@@ -74,3 +74,9 @@ async def get_current_user(
 
 
 CurrentUserDep = Annotated[WebAppInitData, Depends(get_current_user)]
+
+
+def _signed_init_data(token: str, raw: str) -> WebAppInitData:
+    if any("\n" in key + value for key, value in urllib.parse.parse_qsl(raw)):
+        raise InvalidWebAppInitDataError("Перевод строки в initData")
+    return safe_parse_webapp_init_data(token, raw)

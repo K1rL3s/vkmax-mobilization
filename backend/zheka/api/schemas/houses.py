@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FileRef
 from zheka.core.enums import (
     EventSource,
@@ -329,11 +329,11 @@ class HouseResidentItem(BaseSchema):
 
 
 class BlockResidentRequest(BaseSchema):
-    reason: str
+    reason: FreeText
 
 
 class RevokeVerificationRequest(BaseSchema):
-    reason: str
+    reason: FreeText
 
 
 class SetChairmanRequest(BaseSchema):

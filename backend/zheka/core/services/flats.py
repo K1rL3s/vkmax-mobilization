@@ -53,6 +53,9 @@ MOVED_OUT = "Житель привязан к другой квартире, п�
 NOT_A_RESIDENT = "Вы не житель этой квартиры"
 VERIFY_FIRST = "Сначала подтвердите квартиру"
 INVITE_ISSUER_GONE = "Код приглашения больше не действует"
+REVOKED_BY_ORG = (
+    "УК сняла подтверждение этой квартиры: отправьте ей запрос на подтверждение"
+)
 
 
 def normalize_account(account_no: str) -> str:
@@ -142,6 +145,8 @@ class FlatsService:
         if resident.role is ResidentRole.TENANT:
             raise NotEnoughRights("Квартиру подтверждает собственник, а не арендатор")
         self._ensure_not_moving(resident, flat_id)
+        if await self._residents.is_revoked(user_id, flat_id):
+            raise NotEnoughRights(REVOKED_BY_ORG)
 
         if resident.verified_at is not None:
             return VerifyResult(verified=True, detail=ALREADY_VERIFIED_DETAIL)
@@ -374,6 +379,8 @@ class FlatsService:
             return await self._residency_view(existing, house, flat)
         if existing is not None and existing.flat_id is not None:
             raise InvalidState(MOVED_OUT)
+        if await self._residents.is_revoked(user_id, flat_id):
+            raise NotEnoughRights(REVOKED_BY_ORG)
         try:
             await self._verified_owner(invite.created_by, flat_id)
         except (EntityNotFound, NotEnoughRights) as error:

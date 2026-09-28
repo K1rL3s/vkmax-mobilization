@@ -38,3 +38,7 @@ class InvalidState(InvalidValue):
 
 class InvalidRequest(ZhekaError):
     message = "Некорректный запрос"
+
+
+class TooManyRequests(ZhekaError):
+    message = "Слишком много запросов, попробуйте позже"

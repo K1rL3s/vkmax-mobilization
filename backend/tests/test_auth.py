@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
+from maxo.errors import InvalidWebAppInitDataError
 
 from tests.conftest import empty_bot_setup, make_bot_config, make_config
 
@@ -24,11 +25,12 @@ from zheka.core.services.demo import (
 TOKEN = make_config().max.token
 
 
-def signed_init_data(auth_date: datetime) -> str:
+def signed_init_data(auth_date: datetime, **extra: str) -> str:
     fields = {
         "auth_date": str(int(auth_date.timestamp())),
         "chat": json.dumps({"id": 1, "type": "DIALOG"}),
         "user": json.dumps({"id": 42, "first_name": "Жека"}),
+        **extra,
     }
     check = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
     secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
@@ -40,6 +42,13 @@ def test_fresh_init_data_passes() -> None:
     init_data = parse_init_data(TOKEN, signed_init_data(datetime.now(UTC)))
 
     assert init_data.user.id == 42
+
+
+def test_signed_init_data_with_a_line_break_is_refused() -> None:
+    raw = signed_init_data(datetime.now(UTC), start_param="a\nb")
+
+    with pytest.raises(InvalidWebAppInitDataError):
+        parse_init_data(TOKEN, raw)
 
 
 async def test_day_old_init_data_is_401() -> None:

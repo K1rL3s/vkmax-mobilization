@@ -1,17 +1,20 @@
 from collections.abc import Collection, Sequence
 from datetime import datetime
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import ResidentRole, ResidentStatus
 from zheka.core.errors import EntityNotFound
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
-from zheka.infra.database.models import Resident
+from zheka.infra.database.models import Resident, VerificationRevocation
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.houses import flats_table
-from zheka.infra.database.tables.residents import residents_table
+from zheka.infra.database.tables.residents import (
+    residents_table,
+    verification_revocations_table,
+)
 from zheka.infra.database.tables.users import users_table
 
 VERIFIED_RESIDENT = and_(
@@ -213,6 +216,13 @@ class ResidentsRepo(BaseAlchemyRepo):
         await self._session.flush()
 
     async def revoke_verification(self, resident: Resident) -> None:
+        if resident.flat_id is not None:
+            stmt = (
+                pg_insert(VerificationRevocation)
+                .values(user_id=resident.user_id, flat_id=resident.flat_id)
+                .on_conflict_do_nothing()
+            )
+            await self._session.execute(stmt)
         resident.verified_at = None
         resident.verified_by = None
         resident.is_chairman = False
@@ -271,3 +281,12 @@ class ResidentsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+    async def is_revoked(self, user_id: UserId, flat_id: FlatId) -> bool:
+        stmt = select(
+            exists().where(
+                verification_revocations_table.c.user_id == user_id,
+                verification_revocations_table.c.flat_id == flat_id,
+            ),
+        )
+        return bool(await self._session.scalar(stmt))

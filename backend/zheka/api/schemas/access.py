@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.core.ids import AccessRequestId, AccessSlotId, FlatId, HouseId
 from zheka.core.services.access import (
     AccessGridData,
@@ -67,7 +67,7 @@ class AccessSlotInput(BaseSchema):
 
 class CreateAccessRequestRequest(BaseSchema):
     house_id: HouseId
-    reason: str
+    reason: FreeText
     date: date
     flat_ids: list[FlatId]
     slots: list[AccessSlotInput]

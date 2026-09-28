@@ -91,3 +91,11 @@ demand_signals_table = Table(
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     UniqueConstraint("house_id", "user_id"),
 )
+
+verification_revocations_table = Table(
+    "verification_revocations",
+    metadata,
+    Column("user_id", BigInteger, ForeignKey("users.id"), primary_key=True),
+    Column("flat_id", BigInteger, ForeignKey("flats.id"), primary_key=True),
+    created_at_column(),
+)

@@ -105,7 +105,17 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   block). An org invite reopened by a member is free unless it raises the
   role, which consumes an activation. A flat invite works only while its
   issuer is a verified unblocked owner of the flat; a poll's creator manages
-  it only while an active chairman.
+  it only while an active chairman. `ResidentsRepo.revoke_verification`
+  records `(user, flat)` in `verification_revocations`: that user never
+  verifies the flat again by account or invite, only by УК approval.
+- MVP decision, not a gap: an unverified resident books reception (no cap per
+  person), reads house polls and announcements, votes without area weight and
+  files requests. Charges, meters, flat residents and weighted votes need a
+  verified flat.
+- `UploadQuota` (`infra/quota.py`, like `YandexQuota`) caps `POST /api/files`
+  per user per api worker (`UPLOAD_CALLS` an hour, then 429): the host nginx
+  hides client IPs, so no per-IP limit. Free text in request bodies is
+  `FreeText` (4000 chars).
 - A poll ballot's rows carry `choice_index` 0..n-1: unique `(poll, user,
   choice_index)` and `(poll, flat, choice_index) WHERE counted_by_area` make a
   racing second ballot insert nothing (`add_vote` -> `ALREADY_VOTED`).

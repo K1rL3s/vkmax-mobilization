@@ -7,18 +7,22 @@ from fastapi.responses import FileResponse
 
 from zheka.api.dependencies import RequireConsentDep
 from zheka.api.schemas.files import FileRef
-from zheka.core.errors import EntityNotFound
+from zheka.core.errors import EntityNotFound, TooManyRequests
 from zheka.core.services.files import FilesService
+from zheka.infra.quota import UploadQuota
 
 router = APIRouter(tags=["Файлы"], route_class=DishkaRoute)
 
 
 @router.post("/api/files", summary="Загрузить фото")
 async def upload_file(
-    current_account: RequireConsentDep,  # noqa: ARG001
+    current_account: RequireConsentDep,
     file: UploadFile,
     files_service: FromDishka[FilesService],
+    quota: FromDishka[UploadQuota],
 ) -> FileRef:
+    if not quota.take(current_account.user_id):
+        raise TooManyRequests
     name = await files_service.save(file)
     return FileRef.signed(name, files_service)
 

@@ -32,6 +32,7 @@ from zheka.core.services.flats import (
     ALREADY_VERIFIED_DETAIL,
     INVITE_ISSUER_GONE,
     MAX_INVITE_HOURS,
+    REVOKED_BY_ORG,
     FlatsService,
 )
 from zheka.core.services.houses import NOT_CONNECTED
@@ -704,3 +705,45 @@ async def test_an_invite_dies_with_its_issuer_ownership(
     unused = await InvitesRepo(session).get_flat(invite.code)
     assert unused is not None
     assert unused.activations_used == 0
+
+
+async def test_a_revoked_owner_cannot_verify_the_flat_again(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await _set_account(session, own.flat_id, ACCOUNT)
+    resident = await _add_resident(
+        session,
+        own.user_id,
+        own.house_id,
+        own.flat_id,
+        verified=True,
+    )
+    await ResidentsRepo(session).revoke_verification(resident)
+
+    with pytest.raises(NotEnoughRights, match=REVOKED_BY_ORG):
+        await _make_service(session).verify(own.user_id, own.flat_id, ACCOUNT)
+
+
+async def test_a_revoked_resident_cannot_return_by_an_invite(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await _verified_owner(session, make_org_house_flat_user)
+    revoked_id = await add_user(session)
+    revoked = await _add_resident(
+        session,
+        revoked_id,
+        own.house_id,
+        own.flat_id,
+        verified=True,
+    )
+    residents = ResidentsRepo(session)
+    await residents.revoke_verification(revoked)
+    await residents.delete(revoked)
+    service = _make_service(session)
+    invite = await service.create_invite(own.user_id, own.flat_id, 72, 1)
+
+    with pytest.raises(NotEnoughRights, match=REVOKED_BY_ORG):
+        await service.activate_invite(revoked_id, invite.code)

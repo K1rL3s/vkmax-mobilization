@@ -271,11 +271,11 @@ class AdminRequestCard(RequestCard):
 
 class ChangeRequestStatusRequest(BaseSchema):
     status: RequestStatus
-    comment: str | None = None
+    comment: FreeText | None = None
 
 
 class ReplyToRequestRequest(BaseSchema):
-    text: str
+    text: FreeText
 
 
 class AssignExecutorRequest(BaseSchema):
@@ -287,8 +287,8 @@ class CreatePhoneRequestRequest(BaseSchema):
     category: RequestCategory
     description: FreeText
     flat_id: FlatId | None = None
-    caller_name: str | None = None
-    caller_phone: str | None = None
+    caller_name: FreeText | None = None
+    caller_phone: FreeText | None = None
     resident_id: ResidentId | None = Field(
         default=None,
         description=(
@@ -328,7 +328,7 @@ class RequestGroupCard(BaseSchema):
 
 class ChangeGroupStatusRequest(BaseSchema):
     status: RequestStatus
-    comment: str | None = None
+    comment: FreeText | None = None
 
 
 class ExecutorItem(BaseSchema):

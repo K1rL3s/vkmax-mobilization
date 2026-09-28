@@ -37,6 +37,7 @@ from zheka.infra.database.tables.residents import (
     demand_signals_table,
     flat_verification_requests_table,
     residents_table,
+    verification_revocations_table,
 )
 from zheka.infra.database.tables.users import notification_settings_table, users_table
 
@@ -80,4 +81,8 @@ mapper_registry.map_imperatively(models.User, users_table)
 mapper_registry.map_imperatively(
     models.NotificationSetting,
     notification_settings_table,
+)
+mapper_registry.map_imperatively(
+    models.VerificationRevocation,
+    verification_revocations_table,
 )
