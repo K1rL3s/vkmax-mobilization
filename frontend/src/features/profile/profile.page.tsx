@@ -18,6 +18,7 @@ import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
 import { useSession, workingOrgs } from "@/shared/model/session";
 import { Chevron } from "@/shared/ui/chevron";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   alertIcon,
   buildingIcon,
@@ -26,10 +27,12 @@ import {
   homeIcon,
   Icon,
   infoIcon,
+  trashIcon,
 } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { StatusPill } from "@/shared/ui/status-pill";
 
+import { useForgetMe } from "./use-forget-me";
 import {
   ALWAYS_DELIVERED,
   CATEGORIES,
@@ -69,6 +72,7 @@ const ProfilePage = () => {
     selectOrg,
   } = useSession();
   const notifications = useQuery(settingsQueryOptions());
+  const forgetMe = useForgetMe();
 
   if (!residency) {
     return <Navigate to={Routes.HOME} replace />;
@@ -267,9 +271,17 @@ const ProfilePage = () => {
             <CellSimple
               before={<Icon src={bulbIcon} className={styles.CellIcon} />}
               title="Как это работает"
-              subtitle="Заявки, показания, опросы и что умеет бот в чате"
+              subtitle="Заявки, показания, опросы, права жильца и бот"
               showChevron
               onClick={() => void navigate(Routes.FAQ)}
+            />
+            <CellSimple
+              separator
+              before={<Icon src={trashIcon} className={styles.CellIcon} />}
+              title="Удалить мои данные"
+              subtitle="Заявки и показания останутся без вашего имени"
+              showChevron
+              onClick={forgetMe.ask}
             />
           </div>
         </section>
@@ -282,6 +294,17 @@ const ProfilePage = () => {
           для демонстрации
         </Typography.Text>
       </Flex>
+
+      <ConfirmDialog
+        isOpen={forgetMe.isOpen}
+        title="Удалить мои данные?"
+        description="Удалятся имя, привязки к домам и квартирам, подтверждение квартиры, роли в УК, настройки уведомлений и согласие. Заявки с фото и перепиской, показания и голоса в опросах останутся у УК без вашего имени. Чтобы вернуться, откройте приложение заново и дайте согласие."
+        confirmLabel="Удалить"
+        error={forgetMe.error}
+        isPending={forgetMe.isPending}
+        onConfirm={forgetMe.submit}
+        onClose={forgetMe.cancel}
+      />
     </Panel>
   );
 };

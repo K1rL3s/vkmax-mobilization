@@ -533,7 +533,13 @@ async def test_a_deleted_pin_leaves_the_list_and_a_deleted_list_is_erased(
     ]
     await publisher.flush()
     assert broker.enqueued(TaskName.BROADCAST_TO_CHATS) == [
-        {"chat_ids": [chat_id], "text": PINS_ERASED},
+        {
+            "chat_ids": [chat_id],
+            "text": PINS_ERASED,
+            "app_button": None,
+            "app_path": None,
+            "announcement_id": None,
+        },
     ]
 
 

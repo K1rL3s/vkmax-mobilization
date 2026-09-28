@@ -5,7 +5,12 @@ import { Card } from "@/shared/ui/card";
 import { alertIcon, megaphoneIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
-import { addressees, channelsLabel, recipientsCount } from "../domain/labels";
+import {
+  addressees,
+  channelsLabel,
+  deliveryLabel,
+  undeliveredReason,
+} from "../domain/labels";
 import type { Announcement, OrgHouse } from "../model/use-announcements";
 
 import styles from "./announcement-row.module.css";
@@ -51,9 +56,15 @@ export const AnnouncementRow = ({
       </Typography.Text>
 
       <Typography.Text variant="description" color="secondary">
-        {channelsLabel(announcement.channels)} ·{" "}
-        {recipientsCount(announcement.recipients_count)}
+        {channelsLabel(announcement.channels)} · {deliveryLabel(announcement)}
       </Typography.Text>
+
+      {announcement.delivered_count !== null &&
+        announcement.delivered_count < announcement.recipients_count && (
+          <Typography.Text variant="description" color="secondary">
+            Остальным не дошло: {undeliveredReason(announcement)}
+          </Typography.Text>
+        )}
     </Flex>
   </Card>
 );

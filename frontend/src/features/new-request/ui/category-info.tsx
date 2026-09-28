@@ -1,18 +1,26 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
-import { ZONE_LABEL, type RequestCategoryItem } from "@/features/request";
-import { plural } from "@/shared/lib/format";
-import { buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
+import type { EmergencyContact } from "@/features/emergency";
+import {
+  NO_NORM,
+  ZONE_LABEL,
+  type RequestCategoryItem,
+} from "@/features/request";
+import { alertIcon, buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
 
 import styles from "./category-info.module.css";
 
 type CategoryInfoProps = {
   category: RequestCategoryItem;
   orgName: string | null;
+  emergency: EmergencyContact | null;
 };
 
-export const CategoryInfo = ({ category, orgName }: CategoryInfoProps) => {
-  const hours = category.normative_hours;
+export const CategoryInfo = ({
+  category,
+  orgName,
+  emergency,
+}: CategoryInfoProps) => {
   const responsible =
     category.zone === "management"
       ? (orgName ?? "Управляющая компания дома")
@@ -35,14 +43,37 @@ export const CategoryInfo = ({ category, orgName }: CategoryInfoProps) => {
       <Flex align="center" gap={12}>
         <Icon src={clockIcon} className={styles.Icon} />
         <Flex align="stretch" direction="column" gapY={2}>
+          {category.react_text && (
+            <Typography.Text variant="body-strong" color="primary">
+              Принять - {category.react_text}
+            </Typography.Text>
+          )}
           <Typography.Text variant="body-strong" color="primary">
-            Срок - {hours} {plural(hours, ["час", "часа", "часов"])}
+            Срок - {category.deadline_text}
           </Typography.Text>
           <Typography.Text variant="description" color="secondary">
-            На выполнение заявки этой категории
+            {category.deadline_basis ?? NO_NORM}
           </Typography.Text>
         </Flex>
       </Flex>
+
+      {emergency &&
+        (category.category === "leak" ||
+          category.category === "electricity") && (
+          <Flex asChild align="center" gap={12}>
+            <a href={`tel:${emergency.phone}`} className={styles.Emergency}>
+              <Icon src={alertIcon} className={styles.EmergencyIcon} />
+              <Flex align="stretch" direction="column" gapY={2}>
+                <Typography.Text variant="description" color="secondary">
+                  Течёт или искрит прямо сейчас? Звоните
+                </Typography.Text>
+                <Typography.Text variant="body-strong" color="primary">
+                  {emergency.label}: {emergency.phone}
+                </Typography.Text>
+              </Flex>
+            </a>
+          </Flex>
+        )}
     </div>
   );
 };

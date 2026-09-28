@@ -17,6 +17,7 @@ class Organization(ZhekaMutableType, Zoned):
     registered_at: datetime | None = None
     is_demo: bool = False
     timezone: str
+    emergency_phone: str | None = None
 
 
 class OrgSettings(ZhekaMutableType):

@@ -5,6 +5,7 @@ from zheka.bot.handlers.consent import consent_dialog
 from zheka.bot.handlers.errors import error_router
 from zheka.bot.handlers.executor import executor_dialog
 from zheka.bot.handlers.fallback import router as fallback_router
+from zheka.bot.handlers.forget import forget_dialog
 from zheka.bot.handlers.lifecycle import router as lifecycle_router
 from zheka.bot.handlers.menu import menu_dialog
 from zheka.bot.handlers.onboarding import onboarding_dialog
@@ -21,6 +22,7 @@ __all__ = (
     "error_router",
     "executor_dialog",
     "fallback_router",
+    "forget_dialog",
     "lifecycle_router",
     "menu_dialog",
     "onboarding_dialog",

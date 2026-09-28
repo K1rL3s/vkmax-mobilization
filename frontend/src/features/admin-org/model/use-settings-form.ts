@@ -43,6 +43,10 @@ const settingsSchema = z.object({
     .trim()
     .min(1, "Укажите телефон для жителей")
     .max(limits.phone, `Телефон длиннее ${limits.phone} символов`),
+  emergency_phone: z
+    .string()
+    .trim()
+    .max(limits.phone, `Телефон длиннее ${limits.phone} символов`),
   reception_note: z
     .string()
     .trim()
@@ -57,6 +61,7 @@ type SettingsDraft = z.infer<typeof settingsSchema>;
 const draftOf = (settings: OrgSettings): SettingsDraft => ({
   ...settings,
   reception_note: settings.reception_note ?? "",
+  emergency_phone: settings.emergency_phone ?? "",
 });
 
 export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
@@ -84,7 +89,11 @@ export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
     save.mutate(
       {
         params: orgParams(),
-        body: { ...draft, reception_note: draft.reception_note || null },
+        body: {
+          ...draft,
+          reception_note: draft.reception_note || null,
+          emergency_phone: draft.emergency_phone || null,
+        },
       },
       { onSuccess: (saved) => form.reset(draftOf(saved)) },
     );

@@ -161,6 +161,7 @@ class OrgsService:
         group_window_hours: int,
         phone: str,
         reception_note: str | None,
+        emergency_phone: str | None,
     ) -> OrgSettingsView:
         for day in (meter_window_day_from, meter_window_day_to):
             if not MIN_METER_WINDOW_DAY <= day <= MAX_METER_WINDOW_DAY:
@@ -190,6 +191,7 @@ class OrgsService:
         settings.group_window_hours = group_window_hours
         org.phone = phone
         org.reception_note = reception_note
+        org.emergency_phone = (emergency_phone or "").strip() or None
         return OrgSettingsView(org=org, settings=settings)
 
     async def members(self, org_id: OrgId) -> list[OrgMemberView]:

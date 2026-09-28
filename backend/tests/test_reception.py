@@ -91,6 +91,7 @@ async def _add_request(
         description="Течет кран",
         status=RequestStatus.NEW,
         channel=RequestChannel.MINIAPP,
+        deadline_at=datetime.now(UTC),
     )
     session.add(request)
     await session.flush()

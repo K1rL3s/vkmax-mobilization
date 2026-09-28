@@ -356,6 +356,7 @@ class Seeder:
             registered_at=self._now - HISTORY - timedelta(days=30),
             is_demo=True,
             timezone=timezone,
+            emergency_phone=f"+7 (000) 000-01-{PROFILES.index(profile) + 1:02d}",
         )
         self._session.add(org)
         await self._session.flush()
@@ -632,6 +633,8 @@ class Seeder:
                 recipients_count=recipients,
                 created_at=self._now - timedelta(days=days_ago),
                 urgent=urgent,
+                delivered_direct=recipients - 1,
+                delivered_chat=0,
             )
             for days_ago, text, urgent in ANNOUNCEMENTS
         )
@@ -685,8 +688,8 @@ class Seeder:
             index
             for index, created in enumerate(moments)
             if created >= self._now - RECENT
-            and created
-            + timedelta(hours=CATEGORY_RULES[categories[index]].normative_hours + 1)
+            and CATEGORY_RULES[categories[index]].deadlines(created, house.zone)[1]
+            + timedelta(hours=1)
             < self._now
         ]
         overdue = set(
@@ -932,8 +935,14 @@ class Seeder:
             and rng.randint(1, 100) <= RATED_PERCENT
         ):
             rating = rng.choice(profile.ratings)
+        react_deadline_at, deadline_at = CATEGORY_RULES[category].deadlines(
+            created,
+            house.zone,
+        )
         request = Request(
             created_at=created,
+            deadline_at=deadline_at,
+            react_deadline_at=react_deadline_at,
             house_id=house.id,
             flat_id=None if author is None else author.flat_id,
             author_user_id=None if author is None else author.user_id,
@@ -965,6 +974,10 @@ class Seeder:
             done_at=reached.get(RequestStatus.DONE),
             is_staff_author=author is None,
         )
+        if request.warn_at <= self._now:
+            request.deadline_warned_at = self._now
+        if deadline_at <= self._now:
+            request.overdue_notified_at = self._now
         return Plan(
             request=request,
             author=author,

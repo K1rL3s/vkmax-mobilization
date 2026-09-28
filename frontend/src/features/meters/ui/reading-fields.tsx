@@ -3,8 +3,9 @@ import { Flex, Input, Typography } from "@maxhub/max-ui";
 import { Icon, alertIcon } from "@/shared/ui/icon";
 
 import {
+  anomalyOf,
+  baselineOf,
   formatReading,
-  isImplausiblyHigh,
   parseReading,
   ZONE_LABEL,
   type Meter,
@@ -31,14 +32,15 @@ export const ReadingFields = ({
   return (
     <Flex direction="column" align="stretch" gap={16}>
       {zones.map((zone) => {
-        const previous = meter.last_values?.[zone];
-        const current = parseReading(valueOf(zone));
-        const isBelow =
-          previous !== undefined && current !== null && current < previous;
-        const isHigh =
-          previous !== undefined &&
-          current !== null &&
-          isImplausiblyHigh(meter, period, current - previous);
+        const previous = baselineOf(meter, period).values?.[zone];
+        const anomaly = anomalyOf(
+          meter,
+          period,
+          zone,
+          parseReading(valueOf(zone)),
+        );
+        const isBelow = anomaly?.kind === "below";
+        const isHigh = anomaly?.kind === "high";
 
         return (
           <Flex key={zone} direction="column" align="stretch" gap={8}>

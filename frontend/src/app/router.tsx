@@ -137,6 +137,10 @@ const router = createBrowserRouter([
                 path: Routes.FAQ,
                 lazy: () => import("@/features/faq/faq.page"),
               },
+              {
+                path: Routes.EMERGENCY,
+                lazy: () => import("@/features/emergency/emergency.page"),
+              },
             ],
           },
           {

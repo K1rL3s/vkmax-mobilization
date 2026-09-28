@@ -50,9 +50,11 @@ class EventType(StrEnum):
     REQUEST_GROUP_FORMED = "request_group_formed"
     REQUEST_ASSIGNED = "request_assigned"
     EXECUTOR_STATUS_CHANGED = "executor_status_changed"
+    EXECUTOR_DECLINED = "executor_declined"
     REQUEST_REVIEWED = "request_reviewed"
     REQUEST_AUTO_CLOSED = "request_auto_closed"
     REQUEST_EXPORTED = "request_exported"
+    REQUEST_ESCALATED = "request_escalated"
 
     FLAT_INVITE_CREATED = "flat_invite_created"
     FLAT_INVITE_ACTIVATED = "flat_invite_activated"
@@ -67,6 +69,7 @@ class EventType(StrEnum):
     CHARGE_DISPUTED = "charge_disputed"
 
     CONSENT_GIVEN = "consent_given"
+    ACCOUNT_DELETED = "account_deleted"
 
 
 class EventSource(StrEnum):

@@ -11,7 +11,7 @@ from sqlalchemy import (
     false,
 )
 
-from zheka.core.enums import OrgRole
+from zheka.core.enums import OrgRole, RequestCategory
 from zheka.infra.database.tables._columns import (
     created_at_column,
     id_column,
@@ -34,6 +34,7 @@ organizations_table = Table(
     Column("registered_at", DateTime(timezone=True), nullable=True),
     Column("is_demo", Boolean, default=False, server_default=false(), nullable=False),
     Column("timezone", String, nullable=False),
+    Column("emergency_phone", String, nullable=True),
 )
 
 org_settings_table = Table(
@@ -81,4 +82,16 @@ org_members_table = Table(
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("role", pg_enum(OrgRole, "org_role"), nullable=False),
     UniqueConstraint("org_id", "user_id"),
+)
+
+org_category_executors_table = Table(
+    "org_category_executors",
+    metadata,
+    Column("org_id", BigInteger, ForeignKey("organizations.id"), primary_key=True),
+    Column(
+        "category",
+        pg_enum(RequestCategory, "request_category"),
+        primary_key=True,
+    ),
+    Column("executor_user_id", BigInteger, ForeignKey("users.id"), nullable=False),
 )

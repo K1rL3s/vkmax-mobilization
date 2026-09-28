@@ -3,8 +3,10 @@ import { useState } from "react";
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
+import { haptic, useClosingConfirmation } from "@/shared/lib/max";
 
 import {
+  anomalyOf,
   formatReading,
   parseReading,
   zonesOf,
@@ -19,6 +21,7 @@ export const useReadingForm = () => {
   const [meterId, setMeterId] = useState<number | null>(null);
   const [period, setPeriod] = useState<string | null>(null);
   const [edited, setEdited] = useState<Partial<Record<TariffZone, string>>>({});
+  const [question, setQuestion] = useState<"anomaly" | "replace" | null>(null);
 
   const meter =
     readings.meters.find((item) => item.id === meterId) ??
@@ -36,10 +39,18 @@ export const useReadingForm = () => {
     "/api/meters/{meter_id}/readings",
     {
       onSuccess: async () => {
+        haptic.success();
         await invalidatePaths("/api/flats/{flat_id}/meters");
         await invalidatePaths("/api/flats/{flat_id}/reading-periods");
       },
+      onError: haptic.error,
     },
+  );
+
+  useClosingConfirmation(
+    !submit.isSuccess &&
+      (photos.photos.length > 0 ||
+        Object.values(edited).some((value) => value.trim().length > 0)),
   );
 
   const valueOf = (zone: TariffZone) => {
@@ -65,7 +76,19 @@ export const useReadingForm = () => {
       item.last_period !== selectedPeriod?.period,
   );
 
-  const send = () => {
+  const anomalies =
+    meter && selectedPeriod
+      ? zones.flatMap(
+          (zone, index) =>
+            anomalyOf(meter, selectedPeriod.period, zone, parsed[index]) ?? [],
+        )
+      : [];
+  const replaced =
+    meter?.last_period === selectedPeriod?.period ? meter?.last_values : null;
+
+  const post = () => {
+    setQuestion(null);
+
     if (!meter || !selectedPeriod || parsed.some((value) => value === null)) {
       return;
     }
@@ -122,6 +145,25 @@ export const useReadingForm = () => {
       photos.photos.length > 0 &&
       !photos.isUploading &&
       parsed.every((value) => value !== null),
-    send,
+    send: () => {
+      if (anomalies.length > 0) {
+        setQuestion("anomaly");
+      } else if (replaced) {
+        setQuestion("replace");
+      } else {
+        post();
+      }
+    },
+    question,
+    anomalies,
+    replaced,
+    confirm: () => {
+      if (question === "anomaly" && replaced) {
+        setQuestion("replace");
+      } else {
+        post();
+      }
+    },
+    dismissQuestion: () => setQuestion(null),
   };
 };

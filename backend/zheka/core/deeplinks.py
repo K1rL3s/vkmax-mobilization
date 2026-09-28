@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from zheka.base import ZhekaType
 from zheka.core.enums import EventSource
-from zheka.core.ids import HouseId, RequestId
+from zheka.core.ids import HouseId, PollId, RequestId
 from zheka.core.services.demo import DEMO_INNS
 
 
@@ -16,6 +16,7 @@ class DeeplinkKind(StrEnum):
     DEMO_ADMIN = "demo_admin"
     DEMO_STAFF = "demo_staff"
     DEMO_RESIDENT = "demo_resident"
+    DEMO_EXECUTOR = "demo_executor"
 
 
 class Deeplink(ZhekaType):
@@ -31,10 +32,18 @@ _SOURCES = {
     DeeplinkKind.HOUSE: EventSource.CHAT,
     DeeplinkKind.ENTRANCE_QR: EventSource.QR,
 }
-_DEMO = (DeeplinkKind.DEMO_ADMIN, DeeplinkKind.DEMO_STAFF, DeeplinkKind.DEMO_RESIDENT)
+_DEMO = (
+    DeeplinkKind.DEMO_ADMIN,
+    DeeplinkKind.DEMO_STAFF,
+    DeeplinkKind.DEMO_RESIDENT,
+    DeeplinkKind.DEMO_EXECUTOR,
+)
 _DEMO_NUMBERS = frozenset(str(number) for number in range(1, len(DEMO_INNS) + 1))
 _BY_PREFIX = {kind.value: kind for kind in DeeplinkKind if kind not in _DEMO}
 ADMIN_APP_PATH = "/admin/requests"
+METERS_APP_PATH = "/meters"
+APPOINTMENTS_APP_PATH = "/appointments"
+MEETINGS_APP_PATH = "/meetings"
 
 
 def org_invite_payload(code: str) -> str:
@@ -77,3 +86,7 @@ def admin_request_app_path(request_id: RequestId) -> str:
 
 def org_register_app_path(code: str) -> str:
     return f"/register/{quote(code, safe='')}"
+
+
+def poll_app_path(poll_id: PollId) -> str:
+    return f"/meetings/{poll_id}"

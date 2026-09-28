@@ -5,10 +5,14 @@ from typing import Any, ClassVar, Self
 
 from adaptix import Retort
 from maxo.dialogs import DialogManager
+from maxo.types import MessageBody, PhotoAttachment
 
 from zheka.base import ZhekaMutableType, ZhekaType
 from zheka.core.enums import EventSource, RequestCategory
 from zheka.core.ids import HouseId
+from zheka.core.services.requests import MAX_PHOTOS
+
+MIN_REQUEST_TEXT = 15
 
 
 class BaseDialogData(ZhekaMutableType, slots=True):
@@ -74,6 +78,20 @@ class NewRequestData(BaseDialogData):
     request_id: int | None = None
     deadline: str | None = None
     error: str | None = None
+
+    def attach_photos(self, body: MessageBody) -> None:
+        for attach in body.attachments or []:
+            if isinstance(attach, PhotoAttachment) and len(self.photos) < MAX_PHOTOS:
+                self.photos.append(attach.payload.url)
+
+    @classmethod
+    def from_free_text(cls, body: MessageBody) -> Self | None:
+        text = (body.text or "").strip()
+        if len(text) < MIN_REQUEST_TEXT or text.startswith("/"):
+            return None
+        draft = cls(description=text)
+        draft.attach_photos(body)
+        return draft
 
 
 class ExecutorCardData(BaseDialogData):

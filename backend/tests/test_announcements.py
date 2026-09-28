@@ -188,6 +188,7 @@ async def test_house_without_a_reachable_chat_is_reported_back(
     await publisher.flush()
     assert list(created.houses_without_chat) == [data.house_id]
     assert created.announcement.recipients_count == 0
+    assert created.announcement.delivered_count == 0
     assert broker.enqueued(TaskName.BROADCAST_TO_CHATS) == []
 
 
@@ -372,3 +373,50 @@ async def test_a_demo_org_sends_a_direct_announcement_only_to_its_author(
     await publisher.flush()
     [enqueued] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
     assert enqueued["user_ids"] == [data.user_id]
+
+
+async def test_a_channel_without_addressees_is_reported_at_once(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    await _add_resident(session, data.house_id)
+
+    created = await _create(
+        _service(session, publisher),
+        data,
+        channels=[AnnouncementChannel.CHAT, AnnouncementChannel.DIRECT],
+    )
+
+    announcement = created.announcement
+    await publisher.flush()
+    [enqueued] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
+    assert enqueued["announcement_id"] == announcement.id
+    assert broker.enqueued(TaskName.BROADCAST_TO_CHATS) == []
+    assert announcement.delivered_chat == 0
+    assert announcement.delivered_count is None
+
+    await AnnouncementsRepo(session).set_delivered(announcement.id, direct=1)
+    await session.refresh(announcement)
+    assert announcement.delivered_chat == 0
+    assert announcement.delivered_count == 1
+
+
+async def test_a_direct_only_announcement_waits_for_the_direct_count(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    await _add_resident(session, data.house_id)
+
+    created = await _create(
+        _service(session, publisher),
+        data,
+        channels=[AnnouncementChannel.DIRECT],
+    )
+
+    assert created.announcement.delivered_chat == 0
+    assert created.announcement.delivered_direct is None

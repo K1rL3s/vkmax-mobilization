@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from html import escape
 from typing import Any
 
@@ -78,7 +79,11 @@ async def get_flat(
 ) -> dict[str, Any]:
     data = OnboardingData.load(dialog_manager)
     house_id = data.chosen_house()
-    card = await houses_service.house_card(house_id, dialog_user_id(dialog_manager))
+    card = await houses_service.house_card(
+        house_id,
+        dialog_user_id(dialog_manager),
+        datetime.now(UTC),
+    )
     flats = await houses_service.house_flats(house_id, FLATS_LIMIT)
     return {
         "address": escape(card.house.address),

@@ -7,15 +7,19 @@ from maxo.utils.deeplink import create_start_link
 from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep
 from zheka.api.schemas.base import OkResponse
 from zheka.api.schemas.orgs import (
+    CategoryExecutorItem,
     CreateOrgInviteRequest,
     OrgCard,
     OrgInviteItem,
     OrgMemberItem,
     OrgSettingsResponse,
+    SetCategoryExecutorRequest,
     UpdateOrgSettingsRequest,
 )
 from zheka.core.deeplinks import org_invite_payload
+from zheka.core.enums import RequestCategory
 from zheka.core.ids import UserId
+from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.orgs import OrgsService
 
 router = APIRouter(tags=["Админка: организация"], route_class=DishkaRoute)
@@ -52,6 +56,7 @@ async def update_org_settings(
         body.group_window_hours,
         body.phone,
         body.reception_note,
+        body.emergency_phone,
     )
     return OrgSettingsResponse.of(view)
 
@@ -126,3 +131,43 @@ async def revoke_org_invite(
 ) -> OkResponse:
     await orgs_service.revoke_invite(current_org.org_id, code)
     return OkResponse()
+
+
+@router.get(
+    "/admin/org/category-executors",
+    summary="Исполнители по умолчанию для категорий заявок",
+)
+async def list_category_executors(
+    current_org: CurrentOrgDep,
+    category_executors_service: FromDishka[CategoryExecutorsService],
+) -> list[CategoryExecutorItem]:
+    return _category_executors(
+        await category_executors_service.mapping(current_org.org_id),
+    )
+
+
+@router.put(
+    "/admin/org/category-executors",
+    summary="Назначить исполнителя по умолчанию для категории",
+)
+async def set_category_executor(
+    current_org: AdminOrgDep,
+    category_executors_service: FromDishka[CategoryExecutorsService],
+    body: SetCategoryExecutorRequest,
+) -> list[CategoryExecutorItem]:
+    return _category_executors(
+        await category_executors_service.set(
+            current_org.org_id,
+            body.category,
+            body.executor_user_id,
+        ),
+    )
+
+
+def _category_executors(
+    mapping: dict[RequestCategory, UserId],
+) -> list[CategoryExecutorItem]:
+    return [
+        CategoryExecutorItem(category=category, executor_user_id=user_id)
+        for category, user_id in mapping.items()
+    ]

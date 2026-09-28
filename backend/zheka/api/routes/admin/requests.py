@@ -18,13 +18,18 @@ from zheka.api.schemas.requests import (
 )
 from zheka.core.enums import RequestCategory, RequestChannel, RequestStatus
 from zheka.core.errors import NotEnoughRights
-from zheka.core.ids import HouseId, RequestGroupId, RequestId, UserId
+from zheka.core.ids import (
+    API_CHECKER_MAX_USER_ID,
+    HouseId,
+    RequestGroupId,
+    RequestId,
+    UserId,
+)
 from zheka.core.services.admin_requests import (
     AdminRequestCardData,
     AdminRequestsService,
     PhoneRequestDraft,
 )
-from zheka.core.services.demo import API_CHECKER_MAX_USER_ID
 from zheka.core.services.files import FilesService
 from zheka.infra.database.repos.requests import RequestFilters
 

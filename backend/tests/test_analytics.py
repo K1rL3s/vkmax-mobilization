@@ -1,6 +1,7 @@
 import secrets
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,7 @@ from zheka.api.schemas.analytics import (
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
+    CATEGORY_RULES,
     AnalyticsMetric,
     EventType,
     MeterType,
@@ -142,6 +144,10 @@ async def _request(
         parent_request_id=parent_request_id,
         executor_user_id=executor_user_id,
         created_at=created_at,
+        deadline_at=CATEGORY_RULES[category].deadlines(
+            created_at,
+            ZoneInfo("Europe/Moscow"),
+        )[1],
         accepted_at=None if accepted_after is None else created_at + accepted_after,
         reviewed_at=reviewed_at,
         done_at=done_at,
@@ -362,34 +368,41 @@ async def test_a_foreign_house_in_the_reminder_is_not_found(
         await _service(session).remind_not_submitted(org_id, [own, foreign], None, NOW)
 
 
-async def test_overdue_counts_by_the_category_hours(session: AsyncSession) -> None:
+async def test_overdue_counts_by_the_stored_deadline(session: AsyncSession) -> None:
     org_id, house_id = await _org(session)
     await _request(
         session,
         house_id,
-        category=RequestCategory.LEAK,
+        category=RequestCategory.WATER_SUPPLY,
         created_at=NOW - timedelta(hours=5),
     )
     await _request(
         session,
         house_id,
-        category=RequestCategory.LEAK,
+        category=RequestCategory.WATER_SUPPLY,
         created_at=NOW - timedelta(hours=3),
     )
     await _request(session, house_id, created_at=NOW - timedelta(hours=5))
     await _request(
         session,
         house_id,
-        category=RequestCategory.LEAK,
+        category=RequestCategory.WATER_SUPPLY,
         created_at=NOW - timedelta(hours=10),
         status=RequestStatus.DONE,
+    )
+    await _request(
+        session,
+        house_id,
+        category=RequestCategory.WATER_SUPPLY,
+        created_at=NOW - timedelta(hours=10),
+        status=RequestStatus.ON_REVIEW,
     )
 
     dashboard = await _service(session).dashboard(org_id, None, None, None, NOW)
 
     tiles = {tile.key: tile.value for tile in dashboard.tiles}
     assert tiles["overdue"] == 1
-    assert tiles["active"] == 3
+    assert tiles["active"] == 4
 
 
 async def test_the_tiles_average_and_share_are_rounded_once(
@@ -487,7 +500,7 @@ async def test_an_empty_organization_is_explicitly_empty(session: AsyncSession) 
 
     by_category, by_week = dashboard.charts
     assert dashboard.is_empty is True
-    assert [tile.value for tile in dashboard.tiles] == [0, 0, 0, 0]
+    assert [tile.value for tile in dashboard.tiles] == [0, 0, 0, 0, 0]
     assert by_category.points == []
     assert [point.value for point in by_week.points] == [0] * 12
     assert (channels.is_empty, channels.total) == (True, 0)
@@ -873,3 +886,22 @@ async def test_a_period_ending_before_it_starts_is_refused(
             date(2031, 3, 1),
             NOW,
         )
+
+
+async def test_the_tiles_show_the_median_accept_time_beside_the_average(
+    session: AsyncSession,
+) -> None:
+    org_id, house_id = await _org(session)
+    for minutes in (10, 11, 60):
+        await _request(session, house_id, accepted_after=timedelta(minutes=minutes))
+    await _request(session, house_id)
+
+    dashboard = await _service(session).dashboard(org_id, house_id, None, None, NOW)
+
+    keys = [tile.key for tile in dashboard.tiles]
+    tiles = {tile.key: tile.value for tile in dashboard.tiles}
+    assert keys.index(AnalyticsMetric.ACCEPT_TIME_MEDIAN) == (
+        keys.index(AnalyticsMetric.ACCEPT_TIME) + 1
+    )
+    assert tiles[AnalyticsMetric.ACCEPT_TIME] == 27
+    assert tiles[AnalyticsMetric.ACCEPT_TIME_MEDIAN] == 11

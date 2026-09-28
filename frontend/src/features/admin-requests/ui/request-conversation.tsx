@@ -31,8 +31,9 @@ export const RequestConversation = ({ request }: { request: AdminRequest }) => {
               {message.author_name}
               {message.author_role === "staff"
                 ? " · от сотрудника организации"
-                : ""}{" "}
-              · {formatDayTime(message.created_at)}
+                : ""}
+              {message.is_internal ? " · видно только УК" : ""} ·{" "}
+              {formatDayTime(message.created_at)}
             </Typography.Text>
             <Typography.Text
               className={styles.Text}

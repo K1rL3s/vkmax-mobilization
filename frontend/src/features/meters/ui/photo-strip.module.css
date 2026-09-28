@@ -36,5 +36,6 @@
   border-radius: 16px;
   background-color: var(--background-tertiary);
   color: var(--text-themed);
+  text-align: center;
   cursor: pointer;
 }

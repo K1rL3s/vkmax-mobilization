@@ -8,20 +8,22 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select, update
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.script import ScriptDirectory
+from sqlalchemy import Connection, func, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
-from tests.conftest import make_config
+from tests.conftest import alembic_config, make_config
 from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
 
 from zheka.core.charges import parse_lines
 from zheka.core.enums import OrgRole, RequestStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import FlatId, MaxUserId, OrgId, UserId
+from zheka.core.ids import API_CHECKER_MAX_USER_ID, FlatId, MaxUserId, OrgId, UserId
 from zheka.core.services.demo import (
     API_CHECKER_DEMO_NUMBER,
-    API_CHECKER_MAX_USER_ID,
     CHECKER_RESERVED,
     DEMO_INN,
     DEMO_INNS,
@@ -31,14 +33,17 @@ from zheka.core.services.demo import (
 )
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.houses import PUBLIC_STATS_MIN_CLOSED, PUBLIC_STATS_PERIOD
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService, current_period
 from zheka.infra.database.models import Charge, User
+from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.base import metadata
@@ -424,3 +429,74 @@ async def _checker(session: AsyncSession) -> UserId:
     session.add(user)
     await session.flush()
     return user.id
+
+
+async def test_the_mini_app_activation_returns_a_demo_executor_to_staff(
+    db: AsyncSession,
+) -> None:
+    user_id = await _positive_user(db)
+    await _demo(db).join(user_id, 1, OrgRole.EXECUTOR)
+
+    access = await _demo(db).activate(user_id)
+
+    assert access.membership.member.role is OrgRole.EMPLOYEE
+
+
+async def test_no_seeded_deadline_is_due_at_the_seed(db: AsyncSession) -> None:
+    assert await RequestsRepo(db).list_deadline_due(NOW) == []
+
+
+async def test_only_demo_organizations_have_an_emergency_phone(
+    db: AsyncSession,
+) -> None:
+    stmt = select(
+        organizations_table.c.is_demo,
+        organizations_table.c.emergency_phone.is_not(None),
+    ).distinct()
+
+    assert set((await db.execute(stmt)).tuples()) == {(True, True), (False, False)}
+
+
+async def test_the_emergency_phone_migration_numbers_the_seeded_demo_orgs(
+    seeded: AsyncConnection,
+) -> None:
+    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
+        "2c4883d34de8",
+    )
+    assert migration is not None
+
+    def rerun(connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.module.downgrade()
+            migration.module.upgrade()
+
+    stmt = select(
+        organizations_table.c.inn,
+        organizations_table.c.emergency_phone,
+    ).where(organizations_table.c.emergency_phone.is_not(None))
+    savepoint = await seeded.begin_nested()
+    await seeded.run_sync(rerun)
+    phones = dict((await seeded.execute(stmt)).tuples().all())
+    await savepoint.rollback()
+
+    assert phones == {
+        profile.inn: f"+7 (000) 000-01-{number:02d}"
+        for number, profile in enumerate(PROFILES, start=1)
+    }
+
+
+async def test_every_demo_organization_shows_its_own_stats(db: AsyncSession) -> None:
+    seen = set()
+    for profile in PROFILES:
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        stats = await AnalyticsRepo(db).public_stats(
+            org.id,
+            NOW - PUBLIC_STATS_PERIOD,
+            NOW,
+        )
+        assert stats.closed >= PUBLIC_STATS_MIN_CLOSED, profile.inn
+        assert None not in (stats.on_time_share, stats.accept_time, stats.rating)
+        seen.add((stats.on_time_share, stats.accept_time, stats.rating))
+
+    assert len(seen) == len(PROFILES)

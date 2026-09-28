@@ -3,9 +3,9 @@ from typing import Self
 
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema, FreeText
+from zheka.api.schemas.base import BaseSchema, FreeText, Phone
 from zheka.api.schemas.houses import HouseListItem
-from zheka.core.enums import OrgRole
+from zheka.core.enums import OrgRole, RequestCategory
 from zheka.core.ids import OrgId, UserId
 from zheka.core.models import OrgInvite
 from zheka.core.services.orgs import (
@@ -99,7 +99,7 @@ class RegisterOrgRequest(BaseSchema):
     inn: str
     license_no: str | None = None
     name: str
-    phone: str
+    phone: Phone
     address: str
 
 
@@ -111,6 +111,7 @@ class OrgSettingsResponse(BaseSchema):
     group_window_hours: int
     phone: str
     reception_note: str | None
+    emergency_phone: str | None
 
     @classmethod
     def of(cls, view: OrgSettingsView) -> Self:
@@ -123,6 +124,7 @@ class OrgSettingsResponse(BaseSchema):
             group_window_hours=settings.group_window_hours,
             phone=view.org.phone,
             reception_note=view.org.reception_note,
+            emergency_phone=view.org.emergency_phone,
         )
 
 
@@ -132,8 +134,9 @@ class UpdateOrgSettingsRequest(BaseSchema):
     meter_window_always_open: bool
     group_threshold: int
     group_window_hours: int
-    phone: str
+    phone: Phone
     reception_note: FreeText | None = None
+    emergency_phone: Phone | None = None
 
 
 class OrgMemberItem(BaseSchema):
@@ -184,3 +187,16 @@ class CreateOrgInviteRequest(BaseSchema):
     role: OrgRole
     expires_in_hours: int = 72
     max_activations: int = 1
+
+
+class CategoryExecutorItem(BaseSchema):
+    category: RequestCategory
+    executor_user_id: UserId
+
+
+class SetCategoryExecutorRequest(BaseSchema):
+    category: RequestCategory
+    executor_user_id: UserId | None = Field(
+        description="Исполнитель, которому сразу уходят новые заявки категории; "
+        "null снимает назначение",
+    )

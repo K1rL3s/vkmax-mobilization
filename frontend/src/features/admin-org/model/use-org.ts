@@ -53,7 +53,12 @@ export const useSaveSettings = () =>
 export const useRemoveMember = () =>
   rqClient.useMutation("delete", "/api/admin/org/members/{user_id}", {
     onSettled: () =>
-      invalidatePaths("/api/admin/org/members", "/api/admin/org"),
+      invalidatePaths(
+        "/api/admin/org/members",
+        "/api/admin/org",
+        "/api/admin/executors",
+        "/api/admin/org/category-executors",
+      ),
   });
 
 export const useCreateInvite = () =>
@@ -64,4 +69,17 @@ export const useCreateInvite = () =>
 export const useRevokeInvite = () =>
   rqClient.useMutation("delete", "/api/admin/org/invites/{code}", {
     onSettled: () => invalidatePaths("/api/admin/org/invites"),
+  });
+
+export const useOrgExecutors = () =>
+  rqClient.useQuery("get", "/api/admin/executors", { params: orgParams() });
+
+export const useCategoryExecutors = () =>
+  rqClient.useQuery("get", "/api/admin/org/category-executors", {
+    params: orgParams(),
+  });
+
+export const useSetCategoryExecutor = () =>
+  rqClient.useMutation("put", "/api/admin/org/category-executors", {
+    onSuccess: () => invalidatePaths("/api/admin/org/category-executors"),
   });

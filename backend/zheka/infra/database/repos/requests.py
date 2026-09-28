@@ -1,8 +1,9 @@
 from collections.abc import Collection, Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.expression import FromClause
 
 from zheka.base import ZhekaType
 from zheka.core.enums import (
@@ -15,7 +16,9 @@ from zheka.core.enums import (
     RequestStatus,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
+from zheka.core.models.requests import WARN_MAX, WARN_MIN, WARN_SHARE
 from zheka.infra.database.models import (
+    House,
     Request,
     RequestGroup,
     RequestMessage,
@@ -51,26 +54,20 @@ class RequestFilters(ZhekaType):
     grouped: bool = False
 
 
-def overdue_at(now: datetime) -> ColumnElement[bool]:
+def overdue_at(
+    now: datetime,
+    table: FromClause = requests_table,
+) -> ColumnElement[bool]:
     return and_(
-        or_(
-            *[
-                and_(
-                    requests_table.c.category == category,
-                    requests_table.c.created_at
-                    < now - timedelta(hours=rule.normative_hours),
-                )
-                for category, rule in CATEGORY_RULES.items()
-            ],
-        ),
-        requests_table.c.status != RequestStatus.DONE,
+        table.c.deadline_at < now,
+        table.c.status.not_in((RequestStatus.DONE, RequestStatus.ON_REVIEW)),
     )
 
 
 class RequestsRepo(BaseAlchemyRepo):
     async def create(
         self,
-        house_id: HouseId,
+        house: House,
         flat_id: FlatId | None,
         author_user_id: UserId | None,
         category: RequestCategory,
@@ -83,8 +80,14 @@ class RequestsRepo(BaseAlchemyRepo):
         caller_name: str | None = None,
         caller_phone: str | None = None,
     ) -> Request:
+        now = datetime.now(UTC)
+        react_deadline_at, deadline_at = CATEGORY_RULES[category].deadlines(
+            now,
+            house.zone,
+        )
         request = Request(
-            house_id=house_id,
+            created_at=now,
+            house_id=house.id,
             flat_id=flat_id,
             author_user_id=author_user_id,
             category=category,
@@ -96,6 +99,8 @@ class RequestsRepo(BaseAlchemyRepo):
             is_staff_author=is_staff_author,
             caller_name=caller_name,
             caller_phone=caller_phone,
+            deadline_at=deadline_at,
+            react_deadline_at=react_deadline_at,
         )
         self._session.add(request)
         await self._session.flush()
@@ -210,6 +215,8 @@ class RequestsRepo(BaseAlchemyRepo):
         author_user_id: UserId,
         author_role: str,
         text: str,
+        *,
+        is_internal: bool = False,
     ) -> None:
         self._session.add(
             RequestMessage(
@@ -217,6 +224,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 author_user_id=author_user_id,
                 author_role=author_role,
                 text=text,
+                is_internal=is_internal,
             ),
         )
         await self._session.flush()
@@ -272,9 +280,20 @@ class RequestsRepo(BaseAlchemyRepo):
             if value is not None:
                 stmt = stmt.where(requests_table.c[name] == value)
         overdue = overdue_at(now)
+        escalated = escalation_active(now, requests_table)
         if filters.overdue:
             stmt = stmt.where(overdue)
         if filters.grouped:
+            members = requests_table.alias()
+            escalated = or_(
+                escalated,
+                select(members.c.id)
+                .where(
+                    members.c.group_id == requests_table.c.group_id,
+                    escalation_active(now, members),
+                )
+                .exists(),
+            )
             leaders = (
                 select(func.min(requests_table.c.id))
                 .where(requests_table.c.group_id.is_not(None))
@@ -287,7 +306,11 @@ class RequestsRepo(BaseAlchemyRepo):
                 ),
             )
 
-        stmt = stmt.order_by(overdue.desc(), requests_table.c.created_at.desc())
+        stmt = stmt.order_by(
+            escalated.desc(),
+            overdue.desc(),
+            requests_table.c.created_at.desc(),
+        )
         return await self._page(stmt, limit, offset)
 
     async def set_status(
@@ -318,7 +341,7 @@ class RequestsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
-    async def set_executor(self, request: Request, user_id: UserId) -> None:
+    async def set_executor(self, request: Request, user_id: UserId | None) -> None:
         request.executor_user_id = user_id
         await self._session.flush()
 
@@ -440,3 +463,95 @@ class RequestsRepo(BaseAlchemyRepo):
             .execution_options(populate_existing=True)
         )
         await self._session.execute(stmt)
+
+    async def last_for_flat(
+        self,
+        flat_id: FlatId,
+        statuses: Collection[RequestStatus],
+    ) -> Request | None:
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.flat_id == flat_id,
+                requests_table.c.status.in_(statuses),
+            )
+            .order_by(requests_table.c.id.desc())
+            .limit(1)
+        )
+        request: Request | None = await self._session.scalar(stmt)
+        return request
+
+    async def list_deadline_due(self, now: datetime) -> Sequence[Request]:
+        deadline_at = requests_table.c.deadline_at
+        lead = func.greatest(
+            func.least(
+                (deadline_at - requests_table.c.created_at) / WARN_SHARE,
+                WARN_MAX,
+            ),
+            WARN_MIN,
+        )
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.status.in_(OPEN_STATUSES),
+                or_(
+                    and_(
+                        requests_table.c.overdue_notified_at.is_(None),
+                        deadline_at <= now,
+                    ),
+                    and_(
+                        requests_table.c.deadline_warned_at.is_(None),
+                        deadline_at - lead <= now,
+                    ),
+                ),
+            )
+            .order_by(requests_table.c.id)
+            .with_for_update(skip_locked=True)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def mark_deadline(
+        self,
+        request: Request,
+        at: datetime,
+        *,
+        overdue: bool,
+    ) -> None:
+        if request.deadline_warned_at is None:
+            request.deadline_warned_at = at
+        if overdue:
+            request.overdue_notified_at = at
+        await self._session.flush()
+
+    async def set_deadline(self, request: Request, deadline_at: datetime) -> None:
+        request.deadline_at = deadline_at
+        if request.react_deadline_at is not None:
+            request.react_deadline_at = min(request.react_deadline_at, deadline_at)
+        await self._session.flush()
+
+    async def escalate(self, request: Request, at: datetime) -> None:
+        request.escalated_at = at
+        await self._session.flush()
+
+    async def group_escalations(
+        self,
+        group_ids: Collection[RequestGroupId],
+        now: datetime,
+    ) -> dict[RequestGroupId, datetime]:
+        if not group_ids:
+            return {}
+        stmt = (
+            select(requests_table.c.group_id, func.min(requests_table.c.escalated_at))
+            .where(
+                requests_table.c.group_id.in_(group_ids),
+                escalation_active(now, requests_table),
+            )
+            .group_by(requests_table.c.group_id)
+        )
+        result = await self._session.execute(stmt)
+        return {RequestGroupId(group_id): at for group_id, at in result.tuples()}
+
+
+def escalation_active(now: datetime, table: FromClause) -> ColumnElement[bool]:
+    return and_(table.c.escalated_at.is_not(None), overdue_at(now, table))

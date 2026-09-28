@@ -13,7 +13,8 @@ from maxo.dialogs.widgets.kbd import (
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 
-from zheka.bot.cards import BACK, TO_MENU
+from zheka.bot.cards import BACK, EMERGENCY, TO_MENU
+from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.handlers.requests.handlers import (
     SENT_TEXT,
     get_category,
@@ -24,12 +25,17 @@ from zheka.bot.handlers.requests.handlers import (
     on_description_photo,
     on_photo,
     on_send,
+    on_start,
 )
-from zheka.bot.states import NewRequest, Onboarding
+from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.core.texts import OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
 CATEGORY_TEXT = "🏢 {address}\n\n🛠 Что случилось?"
+PROBLEM_TEXT = (
+    "🏢 {address}\n\n📝 Создать заявку по проблеме «{description}»?\n\n"
+    "🛠 Выберите, что случилось"
+)
 NOT_CONNECTED_TEXT = (
     "🏢 {address}\n\n😔 Управляющая компания этого дома еще не подключена к "
     "Жэке, заявку передать некому. Нажмите «Мне нужен» на главной в "
@@ -41,7 +47,7 @@ PHOTO_TEXT = "📷 Пришлите фото, если есть. Приложе�
 CONFIRM_TEXT = "📋 Проверьте заявку\n\n{category}\n\n{description}\n\nФото: {photos}"
 CREATED_TEXT = (
     "✅ Заявка №{request_id} отправлена в УК\n"
-    "⏰ Срок: до {deadline}\n"
+    "{deadline}\n"
     "Сообщу, когда ее примут в работу"
 )
 
@@ -49,7 +55,9 @@ request_dialog = Dialog(
     Window(
         Const(NO_HOUSE_TEXT, when=~F["address"]),
         Format(NOT_CONNECTED_TEXT, when=F["address"] & ~F["connected"]),
-        Format(CATEGORY_TEXT, when=F["connected"]),
+        Format(CATEGORY_TEXT, when=F["connected"] & ~F["description"]),
+        Format(PROBLEM_TEXT, when=F["connected"] & F["description"]),
+        Start(EMERGENCY, id="emergency", state=Menu.emergency),
         Column(
             Select(
                 Format("{item[label]}"),
@@ -59,6 +67,7 @@ request_dialog = Dialog(
                 on_click=on_category,
             ),
         ),
+        MessageInput(on_free_text),
         Start(
             Const("🔎 Найти дом"),
             id="find_house",
@@ -108,8 +117,10 @@ request_dialog = Dialog(
             payload=Format("{request_payload}"),
             when=F["request_payload"] & F["bot_username"],
         ),
+        MessageInput(on_free_text),
         TO_MENU,
         state=NewRequest.sent,
         getter=get_sent,
     ),
+    on_start=on_start,
 )

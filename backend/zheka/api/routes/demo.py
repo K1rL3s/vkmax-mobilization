@@ -8,9 +8,9 @@ from zheka.api.schemas.houses import ResidencySummary
 from zheka.api.schemas.orgs import OrgMembership
 from zheka.core.enums import OrgRole
 from zheka.core.errors import NotEnoughRights
+from zheka.core.ids import API_CHECKER_MAX_USER_ID
 from zheka.core.services.demo import (
     API_CHECKER_DEMO_NUMBER,
-    API_CHECKER_MAX_USER_ID,
     CHECKER_ONLY,
     DemoService,
 )

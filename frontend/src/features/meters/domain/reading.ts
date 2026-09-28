@@ -81,14 +81,56 @@ const monthsBetween = (from: string, to: string): number => {
   );
 };
 
-export const isImplausiblyHigh = (
+const isImplausiblyHigh = (
   meter: Meter,
   period: string,
   consumption: number,
 ): boolean => {
-  const months = meter.last_period
-    ? Math.max(1, monthsBetween(meter.last_period, period))
-    : 1;
+  const since = baselineOf(meter, period).period;
+  const months = since ? Math.max(1, monthsBetween(since, period)) : 1;
 
-  return consumption > TYPICAL_MONTH[meter.type] * 10 * months * MILLI;
+  return consumption > monthlyLimit(meter) * months * MILLI;
+};
+
+export const baselineOf = (meter: Meter, period: string) =>
+  meter.last_period === period
+    ? { period: meter.prior_period, values: meter.prior_values }
+    : { period: meter.last_period, values: meter.last_values };
+
+export const verificationDaysLeft = (due: string, today = new Date()) =>
+  Math.round(
+    (Date.parse(due) -
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) /
+      86_400_000,
+  );
+
+export const monthlyLimit = (meter: Meter): number =>
+  TYPICAL_MONTH[meter.type] * 10;
+
+export type Anomaly = {
+  zone: TariffZone;
+  previous: number;
+  current: number;
+  kind: "below" | "high";
+};
+
+export const anomalyOf = (
+  meter: Meter,
+  period: string,
+  zone: TariffZone,
+  current: number | null,
+): Anomaly | null => {
+  const previous = baselineOf(meter, period).values?.[zone];
+
+  if (previous === undefined || current === null) {
+    return null;
+  }
+
+  if (current < previous) {
+    return { zone, previous, current, kind: "below" };
+  }
+
+  return isImplausiblyHigh(meter, period, current - previous)
+    ? { zone, previous, current, kind: "high" }
+    : null;
 };

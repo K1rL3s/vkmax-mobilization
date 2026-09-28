@@ -24,6 +24,7 @@ export const Routes = {
   APPOINTMENTS: "/appointments",
   NEWS: "/news",
   FAQ: "/faq",
+  EMERGENCY: "/emergency",
   OUTSIDE_MAX: "/outside-max",
   ADMIN: "/admin",
   ADMIN_REQUESTS: "/admin/requests",

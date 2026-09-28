@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -174,6 +176,7 @@ def test_complaint_sources_count_complainants_and_not_requests() -> None:
             description="жалоба",
             status=RequestStatus.NEW,
             channel=RequestChannel.MINIAPP,
+            deadline_at=datetime.now(UTC),
         )
         for flat_id, author_user_id in (
             (FlatId(7), None),

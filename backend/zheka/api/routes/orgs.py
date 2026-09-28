@@ -11,7 +11,8 @@ from zheka.api.schemas.orgs import (
     RegisterOrgRequest,
 )
 from zheka.core.errors import NotEnoughRights
-from zheka.core.services.demo import API_CHECKER_MAX_USER_ID, CHECKER_ONLY
+from zheka.core.ids import API_CHECKER_MAX_USER_ID
+from zheka.core.services.demo import CHECKER_ONLY
 from zheka.core.services.orgs import OrgsService
 
 router = APIRouter(tags=["Организации"], route_class=DishkaRoute)

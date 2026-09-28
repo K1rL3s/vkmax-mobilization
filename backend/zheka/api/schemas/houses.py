@@ -35,6 +35,10 @@ class OrgContacts(BaseSchema):
     address: str
     license_no: str | None = None
     reception_note: str | None = None
+    emergency_phone: str | None = Field(
+        default=None,
+        description="Аварийно-диспетчерская служба дома, если УК ее указала",
+    )
     is_demo: bool = False
     timezone: str = Field(
         description="Часовой пояс IANA: в нем приемные часы и слоты записи",
@@ -116,6 +120,27 @@ class HouseOverhaul(BaseSchema):
     works: list[OverhaulWork]
 
 
+class OrgPublicStats(BaseSchema):
+    closed: int = Field(description="Заявок сдано на приемку, по всем домам УК")
+    on_time: int = Field(description="Из них сдано в нормативный срок")
+    on_time_share: int = Field(
+        description="Доля сданных в срок в сотых долях процента, 50% это 5000",
+    )
+    accept_time: int | None = Field(
+        default=None,
+        description="Среднее время до принятия заявки в минутах",
+    )
+    accept_time_median: int | None = Field(
+        default=None,
+        description="Медиана времени до принятия заявки в минутах",
+    )
+    rating: int | None = Field(
+        default=None,
+        description="Средняя оценка жителей в сотых долях балла",
+    )
+    ratings_count: int
+
+
 class HouseCard(BaseSchema):
     id: HouseId
     address: str
@@ -142,6 +167,10 @@ class HouseCard(BaseSchema):
     chat_bound: bool = False
     overhaul: HouseOverhaul | None = None
     documents: list[FileRef]
+    org_stats: OrgPublicStats | None = Field(
+        default=None,
+        description="Показатели УК за 90 дней, нет при малом числе заявок",
+    )
 
     @classmethod
     def of(cls, card: HouseCardData, documents: list[FileRef]) -> Self:
@@ -175,6 +204,11 @@ class HouseCard(BaseSchema):
                 HouseOverhaul.model_validate(house.overhaul) if house.overhaul else None
             ),
             documents=documents,
+            org_stats=(
+                None
+                if card.org_stats is None
+                else OrgPublicStats.model_validate(card.org_stats)
+            ),
         )
 
 

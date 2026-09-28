@@ -1,14 +1,21 @@
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html import escape
+from math import ceil
 
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
+from zheka.core.models import House, Request
 
 BLOCKED = "УК закрыла вам доступ к этому дому"
 OPEN_REQUEST = "📱 Открыть заявку"
+SUBMIT_READINGS = "📟 Передать показания"
+MY_METERS = "📟 Мои счетчики"
+VOTE = "🗳 Проголосовать"
+MY_APPOINTMENTS = "📅 Мои записи"
 CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
 MOMENT = "%H:%M %d.%m"
+NO_NORM = "Срок сервиса, норматива нет"
 
 REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
     RequestStatus.NEW: "Новая",
@@ -29,25 +36,25 @@ REQUEST_STATUS_NEWS: Mapping[RequestStatus, str] = {
 
 
 def request_status_changed(
-    request_id: RequestId,
-    category: RequestCategory,
-    status: RequestStatus,
-    deadline: datetime,
+    request: Request,
+    house: House,
     comment: str | None,
 ) -> str:
-    text = f"🔔 Заявка {_request(request_id, category)}: {REQUEST_STATUS_NEWS[status]}"
-    if status is not RequestStatus.DONE:
-        text = f"{text}\n{_deadline(deadline)}"
+    text = (
+        f"🔔 Заявка {_request(request.id, request.category)}: "
+        f"{REQUEST_STATUS_NEWS[request.status]}"
+    )
+    if request.status is not RequestStatus.DONE:
+        text = f"{text}\n{deadline_lines(request, house)}"
     if comment:
         text = f"{text}\n\n{escape(comment)}"
     return text
 
 
 def request_reply(request_id: RequestId, category: RequestCategory, text: str) -> str:
-    return (
-        f"💬 Ответ УК по заявке {_request(request_id, category)}\n\n{escape(text)}\n\n"
-        "↩️ Ответить можно в приложении"
-    )
+    head = f"💬 Ответ УК по заявке {_request(request_id, category)}\n\n"
+    tail = "\n\n↩️ Ответить можно в приложении"
+    return f"{head}{_fitted(text, head + tail)}{tail}"
 
 
 def flat_verified(flat_number: str, address: str) -> str:
@@ -89,7 +96,7 @@ def request_auto_closed(request_id: RequestId) -> str:
 
 
 def reading_window_opened() -> str:
-    return "📟 Открыт прием показаний счетчиков. Передайте их в мини-приложении"
+    return "📟 Открыт прием показаний счетчиков"
 
 
 def reading_window_closing(days: int) -> str:
@@ -107,16 +114,13 @@ def poll_reminder(title: str, ends_at: datetime) -> str:
 
 
 def poll_chat_reminder(title: str, ends_at: datetime) -> str:
-    return (
-        f"🗳 Идет опрос «{escape(title)}», голосование закончится "
-        f"{ends_at:%d.%m.%Y}. Проголосовать можно в мини-приложении"
-    )
+    return f"🗳 Идет опрос «{escape(title)}», голосование закончится {ends_at:%d.%m.%Y}"
 
 
-def verification_soon(meter: str, serial: str, due: date) -> str:
+def verification_soon(meter: str, serial: str, due: date, days: int) -> str:
     return (
-        f"⏰ {due:%d.%m.%Y} истекает поверка счетчика «{meter}» №{escape(serial)}. "
-        "После этого начисление пойдет по нормативу"
+        f"⏰ Через {_days(days)}, {due:%d.%m.%Y}, истекает поверка счетчика "
+        f"«{meter}» №{escape(serial)}. После этого начисление пойдет по нормативу"
     )
 
 
@@ -145,8 +149,7 @@ def _days(count: int) -> str:
 
 def reading_reminder_manual() -> str:
     return (
-        "📟 Управляющая организация напоминает: прием показаний открыт, а "
-        "ваших еще нет. Передайте их в мини-приложении"
+        "📟 Управляющая организация напоминает: прием показаний открыт, а ваших еще нет"
     )
 
 
@@ -169,15 +172,10 @@ def flat_verification_revoked(address: str, reason: str, contact: str) -> str:
     )
 
 
-def request_created(
-    request_id: RequestId,
-    category: RequestCategory,
-    address: str,
-    deadline: datetime,
-) -> str:
+def request_created(request: Request, house: House) -> str:
     return (
-        f"🆕 Заявка {_request(request_id, category)}\n🏢 {escape(address)}\n"
-        f"{_deadline(deadline)}"
+        f"🆕 Заявка {_request(request.id, request.category)}\n"
+        f"🏢 {escape(house.address)}\n{deadline_lines(request, house)}"
     )
 
 
@@ -185,5 +183,104 @@ def _request(request_id: RequestId, category: RequestCategory) -> str:
     return f"№{request_id} «{CATEGORY_RULES[category].caption}»"
 
 
-def _deadline(deadline: datetime) -> str:
-    return f"⏰ Срок: до {deadline:{MOMENT}}"
+def verification_today(meter: str, serial: str) -> str:
+    return (
+        f"⏰ Сегодня последний день поверки счетчика «{meter}» №{escape(serial)}. "
+        "С завтрашнего дня начисление пойдет по нормативу"
+    )
+
+
+def deadline_lines(request: Request, house: House) -> str:
+    lines = [
+        f"⏰ Срок: до {house.local(request.deadline_at):{MOMENT}}",
+        f"📜 {CATEGORY_RULES[request.category].basis or NO_NORM}",
+    ]
+    if request.status is RequestStatus.NEW and request.react_deadline_at is not None:
+        lines.insert(
+            0,
+            f"⏱ Принять до {house.local(request.react_deadline_at):{MOMENT}}",
+        )
+    return "\n".join(lines)
+
+
+COMPLAINT_BUTTON = "📄 Жалоба в ГЖИ"
+
+
+def deadline_warning(request: Request, house: House, now: datetime) -> str:
+    hours = ceil((request.deadline_at - now) / timedelta(hours=1))
+    return (
+        f"⏳ Заявке {_request(request.id, request.category)} осталось {hours} ч\n"
+        f"⏰ Срок: до {house.local(request.deadline_at):{MOMENT}}"
+    )
+
+
+def request_overdue_staff(request: Request, house: House) -> str:
+    return (
+        f"🔴 Заявка {_request(request.id, request.category)} просрочена\n"
+        f"🏢 {escape(house.address)}"
+    )
+
+
+def request_overdue_author(request: Request) -> str:
+    return (
+        f"🔴 Срок по заявке {_request(request.id, request.category)} истек\n"
+        f"📜 {CATEGORY_RULES[request.category].basis or NO_NORM}\n"
+        "📄 Можно подготовить жалобу в ГЖИ"
+    )
+
+
+def request_overdue_chairman(request: Request) -> str:
+    return f"🔴 В доме просрочена заявка {_request(request.id, request.category)}"
+
+
+def executor_declined(
+    request_id: RequestId,
+    category: RequestCategory,
+    executor: str,
+    reason: str,
+) -> str:
+    head = (
+        f"🙅 {escape(executor)} отказался от заявки {_request(request_id, category)}"
+        "\n💬 "
+    )
+    return f"{head}{_fitted(reason, head)}"
+
+
+MESSAGE_LIMIT = 4000
+
+
+def _units(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _fitted(quote: str, frame: str) -> str:
+    room = MESSAGE_LIMIT - _units(frame)
+    escaped = escape(quote)
+    if _units(escaped) <= room:
+        return escaped
+    kept: list[str] = []
+    size = _units("…")
+    for char in quote:
+        part = escape(char)
+        size += _units(part)
+        if size > room:
+            break
+        kept.append(part)
+    return f"{''.join(kept)}…"
+
+
+def request_escalated(request: Request, house: House, now: datetime) -> str:
+    hours = max(1, ceil((now - request.deadline_at) / timedelta(hours=1)))
+    return (
+        "⬆️ Житель просит руководство вмешаться: заявка "
+        f"{_request(request.id, request.category)} просрочена на {hours} ч\n"
+        f"🏢 {escape(house.address)}"
+    )
+
+
+def request_escalated_author(request: Request) -> str:
+    return (
+        "⬆️ Руководство УК уведомлено о просрочке заявки "
+        f"{_request(request.id, request.category)}\n"
+        "📄 Если ничего не изменится, можно подать жалобу в ГЖИ"
+    )

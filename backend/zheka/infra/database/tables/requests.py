@@ -58,6 +58,11 @@ requests_table = Table(
         server_default=false(),
         nullable=False,
     ),
+    Column("deadline_at", DateTime(timezone=True), nullable=False),
+    Column("react_deadline_at", DateTime(timezone=True), nullable=True),
+    Column("deadline_warned_at", DateTime(timezone=True), nullable=True),
+    Column("overdue_notified_at", DateTime(timezone=True), nullable=True),
+    Column("escalated_at", DateTime(timezone=True), nullable=True),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),
@@ -109,4 +114,11 @@ request_messages_table = Table(
     Column("author_user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("author_role", String(16), nullable=False),
     Column("text", Text, nullable=False),
+    Column(
+        "is_internal",
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
+    ),
 )

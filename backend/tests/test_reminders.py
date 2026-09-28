@@ -18,7 +18,12 @@ from zheka.broker.tasks.reminders import (
     remind_readings,
     warn_verification,
 )
-from zheka.broker.tasks.requests import auto_close_reviewed_requests
+from zheka.broker.tasks.requests import (
+    auto_close_reviewed_requests,
+    watch_request_deadlines,
+)
+from zheka.core import texts
+from zheka.core.deeplinks import MEETINGS_APP_PATH, poll_app_path
 from zheka.core.enums import (
     AppointmentStatus,
     ChatStatus,
@@ -40,8 +45,11 @@ from zheka.core.ids import (
     PollId,
     UserId,
 )
+from zheka.core.services.demo import demo_flat_number
 from zheka.core.services.readings import current_period
 from zheka.core.services.reminders import (
+    DEMO_ADDRESS,
+    DEMO_POLL,
     ReadingReminder,
     reading_reminder,
 )
@@ -274,6 +282,10 @@ async def test_the_reading_reminder_goes_once_to_a_flat_that_did_not_submit(
     [queued] = _to_users(bot_broker, lagging)
     assert queued["category"] == NotificationCategory.METERS.value
     assert queued["mandatory"] is False
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.SUBMIT_READINGS,
+        "/meters",
+    )
     assert _to_users(bot_broker, done) == []
     assert _to_users(bot_broker, unverified) == []
 
@@ -374,6 +386,10 @@ async def test_the_poll_reminder_goes_once_only_to_flats_without_a_vote(
     assert {voted, flatmate, tenant, blocked, flatless}.isdisjoint(queued["user_ids"])
     assert queued["category"] == NotificationCategory.ANNOUNCEMENTS.value
     assert queued["mandatory"] is False
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.VOTE,
+        f"/meetings/{poll_id}",
+    )
 
 
 async def _chat(session: AsyncSession, house_id: HouseId, *, bound: bool) -> MaxChatId:
@@ -400,17 +416,20 @@ async def test_the_poll_reminder_goes_into_the_bound_chat_only(
     house_id = await _house(bot_session)
     bound = await _chat(bot_session, house_id, bound=True)
     unbound = await _chat(bot_session, house_id, bound=False)
-    await _poll(bot_session, house_id, timedelta(hours=24))
+    poll_id = await _poll(bot_session, house_id, timedelta(hours=24))
 
     await _run(task_broker, remind_polls)
 
-    chat_ids = [
-        chat_id
+    [queued] = [
+        kwargs
         for kwargs in bot_broker.enqueued(TaskName.BROADCAST_TO_CHATS)
-        for chat_id in kwargs["chat_ids"]
+        if bound in kwargs["chat_ids"]
     ]
-    assert bound in chat_ids
-    assert unbound not in chat_ids
+    assert unbound not in queued["chat_ids"]
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.VOTE,
+        f"/meetings/{poll_id}",
+    )
 
 
 async def _poll_status(session: AsyncSession, poll_id: PollId) -> PollStatus:
@@ -448,9 +467,14 @@ def _texts(bot_broker: RecordingBroker, user_id: UserId) -> list[str]:
 @pytest.mark.parametrize(
     ("due_in", "warned_ago", "expected"),
     [
-        (10, None, "{due:%d.%m.%Y} истекает поверка"),
-        (0, 30, "Истекла поверка"),
-        (10, 365, "{due:%d.%m.%Y} истекает поверка"),
+        (30, None, "Через 30 дней, {due:%d.%m.%Y}, истекает поверка"),
+        (7, 8, "Через 7 дней, {due:%d.%m.%Y}, истекает поверка"),
+        (6, 20, "Через 6 дней, {due:%d.%m.%Y}, истекает поверка"),
+        (1, 6, "Через 1 день, {due:%d.%m.%Y}, истекает поверка"),
+        (0, 1, "Сегодня последний день поверки"),
+        (-1, 1, "Истекла поверка"),
+        (-1, 30, "Истекла поверка"),
+        (10, 365, "Через 10 дней, {due:%d.%m.%Y}, истекает поверка"),
     ],
 )
 async def test_each_verification_warning_goes_once(
@@ -470,8 +494,9 @@ async def test_each_verification_warning_goes_once(
     await _run(task_broker, warn_verification)
     await _run(task_broker, warn_verification)
 
-    [text] = _texts(bot_broker, user_id)
-    assert expected.format(due=due) in text
+    [queued] = _to_users(bot_broker, user_id)
+    assert expected.format(due=due) in queued["text"]
+    assert (queued["app_button"], queued["app_path"]) == (texts.MY_METERS, "/meters")
     assert await _warned_at(bot_session, meter_id) == _today()
 
 
@@ -537,8 +562,12 @@ async def test_only_tomorrows_appointment_is_reminded_once(
     await _run(task_broker, remind_appointments)
     await _run(task_broker, remind_appointments)
 
-    queued = _to_user(bot_broker, user_id)
-    assert [kwargs["mandatory"] for kwargs in queued] == ([True] if reminded else [])
+    queued = [
+        (kwargs["mandatory"], kwargs["app_button"], kwargs["app_path"])
+        for kwargs in _to_user(bot_broker, user_id)
+    ]
+    reminder = (True, texts.MY_APPOINTMENTS, "/appointments")
+    assert queued == ([reminder] if reminded else [])
 
 
 async def test_each_moment_of_each_window_is_reminded_once(
@@ -713,6 +742,7 @@ def test_schedules_are_hourly_in_utc() -> None:
         warn_verification,
         remind_appointments,
         auto_close_reviewed_requests,
+        watch_request_deadlines,
     ]
 
     assert {task.task_name: task.labels["schedule"] for task in tasks} == {
@@ -722,6 +752,7 @@ def test_schedules_are_hourly_in_utc() -> None:
         TaskName.WARN_VERIFICATION: [{"cron": "0 * * * *"}],
         TaskName.REMIND_APPOINTMENTS: [{"cron": "0 * * * *"}],
         TaskName.AUTO_CLOSE_REVIEWED_REQUESTS: [{"cron": "* * * * *"}],
+        TaskName.WATCH_REQUEST_DEADLINES: [{"cron": "*/5 * * * *"}],
     }
 
 
@@ -792,7 +823,7 @@ async def test_the_verification_warning_waits_for_nine_of_the_local_day(
     await service.warn_verification(datetime(2026, 9, 14, 23, tzinfo=UTC))
     await publisher.flush()
     [text] = _texts(broker, user_id)
-    assert "15.10.2026 истекает поверка" in text
+    assert "15.10.2026, истекает поверка" in text
 
 
 async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(
@@ -855,7 +886,11 @@ async def test_the_manual_reading_reminder_counts_the_day_in_local_time(
     )
     await publisher.flush()
 
-    assert len(_to_users(broker, user_id)) == 1
+    [queued] = _to_users(broker, user_id)
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.SUBMIT_READINGS,
+        "/meters",
+    )
 
 
 async def test_a_verification_due_in_thirty_one_days_waits(
@@ -870,3 +905,90 @@ async def test_a_verification_due_in_thirty_one_days_waits(
 
     assert _texts(bot_broker, user_id) == []
     assert await _warned_at(bot_session, meter_id) is None
+
+
+async def test_a_due_date_brings_one_verification_notice_per_stage(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    flat_id, user_id = await _resident(session, await _house(session))
+    meter_id = await _meter(session, flat_id, due=date(2026, 10, 15))
+    service = reminders_service(session, publisher)
+
+    day = date(2026, 9, 10)
+    while day <= date(2026, 10, 20):
+        now = datetime.combine(day, time(6), UTC)
+        await service.warn_verification(now)
+        await service.warn_verification(now)
+        await publisher.flush()
+        day += timedelta(days=1)
+
+    assert [text.split(" поверк")[0] for text in _texts(broker, user_id)] == [
+        "⏰ Через 30 дней, 15.10.2026, истекает",
+        "⏰ Через 7 дней, 15.10.2026, истекает",
+        "⏰ Через 1 день, 15.10.2026, истекает",
+        "⏰ Сегодня последний день",
+        "⚠️ Истекла",
+    ]
+    assert await _warned_at(session, meter_id) == date(2026, 10, 16)
+
+
+async def test_a_missed_stage_arrives_the_next_day_once(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    flat_id, user_id = await _resident(session, await _house(session))
+    await _meter(session, flat_id, due=date(2026, 10, 15), warned_at=date(2026, 9, 15))
+    service = reminders_service(session, publisher)
+
+    for day in (9, 10):
+        await service.warn_verification(datetime(2026, 10, day, 6, tzinfo=UTC))
+        await publisher.flush()
+
+    [text] = _texts(broker, user_id)
+    assert "Через 6 дней, 15.10.2026, истекает поверка" in text
+
+
+async def test_the_demo_reminders_take_nothing_from_a_flat_that_is_not_a_demo_one(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    house_id = await _house(session)
+    _flat_id, user_id = await _resident(session, house_id)
+    await _poll(session, house_id, timedelta(hours=24))
+
+    await reminders_service(session, publisher).demo(user_id, NOW)
+    await publisher.flush()
+
+    *_, poll, appointment = broker.enqueued(TaskName.SEND_TO_USER)
+    assert DEMO_POLL in poll["text"]
+    assert poll["app_path"] == MEETINGS_APP_PATH
+    assert DEMO_ADDRESS in appointment["text"]
+
+
+async def test_the_demo_poll_reminder_names_the_running_poll_of_the_demo_house(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    house_id = await _house(session)
+    user = User(max_user_id=MaxUserId(secrets.randbits(40)), name="Проверяющий")
+    session.add(user)
+    await session.flush()
+    user_id = user.id
+    flat = Flat(house_id=house_id, number=demo_flat_number(user_id))
+    session.add(flat)
+    await session.flush()
+    await _resident(session, house_id, flat_id=flat.id, user_id=user_id)
+    running = await _poll(session, house_id, timedelta(hours=24))
+    await _poll(session, house_id, timedelta(hours=-1))
+    await _poll(session, house_id, timedelta(hours=24), PollStatus.CLOSED)
+
+    await reminders_service(session, publisher).demo(user_id, NOW)
+    await publisher.flush()
+
+    *_, poll, _appointment = broker.enqueued(TaskName.SEND_TO_USER)
+    assert poll["app_path"] == poll_app_path(running)

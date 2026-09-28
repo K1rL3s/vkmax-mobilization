@@ -21,6 +21,7 @@ from zheka.core.deeplinks import (
 from zheka.core.enums import EventType, OrgRole
 from zheka.core.errors import ZhekaError
 from zheka.core.models import User
+from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.demo import DemoService, demo_flat_number
 from zheka.core.services.events import EventsService
 from zheka.core.services.flats import FlatsService
@@ -50,6 +51,10 @@ DEMO_RESIDENT_NOTICE = (
     "🎟 Демо-доступ открыт: ваша квартира {flat}, {address}, дом обслуживает "
     "{org}. Передайте показания за этот месяц в приложении" + DEMO_DATA_NOTE
 )
+DEMO_EXECUTOR_NOTICE = (
+    "🎟 Демо-доступ открыт: вы исполнитель {org}. Карточка заявки придет "
+    "следующим сообщением" + DEMO_DATA_NOTE
+)
 
 _DEMO_STAFF = {
     DeeplinkKind.DEMO_ADMIN: (OrgRole.ADMIN, DEMO_ADMIN_NOTICE),
@@ -67,6 +72,7 @@ async def deeplink_handler(
     orgs_service: FromDishka[OrgsService],
     flats_service: FromDishka[FlatsService],
     demo_service: FromDishka[DemoService],
+    admin_requests_service: FromDishka[AdminRequestsService],
 ) -> Any:
     payload = update.payload
     if is_not_defined(payload):
@@ -90,6 +96,7 @@ async def deeplink_handler(
         orgs_service,
         flats_service,
         demo_service,
+        admin_requests_service,
     )
     return None
 
@@ -102,6 +109,7 @@ async def open_deeplink(
     orgs_service: OrgsService,
     flats_service: FlatsService,
     demo_service: DemoService,
+    admin_requests_service: AdminRequestsService,
 ) -> None:
     if user.consent_at is None:
         await dialog_manager.start(
@@ -144,6 +152,18 @@ async def open_deeplink(
                 org=escape(org.name),
             )
             await back_to_menu(dialog_manager, notice, APP_BUTTON)
+        elif deeplink.kind is DeeplinkKind.DEMO_EXECUTOR:
+            number = int(deeplink.value)
+            org = await demo_service.org(user_id, number)
+            request = await admin_requests_service.demo_request(
+                org.id,
+                number,
+                user_id,
+            )
+            await demo_service.join(user_id, number, OrgRole.EXECUTOR)
+            await admin_requests_service.assign_demo(org.id, request, user_id)
+            notice = DEMO_EXECUTOR_NOTICE.format(org=escape(org.name))
+            await back_to_menu(dialog_manager, notice)
         else:
             role, template = _DEMO_STAFF[deeplink.kind]
             access = await demo_service.join(user_id, int(deeplink.value), role)

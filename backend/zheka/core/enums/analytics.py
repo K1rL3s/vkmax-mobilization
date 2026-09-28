@@ -16,3 +16,5 @@ class AnalyticsMetric(StrEnum):
     AUTO_CLOSED_SHARE = "auto_closed_share"
     DIGITAL_SHARE = "digital_share"
     RATING = "rating"
+    ON_TIME_SHARE = "on_time_share"
+    ACCEPT_TIME_MEDIAN = "accept_time_median"

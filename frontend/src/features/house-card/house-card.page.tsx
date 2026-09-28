@@ -5,11 +5,18 @@ import { Link, Navigate } from "react-router-dom";
 import { MyAppointmentsSection } from "@/features/appointments";
 import { type HouseCard, useHouseCard } from "@/features/house";
 import { cn } from "@/shared/lib/css";
-import { formatArea } from "@/shared/lib/format";
+import {
+  duration,
+  formatArea,
+  formatPercent,
+  plural,
+} from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 import {
+  alertIcon,
   buildingIcon,
+  checkIcon,
   clockIcon,
   documentIcon,
   geoPinIcon,
@@ -17,6 +24,7 @@ import {
   Icon,
   infoIcon,
   phoneIcon,
+  starIcon,
   wrenchIcon,
 } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
@@ -125,6 +133,25 @@ const Org = ({ house }: { house: HouseCard }) => {
         </CellSimple>
         <CellSimple
           separator
+          before={<Icon src={alertIcon} className={styles.CellIcon} />}
+          overline="Аварийная служба"
+          title={org.emergency_phone ?? "Что делать при аварии"}
+          subtitle={
+            org.emergency_phone
+              ? undefined
+              : "Номер есть в квитанции и на доске объявлений в подъезде"
+          }
+          showChevron
+          asChild
+        >
+          {org.emergency_phone ? (
+            <a href={`tel:${org.emergency_phone}`} />
+          ) : (
+            <Link to={Routes.EMERGENCY} />
+          )}
+        </CellSimple>
+        <CellSimple
+          separator
           before={<Icon src={geoPinIcon} className={styles.CellIcon} />}
           overline="Адрес офиса"
           title={org.address}
@@ -136,6 +163,8 @@ const Org = ({ house }: { house: HouseCard }) => {
           title={org.reception_note ?? "УК не указала часы приёма"}
         />
       </div>
+
+      {house.org_stats && <OrgStats stats={house.org_stats} />}
 
       {house.is_connected ? (
         <>
@@ -244,6 +273,47 @@ const Documents = ({ house }: { house: HouseCard }) =>
     </div>
   );
 
+const OrgStats = ({
+  stats,
+}: {
+  stats: NonNullable<HouseCard["org_stats"]>;
+}) => (
+  <Flex direction="column" align="stretch" gapY={8}>
+    <div className={styles.Panel}>
+      <CellSimple
+        before={<Icon src={clockIcon} className={styles.CellIcon} />}
+        overline="Время до принятия заявки"
+        title={`в среднем ${minutes(stats.accept_time)}, медиана ${minutes(stats.accept_time_median)}`}
+      />
+      <CellSimple
+        separator
+        before={<Icon src={checkIcon} className={styles.CellIcon} />}
+        overline="Сделано в нормативный срок"
+        title={formatPercent(stats.on_time_share)}
+        subtitle={`${stats.on_time} из ${stats.closed} ${plural(stats.closed, ["заявки", "заявок", "заявок"])}`}
+      />
+      <CellSimple
+        separator
+        before={<Icon src={starIcon} className={styles.CellIcon} />}
+        overline="Оценка жителей"
+        title={
+          stats.rating == null
+            ? "Оценок пока нет"
+            : `${(stats.rating / 100).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} из 5`
+        }
+        subtitle={
+          stats.ratings_count > 0
+            ? `${stats.ratings_count} ${plural(stats.ratings_count, ["оценка", "оценки", "оценок"])}`
+            : undefined
+        }
+      />
+    </div>
+    <Typography.Text variant="description" color="secondary">
+      По всем домам УК за 90 дней
+    </Typography.Text>
+  </Flex>
+);
+
 const HouseCardPage = () => {
   const { currentResidency: residency } = useSession();
   const card = useHouseCard(residency?.house_id);
@@ -310,3 +380,6 @@ const HouseCardPage = () => {
 };
 
 export const Component = HouseCardPage;
+
+const minutes = (value: number | null | undefined) =>
+  value == null ? "-" : duration(value * 60_000);

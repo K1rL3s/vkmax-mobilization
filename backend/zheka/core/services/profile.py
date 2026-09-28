@@ -1,16 +1,19 @@
 from zheka.base import ZhekaType
 from zheka.core.consent import CONSENT_VERSION
-from zheka.core.enums import EventSource, EventType, VerificationStatus
-from zheka.core.errors import EntityNotFound, InvalidRequest
-from zheka.core.ids import UserId
+from zheka.core.enums import EventSource, EventType, OrgRole, VerificationStatus
+from zheka.core.errors import EntityNotFound, InvalidRequest, NotEnoughRights
+from zheka.core.ids import API_CHECKER_MAX_USER_ID, MaxUserId, UserId
 from zheka.core.models import OrgMember, Organization, User
 from zheka.core.services.events import EventsService
-from zheka.core.services.houses import ResidencyView, is_connected
+from zheka.core.services.houses import ResidencyView
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+
+CREATOR_CANNOT_FORGET = "🏢 Вы создатель организации, удаление через поддержку"
+CHECKER_CANNOT_FORGET = "Данные тестового токена не удаляются"
 
 
 class OrgMembershipView(ZhekaType):
@@ -103,7 +106,7 @@ class ProfileService:
                     resident=resident,
                     house=house,
                     flat=None if resident.flat_id is None else flats[resident.flat_id],
-                    is_connected=is_connected(house, org),
+                    org=org,
                     verification_status=None if latest is None else latest.status,
                     verification_reject_reason=(
                         latest.reason
@@ -140,3 +143,15 @@ class ProfileService:
             version=version,
         )
         return await self.me(user_id)
+
+    async def forget(self, user_id: UserId) -> None:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise EntityNotFound("Пользователь не найден")
+        if user.max_user_id == API_CHECKER_MAX_USER_ID:
+            raise NotEnoughRights(CHECKER_CANNOT_FORGET)
+        members = await self._orgs.list_for_user(user_id)
+        if any(member.role is OrgRole.CREATOR for member in members):
+            raise NotEnoughRights(CREATOR_CANNOT_FORGET)
+        await self._users.forget(user, MaxUserId(API_CHECKER_MAX_USER_ID - user_id))
+        await self._events.record(EventType.ACCOUNT_DELETED, user_id=user_id)

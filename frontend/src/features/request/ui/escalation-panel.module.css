@@ -17,3 +17,7 @@
   overflow-wrap: anywhere;
   user-select: text;
 }
+
+.Failed {
+  color: var(--text-negative);
+}

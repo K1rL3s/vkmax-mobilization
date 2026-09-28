@@ -20,3 +20,6 @@ class TaskName(StrEnum):
     BROADCAST_ACCESS_REQUEST = "broadcast_access_request"
     SEED_DEMO = "seed_demo"
     SYNC_CHAT_PINS = "sync_chat_pins"
+    KEEP_WEBHOOK = "keep_webhook"
+    WATCH_REQUEST_DEADLINES = "watch_request_deadlines"
+    PURGE_FILES = "purge_files"

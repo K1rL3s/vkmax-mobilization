@@ -6,6 +6,7 @@ from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
+from zheka.infra.database.repos.files import FilesRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
@@ -40,4 +41,5 @@ class ReposProvider(Provider):
         ReceptionRepo,
         AccessRepo,
         AnalyticsRepo,
+        FilesRepo,
     )

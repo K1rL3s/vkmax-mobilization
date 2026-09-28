@@ -8,6 +8,7 @@ type ConfirmDialogProps = {
   title: string;
   description: ReactNode;
   confirmLabel: string;
+  confirmVariant?: "primary" | "destructive";
   error?: ReactNode;
   isPending?: boolean;
   onConfirm: () => void;
@@ -19,6 +20,7 @@ export const ConfirmDialog = ({
   title,
   description,
   confirmLabel,
+  confirmVariant = "destructive",
   error,
   isPending = false,
   onConfirm,
@@ -55,7 +57,7 @@ export const ConfirmDialog = ({
           type="button"
           size="large"
           stretched
-          variant="destructive"
+          variant={confirmVariant}
           loading={isPending}
           onClick={onConfirm}
         >

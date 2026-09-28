@@ -1,6 +1,7 @@
 import { Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link } from "react-router-dom";
 
+import { useHouseCard } from "@/features/house";
 import { formatDay, formatTime, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { buildingIcon, Icon, userIcon } from "@/shared/ui/icon";
@@ -10,7 +11,9 @@ import { StatusPill } from "@/shared/ui/status-pill";
 
 import { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
 import { deadlineLeft } from "./domain/format";
+import { requestLetter } from "./domain/letters";
 import {
+  currentActor,
   isFinished,
   isOnReview,
   STATUS_LABEL,
@@ -22,6 +25,7 @@ import { ReviewPanel } from "./review";
 import { Answers } from "./ui/answers";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
+import { LetterPanel } from "./ui/letter-panel";
 import { RatePanel } from "./ui/rate-panel";
 import { RequestPhotos } from "./ui/request-photos";
 import { RequestTimeline } from "./ui/request-timeline";
@@ -30,6 +34,7 @@ import styles from "./request.module.css";
 
 const RequestPage = () => {
   const { request, zone, isPending, isError, loadError, retry } = useRequest();
+  const house = useHouseCard(request?.house_id);
 
   if (isPending) {
     return <LoadingState fill title="Загружаем заявку" />;
@@ -42,6 +47,8 @@ const RequestPage = () => {
   const tone = STATUS_TONE[request.status];
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
   const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
+  const actor = currentActor(request);
+  const letter = house.data && requestLetter(request, house.data, zone);
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -97,6 +104,12 @@ const RequestPage = () => {
         )}
       </Flex>
 
+      {actor && (
+        <Typography.Text variant="description" color="secondary">
+          Сейчас: {actor}
+        </Typography.Text>
+      )}
+
       {isRunning && <DeadlinePanel request={request} />}
 
       {request.can_review && <ReviewPanel request={request} />}
@@ -143,6 +156,8 @@ const RequestPage = () => {
       </div>
 
       {overdue && <EscalationPanel request={request} />}
+
+      {letter && <LetterPanel {...letter} />}
 
       <Flex asChild align="stretch" direction="column" gap={8}>
         <section>

@@ -1,19 +1,28 @@
 import logging
 from calendar import monthrange
 from collections.abc import Callable, Collection
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 
 from zheka.core import texts
+from zheka.core.deeplinks import (
+    APPOINTMENTS_APP_PATH,
+    MEETINGS_APP_PATH,
+    METERS_APP_PATH,
+    poll_app_path,
+)
 from zheka.core.enums import (
     SERVICE_LABELS,
     SERVICE_OF_METER,
     EventType,
+    MeterType,
     NotificationCategory,
+    PollStatus,
     ResidentStatus,
 )
 from zheka.core.ids import HouseId, UserId
-from zheka.core.models import OrgSettings
+from zheka.core.models import House, OrgSettings
+from zheka.core.services.demo import VERIFICATION_SOON, demo_flat_number
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.readings import (
@@ -37,7 +46,12 @@ POLL_REMINDER_BEFORE = timedelta(hours=48)
 READING_HOUR = 10
 POLL_HOUR = 10
 VERIFICATION_HOUR = 9
+VERIFICATION_STAGE_DAYS = (VERIFICATION_WARNING.days, 7, 1, 0, -1)
 APPOINTMENT_HOUR = 19
+DEMO_SERIAL = "ДЕМО-ГВ-000001"
+DEMO_ADDRESS = "ул. Примерная, 1"
+DEMO_POLL = "Благоустройство двора"
+DEMO_APPOINTMENT_AT = time(10)
 
 
 class ReadingReminder(StrEnum):
@@ -167,10 +181,14 @@ class RemindersService:
                 texts.poll_reminder(poll.title, ends_at),
                 category=NotificationCategory.ANNOUNCEMENTS,
                 mandatory=False,
+                app_button=texts.VOTE,
+                app_path=poll_app_path(poll.id),
             )
             self._notifications.notify_chats(
                 [chat.chat_id for chat in chats],
                 texts.poll_chat_reminder(poll.title, ends_at),
+                app_button=texts.VOTE,
+                app_path=poll_app_path(poll.id),
             )
             reminded += 1
         logger.info("Напоминание об опросах: опросов %s", reminded)
@@ -193,18 +211,24 @@ class RemindersService:
                 continue
             local = house.local(now)
             today = local.date()
-            if local.hour < VERIFICATION_HOUR or due > today + VERIFICATION_WARNING:
+            stage = verification_stage(today, due)
+            if (
+                local.hour < VERIFICATION_HOUR
+                or stage is None
+                or (
+                    meter.verification_warned_at is not None
+                    and meter.verification_warned_at >= stage
+                )
+            ):
                 continue
             label = SERVICE_LABELS[SERVICE_OF_METER[meter.type]]
-            if today >= due:
+            days = (due - today).days
+            if days < 0:
                 text = texts.verification_expired(label, meter.serial)
-            elif (
-                meter.verification_warned_at is None
-                or meter.verification_warned_at < due - VERIFICATION_WARNING
-            ):
-                text = texts.verification_soon(label, meter.serial, due)
+            elif days == 0:
+                text = texts.verification_today(label, meter.serial)
             else:
-                continue
+                text = texts.verification_soon(label, meter.serial, due, days)
             residents = await self._residents.list_verified_for_flats([meter.flat_id])
             await self._meters.mark_warned(meter, today)
             self._notifications.notify_users(
@@ -212,6 +236,8 @@ class RemindersService:
                 text,
                 category=NotificationCategory.METERS,
                 mandatory=False,
+                app_button=texts.MY_METERS,
+                app_path=METERS_APP_PATH,
             )
             warned += 1
         logger.info("Предупреждение о поверке: счетчиков %s", warned)
@@ -249,6 +275,8 @@ class RemindersService:
                 ),
                 category=NotificationCategory.REQUESTS,
                 mandatory=True,
+                app_button=texts.MY_APPOINTMENTS,
+                app_path=APPOINTMENTS_APP_PATH,
             )
             reminded += 1
         logger.info("Напоминание о приеме: записей %s", reminded)
@@ -289,6 +317,8 @@ class RemindersService:
             _READING_TEXTS[kind](),
             category=NotificationCategory.METERS,
             mandatory=False,
+            app_button=texts.SUBMIT_READINGS,
+            app_path=METERS_APP_PATH,
         )
         return len(fresh)
 
@@ -311,3 +341,104 @@ class RemindersService:
             )
         logger.info("Ручное напоминание о показаниях: адресатов %s", sent)
         return sent
+
+    async def demo(self, user_id: UserId, now: datetime) -> None:
+        house: House | None = None
+        serial = DEMO_SERIAL
+        for resident in await self._residents.list_for_user(user_id):
+            flat = (
+                None
+                if resident.flat_id is None
+                else await self._houses.get_flat(resident.flat_id)
+            )
+            if flat is None or flat.number != demo_flat_number(user_id):
+                continue
+            house = await self._houses.get(flat.house_id)
+            serial = next(
+                (
+                    meter.serial
+                    for meter in await self._meters.list_for_flat(flat.id)
+                    if meter.type is MeterType.HOT_WATER
+                ),
+                DEMO_SERIAL,
+            )
+
+        local = now if house is None else house.local(now)
+        today = local.date()
+        poll_title, poll_ends, poll_path = (
+            DEMO_POLL,
+            local + POLL_REMINDER_BEFORE,
+            MEETINGS_APP_PATH,
+        )
+        if house is not None:
+            for poll in await self._polls.list_for_house(house.id):
+                if poll.effective_status(now) is PollStatus.ACTIVE:
+                    poll_title, poll_ends, poll_path = (
+                        poll.title,
+                        house.local(poll.ends_at),
+                        poll_app_path(poll.id),
+                    )
+
+        meters = NotificationCategory.METERS
+        label = SERVICE_LABELS[SERVICE_OF_METER[MeterType.HOT_WATER]]
+        reminders = [
+            *(
+                (text(), meters, texts.SUBMIT_READINGS, METERS_APP_PATH)
+                for text in _READING_TEXTS.values()
+            ),
+            (
+                texts.verification_soon(
+                    label,
+                    serial,
+                    today + VERIFICATION_SOON,
+                    VERIFICATION_SOON.days,
+                ),
+                meters,
+                texts.MY_METERS,
+                METERS_APP_PATH,
+            ),
+            (
+                texts.verification_today(label, serial),
+                meters,
+                texts.MY_METERS,
+                METERS_APP_PATH,
+            ),
+            (
+                texts.verification_expired(label, serial),
+                meters,
+                texts.MY_METERS,
+                METERS_APP_PATH,
+            ),
+            (
+                texts.poll_reminder(poll_title, poll_ends),
+                NotificationCategory.ANNOUNCEMENTS,
+                texts.VOTE,
+                poll_path,
+            ),
+            (
+                texts.appointment_reminder(
+                    datetime.combine(
+                        today + timedelta(days=1),
+                        DEMO_APPOINTMENT_AT,
+                    ),
+                    DEMO_ADDRESS if house is None else house.address,
+                ),
+                NotificationCategory.REQUESTS,
+                texts.MY_APPOINTMENTS,
+                APPOINTMENTS_APP_PATH,
+            ),
+        ]
+        for text, category, button, path in reminders:
+            self._notifications.notify_user(
+                user_id,
+                text,
+                category=category,
+                mandatory=True,
+                app_button=button,
+                app_path=path,
+            )
+
+
+def verification_stage(today: date, due: date) -> date | None:
+    stages = [due - timedelta(days=days) for days in VERIFICATION_STAGE_DAYS]
+    return max((stage for stage in stages if stage <= today), default=None)

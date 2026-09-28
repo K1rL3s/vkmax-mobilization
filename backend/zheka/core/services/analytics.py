@@ -250,6 +250,12 @@ class AnalyticsService:
                 value=tiles.accept_time or 0,
             ),
             Tile(
+                key=AnalyticsMetric.ACCEPT_TIME_MEDIAN.value,
+                label="Медиана времени до принятия",
+                unit=MetricUnit.MINUTES,
+                value=tiles.accept_time_median or 0,
+            ),
+            Tile(
                 key=AnalyticsMetric.REPEAT_SHARE.value,
                 label="Доля повторных",
                 unit=MetricUnit.PERCENT,

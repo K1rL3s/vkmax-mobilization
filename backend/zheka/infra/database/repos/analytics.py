@@ -45,6 +45,8 @@ from zheka.infra.database.tables.residents import demand_signals_table
 from zheka.infra.database.tables.users import users_table
 
 _R = requests_table.c
+_REVIEWED = _R.reviewed_at.is_not(None)
+_ON_TIME = _R.reviewed_at <= _R.deadline_at
 
 
 def share(part: Any, whole: Any) -> ColumnElement[int]:
@@ -92,6 +94,13 @@ _METRICS: dict[AnalyticsMetric, Callable[[datetime], ColumnElement[int]]] = {
         func.round(func.avg(_R.rating) * 100),
         Integer,
     ),
+    AnalyticsMetric.ON_TIME_SHARE: lambda _: share(
+        func.count().filter(_ON_TIME),
+        func.count().filter(_REVIEWED),
+    ),
+    AnalyticsMetric.ACCEPT_TIME_MEDIAN: lambda _: _median_minutes(
+        _seconds(_R.created_at, _R.accepted_at),
+    ),
 }
 
 
@@ -114,6 +123,7 @@ class Tiles(ZhekaType):
     active: int
     overdue: int
     accept_time: int | None
+    accept_time_median: int | None
     repeat_share: int | None
 
 
@@ -152,6 +162,16 @@ class CutRow(ZhekaType):
     value: int
 
 
+class PublicStats(ZhekaType):
+    closed: int
+    on_time: int
+    on_time_share: int | None
+    accept_time: int | None
+    accept_time_median: int | None
+    rating: int | None
+    ratings_count: int
+
+
 class AnalyticsRepo(BaseAlchemyRepo):
     async def tiles(
         self,
@@ -171,20 +191,22 @@ class AnalyticsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         active, overdue = result.tuples().one()
-        stmt = _org_requests(
+        period_stmt = _org_requests(
             select(
                 _METRICS[AnalyticsMetric.ACCEPT_TIME](now),
+                _METRICS[AnalyticsMetric.ACCEPT_TIME_MEDIAN](now),
                 _METRICS[AnalyticsMetric.REPEAT_SHARE](now),
             ).where(_created_in(since, until)),
             org_id,
             house_id,
         )
-        result = await self._session.execute(stmt)
-        accept_time, repeat_share = result.tuples().one()
+        period_result = await self._session.execute(period_stmt)
+        accept_time, accept_time_median, repeat_share = period_result.tuples().one()
         return Tiles(
             active=active,
             overdue=overdue,
             accept_time=accept_time,
+            accept_time_median=accept_time_median,
             repeat_share=repeat_share,
         )
 
@@ -471,6 +493,45 @@ class AnalyticsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return list(result.tuples().all())
+
+    async def public_stats(
+        self,
+        org_id: OrgId,
+        since: datetime,
+        now: datetime,
+    ) -> PublicStats:
+        stmt = _org_requests(
+            select(
+                func.count().filter(_REVIEWED),
+                func.count().filter(_ON_TIME),
+                _METRICS[AnalyticsMetric.ON_TIME_SHARE](now),
+                _METRICS[AnalyticsMetric.ACCEPT_TIME](now),
+                _METRICS[AnalyticsMetric.ACCEPT_TIME_MEDIAN](now),
+                _METRICS[AnalyticsMetric.RATING](now),
+                func.count(_R.rating),
+            ).where(_created_in(since, now)),
+            org_id,
+            None,
+        )
+        result = await self._session.execute(stmt)
+        (
+            closed,
+            on_time,
+            on_time_share,
+            accept_time,
+            accept_time_median,
+            rating,
+            ratings_count,
+        ) = result.tuples().one()
+        return PublicStats(
+            closed=closed,
+            on_time=on_time,
+            on_time_share=on_time_share,
+            accept_time=accept_time,
+            accept_time_median=accept_time_median,
+            rating=rating,
+            ratings_count=ratings_count,
+        )
 
 
 def _peers(

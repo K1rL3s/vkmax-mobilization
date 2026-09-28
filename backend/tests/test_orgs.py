@@ -2,6 +2,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,8 @@ from tests.conftest import (
     make_notifications_service,
 )
 
+from zheka.api.schemas.houses import OrgContacts
+from zheka.api.schemas.orgs import RegisterOrgRequest, UpdateOrgSettingsRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core import texts
@@ -98,6 +101,8 @@ async def test_single_use_invite_is_not_activated_twice(
         ("qr_12_3", Deeplink(kind=DeeplinkKind.ENTRANCE_QR, value="12_3")),
         ("demo_staff_1", Deeplink(kind=DeeplinkKind.DEMO_STAFF, value="1")),
         ("demo_admin_5", Deeplink(kind=DeeplinkKind.DEMO_ADMIN, value="5")),
+        ("demo_executor_4", Deeplink(kind=DeeplinkKind.DEMO_EXECUTOR, value="4")),
+        ("demo_executor_6", None),
         ("demo_staff", None),
         ("demo_staff_6", None),
         ("demo_resident_0", None),
@@ -138,9 +143,11 @@ async def test_org_surface(
         group_window_hours=24,
         phone="+79990000000",
         reception_note="по записи",
+        emergency_phone=" +79990000112 ",
     )
     assert updated.settings.meter_window_day_to == 20
     assert updated.org.reception_note == "по записи"
+    assert OrgContacts.model_validate(updated.org).emergency_phone == "+79990000112"
 
     members = await orgs_service.members(own.org_id)
     assert len(members) == 1
@@ -346,6 +353,7 @@ async def test_update_settings_rejects_values_outside_the_limits(
             group_window_hours=group_window_hours,
             phone="+79990000000",
             reception_note=None,
+            emergency_phone=None,
         )
 
 
@@ -438,3 +446,59 @@ async def test_a_demo_org_restricts_only_seeded_residents(
             await restrict(own.org_id, resident.id, "причина", own.user_id)
     else:
         await restrict(own.org_id, resident.id, "причина", own.user_id)
+
+
+async def test_a_blank_emergency_phone_is_cleared(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    updated = await make_orgs_service(session).update_settings(
+        own.org_id,
+        15,
+        25,
+        meter_window_always_open=False,
+        group_threshold=3,
+        group_window_hours=24,
+        phone="+79990000000",
+        reception_note=None,
+        emergency_phone="   ",
+    )
+
+    assert updated.org.emergency_phone is None
+
+
+def _settings(phone: str, emergency_phone: str) -> UpdateOrgSettingsRequest:
+    return UpdateOrgSettingsRequest(
+        meter_window_day_from=15,
+        meter_window_day_to=25,
+        meter_window_always_open=False,
+        group_threshold=3,
+        group_window_hours=24,
+        phone=phone,
+        emergency_phone=emergency_phone,
+    )
+
+
+def _registration(phone: str) -> RegisterOrgRequest:
+    return RegisterOrgRequest(
+        deeplink_code="code",
+        inn="7700000000",
+        name="УК",
+        phone=phone,
+        address="Москва",
+    )
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda phone: _settings(phone, "+79990000112"),
+        lambda phone: _settings("+79990000000", phone),
+        _registration,
+    ],
+)
+def test_an_org_phone_is_capped(build: Callable[[str], object]) -> None:
+    build("7" * 32)
+
+    with pytest.raises(ValidationError):
+        build("7" * 33)

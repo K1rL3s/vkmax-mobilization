@@ -5,7 +5,14 @@ from zheka.broker.task_names import TaskName
 from zheka.core import texts
 from zheka.core.deeplinks import request_app_path
 from zheka.core.enums import EventType, NotificationCategory, NotificationLevel
-from zheka.core.ids import AccessRequestId, HouseId, MaxChatId, RequestId, UserId
+from zheka.core.ids import (
+    AccessRequestId,
+    AnnouncementId,
+    HouseId,
+    MaxChatId,
+    RequestId,
+    UserId,
+)
 from zheka.core.models import Request
 from zheka.core.notifications import DEFAULT_LEVEL
 from zheka.core.services.events import EventsService
@@ -79,6 +86,7 @@ class NotificationsService:
         mandatory: bool,
         app_button: str | None = None,
         app_path: str | None = None,
+        announcement_id: AnnouncementId | None = None,
     ) -> None:
         if not user_ids:
             return
@@ -90,15 +98,27 @@ class NotificationsService:
             mandatory=mandatory,
             app_button=app_button,
             app_path=app_path,
+            announcement_id=announcement_id,
         )
 
-    def notify_chats(self, chat_ids: Sequence[MaxChatId], text: str) -> None:
+    def notify_chats(
+        self,
+        chat_ids: Sequence[MaxChatId],
+        text: str,
+        *,
+        app_button: str | None = None,
+        app_path: str | None = None,
+        announcement_id: AnnouncementId | None = None,
+    ) -> None:
         if not chat_ids:
             return
         self._publisher.publish(
             TaskName.BROADCAST_TO_CHATS,
             chat_ids=list(chat_ids),
             text=text,
+            app_button=app_button,
+            app_path=app_path,
+            announcement_id=announcement_id,
         )
 
     def open_executor_card(

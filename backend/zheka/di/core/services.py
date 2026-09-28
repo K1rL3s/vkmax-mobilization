@@ -6,6 +6,7 @@ from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.analytics import AnalyticsService
 from zheka.core.services.announcements import AnnouncementsService
+from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.charges import ChargesService
 from zheka.core.services.chats import ChatsService
 from zheka.core.services.demo import DemoService
@@ -25,6 +26,7 @@ from zheka.core.services.reception import ReceptionService
 from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
+from zheka.core.services.retention import RetentionService
 from zheka.infra.quota import UploadQuota
 
 
@@ -40,6 +42,7 @@ class ServicesProvider(Provider):
         ModerationService,
         FlatsService,
         GroupingService,
+        CategoryExecutorsService,
         RequestsService,
         MeterAccess,
         ReadingsService,
@@ -55,6 +58,7 @@ class ServicesProvider(Provider):
         RemindersService,
         AnalyticsService,
         DemoService,
+        RetentionService,
     )
     upload_quota = provide(UploadQuota, scope=Scope.APP)
 

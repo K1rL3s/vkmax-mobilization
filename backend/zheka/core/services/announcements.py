@@ -108,6 +108,8 @@ class AnnouncementsService:
             picked,
             len(user_ids) + len(chat_ids),
             urgent=urgent,
+            delivered_direct=None if user_ids else 0,
+            delivered_chat=None if chat_ids else 0,
         )
 
         for channel in picked:
@@ -125,8 +127,13 @@ class AnnouncementsService:
             message,
             category=NotificationCategory.ANNOUNCEMENTS,
             mandatory=False,
+            announcement_id=announcement.id,
         )
-        self._notifications.notify_chats(chat_ids, message)
+        self._notifications.notify_chats(
+            chat_ids,
+            message,
+            announcement_id=announcement.id,
+        )
 
         return AnnouncementData(
             announcement=announcement,

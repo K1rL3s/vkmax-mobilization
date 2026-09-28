@@ -1,6 +1,7 @@
 import { Button } from "@maxhub/max-ui";
 
 import type { RequestCategory, RequestCategoryItem } from "@/features/request";
+import { haptic } from "@/shared/lib/max";
 
 import styles from "./category-chips.module.css";
 
@@ -24,7 +25,12 @@ export const CategoryChips = ({
         size="small"
         variant={item.category === value ? "primary" : "secondary"}
         aria-pressed={item.category === value}
-        onClick={() => onChange(item.category)}
+        onClick={() => {
+          if (item.category !== value) {
+            haptic.select();
+          }
+          onChange(item.category);
+        }}
       >
         {item.label}
         {item.category === suggested && (

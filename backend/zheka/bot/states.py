@@ -9,6 +9,7 @@ class Consent(StatesGroup):
 
 class Menu(StatesGroup):
     main = State()
+    emergency = State()
 
 
 def entry_state(user: User) -> State:
@@ -34,6 +35,7 @@ class NewRequest(StatesGroup):
 class ExecutorCard(StatesGroup):
     card = State()
     result_photo = State()
+    decline = State()
 
 
 class Review(StatesGroup):
@@ -51,3 +53,7 @@ class ChatBinding(StatesGroup):
 
 class AccessSlots(StatesGroup):
     pick = State()
+
+
+class Forget(StatesGroup):
+    confirm = State()

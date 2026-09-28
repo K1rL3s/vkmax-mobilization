@@ -39,13 +39,20 @@ from zheka.core.services.requests import (
 )
 
 UNKNOWN_AUTHOR = "Пользователь"
+DEADLINE_TEXT = "Срок устранения, например «3 суток»"
+DEADLINE_BASIS = "Норма права под сроком; пусто - срок сервиса, норматива нет"
 
 
 class RequestCategoryItem(BaseSchema):
     category: RequestCategory
     label: str
     zone: ResponsibilityZone
-    normative_hours: int
+    deadline_text: str = Field(description=DEADLINE_TEXT)
+    react_text: str | None = Field(
+        default=None,
+        description="Срок реакции, например «30 минут»; пусто - не нормирован",
+    )
+    deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
 
     @classmethod
     def of(cls, category: RequestCategory, rule: CategoryRule) -> Self:
@@ -53,7 +60,9 @@ class RequestCategoryItem(BaseSchema):
             category=category,
             label=rule.label,
             zone=rule.zone,
-            normative_hours=rule.normative_hours,
+            deadline_text=rule.deadline_text,
+            react_text=rule.react_text,
+            deadline_basis=rule.basis,
         )
 
 
@@ -73,6 +82,10 @@ class RequestListItem(BaseSchema):
     rating: int | None = Field(default=None, description="Оценка жителя от 1 до 5")
     deadline_at: datetime | None = None
     completion_reason: RequestCompletionReason | None = None
+    escalated_at: datetime | None = Field(
+        default=None,
+        description="Когда автор попросил руководство УК вмешаться",
+    )
 
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
@@ -94,6 +107,7 @@ class RequestListItem(BaseSchema):
             rating=request.rating,
             deadline_at=request.deadline_at,
             completion_reason=request.completion_reason,
+            escalated_at=request.escalated_at,
         )
 
 
@@ -102,6 +116,10 @@ class RequestMessageItem(BaseSchema):
     author_role: str
     author_name: str
     text: str
+    is_internal: bool = Field(
+        default=False,
+        description="Заметка только для УК, например причина отказа исполнителя",
+    )
 
     @classmethod
     def of(cls, view: RequestMessageView) -> Self:
@@ -110,6 +128,7 @@ class RequestMessageItem(BaseSchema):
             author_role=view.message.author_role,
             author_name=UNKNOWN_AUTHOR if view.author is None else view.author.name,
             text=view.message.text,
+            is_internal=view.message.is_internal,
         )
 
 
@@ -124,7 +143,12 @@ class RequestCard(RequestListItem):
     house_id: HouseId
     address: str
     org_name: str | None
-    normative_hours: int
+    deadline_text: str = Field(description=DEADLINE_TEXT)
+    deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
+    react_deadline_at: datetime | None = Field(
+        default=None,
+        description="Срок реакции (принять заявку); пусто - не нормирован",
+    )
     photos: list[FileRef]
     result_photos: list[FileRef]
     messages: list[RequestMessageItem]
@@ -138,6 +162,9 @@ class RequestCard(RequestListItem):
         default=None,
         description="Автозакрытие заявки, оставленной на приемке",
     )
+    can_demo_expire: bool = Field(
+        description="Автор заявки в демо-УК может перенести ее срок на текущий момент",
+    )
 
     @classmethod
     def of(
@@ -147,6 +174,7 @@ class RequestCard(RequestListItem):
         result_photos: list[FileRef],
     ) -> Self:
         request = card.request
+        rule = CATEGORY_RULES[request.category]
         base = RequestListItem.of_row(
             RequestRow(
                 request=request,
@@ -161,7 +189,9 @@ class RequestCard(RequestListItem):
             house_id=request.house_id,
             address=card.house.address,
             org_name=None if card.org is None else card.org.name,
-            normative_hours=CATEGORY_RULES[request.category].normative_hours,
+            deadline_text=rule.deadline_text,
+            deadline_basis=rule.basis,
+            react_deadline_at=request.react_deadline_at,
             photos=photos,
             result_photos=result_photos,
             messages=[RequestMessageItem.of(view) for view in card.messages],
@@ -174,6 +204,7 @@ class RequestCard(RequestListItem):
             parent_request_id=request.parent_request_id,
             flat_id=request.flat_id,
             auto_close_at=card.auto_close_at,
+            can_demo_expire=card.can_demo_expire,
         )
 
 
@@ -233,7 +264,8 @@ class AdminRequestListItem(RequestListItem):
         base = RequestListItem.of_row(row)
         request = row.request
         return cls(
-            **base.model_dump(),
+            **base.model_dump(exclude={"escalated_at"}),
+            escalated_at=row.escalated_at,
             house_id=request.house_id,
             address=row.house.address,
             is_staff_author=request.is_staff_author,

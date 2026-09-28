@@ -33,3 +33,4 @@ class Page[ItemT](BaseSchema):
 Limit = Annotated[int, Query(ge=1, le=100, description="Размер страницы")]
 Offset = Annotated[int, Query(ge=0, description="Сдвиг от начала списка")]
 FreeText = Annotated[str, Field(max_length=4000)]
+Phone = Annotated[str, Field(max_length=32)]

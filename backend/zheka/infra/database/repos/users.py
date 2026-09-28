@@ -1,14 +1,29 @@
 from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from zheka.core.enums import AppointmentStatus
 from zheka.core.errors import EntityNotFound
 from zheka.core.ids import MaxChatId, MaxUserId, UserId
-from zheka.infra.database.models import User, fresh_timestamp
+from zheka.infra.database.models import Appointment, Request, User, fresh_timestamp
 from zheka.infra.database.repos.base import BaseAlchemyRepo
-from zheka.infra.database.tables.users import users_table
+from zheka.infra.database.tables.organizations import org_members_table
+from zheka.infra.database.tables.reception import appointments_table
+from zheka.infra.database.tables.requests import requests_table
+from zheka.infra.database.tables.residents import (
+    demand_signals_table,
+    flat_verification_requests_table,
+    residents_table,
+    verification_revocations_table,
+)
+from zheka.infra.database.tables.users import (
+    notification_settings_table,
+    users_table,
+)
+
+FORGOTTEN_NAME = "Удаленный пользователь"
 
 
 class UsersRepo(BaseAlchemyRepo):
@@ -78,3 +93,38 @@ class UsersRepo(BaseAlchemyRepo):
         stmt = select(User).where(users_table.c.id.in_(user_ids))
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+    async def forget(self, user: User, max_user_id: MaxUserId) -> None:
+        for table in (
+            residents_table,
+            flat_verification_requests_table,
+            demand_signals_table,
+            notification_settings_table,
+            org_members_table,
+            verification_revocations_table,
+        ):
+            stmt = delete(table).where(table.c.user_id == user.id)
+            await self._session.execute(stmt)
+        cancel = (
+            update(Appointment)
+            .where(
+                appointments_table.c.user_id == user.id,
+                appointments_table.c.status == AppointmentStatus.BOOKED,
+                appointments_table.c.starts_at >= func.now(),
+            )
+            .values(status=AppointmentStatus.CANCELLED)
+        )
+        await self._session.execute(cancel)
+        anonymize = (
+            update(Request)
+            .where(requests_table.c.author_user_id == user.id)
+            .values(caller_name=None, caller_phone=None)
+        )
+        await self._session.execute(anonymize)
+        user.max_user_id = max_user_id
+        user.name = FORGOTTEN_NAME
+        user.username = None
+        user.max_chat_id = None
+        user.consent_version = None
+        user.consent_at = None
+        await self._session.flush()

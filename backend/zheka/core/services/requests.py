@@ -3,10 +3,11 @@ from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
-from zheka.core.deeplinks import admin_request_app_path
+from zheka.core.deeplinks import admin_request_app_path, request_app_path
 from zheka.core.enums import (
     EventType,
     NotificationCategory,
+    OrgRole,
     RequestActorRole,
     RequestCategory,
     RequestChannel,
@@ -38,6 +39,7 @@ from zheka.core.models import (
     Resident,
     User,
 )
+from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.houses import NOT_CONNECTED, is_connected
@@ -50,7 +52,7 @@ from zheka.core.services.request_groups import (
 )
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.infra.database.repos.requests import RequestsRepo
+from zheka.infra.database.repos.requests import OPEN_STATUSES, RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.yandex import YandexClassifier
@@ -72,6 +74,8 @@ REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано пло
 ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
 REJECT_NOT_ON_REVIEW = "Работу возвращают только с приемки"
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
+ESCALATED_ALREADY = "Руководство УК уже уведомлено"
+ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
 
 
 class RequestDraft(ZhekaType):
@@ -111,10 +115,12 @@ class RequestCardData(ZhekaType):
     can_review: bool
     can_rate: bool
     auto_close_at: datetime | None
+    can_demo_expire: bool
 
 
 class RequestsService:
     __slots__ = (
+        "_category_executors",
         "_classifier",
         "_events",
         "_files",
@@ -139,6 +145,7 @@ class RequestsService:
         notifications_service: NotificationsService,
         events_service: EventsService,
         classifier: YandexClassifier,
+        category_executors_service: CategoryExecutorsService,
     ) -> None:
         self._requests = requests_repo
         self._houses = houses_repo
@@ -150,6 +157,7 @@ class RequestsService:
         self._notifications = notifications_service
         self._events = events_service
         self._classifier = classifier
+        self._category_executors = category_executors_service
 
     async def create(
         self,
@@ -170,7 +178,7 @@ class RequestsService:
         group_id = await self._checked_group(draft.group_id, house_id, draft.category)
 
         request = await self._requests.create(
-            house_id,
+            house,
             draft.flat_id,
             user_id,
             draft.category,
@@ -201,7 +209,8 @@ class RequestsService:
                 house_id=house_id,
                 category=draft.category.value,
             )
-        await self._notify_staff(request, house)
+        await self._category_executors.assign_default(request, house.org_id)
+        await self._notify_staff(request, house, texts.request_created(request, house))
         return await self._built_card(request, house)
 
     async def repeat(
@@ -238,7 +247,7 @@ class RequestsService:
             )
 
         request = await self._requests.create(
-            house_id,
+            house,
             parent.flat_id,
             user_id,
             parent.category,
@@ -260,7 +269,8 @@ class RequestsService:
             is_repeat=True,
             parent_request_id=parent.id,
         )
-        await self._notify_staff(request, house)
+        await self._category_executors.assign_default(request, house.org_id)
+        await self._notify_staff(request, house, texts.request_created(request, house))
         return await self._built_card(request, house)
 
     async def rate(
@@ -432,6 +442,7 @@ class RequestsService:
             self._orgs,
             request,
             house,
+            authored=True,
         )
 
     async def _open(self, request: Request, user_id: UserId) -> None:
@@ -539,7 +550,7 @@ class RequestsService:
             )
         return category
 
-    async def _notify_staff(self, request: Request, house: House) -> None:
+    async def _notify_staff(self, request: Request, house: House, text: str) -> None:
         if house.org_id is None:
             return
         members = await self._orgs.list_members(house.org_id)
@@ -549,17 +560,126 @@ class RequestsService:
                 for member in members
                 if member.role.is_staff and member.user_id != request.author_user_id
             ],
-            texts.request_created(
-                request.id,
-                request.category,
-                house.address,
-                house.local(request.deadline_at),
-            ),
+            text,
             category=NotificationCategory.REQUESTS,
             mandatory=False,
             app_button=texts.OPEN_REQUEST,
             app_path=admin_request_app_path(request.id),
         )
+
+    async def watch_deadlines(self, now: datetime) -> int:
+        requests = await self._requests.list_deadline_due(now)
+        for request in requests:
+            await self._watch(request, await self._get_house(request.house_id), now)
+        return len(requests)
+
+    async def demo_expire(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        now: datetime,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._requests.lock(request)
+        house = await self._get_house(request.house_id)
+        org = None if house.org_id is None else await self._orgs.get(house.org_id)
+        if not demo_expirable(request, org, now):
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        await self._requests.set_deadline(request, now - timedelta(minutes=1))
+        await self._watch(request, house, now)
+        return await self._built_card(request, house)
+
+    async def _watch(self, request: Request, house: House, now: datetime) -> None:
+        overdue = request.deadline_at <= now
+        await self._requests.mark_deadline(request, now, overdue=overdue)
+        if not overdue:
+            await self._notify_crew(
+                request,
+                house,
+                texts.deadline_warning(request, house, now),
+            )
+            return
+        await self._notify_crew(
+            request,
+            house,
+            texts.request_overdue_staff(request, house),
+        )
+        if request.author_user_id is not None:
+            self._notifications.notify_user(
+                request.author_user_id,
+                texts.request_overdue_author(request),
+                category=NotificationCategory.REQUESTS,
+                mandatory=True,
+                app_button=texts.COMPLAINT_BUTTON,
+                app_path=request_app_path(request.id),
+            )
+        chairman = await self._residents.get_chairman(house.id)
+        if (
+            chairman is not None
+            and chairman.status is not ResidentStatus.BLOCKED
+            and chairman.user_id != request.author_user_id
+        ):
+            self._notifications.notify_user(
+                chairman.user_id,
+                texts.request_overdue_chairman(request),
+                category=NotificationCategory.REQUESTS,
+                mandatory=False,
+            )
+
+    async def _notify_crew(self, request: Request, house: House, text: str) -> None:
+        await self._notify_staff(request, house, text)
+        executor_id = request.executor_user_id
+        if (
+            house.org_id is None
+            or executor_id is None
+            or executor_id == request.author_user_id
+        ):
+            return
+        member = await self._orgs.get_member(house.org_id, executor_id)
+        if member is not None and member.role is OrgRole.EXECUTOR:
+            self._notifications.notify_user(
+                executor_id,
+                text,
+                category=NotificationCategory.REQUESTS,
+                mandatory=False,
+            )
+
+    async def escalate(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        now: datetime,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._active_resident(user_id, request.house_id)
+        await self._requests.lock(request)
+        if request.escalated_at is not None:
+            raise InvalidState(ESCALATED_ALREADY)
+        if request.status not in OPEN_STATUSES or request.deadline_at > now:
+            raise InvalidState(ESCALATE_NOT_OVERDUE)
+        house = await self._get_house(request.house_id)
+        await self._requests.escalate(request, now)
+        await self._events.record(
+            EventType.REQUEST_ESCALATED,
+            user_id=user_id,
+            request_id=request.id,
+            house_id=house.id,
+            category=request.category.value,
+        )
+        self._notifications.notify_user(
+            user_id,
+            texts.request_escalated_author(request),
+            category=NotificationCategory.REQUESTS,
+            mandatory=False,
+            app_button=texts.OPEN_REQUEST,
+            app_path=request_app_path(request.id),
+        )
+        await self._notify_crew(
+            request,
+            house,
+            texts.request_escalated(request, house, now),
+        )
+        return await self._built_card(request, house)
 
 
 async def build_rows(
@@ -611,9 +731,16 @@ async def build_card(
     orgs_repo: OrgsRepo,
     request: Request,
     house: House,
+    *,
+    authored: bool = False,
+    with_internal: bool = False,
 ) -> RequestCardData:
     photos = await requests_repo.list_photos(request.id)
-    messages = await requests_repo.list_messages(request.id)
+    messages = [
+        message
+        for message in await requests_repo.list_messages(request.id)
+        if with_internal or not message.is_internal
+    ]
     authors = {
         user.id: user
         for user in await users_repo.list_by_ids(
@@ -628,10 +755,11 @@ async def build_card(
         if request.executor_user_id is None
         else await users_repo.get_by_id(request.executor_user_id)
     )
+    org = None if house.org_id is None else await orgs_repo.get(house.org_id)
     return RequestCardData(
         request=request,
         house=house,
-        org=None if house.org_id is None else await orgs_repo.get(house.org_id),
+        org=org,
         flat=(
             None
             if request.flat_id is None
@@ -664,6 +792,7 @@ async def build_card(
             and request.reviewed_at is not None
             else None
         ),
+        can_demo_expire=authored and demo_expirable(request, org, datetime.now(UTC)),
     )
 
 
@@ -672,3 +801,16 @@ def stated(text: str, refusal: str) -> str:
     if not stripped:
         raise InvalidRequest(refusal)
     return stripped
+
+
+def demo_expirable(
+    request: Request,
+    org: Organization | None,
+    now: datetime,
+) -> bool:
+    return (
+        org is not None
+        and org.is_demo
+        and request.status in OPEN_STATUSES
+        and request.deadline_at > now
+    )

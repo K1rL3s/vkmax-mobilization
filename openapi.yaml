@@ -124,6 +124,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+    delete:
+      tags:
+      - Профиль
+      summary: Удалить мои данные
+      operationId: forget_me
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/me/consent:
     post:
       tags:
@@ -2535,6 +2596,152 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClassifyRequestResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/demo/expire:
+    post:
+      tags:
+      - Заявки
+      summary: 'Демо: срок заявки истек'
+      description: Только автор заявки в демо-УК, пока заявка открыта и не просрочена, иначе 404. Срок, и срок реакции, если он позже, становится минутой раньше текущего момента, уведомления о просрочке уходят сразу
+      operationId: expire_request_deadline
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/escalate:
+    post:
+      tags:
+      - Заявки
+      summary: Попросить руководство УК вмешаться
+      description: 'Только автор просроченной открытой заявки, один раз: сотрудники УК и исполнитель получают сообщение, автор - подтверждение, заявка встает первой во входящих. Повтор или непросроченная заявка - 409, чужая - 404'
+      operationId: escalate_request
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
         '400':
           description: Некорректный запрос
           content:
@@ -5531,6 +5738,165 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/org/category-executors:
+    get:
+      tags:
+      - 'Админка: организация'
+      summary: Исполнители по умолчанию для категорий заявок
+      operationId: list_category_executors
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryExecutorItem'
+                title: Response List Category Executors
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+    put:
+      tags:
+      - 'Админка: организация'
+      summary: Назначить исполнителя по умолчанию для категории
+      operationId: set_category_executor
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCategoryExecutorRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryExecutorItem'
+                title: Response Set Category Executor
         '400':
           description: Некорректный запрос
           content:
@@ -9508,6 +9874,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
         house_id:
           type: integer
           title: House Id
@@ -9519,9 +9892,23 @@ components:
           - type: string
           - type: 'null'
           title: Org Name
-        normative_hours:
-          type: integer
-          title: Normative Hours
+        deadline_text:
+          type: string
+          title: Deadline Text
+          description: Срок устранения, например «3 суток»
+        deadline_basis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deadline Basis
+          description: Норма права под сроком; пусто - срок сервиса, норматива нет
+        react_deadline_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: React Deadline At
+          description: Срок реакции (принять заявку); пусто - не нормирован
         photos:
           items:
             $ref: '#/components/schemas/FileRef'
@@ -9570,6 +9957,10 @@ components:
           - type: 'null'
           title: Auto Close At
           description: Автозакрытие заявки, оставленной на приемке
+        can_demo_expire:
+          type: boolean
+          title: Can Demo Expire
+          description: Автор заявки в демо-УК может перенести ее срок на текущий момент
         is_staff_author:
           type: boolean
           title: Is Staff Author
@@ -9607,13 +9998,14 @@ components:
       - house_id
       - address
       - org_name
-      - normative_hours
+      - deadline_text
       - photos
       - result_photos
       - messages
       - timeline
       - can_review
       - can_rate
+      - can_demo_expire
       - is_staff_author
       title: AdminRequestCard
     AdminRequestListItem:
@@ -9674,6 +10066,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
         house_id:
           type: integer
           title: House Id
@@ -9751,6 +10150,12 @@ components:
           title: Recipients Count
           description: 'Сколько адресатов было на момент отправки: по одному на жителя для канала direct и по одному на привязанный чат для канала chat'
           default: 0
+        delivered_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Delivered Count
+          description: Скольким адресатам MAX принял сообщение, по всем каналам вместе. null, пока рассылка идет, и у объявлений, отправленных до появления отчета
         houses_without_chat:
           items:
             type: integer
@@ -9769,6 +10174,7 @@ components:
       - text
       - house_ids
       - channels
+      - delivered_count
       title: AnnouncementItem
     ApiError_BaseError_:
       properties:
@@ -10025,6 +10431,18 @@ components:
       required:
       - starts_at
       title: BookAppointmentRequest
+    CategoryExecutorItem:
+      properties:
+        category:
+          $ref: '#/components/schemas/RequestCategory'
+        executor_user_id:
+          type: integer
+          title: Executor User Id
+      type: object
+      required:
+      - category
+      - executor_user_id
+      title: CategoryExecutorItem
     ChangeGroupStatusRequest:
       properties:
         status:
@@ -11136,6 +11554,11 @@ components:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Documents
+        org_stats:
+          anyOf:
+          - $ref: '#/components/schemas/OrgPublicStats'
+          - type: 'null'
+          description: Показатели УК за 90 дней, нет при малом числе заявок
       type: object
       required:
       - id
@@ -11373,6 +11796,22 @@ components:
           - type: 'null'
           title: Last Values
           description: Показание в тысячных долях единицы измерения
+        prior_period:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Prior Period
+        prior_values:
+          anyOf:
+          - additionalProperties:
+              type: integer
+            propertyNames:
+              $ref: '#/components/schemas/TariffZone'
+            type: object
+          - type: 'null'
+          title: Prior Values
+          description: Показание в тысячных долях единицы измерения
       type: object
       required:
       - id
@@ -11599,6 +12038,12 @@ components:
           - type: string
           - type: 'null'
           title: Reception Note
+        emergency_phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Emergency Phone
+          description: Аварийно-диспетчерская служба дома, если УК ее указала
         is_demo:
           type: boolean
           title: Is Demo
@@ -11765,6 +12210,48 @@ components:
       - role
       - is_demo
       title: OrgMembership
+    OrgPublicStats:
+      properties:
+        closed:
+          type: integer
+          title: Closed
+          description: Заявок сдано на приемку, по всем домам УК
+        on_time:
+          type: integer
+          title: On Time
+          description: Из них сдано в нормативный срок
+        on_time_share:
+          type: integer
+          title: On Time Share
+          description: Доля сданных в срок в сотых долях процента, 50% это 5000
+        accept_time:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Accept Time
+          description: Среднее время до принятия заявки в минутах
+        accept_time_median:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Accept Time Median
+          description: Медиана времени до принятия заявки в минутах
+        rating:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rating
+          description: Средняя оценка жителей в сотых долях балла
+        ratings_count:
+          type: integer
+          title: Ratings Count
+      type: object
+      required:
+      - closed
+      - on_time
+      - on_time_share
+      - ratings_count
+      title: OrgPublicStats
     OrgRole:
       type: string
       enum:
@@ -11800,6 +12287,11 @@ components:
           - type: string
           - type: 'null'
           title: Reception Note
+        emergency_phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Emergency Phone
       type: object
       required:
       - meter_window_day_from
@@ -11809,6 +12301,7 @@ components:
       - group_window_hours
       - phone
       - reception_note
+      - emergency_phone
       title: OrgSettingsResponse
     OverhaulWork:
       properties:
@@ -12486,6 +12979,7 @@ components:
           title: Name
         phone:
           type: string
+          maxLength: 32
           title: Phone
         address:
           type: string
@@ -12616,6 +13110,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
         house_id:
           type: integer
           title: House Id
@@ -12627,9 +13128,23 @@ components:
           - type: string
           - type: 'null'
           title: Org Name
-        normative_hours:
-          type: integer
-          title: Normative Hours
+        deadline_text:
+          type: string
+          title: Deadline Text
+          description: Срок устранения, например «3 суток»
+        deadline_basis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deadline Basis
+          description: Норма права под сроком; пусто - срок сервиса, норматива нет
+        react_deadline_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: React Deadline At
+          description: Срок реакции (принять заявку); пусто - не нормирован
         photos:
           items:
             $ref: '#/components/schemas/FileRef'
@@ -12678,6 +13193,10 @@ components:
           - type: 'null'
           title: Auto Close At
           description: Автозакрытие заявки, оставленной на приемке
+        can_demo_expire:
+          type: boolean
+          title: Can Demo Expire
+          description: Автор заявки в демо-УК может перенести ее срок на текущий момент
       type: object
       required:
       - id
@@ -12692,13 +13211,14 @@ components:
       - house_id
       - address
       - org_name
-      - normative_hours
+      - deadline_text
       - photos
       - result_photos
       - messages
       - timeline
       - can_review
       - can_rate
+      - can_demo_expire
       title: RequestCard
     RequestCategory:
       type: string
@@ -12724,15 +13244,28 @@ components:
           title: Label
         zone:
           $ref: '#/components/schemas/ResponsibilityZone'
-        normative_hours:
-          type: integer
-          title: Normative Hours
+        deadline_text:
+          type: string
+          title: Deadline Text
+          description: Срок устранения, например «3 суток»
+        react_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: React Text
+          description: Срок реакции, например «30 минут»; пусто - не нормирован
+        deadline_basis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deadline Basis
+          description: Норма права под сроком; пусто - срок сервиса, норматива нет
       type: object
       required:
       - category
       - label
       - zone
-      - normative_hours
+      - deadline_text
       title: RequestCategoryItem
     RequestChannel:
       type: string
@@ -12867,6 +13400,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
       type: object
       required:
       - id
@@ -12894,6 +13434,11 @@ components:
         text:
           type: string
           title: Text
+        is_internal:
+          type: boolean
+          title: Is Internal
+          description: Заметка только для УК, например причина отказа исполнителя
+          default: false
       type: object
       required:
       - created_at
@@ -13060,6 +13605,21 @@ components:
       - penalty
       - recalculation
       title: ServiceType
+    SetCategoryExecutorRequest:
+      properties:
+        category:
+          $ref: '#/components/schemas/RequestCategory'
+        executor_user_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Executor User Id
+          description: Исполнитель, которому сразу уходят новые заявки категории; null снимает назначение
+      type: object
+      required:
+      - category
+      - executor_user_id
+      title: SetCategoryExecutorRequest
     SetChairmanRequest:
       properties:
         is_chairman:
@@ -13297,6 +13857,7 @@ components:
           title: Group Window Hours
         phone:
           type: string
+          maxLength: 32
           title: Phone
         reception_note:
           anyOf:
@@ -13304,6 +13865,12 @@ components:
             maxLength: 4000
           - type: 'null'
           title: Reception Note
+        emergency_phone:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Emergency Phone
       type: object
       required:
       - meter_window_day_from

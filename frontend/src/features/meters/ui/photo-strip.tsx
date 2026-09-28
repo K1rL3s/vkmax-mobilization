@@ -1,7 +1,7 @@
 import type { ChangeEvent } from "react";
 import { Icon16CloseIos, IconButton, Typography } from "@maxhub/max-ui";
 
-import { Icon, cameraIcon } from "@/shared/ui/icon";
+import { Icon, cameraIcon, plusIcon } from "@/shared/ui/icon";
 
 import styles from "./photo-strip.module.css";
 
@@ -42,22 +42,34 @@ export const PhotoStrip = ({
         </div>
       ))}
 
-      {!isFull && (
-        <label className={styles.Add}>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={pick}
-            disabled={isUploading}
-          />
+      {isUploading && (
+        <div className={styles.Add}>
           <Icon src={cameraIcon} />
-          <Typography.Text variant="label-strong">
-            {isUploading ? "Грузим" : "Добавить"}
-          </Typography.Text>
-        </label>
+          <Typography.Text variant="label-strong">Грузим</Typography.Text>
+        </div>
       )}
+
+      {!isUploading &&
+        !isFull &&
+        [
+          { label: "Снять", icon: cameraIcon, capture: "environment" as const },
+          { label: "Из галереи", icon: plusIcon, capture: undefined },
+        ].map((source) => (
+          <label key={source.label} className={styles.Add}>
+            <input
+              type="file"
+              accept="image/*"
+              capture={source.capture}
+              multiple
+              hidden
+              onChange={pick}
+            />
+            <Icon src={source.icon} />
+            <Typography.Text variant="label-strong">
+              {source.label}
+            </Typography.Text>
+          </label>
+        ))}
     </div>
   );
 };

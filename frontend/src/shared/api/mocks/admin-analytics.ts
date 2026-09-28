@@ -41,6 +41,12 @@ const dashboard = (span: number): Schemas["DashboardResponse"] => {
         value: span === 90 ? 3145 : 260,
       },
       {
+        key: "accept_time_median",
+        label: "Медиана времени до принятия",
+        unit: "minutes",
+        value: span === 90 ? 1240 : 95,
+      },
+      {
         key: "repeat_share",
         label: "Доля повторных",
         unit: "percent",

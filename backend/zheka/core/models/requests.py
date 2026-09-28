@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 
 from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import (
-    CATEGORY_RULES,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
@@ -20,6 +19,10 @@ from zheka.core.ids import (
     RequestStatusLogId,
     UserId,
 )
+
+WARN_SHARE = 4
+WARN_MIN = timedelta(hours=1)
+WARN_MAX = timedelta(hours=24)
 
 
 class Request(ZhekaMutableType):
@@ -44,11 +47,16 @@ class Request(ZhekaMutableType):
     done_at: datetime | None = None
     reviewed_at: datetime | None = None
     is_staff_author: bool = False
+    deadline_at: datetime
+    react_deadline_at: datetime | None = None
+    deadline_warned_at: datetime | None = None
+    overdue_notified_at: datetime | None = None
+    escalated_at: datetime | None = None
 
     @property
-    def deadline_at(self) -> datetime:
-        hours = CATEGORY_RULES[self.category].normative_hours
-        return self.created_at + timedelta(hours=hours)
+    def warn_at(self) -> datetime:
+        lead = (self.deadline_at - self.created_at) / WARN_SHARE
+        return self.deadline_at - max(WARN_MIN, min(lead, WARN_MAX))
 
 
 class RequestGroup(ZhekaMutableType):
@@ -85,3 +93,4 @@ class RequestMessage(ZhekaMutableType):
     author_user_id: UserId
     author_role: str
     text: str
+    is_internal: bool = False

@@ -17,7 +17,12 @@ from zheka.core.enums import (
     RequestChannel,
     ServiceType,
 )
-from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidState,
+    InvalidValue,
+    NotEnoughRights,
+)
 from zheka.core.ids import ChargeId, FlatId, HouseId, MeterId, RequestId, UserId
 from zheka.core.models import Charge, Flat, House, Tariff
 from zheka.core.services.events import EventsService
@@ -31,6 +36,10 @@ NOT_VERIFIED = "Подтвердите квартиру, чтобы видеть
 CANNOT_SEE_CHARGES = "Начисления недоступны для вашей роли"
 
 CONSUMPTION_POINTS = 6
+
+LINE_QUESTION_ASK = (
+    "Прошу сообщить состав начисления и данные, использованные при расчете"
+)
 
 
 class ConsumptionPoint(ZhekaType):
@@ -72,9 +81,7 @@ class PaymentResult(ZhekaType):
 
 
 def _rubles(kopecks: int) -> str:
-    sign = "-" if kopecks < 0 else "+"
-    whole, cents = divmod(abs(kopecks), 100)
-    return f"{sign}{whole}.{cents:02d}"
+    return _money(kopecks) if kopecks < 0 else f"+{_money(kopecks)}"
 
 
 def _dispute_description(
@@ -82,23 +89,15 @@ def _dispute_description(
     lines: Sequence[LineDelta],
     total_delta: int,
     comment: str,
-    service: ServiceType | None,
 ) -> str:
     period_text = charge.period.strftime("%m.%Y")
-    if service is not None:
-        line = next((item for item in lines if item.service is service), None)
-        summary = f"По строке «{SERVICE_LABELS[service]}» за {period_text}"
-        summary += "." if line is None else f": {_rubles(line.delta)} руб."
-    else:
-        top = ", ".join(
-            f"{SERVICE_LABELS[item.service]} {_rubles(item.delta)} руб"
-            for item in lines[:3]
-        )
-        summary = (
-            f"Начисление за {period_text} изменилось на {_rubles(total_delta)} руб."
-        )
-        if top:
-            summary = f"{summary} {top}."
+    top = ", ".join(
+        f"{SERVICE_LABELS[item.service]} {_rubles(item.delta)} руб"
+        for item in lines[:3]
+    )
+    summary = f"Начисление за {period_text} изменилось на {_rubles(total_delta)} руб."
+    if top:
+        summary = f"{summary} {top}."
     return f"{summary}\n\n{comment.strip()}"
 
 
@@ -195,17 +194,28 @@ class ChargesService:
         flat_id = charge.flat_id
         house_id = (await self._access.get_flat(flat_id)).house_id
 
-        current_lines, previous_lines, _previous_charge = await self._diffed_lines(
+        current_lines, previous_lines, previous_charge = await self._diffed_lines(
             charge,
         )
         core = compute_breakdown(current_lines, previous_lines)
-        description = _dispute_description(
-            charge,
-            core.lines,
-            core.delta,
-            comment,
-            service,
-        )
+        if service is None:
+            description = _dispute_description(charge, core.lines, core.delta, comment)
+        else:
+            line = next(
+                (item for item in current_lines if item.service is service),
+                None,
+            )
+            if line is None:
+                raise InvalidValue(
+                    f"Строки «{SERVICE_LABELS[service]}» нет в этой квитанции",
+                )
+            delta = next(item for item in core.lines if item.service is service)
+            description = _line_question(
+                charge,
+                line,
+                None if previous_charge is None else delta,
+                comment,
+            )
         photos = await self._period_photos(flat_id, charge.period)
 
         card = await self._requests.create(
@@ -303,3 +313,39 @@ class ChargesService:
                 ),
             )
         return result
+
+
+def _money(kopecks: int) -> str:
+    whole, cents = divmod(abs(kopecks), 100)
+    return f"{'-' if kopecks < 0 else ''}{whole}.{cents:02d}"
+
+
+def _volume(milli: int) -> str:
+    whole, rest = divmod(milli, 1000)
+    fraction = f"{rest:03d}".rstrip("0")
+    return f"{whole},{fraction}" if fraction else str(whole)
+
+
+def _tariff(tariff: int) -> str:
+    whole, rest = divmod(tariff, 10_000)
+    return f"{whole}.{f'{rest:04d}'.rstrip('0').ljust(2, '0')}"
+
+
+def _line_question(
+    charge: Charge,
+    line: ChargeLine,
+    delta: LineDelta | None,
+    comment: str,
+) -> str:
+    summary = (
+        f"По строке «{SERVICE_LABELS[line.service]}» за "
+        f"{charge.period.strftime('%m.%Y')}: {_money(line.amount)} руб."
+    )
+    if line.volume is not None and line.tariff is not None:
+        volume = " ".join(filter(None, (_volume(line.volume), line.unit)))
+        summary += f" ({volume} × {_tariff(line.tariff)} руб.)"
+    if delta is not None and delta.kind == "appeared":
+        summary += ", новая строка в этом месяце."
+    elif delta is not None:
+        summary += f", к прошлому месяцу {_rubles(delta.delta)} руб."
+    return f"{summary}\n\n{comment.strip()}\n\n{LINE_QUESTION_ASK}"

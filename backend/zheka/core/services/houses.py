@@ -2,6 +2,7 @@ import math
 import secrets
 from collections.abc import Sequence
 from dataclasses import replace
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from zheka.base import ZhekaType
@@ -22,6 +23,7 @@ from zheka.core.errors import (
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat, House, Organization, Resident, User
 from zheka.core.services.events import EventsService
+from zheka.infra.database.repos.analytics import AnalyticsRepo, PublicStats
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -29,6 +31,8 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 NEARBY_METERS_PER_DEGREE = 111_320
+PUBLIC_STATS_PERIOD = timedelta(days=90)
+PUBLIC_STATS_MIN_CLOSED = 10
 
 CONSENT_REQUIRED = "Сначала примите согласие на обработку персональных данных"
 NOT_CONNECTED = "Управляющая компания дома еще не подключена к сервису"
@@ -55,9 +59,13 @@ class ResidencyView(ZhekaType):
     resident: Resident
     house: House
     flat: Flat | None
-    is_connected: bool
+    org: Organization | None
     verification_status: VerificationStatus | None = None
     verification_reject_reason: str | None = None
+
+    @property
+    def is_connected(self) -> bool:
+        return is_connected(self.house, self.org)
 
 
 class HouseCardData(ZhekaType):
@@ -68,6 +76,7 @@ class HouseCardData(ZhekaType):
     demand_count: int
     demand_sent: bool
     is_chat_bound: bool
+    org_stats: PublicStats | None
 
 
 class HouseResidentView(ZhekaType):
@@ -97,7 +106,15 @@ class AdminHouseCardData(ZhekaType):
 
 
 class HousesService:
-    __slots__ = ("_events", "_flats", "_houses", "_orgs", "_residents", "_users")
+    __slots__ = (
+        "_analytics",
+        "_events",
+        "_flats",
+        "_houses",
+        "_orgs",
+        "_residents",
+        "_users",
+    )
 
     def __init__(
         self,
@@ -107,7 +124,9 @@ class HousesService:
         users_repo: UsersRepo,
         flats_repo: FlatsRepo,
         events_service: EventsService,
+        analytics_repo: AnalyticsRepo,
     ) -> None:
+        self._analytics = analytics_repo
         self._houses = houses_repo
         self._residents = residents_repo
         self._orgs = orgs_repo
@@ -192,18 +211,30 @@ class HousesService:
             for item, (_, distance) in zip(found, rows, strict=True)
         ]
 
-    async def house_card(self, house_id: HouseId, user_id: UserId) -> HouseCardData:
+    async def house_card(
+        self,
+        house_id: HouseId,
+        user_id: UserId,
+        now: datetime,
+    ) -> HouseCardData:
         house = await self._get_house(house_id)
         org = await self._org_of(house)
         connected = is_connected(house, org)
         resident = await self._residents.get_for_house(user_id, house_id)
+        org_stats = None
+        if org is not None and connected:
+            stats = await self._analytics.public_stats(
+                org.id,
+                now - PUBLIC_STATS_PERIOD,
+                now,
+            )
+            if stats.closed >= PUBLIC_STATS_MIN_CLOSED:
+                org_stats = stats
         return HouseCardData(
             house=house,
             org=org,
             residency=(
-                None
-                if resident is None
-                else await self._view(resident, house, connected)
+                None if resident is None else await self._view(resident, house, org)
             ),
             is_connected=connected,
             demand_count=0 if connected else await self._houses.count_demand(house_id),
@@ -212,6 +243,7 @@ class HousesService:
                 and await self._houses.has_demand_signal(house_id, user_id)
             ),
             is_chat_bound=await self._houses.is_chat_bound(house_id),
+            org_stats=org_stats,
         )
 
     async def link(
@@ -274,11 +306,7 @@ class HousesService:
                 source=source.value,
                 entrance=entrance,
             )
-        return await self._view(
-            resident,
-            house,
-            is_connected(house, await self._org_of(house)),
-        )
+        return await self._view(resident, house, await self._org_of(house))
 
     async def unlink(self, user_id: UserId, resident_id: ResidentId) -> None:
         resident = await self._residents.get(resident_id)
@@ -349,7 +377,7 @@ class HousesService:
         self,
         resident: Resident,
         house: House,
-        connected: bool,
+        org: Organization | None,
     ) -> ResidencyView:
         flat = (
             None
@@ -360,7 +388,7 @@ class HousesService:
             resident=resident,
             house=house,
             flat=flat,
-            is_connected=connected,
+            org=org,
         )
 
     async def _with_orgs(self, houses: Sequence[House]) -> list[HouseFound]:

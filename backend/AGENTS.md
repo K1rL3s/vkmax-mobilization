@@ -100,6 +100,19 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `EntityNotFound` (404), never 403.
 - Route and bot uploads go through `save_download`, which counts
   `max_size_mb` while writing (`Bot.download` streams unchecked for 30 s).
+- Daily `purge_files` first deletes upload-named files older than a day that
+  no row names (`FilesRepo.referenced_names`), then drops request photos
+  `PHOTO_TTL` after `done_at` and reading photos `PHOTO_TTL` after
+  `submitted_at`; their files go on the next run, so a rollback loses none. A
+  new column holding a file name joins `referenced_names`, or its files go.
+- `ProfileService.forget` (`DELETE /api/me`, bot `/delete`) deletes the
+  user's residents, verification requests and revocations, demand signals,
+  notification settings and org roles, cancels their upcoming booked
+  appointments, clears `caller_name`/`caller_phone` on requests they authored,
+  and tombstones the `users` row (`FORGOTTEN_NAME`,
+  `max_user_id = API_CHECKER_MAX_USER_ID - id`): nothing is sent to it and a
+  return is a new row. Requests, readings, votes and events
+  stay. It refuses an org creator and the API checker, not a blocked resident.
 - `HousesService.link` never changes a verified resident's flat or role (УК
   moves them); a blocked resident cannot `unlink` (relinking would shed the
   block). An org invite reopened by a member is free unless it raises the
@@ -159,7 +172,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - `MaxSender` serves broadcasts and task windows, not handlers, and owns MAX
   limits: 30 rps per bot (`BOT_RATE_LIMIT`), 2 msg/s per chat keyed on
   `max_user_id`. `send_message` drops private sends to negative ids (seeded
-  users, the API checker); group sends go (group chat ids are negative too).
+  and forgotten users, the API checker); group sends go (group chat ids are
+  negative too).
 - A task opens a window only via `MaxSender.start_dialog` (`fg()`,
   `RESET_STACK`): `bg().start()` and `NEW_STACK` go through `call_soon` and
   let the task commit first. It skips users without `max_chat_id` or with
@@ -194,13 +208,19 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `app_button` + `app_path`; `notify_author` always attaches the request's.
 - The menu reads the profile: the last linked house, the staff line and
   cabinet button.
+- A dialog swallows every message sent to its window: the fallback router gets
+  only updates with no dialog open. Free text (`NewRequestData.from_free_text`:
+  15+ chars, not a command, a photo caption counts) opens `NewRequest.category`
+  with it as the description from the menu and its emergency window,
+  `NewRequest.category` and `NewRequest.sent` (`on_free_text`, consent checked
+  first) and the fallback; `on_category` then skips to the photo.
 - House search and request draft steps have «🏠 Меню» and, past the first,
   «⬅️ Назад» (`TO_MENU`, `BACK`). A search list also takes text: one match is
   chosen, several narrow, none keeps the list and says so; `on_back` clears it.
 - `BOT_COMMANDS` (`commands/start.py`) is set by an `after_startup` hook in
   every api worker (the taskiq worker feeds no signals); failure is logged. A
-  new command joins it, `/seed` never. Tests call the hook directly (a second
-  `AfterStartup` fails in `DialogRegistry.refresh`).
+  new command joins it, `/seed` and `/demo` never. Tests call the hook
+  directly (a second `AfterStartup` fails in `DialogRegistry.refresh`).
 
 ## Requests and chats
 
@@ -208,6 +228,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   the house's org (a removed executor keeps the id and a live card):
   `executor_advance` checks both before writing, `executor_card` returns
   `None`.
+- An executor's decline clears `executor_user_id`, keeps the status and writes
+  the reason as an `is_internal` message: only `build_card(with_internal=True)`
+  (staff and executor cards) returns it. The org's default executor per
+  category (`org_category_executors`) is assigned on create, repeat and phone
+  requests only while still `OrgRole.EXECUTOR`, never again after a decline.
 - The author's review card is queued only in `AdminRequestsService._move`,
   the one road into `ON_REVIEW`. Every status write first takes
   `RequestsRepo.lock` (`FOR UPDATE`, refreshed), so a concurrent tap sees the
@@ -215,8 +240,25 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   log, event, message, notification): a repeated staff status call answers 200
   with the card; backward is `InvalidState(BACKWARD)`.
 - New and repeat requests notify org staff (never executor or author) under
-  `REQUESTS`, not mandatory. Deadline: `Request.deadline_at`, printed in the
-  house's time.
+  `REQUESTS`, not mandatory. Deadline: `Request.deadline_at` (and
+  `react_deadline_at`), stored at creation from `CategoryRule.deadlines`,
+  printed in the house's time; a rule without `basis` is a service deadline.
+  `fix_working_days` counts from the next local day to its end by
+  `core/workdays.py`, a static calendar: add each year's transfer decree
+  there (the 2026.09.29 migration backfill has its own copy).
+- `watch_request_deadlines` (every 5 min) warns staff and executor at
+  `Request.warn_at`, then reports the overdue request to them, the author and
+  the chairman, once each by `deadline_warned_at` / `overdue_notified_at` (the
+  overdue stamp sets both). Seed and migration stamp moments already past, so
+  a deploy sends nothing stale. The demo button moves `deadline_at` (and a
+  later `react_deadline_at`) to a minute ago, so a phone clock slightly behind
+  the server still shows the request overdue.
+- `RequestsService.escalate`: the author of an overdue open request, once
+  (`escalated_at`). Staff and the executor hear via `_notify_crew`, the author
+  gets a confirmation, each user once. Escalated overdue requests lead
+  `list_for_org`; a finished one drops back. Grouped, any member's active
+  escalation lifts the group and `AdminRequestRow.escalated_at` carries the
+  earliest one.
 - A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,
@@ -225,7 +267,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   / `YANDEX_FOLDER_ID`; 401, 403 or a non-header key disables it per process;
   other failures or answers outside `RequestCategory` -> `category: null`.
   Key never logged. The model picks only the category (`CATEGORY_RULES` give
-  the zone), the resident's text is its own `user` message. `YandexQuota`
+  the zone), the resident's text is its own `user` message, masked by
+  `mask_pii` (`core/masking.py`: phones, e-mails, 8+ digit runs, flat numbers;
+  names and street addresses stay). `YandexQuota`
   caps classify and OCR together per user per api worker (`QUOTA_CALLS` an
   hour); past it the route answers as if Yandex were off. The bot does not
   classify. OCR gets the photo's real type and skips types it can't read.
@@ -306,18 +350,25 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   services; no request is left `ON_REVIEW` (the scheduler would auto-close
   and message the author). `/seed` (unadvertised, open) only queues
   `seed_demo`, which replies after commit; `seed()` gets no publisher.
+  `/demo` (unadvertised) queues one real text of every reminder kind to the
+  caller alone, mandatory, from the caller's demo flat or stubs
+  (`RemindersService.demo`); it stamps nothing.
 - All five demo orgs have history in Москва (region = city), so both benchmark
   cuts survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: five distinct ranks per
   metric). They group requests from `REVIEWERS_GROUP_THRESHOLD` flats, not 3:
   reviewers share an org's first house and file the same category.
-- Demo deeplinks are only `demo_{admin,staff,resident}_N`, N 1-4 (5 is the
-  API checker's), granting only that role in demo org N: `DemoService.join`
-  sets exactly ADMIN or
-  EMPLOYEE (lowering too); `settle` gives the verified flat `Д{user_id}` in
-  the org's first house, filled by `furnish` (charges from tariffs: every demo
-  house has tariffs, every demo org `meter_window_always_open`).
+- Demo deeplinks are only `demo_{admin,staff,resident,executor}_N`, N 1-4 (5
+  is the API checker's), granting only that role in demo org N:
+  `DemoService.join` sets exactly ADMIN, EMPLOYEE or EXECUTOR (lowering too);
+  `demo_executor_N` finds the last NEW or ACCEPTED request of the caller's
+  demo flat first (`AdminRequestsService.demo_request`; none -> role kept),
+  then joins and hands it over (`assign_demo`: accept, assign, card;
+  `DemoService` can't take it, `deeplinks` imports `demo`).
+  `settle` gives the verified flat `Д{user_id}` in the org's first house,
+  filled by `furnish` (charges from tariffs: every demo house has tariffs,
+  every demo org `meter_window_always_open`).
   `POST /demo/activate` (`number`, `admin`) does both, keeping an existing
-  role unless `admin` raises it; both idempotent. No seed ->
+  role unless `admin` raises it or it is EXECUTOR; both idempotent. No seed ->
   `EntityNotFound`; no `consent_at` -> `NotEnoughRights`. A reviewer's flat
   account is random (seeded ones are the zero-padded number), so no other
   reviewer can verify into it.

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { useRequestCategories, type RequestCategory } from "@/features/request";
 import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
+import { useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
 
@@ -70,6 +71,7 @@ export const usePhoneRequest = () => {
       callerPhone: "",
     },
   });
+  useClosingConfirmation(form.formState.isDirty);
   const [houseId, flatId, category] = useWatch({
     control: form.control,
     name: ["houseId", "flatId", "category"],

@@ -32,7 +32,8 @@ export interface paths {
     get: operations["get_me"];
     put?: never;
     post?: never;
-    delete?: never;
+    /** Удалить мои данные */
+    delete: operations["forget_me"];
     options?: never;
     head?: never;
     patch?: never;
@@ -511,6 +512,46 @@ export interface paths {
     put?: never;
     /** Подсказать категорию по описанию */
     post: operations["classify_request_text"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/requests/{request_id}/demo/expire": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Демо: срок заявки истек
+     * @description Только автор заявки в демо-УК, пока заявка открыта и не просрочена, иначе 404. Срок, и срок реакции, если он позже, становится минутой раньше текущего момента, уведомления о просрочке уходят сразу
+     */
+    post: operations["expire_request_deadline"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/requests/{request_id}/escalate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Попросить руководство УК вмешаться
+     * @description Только автор просроченной открытой заявки, один раз: сотрудники УК и исполнитель получают сообщение, автор - подтверждение, заявка встает первой во входящих. Повтор или непросроченная заявка - 409, чужая - 404
+     */
+    post: operations["escalate_request"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1091,6 +1132,24 @@ export interface paths {
     post?: never;
     /** Отозвать приглашение */
     delete: operations["revoke_org_invite"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/admin/org/category-executors": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Исполнители по умолчанию для категорий заявок */
+    get: operations["list_category_executors"];
+    /** Назначить исполнителя по умолчанию для категории */
+    put: operations["set_category_executor"];
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1979,14 +2038,32 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
       address: string;
       /** Org Name */
       org_name: string | null;
-      /** Normative Hours */
-      normative_hours: number;
+      /**
+       * Deadline Text
+       * @description Срок устранения, например «3 суток»
+       */
+      deadline_text: string;
+      /**
+       * Deadline Basis
+       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       */
+      deadline_basis?: string | null;
+      /**
+       * React Deadline At
+       * @description Срок реакции (принять заявку); пусто - не нормирован
+       */
+      react_deadline_at?: string | null;
       /** Photos */
       photos: components["schemas"]["FileRef"][];
       /** Result Photos */
@@ -2010,6 +2087,11 @@ export interface components {
        * @description Автозакрытие заявки, оставленной на приемке
        */
       auto_close_at?: string | null;
+      /**
+       * Can Demo Expire
+       * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
+       */
+      can_demo_expire: boolean;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -2056,6 +2138,11 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -2097,6 +2184,11 @@ export interface components {
        * @default 0
        */
       recipients_count: number;
+      /**
+       * Delivered Count
+       * @description Скольким адресатам MAX принял сообщение, по всем каналам вместе. null, пока рассылка идет, и у объявлений, отправленных до появления отчета
+       */
+      delivered_count: number | null;
       /**
        * Houses Without Chat
        * @description Дома, у которых не привязан чат, поэтому объявление туда не ушло. Заполняется только при создании объявления
@@ -2259,6 +2351,12 @@ export interface components {
       starts_at: string;
       /** Request Id */
       request_id?: number | null;
+    };
+    /** CategoryExecutorItem */
+    CategoryExecutorItem: {
+      category: components["schemas"]["RequestCategory"];
+      /** Executor User Id */
+      executor_user_id: number;
     };
     /** ChangeGroupStatusRequest */
     ChangeGroupStatusRequest: {
@@ -2930,6 +3028,8 @@ export interface components {
       overhaul?: components["schemas"]["HouseOverhaul"] | null;
       /** Documents */
       documents: components["schemas"]["FileRef"][];
+      /** @description Показатели УК за 90 дней, нет при малом числе заявок */
+      org_stats?: components["schemas"]["OrgPublicStats"] | null;
     };
     /** HouseListItem */
     HouseListItem: {
@@ -3039,6 +3139,15 @@ export interface components {
        * @description Показание в тысячных долях единицы измерения
        */
       last_values?: {
+        [key: string]: number;
+      } | null;
+      /** Prior Period */
+      prior_period?: string | null;
+      /**
+       * Prior Values
+       * @description Показание в тысячных долях единицы измерения
+       */
+      prior_values?: {
         [key: string]: number;
       } | null;
     };
@@ -3172,6 +3281,11 @@ export interface components {
       /** Reception Note */
       reception_note?: string | null;
       /**
+       * Emergency Phone
+       * @description Аварийно-диспетчерская служба дома, если УК ее указала
+       */
+      emergency_phone?: string | null;
+      /**
        * Is Demo
        * @default false
        */
@@ -3259,6 +3373,41 @@ export interface components {
       /** Is Demo */
       is_demo: boolean;
     };
+    /** OrgPublicStats */
+    OrgPublicStats: {
+      /**
+       * Closed
+       * @description Заявок сдано на приемку, по всем домам УК
+       */
+      closed: number;
+      /**
+       * On Time
+       * @description Из них сдано в нормативный срок
+       */
+      on_time: number;
+      /**
+       * On Time Share
+       * @description Доля сданных в срок в сотых долях процента, 50% это 5000
+       */
+      on_time_share: number;
+      /**
+       * Accept Time
+       * @description Среднее время до принятия заявки в минутах
+       */
+      accept_time?: number | null;
+      /**
+       * Accept Time Median
+       * @description Медиана времени до принятия заявки в минутах
+       */
+      accept_time_median?: number | null;
+      /**
+       * Rating
+       * @description Средняя оценка жителей в сотых долях балла
+       */
+      rating?: number | null;
+      /** Ratings Count */
+      ratings_count: number;
+    };
     /**
      * OrgRole
      * @enum {string}
@@ -3286,6 +3435,8 @@ export interface components {
       phone: string;
       /** Reception Note */
       reception_note: string | null;
+      /** Emergency Phone */
+      emergency_phone: string | null;
     };
     /** OverhaulWork */
     OverhaulWork: {
@@ -3786,14 +3937,32 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
       address: string;
       /** Org Name */
       org_name: string | null;
-      /** Normative Hours */
-      normative_hours: number;
+      /**
+       * Deadline Text
+       * @description Срок устранения, например «3 суток»
+       */
+      deadline_text: string;
+      /**
+       * Deadline Basis
+       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       */
+      deadline_basis?: string | null;
+      /**
+       * React Deadline At
+       * @description Срок реакции (принять заявку); пусто - не нормирован
+       */
+      react_deadline_at?: string | null;
       /** Photos */
       photos: components["schemas"]["FileRef"][];
       /** Result Photos */
@@ -3817,6 +3986,11 @@ export interface components {
        * @description Автозакрытие заявки, оставленной на приемке
        */
       auto_close_at?: string | null;
+      /**
+       * Can Demo Expire
+       * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
+       */
+      can_demo_expire: boolean;
     };
     /**
      * RequestCategory
@@ -3840,8 +4014,21 @@ export interface components {
       /** Label */
       label: string;
       zone: components["schemas"]["ResponsibilityZone"];
-      /** Normative Hours */
-      normative_hours: number;
+      /**
+       * Deadline Text
+       * @description Срок устранения, например «3 суток»
+       */
+      deadline_text: string;
+      /**
+       * React Text
+       * @description Срок реакции, например «30 минут»; пусто - не нормирован
+       */
+      react_text?: string | null;
+      /**
+       * Deadline Basis
+       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       */
+      deadline_basis?: string | null;
     };
     /**
      * RequestChannel
@@ -3922,6 +4109,11 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
     };
     /** RequestMessageItem */
     RequestMessageItem: {
@@ -3936,6 +4128,12 @@ export interface components {
       author_name: string;
       /** Text */
       text: string;
+      /**
+       * Is Internal
+       * @description Заметка только для УК, например причина отказа исполнителя
+       * @default false
+       */
+      is_internal: boolean;
     };
     /**
      * RequestStatus
@@ -4030,6 +4228,15 @@ export interface components {
       | "waste"
       | "penalty"
       | "recalculation";
+    /** SetCategoryExecutorRequest */
+    SetCategoryExecutorRequest: {
+      category: components["schemas"]["RequestCategory"];
+      /**
+       * Executor User Id
+       * @description Исполнитель, которому сразу уходят новые заявки категории; null снимает назначение
+       */
+      executor_user_id: number | null;
+    };
     /** SetChairmanRequest */
     SetChairmanRequest: {
       /** Is Chairman */
@@ -4172,6 +4379,8 @@ export interface components {
       phone: string;
       /** Reception Note */
       reception_note?: string | null;
+      /** Emergency Phone */
+      emergency_phone?: string | null;
     };
     /** VerificationRequestItem */
     VerificationRequestItem: {
@@ -4336,6 +4545,89 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["MeResponse"];
         };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  forget_me: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Некорректный запрос */
       400: {
@@ -7090,6 +7382,180 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ClassifyRequestResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  expire_request_deadline: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  escalate_request: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
         };
       };
       /** @description Некорректный запрос */
@@ -10535,6 +11001,182 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OkResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  list_category_executors: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CategoryExecutorItem"][];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  set_category_executor: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetCategoryExecutorRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CategoryExecutorItem"][];
         };
       };
       /** @description Некорректный запрос */

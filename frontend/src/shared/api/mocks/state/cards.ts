@@ -45,6 +45,17 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
     chat_bound: false,
     overhaul: null,
     documents: [],
+    org_stats: house.is_connected
+      ? {
+          closed: 38,
+          on_time: 23,
+          on_time_share: 6053,
+          accept_time: 43,
+          accept_time_median: 25,
+          rating: 450,
+          ratings_count: 22,
+        }
+      : null,
   };
 };
 

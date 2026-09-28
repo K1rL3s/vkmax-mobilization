@@ -7,7 +7,7 @@ from maxo.dialogs import DialogManager
 from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import ManagedTextInput, MessageInput
 from maxo.dialogs.widgets.kbd import Button, Select
-from maxo.types import MessageCallback, MessageCreated, PhotoAttachment
+from maxo.types import MessageCallback, MessageCreated
 
 from zheka.bot.cards import app_payload, web_app_name
 from zheka.bot.dialog_data import NewRequestData
@@ -19,11 +19,11 @@ from zheka.core.deeplinks import request_app_path
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestChannel
 from zheka.core.ids import RequestId
 from zheka.core.services.profile import ProfileService
-from zheka.core.services.requests import MAX_PHOTOS
 
 SENT_TEXT = "⏳ Принял, оформляю"
 NOT_CREATED = "😔 Заявку не удалось оформить: {reason}"
 NOT_CREATED_UNEXPECTED = "😔 Заявку не удалось оформить, попробуйте еще раз"
+QUOTE_LIMIT = 200
 
 
 @inject
@@ -43,9 +43,13 @@ async def get_category(
     with NewRequestData.proxy(dialog_manager) as data:
         data.house_id = residency.house.id
         data.flat_id = None if residency.flat is None else residency.flat.id
+        description = data.description
+    if len(description) > QUOTE_LIMIT:
+        description = f"{description[:QUOTE_LIMIT]}…"
     return {
         "address": address,
         "connected": True,
+        "description": escape(description),
         "categories": [
             {"id": category.value, "label": CATEGORY_RULES[category].caption}
             for category in RequestCategory
@@ -91,7 +95,10 @@ async def on_category(
 ) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
         data.category = RequestCategory(category)
-    await dialog_manager.switch_to(NewRequest.description)
+        described = bool(data.description)
+    await dialog_manager.switch_to(
+        NewRequest.photo if described else NewRequest.description,
+    )
 
 
 async def on_description(
@@ -111,9 +118,7 @@ async def on_photo(
     dialog_manager: DialogManager,
 ) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
-        for attach in update.message.body.attachments or []:
-            if isinstance(attach, PhotoAttachment) and len(data.photos) < MAX_PHOTOS:
-                data.photos.append(attach.payload.url)
+        data.attach_photos(update.message.body)
 
 
 @inject
@@ -150,3 +155,7 @@ async def on_description_photo(
     with NewRequestData.proxy(dialog_manager) as data:
         data.description = caption
     await dialog_manager.switch_to(NewRequest.photo)
+
+
+async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
+    NewRequestData.load_start(dialog_manager).dump(dialog_manager)

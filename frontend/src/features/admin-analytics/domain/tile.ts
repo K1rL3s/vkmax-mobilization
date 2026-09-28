@@ -13,7 +13,10 @@ export const splitTiles = (tiles: DashboardTile[]) => ({
 });
 
 export const tileView = (tile: DashboardTile) => {
-  if (tile.key === "accept_time" && tile.value === 0) {
+  if (
+    (tile.key === "accept_time" || tile.key === "accept_time_median") &&
+    tile.value === 0
+  ) {
     return {
       key: tile.key,
       label: tile.label,

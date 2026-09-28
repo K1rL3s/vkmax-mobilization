@@ -136,3 +136,14 @@ async def open_card(
         stack_id=stack_id,
         show_mode=show_mode,
     )
+
+
+@async_shared_broker.task(
+    task_name=TaskName.WATCH_REQUEST_DEADLINES.value,
+    schedule=[{"cron": "*/5 * * * *"}],
+)
+@inject(patch_module=True)
+async def watch_request_deadlines(
+    requests_service: FromDishka[RequestsService],
+) -> int:
+    return await requests_service.watch_deadlines(datetime.now(UTC))

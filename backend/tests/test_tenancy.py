@@ -1,5 +1,6 @@
 import secrets
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -33,6 +34,7 @@ async def _add_request(session: AsyncSession, house_id: HouseId) -> RequestId:
         description="Тестовая заявка",
         status=RequestStatus.NEW,
         channel=RequestChannel.MINIAPP,
+        deadline_at=datetime.now(UTC),
     )
     session.add(request)
     await session.flush()

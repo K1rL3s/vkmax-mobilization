@@ -37,6 +37,11 @@
     }
   }
 
+  .Ask {
+    align-self: flex-start;
+    margin-top: 6px;
+  }
+
   .Paid {
     padding: 12px;
     border-radius: 16px;

@@ -23,6 +23,8 @@ class MeterCard(ZhekaType):
     verification_expired: bool
     last_period: date | None
     last_values: dict[TariffZone, int] | None
+    prior_period: date | None
+    prior_values: dict[TariffZone, int] | None
 
 
 def zones_of(raw: dict[str, int]) -> dict[TariffZone, int]:
@@ -93,6 +95,11 @@ class MeterAccess:
         today = (await self.house_of_flat(meter.flat_id)).local(now).date()
         last = await self._meters.list_readings(meter.id, 1)
         last_reading = last[0] if last else None
+        prior = (
+            None
+            if last_reading is None
+            else await self._meters.previous_reading(meter.id, last_reading.period)
+        )
         expired = (
             meter.next_verification_date is not None
             and meter.next_verification_date < today
@@ -105,6 +112,8 @@ class MeterAccess:
             last_values=(
                 None if last_reading is None else zones_of(last_reading.values)
             ),
+            prior_period=None if prior is None else prior.period,
+            prior_values=None if prior is None else zones_of(prior.values),
         )
 
     async def get_flat(self, flat_id: FlatId) -> Flat:

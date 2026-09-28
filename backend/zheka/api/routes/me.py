@@ -1,3 +1,5 @@
+from http import HTTPStatus
+
 from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
@@ -77,3 +79,15 @@ async def track_event(
         announcement_id=body.announcement_id,
     )
     return OkResponse()
+
+
+@router.delete(
+    "/me",
+    summary="Удалить мои данные",
+    status_code=HTTPStatus.NO_CONTENT,
+)
+async def forget_me(
+    current_account: CurrentAccountDep,
+    profile_service: FromDishka[ProfileService],
+) -> None:
+    await profile_service.forget(current_account.user_id)

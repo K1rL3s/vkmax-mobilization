@@ -108,7 +108,7 @@ checks:
     response:
       content_type: application/json
       type: array
-      required_fields: ["[].category", "[].label", "[].zone", "[].normative_hours"]
+      required_fields: ["[].category", "[].label", "[].zone", "[].deadline_text"]
 
   - id: house_search
     description: Поиск дома по адресу в справочнике
@@ -157,7 +157,7 @@ checks:
     expected_status: [200]
     response:
       content_type: application/json
-      required_fields: [id, created_at, category, category_label, description, status, channel, has_photos, group_size, house_id, address, org_name, normative_hours, photos, result_photos, messages, timeline, can_review, can_rate]
+      required_fields: [id, created_at, category, category_label, description, status, channel, has_photos, group_size, house_id, address, org_name, deadline_text, photos, result_photos, messages, timeline, can_review, can_rate]
 
   - id: request_list
     description: Список заявок жителя со статусами
@@ -191,7 +191,7 @@ checks:
     expected_status: [200]
     response:
       content_type: application/json
-      required_fields: [id, created_at, category, status, house_id, address, normative_hours, timeline, messages]
+      required_fields: [id, created_at, category, status, house_id, address, deadline_text, timeline, messages]
 
   - id: request_card_foreign
     description: Чужая заявка недоступна - данные изолированы по жителю и организации

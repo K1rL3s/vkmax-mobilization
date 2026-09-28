@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
+import { haptic } from "@/shared/lib/max";
 import { useRouteParams } from "@/shared/lib/router";
 import { useSession } from "@/shared/model/session";
 
@@ -30,7 +31,11 @@ export const usePoll = () => {
   );
 
   const vote = rqClient.useMutation("post", "/api/polls/{poll_id}/vote", {
-    onSuccess: refreshPoll,
+    onSuccess: () => {
+      haptic.success();
+      return refreshPoll();
+    },
+    onError: haptic.error,
   });
 
   const poll = card.data;

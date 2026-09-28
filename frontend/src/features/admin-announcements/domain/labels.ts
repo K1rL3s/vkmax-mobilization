@@ -34,3 +34,30 @@ export const addressees = (houseIds: number[], houses: House[]) => {
 
   return housesCount(houseIds.length);
 };
+
+type Delivery = components["schemas"]["AnnouncementItem"];
+
+export const isSending = (delivery: Delivery) =>
+  delivery.delivered_count === null &&
+  Date.now() - Date.parse(delivery.created_at) < 10 * 60 * 1000;
+
+export const deliveryLabel = (delivery: Delivery) => {
+  if (isSending(delivery)) {
+    return "Отправляется…";
+  }
+
+  if (delivery.delivered_count === null) {
+    return recipientsCount(delivery.recipients_count);
+  }
+
+  return `Доставлено ${delivery.delivered_count} из ${delivery.recipients_count}`;
+};
+
+export const undeliveredReason = ({ channels }: Delivery) =>
+  [
+    channels.includes("direct") &&
+      "жители остановили бота, выключили объявления или ни разу его не открывали",
+    channels.includes("chat") && "у бота нет прав администратора в чате дома",
+  ]
+    .filter(Boolean)
+    .join(", или ");

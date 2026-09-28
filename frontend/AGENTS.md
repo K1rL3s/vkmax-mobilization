@@ -8,7 +8,10 @@ kit). pnpm, Node 24. `CLAUDE.md` is a symlink to this file.
 - `pnpm pre-commit` (lint, format, `tsc -b`) is the gate before every commit;
   nothing runs it for you. Type-checking is `tsc -b`: `tsconfig.json` is a
   solution file, so bare `tsc` checks nothing and exits 0. One file:
-  `pnpm eslint <path>`; no per-file type-check. No test runner.
+  `pnpm eslint <path>`; no per-file type-check. `pnpm test` runs
+  `node:test` over `scripts/*.test.ts`; Node strips types but resolves no
+  `@/`, so a tested module has only `import type` imports and the test loads
+  it by a runtime URL.
 - eslint and prettier target `src` only, keeping `.agents/` (vendored docs)
   and top-level configs out. No `.prettierignore`: after `pnpm api` run
   `pnpm format` (openapi-typescript indents 4 spaces).
@@ -111,9 +114,12 @@ Knows every feature; nothing imports it.
 - `lib/`: `css.ts` (`cn`), `format.ts` (dates, numbers, `plural`),
   `router.ts` (`useRouteParams`, zod-parsed), `analytics/` (`useTrack` ->
   `/api/events`), `max/` (the Bridge: typed `getWebApp`, `getMaxLaunch` with
-  `isInsideMax`, `initData`, `startParam`, and `useBackNavigation`). The
-  bridge is the CDN script in `index.html`; outside MAX `getWebApp()` is
-  `null` and the back button is a no-op.
+  `isInsideMax`, `initData`, `startParam`, `useBackNavigation`,
+  `useClosingConfirmation(active)` for forms with unsaved input, and
+  `haptic.success/error/select`). The bridge is the CDN script in
+  `index.html`; outside MAX `getWebApp()` is `null` and the back button,
+  closing confirmation and haptics are no-ops (the web and desktop clients
+  have no haptics either).
 - `ui/`: the kit over max-ui. Every recharts chart goes in `ChartBox` (owns
   `ResponsiveContainer`, kills the tap focus ring from `accessibilityLayer`),
   never a bare `<div>`. `StatusPill` is the one status badge of both

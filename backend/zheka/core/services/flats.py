@@ -491,7 +491,7 @@ class FlatsService:
             resident=resident,
             house=house,
             flat=flat,
-            is_connected=is_connected(house, org),
+            org=org,
         )
 
     async def _request_views(

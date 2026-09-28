@@ -1,5 +1,7 @@
 import { Button } from "@maxhub/max-ui";
 
+import { haptic } from "@/shared/lib/max";
+
 import { METER_LABEL, type Meter } from "../domain/reading";
 
 import styles from "./meter-chips.module.css";
@@ -19,7 +21,12 @@ export const MeterChips = ({ meters, value, onChange }: MeterChipsProps) => {
           size="small"
           variant={meter.id === value ? "primary" : "secondary"}
           aria-pressed={meter.id === value}
-          onClick={() => onChange(meter.id)}
+          onClick={() => {
+            if (meter.id !== value) {
+              haptic.select();
+            }
+            onChange(meter.id);
+          }}
         >
           {METER_LABEL[meter.type]}
         </Button>

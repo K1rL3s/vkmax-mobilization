@@ -14,7 +14,7 @@ from zheka.core.enums import (
     TariffZone,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import MaxUserId, UserId
+from zheka.core.ids import API_CHECKER_MAX_USER_ID, UserId
 from zheka.core.models import Flat, Organization
 from zheka.core.services.houses import CONSENT_REQUIRED, ResidencyView
 from zheka.core.services.profile import OrgMembershipView
@@ -29,7 +29,6 @@ from zheka.infra.database.repos.users import UsersRepo
 DEMO_INNS = ("9900000001", "9900000010", "9900000020", "9900000030", "9900000040")
 DEMO_INN = DEMO_INNS[0]
 NOT_SEEDED = "Демо-доступ еще не готов: демо-данные не загружены"
-API_CHECKER_MAX_USER_ID = MaxUserId(-(10**18))
 API_CHECKER_DEMO_NUMBER = 5
 CHECKER_ONLY = (
     f"Тестовый токен получает только роль сотрудника демо-УК №{API_CHECKER_DEMO_NUMBER}"
@@ -39,7 +38,7 @@ CHECKER_RESERVED = (
 )
 
 CHARGED_MONTHS = 6
-VERIFICATION_SOON = timedelta(days=21)
+VERIFICATION_SOON = timedelta(days=7)
 
 _MONTHLY: dict[MeterType, dict[TariffZone, int]] = {
     MeterType.COLD_WATER: {TariffZone.SINGLE: 7_000},
@@ -92,7 +91,7 @@ class DemoService:
     ) -> DemoAccess:
         org, residency = await self.settle(user_id, number)
         member = await self._orgs.add_member_or_get(org.id, user_id, role)
-        if role is OrgRole.ADMIN:
+        if role is OrgRole.ADMIN or member.role is OrgRole.EXECUTOR:
             await self._orgs.set_member_role(member, role)
         return DemoAccess(
             membership=OrgMembershipView(member=member, org=org),
@@ -237,7 +236,7 @@ class DemoService:
         number: int,
         role: OrgRole,
     ) -> OrgMembershipView:
-        org = await self._org(user_id, number)
+        org = await self.org(user_id, number)
         member = await self._orgs.add_member_or_get(org.id, user_id, role)
         await self._orgs.set_member_role(member, role)
         return OrgMembershipView(member=member, org=org)
@@ -247,7 +246,7 @@ class DemoService:
         user_id: UserId,
         number: int,
     ) -> tuple[Organization, ResidencyView]:
-        org = await self._org(user_id, number)
+        org = await self.org(user_id, number)
         houses = await self._houses.list_for_org(org.id)
         if not houses:
             raise EntityNotFound(NOT_SEEDED)
@@ -283,10 +282,10 @@ class DemoService:
             resident=resident,
             house=house,
             flat=flat,
-            is_connected=True,
+            org=org,
         )
 
-    async def _org(self, user_id: UserId, number: int) -> Organization:
+    async def org(self, user_id: UserId, number: int) -> Organization:
         user = await self._users.get_by_id(user_id)
         if user is None or user.consent_at is None:
             raise NotEnoughRights(CONSENT_REQUIRED)

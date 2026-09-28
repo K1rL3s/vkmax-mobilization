@@ -114,6 +114,9 @@ const meterReadings = (meterId: number): MockReading[] =>
 
 export const meterItem = (meter: MockMeter): Schemas["MeterItem"] => {
   const last = meterReadings(meter.id).at(0);
+  const prior = meterReadings(meter.id).find(
+    (reading) => last !== undefined && reading.period < last.period,
+  );
   const expired =
     meter.next_verification_date !== null &&
     meter.next_verification_date < today();
@@ -129,6 +132,8 @@ export const meterItem = (meter: MockMeter): Schemas["MeterItem"] => {
     next_verification_date: meter.next_verification_date,
     last_period: last?.period ?? null,
     last_values: last?.values ?? null,
+    prior_period: prior?.period ?? null,
+    prior_values: prior?.values ?? null,
   };
 };
 

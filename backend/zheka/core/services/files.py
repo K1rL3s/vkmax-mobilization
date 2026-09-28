@@ -2,8 +2,8 @@ import hashlib
 import hmac
 import re
 import time
-from collections.abc import Awaitable, Callable
-from datetime import timedelta
+from collections.abc import Awaitable, Callable, Container
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import BinaryIO, cast
 from uuid import uuid4
@@ -88,6 +88,17 @@ class FilesService:
             destination.unlink(missing_ok=True)
             raise
         return name
+
+    def remove_orphans(self, referenced: Container[str], before: datetime) -> int:
+        removed = 0
+        for path in self._dir.iterdir():
+            if not _NAME_RE.fullmatch(path.name) or path.name in referenced:
+                continue
+            if path.stat().st_mtime >= before.timestamp():
+                continue
+            path.unlink(missing_ok=True)
+            removed += 1
+        return removed
 
 
 class _CappedWriter:

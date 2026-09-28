@@ -45,4 +45,17 @@
   .Missing {
     text-align: center;
   }
+
+  .Emergency {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: color-mix(in srgb, var(--icon-negative) 12%, transparent);
+    color: var(--text-negative);
+    text-decoration: none;
+  }
+
+  .EmergencyIcon {
+    flex-shrink: 0;
+    color: var(--icon-negative);
+  }
 }

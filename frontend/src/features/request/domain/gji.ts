@@ -1,6 +1,6 @@
 import type { HouseCard } from "@/features/house";
 
-import { duration, plural } from "@/shared/lib/format";
+import { duration } from "@/shared/lib/format";
 import { STATUS_LABEL } from "./status";
 import type { RequestCard } from "./types";
 
@@ -40,7 +40,9 @@ export const gjiAppeal = (request: RequestCard, house: HouseCard) => {
     org && "",
     `${at(request.created_at)} через мини-приложение «Жэка Коммуналкин» в мессенджере MAX я подал(а) в управляющую организацию заявку №${request.id} по категории «${request.category_label}».`,
     "",
-    `Срок реакции по этой категории в сервисе - ${request.normative_hours} ${plural(request.normative_hours, ["час", "часа", "часов"])}.` +
+    (request.deadline_basis
+      ? `Нормативный срок устранения - ${request.deadline_text} (${request.deadline_basis}).`
+      : `Срок выполнения по этой категории в сервисе - ${request.deadline_text}.`) +
       (request.deadline_at ? ` Срок истёк ${at(request.deadline_at)}.` : "") +
       (overdue ? ` Просрочка на момент обращения - ${overdue}.` : "") +
       ` Заявка находится в статусе «${STATUS_LABEL[request.status]}», работы не завершены.`,
