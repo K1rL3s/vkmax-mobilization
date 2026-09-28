@@ -95,7 +95,7 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
     RequestCategory.HEATING: CategoryRule(
         label="Отопление",
         emoji="🔥",
-        zone=ResponsibilityZone.UTILITY,
+        zone=ResponsibilityZone.MANAGEMENT,
         normative_hours=24,
     ),
     RequestCategory.WATER_SUPPLY: CategoryRule(
@@ -107,7 +107,7 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
     RequestCategory.ELECTRICITY: CategoryRule(
         label="Электричество",
         emoji="💡",
-        zone=ResponsibilityZone.UTILITY,
+        zone=ResponsibilityZone.MANAGEMENT,
         normative_hours=24,
     ),
     RequestCategory.ENTRANCE: CategoryRule(
@@ -119,7 +119,7 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
     RequestCategory.YARD: CategoryRule(
         label="Двор и территория",
         emoji="🌳",
-        zone=ResponsibilityZone.MUNICIPALITY,
+        zone=ResponsibilityZone.MANAGEMENT,
         normative_hours=72,
     ),
     RequestCategory.METER_ERROR: CategoryRule(
