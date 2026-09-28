@@ -1,6 +1,7 @@
 from collections.abc import Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html import escape
+from math import ceil
 
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
@@ -201,3 +202,33 @@ def deadline_lines(request: Request, house: House) -> str:
             f"⏱ Принять до {house.local(request.react_deadline_at):{MOMENT}}",
         )
     return "\n".join(lines)
+
+
+COMPLAINT_BUTTON = "📄 Жалоба в ГЖИ"
+
+
+def deadline_warning(request: Request, house: House, now: datetime) -> str:
+    hours = ceil((request.deadline_at - now) / timedelta(hours=1))
+    return (
+        f"⏳ Заявке {_request(request.id, request.category)} осталось {hours} ч\n"
+        f"⏰ Срок: до {house.local(request.deadline_at):{MOMENT}}"
+    )
+
+
+def request_overdue_staff(request: Request, house: House) -> str:
+    return (
+        f"🔴 Заявка {_request(request.id, request.category)} просрочена\n"
+        f"🏢 {escape(house.address)}"
+    )
+
+
+def request_overdue_author(request: Request) -> str:
+    return (
+        f"🔴 Срок по заявке {_request(request.id, request.category)} истек\n"
+        f"📜 {CATEGORY_RULES[request.category].basis or NO_NORM}\n"
+        "📄 Можно подготовить жалобу в ГЖИ"
+    )
+
+
+def request_overdue_chairman(request: Request) -> str:
+    return f"🔴 В доме просрочена заявка {_request(request.id, request.category)}"

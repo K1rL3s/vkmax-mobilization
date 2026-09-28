@@ -371,6 +371,7 @@ const requestPhotos = (item: MockRequest): Schemas["FileRef"][] => {
 
 export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
   const timeline = requestTimeline(item);
+  const react = shift(item.created_at, 30);
 
   return {
     ...requestListItem(item),
@@ -379,9 +380,11 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     org_name: findHouse(item.house_id)?.org?.name ?? null,
     deadline_text: CATEGORY_RULES[item.category].text,
     deadline_basis: CATEGORY_RULES[item.category].basis ?? null,
-    react_deadline_at: CATEGORY_RULES[item.category].react
-      ? shift(item.created_at, 30)
-      : null,
+    react_deadline_at: !CATEGORY_RULES[item.category].react
+      ? null
+      : item.deadline_at && item.deadline_at < react
+        ? item.deadline_at
+        : react,
     photos: requestPhotos(item),
     result_photos: item.has_result_photos ? [RESULT_PHOTO] : [],
     messages: item.messages.map((message) => ({
@@ -399,6 +402,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     flat_id: residencyForHouse(item.house_id)?.flat_id ?? null,
     auto_close_at:
       item.status === "on_review" ? shift(timeline[3].at, 48 * 60) : null,
+    can_demo_expire: canDemoExpire(item),
   };
 };
 
@@ -509,3 +513,9 @@ export const requestCategories = (): Schemas["RequestCategoryItem"][] =>
 
 export const categoryDeadline = (category: Schemas["RequestCategory"]) =>
   minutes(CATEGORY_RULES[category].hours * 60);
+
+export const canDemoExpire = (item: MockRequest) =>
+  Boolean(findHouse(item.house_id)?.org?.is_demo) &&
+  ["new", "accepted", "in_progress"].includes(item.status) &&
+  item.deadline_at !== null &&
+  new Date(item.deadline_at).getTime() > Date.now();

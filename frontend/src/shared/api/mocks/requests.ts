@@ -12,9 +12,11 @@ import {
   page,
 } from "./reply";
 import {
+  canDemoExpire,
   createRequest,
   findRequest,
   houseRequests,
+  minutes,
   nextFileName,
   repeatRequest,
   requestCard,
@@ -163,6 +165,17 @@ export const requestsConfigs = [
     }
 
     return ok(requestCard(repeatRequest(item, description, body.photos ?? [])));
+  }),
+  endpoint("post", "/requests/:request_id/demo/expire", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item || !canDemoExpire(item)) {
+      return notFound("Заявка не найдена");
+    }
+
+    item.deadline_at = minutes(-1);
+
+    return ok(requestCard(item));
   }),
   endpoint("get", "/request-categories", () => ok(requestCategories())),
   endpoint("post", "/files", async (request) => {

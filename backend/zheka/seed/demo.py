@@ -971,6 +971,10 @@ class Seeder:
             done_at=reached.get(RequestStatus.DONE),
             is_staff_author=author is None,
         )
+        if request.warn_at <= self._now:
+            request.deadline_warned_at = self._now
+        if deadline_at <= self._now:
+            request.overdue_notified_at = self._now
         return Plan(
             request=request,
             author=author,

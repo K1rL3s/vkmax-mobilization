@@ -227,6 +227,13 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `fix_working_days` counts from the next local day to its end by
   `core/workdays.py`, a static calendar: add each year's transfer decree
   there (the 2026.09.29 migration backfill has its own copy).
+- `watch_request_deadlines` (every 5 min) warns staff and executor at
+  `Request.warn_at`, then reports the overdue request to them, the author and
+  the chairman, once each by `deadline_warned_at` / `overdue_notified_at` (the
+  overdue stamp sets both). Seed and migration stamp moments already past, so
+  a deploy sends nothing stale. The demo button moves `deadline_at` (and a
+  later `react_deadline_at`) to a minute ago, so a phone clock slightly behind
+  the server still shows the request overdue.
 - A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,

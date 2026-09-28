@@ -152,6 +152,9 @@ class RequestCard(RequestListItem):
         default=None,
         description="Автозакрытие заявки, оставленной на приемке",
     )
+    can_demo_expire: bool = Field(
+        description="Автор заявки в демо-УК может перенести ее срок на текущий момент",
+    )
 
     @classmethod
     def of(
@@ -191,6 +194,7 @@ class RequestCard(RequestListItem):
             parent_request_id=request.parent_request_id,
             flat_id=request.flat_id,
             auto_close_at=card.auto_close_at,
+            can_demo_expire=card.can_demo_expire,
         )
 
 

@@ -39,6 +39,7 @@ from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.base import metadata
@@ -435,3 +436,7 @@ async def test_the_mini_app_activation_returns_a_demo_executor_to_staff(
     access = await _demo(db).activate(user_id)
 
     assert access.membership.member.role is OrgRole.EMPLOYEE
+
+
+async def test_no_seeded_deadline_is_due_at_the_seed(db: AsyncSession) -> None:
+    assert await RequestsRepo(db).list_deadline_due(NOW) == []

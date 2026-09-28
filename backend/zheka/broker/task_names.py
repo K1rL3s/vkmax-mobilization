@@ -21,3 +21,4 @@ class TaskName(StrEnum):
     SEED_DEMO = "seed_demo"
     SYNC_CHAT_PINS = "sync_chat_pins"
     KEEP_WEBHOOK = "keep_webhook"
+    WATCH_REQUEST_DEADLINES = "watch_request_deadlines"

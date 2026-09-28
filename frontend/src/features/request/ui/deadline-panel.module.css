@@ -36,3 +36,7 @@
 .Fill.overdue {
   background-color: var(--icon-negative);
 }
+
+.Failed {
+  color: var(--text-negative);
+}

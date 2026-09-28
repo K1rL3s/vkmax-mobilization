@@ -15,6 +15,7 @@ from zheka.core.enums import (
     RequestStatus,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
+from zheka.core.models.requests import WARN_MAX, WARN_MIN, WARN_SHARE
 from zheka.infra.database.models import (
     House,
     Request,
@@ -457,3 +458,52 @@ class RequestsRepo(BaseAlchemyRepo):
         )
         request: Request | None = await self._session.scalar(stmt)
         return request
+
+    async def list_deadline_due(self, now: datetime) -> Sequence[Request]:
+        deadline_at = requests_table.c.deadline_at
+        lead = func.greatest(
+            func.least(
+                (deadline_at - requests_table.c.created_at) / WARN_SHARE,
+                WARN_MAX,
+            ),
+            WARN_MIN,
+        )
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.status.in_(OPEN_STATUSES),
+                or_(
+                    and_(
+                        requests_table.c.overdue_notified_at.is_(None),
+                        deadline_at <= now,
+                    ),
+                    and_(
+                        requests_table.c.deadline_warned_at.is_(None),
+                        deadline_at - lead <= now,
+                    ),
+                ),
+            )
+            .order_by(requests_table.c.id)
+            .with_for_update(skip_locked=True)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def mark_deadline(
+        self,
+        request: Request,
+        at: datetime,
+        *,
+        overdue: bool,
+    ) -> None:
+        if request.deadline_warned_at is None:
+            request.deadline_warned_at = at
+        if overdue:
+            request.overdue_notified_at = at
+        await self._session.flush()
+
+    async def set_deadline(self, request: Request, deadline_at: datetime) -> None:
+        request.deadline_at = deadline_at
+        if request.react_deadline_at is not None:
+            request.react_deadline_at = min(request.react_deadline_at, deadline_at)
+        await self._session.flush()

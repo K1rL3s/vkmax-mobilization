@@ -2577,6 +2577,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/demo/expire:
+    post:
+      tags:
+      - Заявки
+      summary: 'Демо: срок заявки истек'
+      description: Только автор заявки в демо-УК, пока заявка открыта и не просрочена, иначе 404. Срок, и срок реакции, если он позже, становится минутой раньше текущего момента, уведомления о просрочке уходят сразу
+      operationId: expire_request_deadline
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/flats/{flat_id}/meters:
     get:
       tags:
@@ -9584,6 +9657,10 @@ components:
           - type: 'null'
           title: Auto Close At
           description: Автозакрытие заявки, оставленной на приемке
+        can_demo_expire:
+          type: boolean
+          title: Can Demo Expire
+          description: Автор заявки в демо-УК может перенести ее срок на текущий момент
         is_staff_author:
           type: boolean
           title: Is Staff Author
@@ -9628,6 +9705,7 @@ components:
       - timeline
       - can_review
       - can_rate
+      - can_demo_expire
       - is_staff_author
       title: AdminRequestCard
     AdminRequestListItem:
@@ -12722,6 +12800,10 @@ components:
           - type: 'null'
           title: Auto Close At
           description: Автозакрытие заявки, оставленной на приемке
+        can_demo_expire:
+          type: boolean
+          title: Can Demo Expire
+          description: Автор заявки в демо-УК может перенести ее срок на текущий момент
       type: object
       required:
       - id
@@ -12743,6 +12825,7 @@ components:
       - timeline
       - can_review
       - can_rate
+      - can_demo_expire
       title: RequestCard
     RequestCategory:
       type: string

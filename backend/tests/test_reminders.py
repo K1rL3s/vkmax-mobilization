@@ -18,7 +18,10 @@ from zheka.broker.tasks.reminders import (
     remind_readings,
     warn_verification,
 )
-from zheka.broker.tasks.requests import auto_close_reviewed_requests
+from zheka.broker.tasks.requests import (
+    auto_close_reviewed_requests,
+    watch_request_deadlines,
+)
 from zheka.core import texts
 from zheka.core.deeplinks import MEETINGS_APP_PATH, poll_app_path
 from zheka.core.enums import (
@@ -739,6 +742,7 @@ def test_schedules_are_hourly_in_utc() -> None:
         warn_verification,
         remind_appointments,
         auto_close_reviewed_requests,
+        watch_request_deadlines,
     ]
 
     assert {task.task_name: task.labels["schedule"] for task in tasks} == {
@@ -748,6 +752,7 @@ def test_schedules_are_hourly_in_utc() -> None:
         TaskName.WARN_VERIFICATION: [{"cron": "0 * * * *"}],
         TaskName.REMIND_APPOINTMENTS: [{"cron": "0 * * * *"}],
         TaskName.AUTO_CLOSE_REVIEWED_REQUESTS: [{"cron": "* * * * *"}],
+        TaskName.WATCH_REQUEST_DEADLINES: [{"cron": "*/5 * * * *"}],
     }
 
 

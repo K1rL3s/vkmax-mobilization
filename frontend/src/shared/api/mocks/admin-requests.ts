@@ -103,6 +103,7 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     can_rate: false,
     parent_request_id: null,
     auto_close_at: null,
+    can_demo_expire: false,
     ...fields,
   };
 };

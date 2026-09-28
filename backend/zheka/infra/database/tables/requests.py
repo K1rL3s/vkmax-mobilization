@@ -60,6 +60,8 @@ requests_table = Table(
     ),
     Column("deadline_at", DateTime(timezone=True), nullable=False),
     Column("react_deadline_at", DateTime(timezone=True), nullable=True),
+    Column("deadline_warned_at", DateTime(timezone=True), nullable=True),
+    Column("overdue_notified_at", DateTime(timezone=True), nullable=True),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),

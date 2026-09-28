@@ -517,6 +517,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/demo/expire": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Демо: срок заявки истек
+     * @description Только автор заявки в демо-УК, пока заявка открыта и не просрочена, иначе 404. Срок, и срок реакции, если он позже, становится минутой раньше текущего момента, уведомления о просрочке уходят сразу
+     */
+    post: operations["expire_request_deadline"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/flats/{flat_id}/meters": {
     parameters: {
       query?: never;
@@ -2023,6 +2043,11 @@ export interface components {
        * @description Автозакрытие заявки, оставленной на приемке
        */
       auto_close_at?: string | null;
+      /**
+       * Can Demo Expire
+       * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
+       */
+      can_demo_expire: boolean;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -3852,6 +3877,11 @@ export interface components {
        * @description Автозакрытие заявки, оставленной на приемке
        */
       auto_close_at?: string | null;
+      /**
+       * Can Demo Expire
+       * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
+       */
+      can_demo_expire: boolean;
     };
     /**
      * RequestCategory
@@ -7138,6 +7168,93 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ClassifyRequestResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  expire_request_deadline: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
         };
       };
       /** @description Некорректный запрос */
