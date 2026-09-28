@@ -69,7 +69,7 @@ class HousesRepo(BaseAlchemyRepo):
                 houses_table.c.street,
                 houses_table.c.building,
             )
-            for word in query.split():
+            for word in query.replace(",", " ").split():
                 stmt = stmt.where(address.icontains(word, autoescape=True))
 
         stmt = stmt.order_by(houses_table.c.street, houses_table.c.building)

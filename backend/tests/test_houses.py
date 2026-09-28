@@ -719,3 +719,45 @@ def test_object_qrs_open_the_request_form_per_entrance_and_object(
     ]
     assert qrs[0].deeplink == create_startapp_link(fake_bot, "obj_7_1_elevator")
     assert all("startapp=obj_7_" in qr.deeplink for qr in qrs)
+
+
+async def test_a_search_finds_a_house_by_any_displayed_form_of_its_address(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    wanted = await _add_house(
+        session,
+        fixture.org_id,
+        city="Москва",
+        street="Волгоградский проспект",
+        building="105 к.2",
+    )
+    await _add_house(
+        session,
+        fixture.org_id,
+        city="Москва",
+        street="Волгоградский проспект",
+        building="105",
+    )
+    house = await HousesRepo(session).get(wanted)
+    assert house is not None
+    service = _make_service(session)
+
+    for query in (
+        house.address,
+        house.street_address,
+        "Волгоградский проспект,105 к.2",
+        "москва,волгоградский проспект , 105 к.2",
+    ):
+        found, total = await service.search(
+            fixture.user_id,
+            None,
+            None,
+            None,
+            query,
+            20,
+            0,
+        )
+        assert [item.house.id for item in found] == [wanted], query
+        assert total == 1
