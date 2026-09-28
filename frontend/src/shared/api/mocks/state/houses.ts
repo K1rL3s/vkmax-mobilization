@@ -35,6 +35,7 @@ export const ZHILSERVIS: Schemas["OrgContacts"] = {
   address: "Казань, ул. Баумана, 10",
   license_no: "16-000123",
   reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
+  emergency_phone: "+7 843 200-10-11",
   is_demo: true,
   timezone: "Europe/Moscow",
 };

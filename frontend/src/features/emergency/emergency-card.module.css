@@ -1,0 +1,12 @@
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Title {
+  color: var(--text-negative);
+}
+
+.Call {
+  flex: 1;
+}

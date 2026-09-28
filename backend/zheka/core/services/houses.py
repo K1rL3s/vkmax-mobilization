@@ -55,9 +55,13 @@ class ResidencyView(ZhekaType):
     resident: Resident
     house: House
     flat: Flat | None
-    is_connected: bool
+    org: Organization | None
     verification_status: VerificationStatus | None = None
     verification_reject_reason: str | None = None
+
+    @property
+    def is_connected(self) -> bool:
+        return is_connected(self.house, self.org)
 
 
 class HouseCardData(ZhekaType):
@@ -201,9 +205,7 @@ class HousesService:
             house=house,
             org=org,
             residency=(
-                None
-                if resident is None
-                else await self._view(resident, house, connected)
+                None if resident is None else await self._view(resident, house, org)
             ),
             is_connected=connected,
             demand_count=0 if connected else await self._houses.count_demand(house_id),
@@ -274,11 +276,7 @@ class HousesService:
                 source=source.value,
                 entrance=entrance,
             )
-        return await self._view(
-            resident,
-            house,
-            is_connected(house, await self._org_of(house)),
-        )
+        return await self._view(resident, house, await self._org_of(house))
 
     async def unlink(self, user_id: UserId, resident_id: ResidentId) -> None:
         resident = await self._residents.get(resident_id)
@@ -349,7 +347,7 @@ class HousesService:
         self,
         resident: Resident,
         house: House,
-        connected: bool,
+        org: Organization | None,
     ) -> ResidencyView:
         flat = (
             None
@@ -360,7 +358,7 @@ class HousesService:
             resident=resident,
             house=house,
             flat=flat,
-            is_connected=connected,
+            org=org,
         )
 
     async def _with_orgs(self, houses: Sequence[House]) -> list[HouseFound]:

@@ -5,7 +5,7 @@ from zheka.core.errors import EntityNotFound, InvalidRequest
 from zheka.core.ids import UserId
 from zheka.core.models import OrgMember, Organization, User
 from zheka.core.services.events import EventsService
-from zheka.core.services.houses import ResidencyView, is_connected
+from zheka.core.services.houses import ResidencyView
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -103,7 +103,7 @@ class ProfileService:
                     resident=resident,
                     house=house,
                     flat=None if resident.flat_id is None else flats[resident.flat_id],
-                    is_connected=is_connected(house, org),
+                    org=org,
                     verification_status=None if latest is None else latest.status,
                     verification_reject_reason=(
                         latest.reason

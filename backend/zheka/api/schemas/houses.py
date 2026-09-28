@@ -35,6 +35,10 @@ class OrgContacts(BaseSchema):
     address: str
     license_no: str | None = None
     reception_note: str | None = None
+    emergency_phone: str | None = Field(
+        default=None,
+        description="Аварийно-диспетчерская служба дома, если УК ее указала",
+    )
     is_demo: bool = False
     timezone: str = Field(
         description="Часовой пояс IANA: в нем приемные часы и слоты записи",

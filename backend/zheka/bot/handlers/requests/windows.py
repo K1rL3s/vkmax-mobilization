@@ -13,7 +13,7 @@ from maxo.dialogs.widgets.kbd import (
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 
-from zheka.bot.cards import BACK, TO_MENU
+from zheka.bot.cards import BACK, EMERGENCY, TO_MENU
 from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.handlers.requests.handlers import (
     SENT_TEXT,
@@ -27,7 +27,7 @@ from zheka.bot.handlers.requests.handlers import (
     on_send,
     on_start,
 )
-from zheka.bot.states import NewRequest, Onboarding
+from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.core.texts import OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
@@ -57,6 +57,7 @@ request_dialog = Dialog(
         Format(NOT_CONNECTED_TEXT, when=F["address"] & ~F["connected"]),
         Format(CATEGORY_TEXT, when=F["connected"] & ~F["description"]),
         Format(PROBLEM_TEXT, when=F["connected"] & F["description"]),
+        Start(EMERGENCY, id="emergency", state=Menu.emergency),
         Column(
             Select(
                 Format("{item[label]}"),

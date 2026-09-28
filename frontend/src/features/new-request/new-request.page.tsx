@@ -1,7 +1,12 @@
 import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
+import { Link } from "react-router-dom";
 
+import { emergencyContact } from "@/features/emergency";
 import { useHouseCard } from "@/features/house";
+import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
+import { Chevron } from "@/shared/ui/chevron";
+import { alertIcon, Icon } from "@/shared/ui/icon";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { DESCRIPTION_LIMIT, useNewRequest } from "./model/use-new-request";
@@ -39,6 +44,20 @@ const NewRequestPage = () => {
   return (
     <Panel className={styles.Page} mode="secondary">
       <div className={styles.Content}>
+        {!form.isDispute &&
+          form.description === "" &&
+          form.photos.photos.length === 0 && (
+            <Flex asChild align="center" gap={12}>
+              <Link to={Routes.EMERGENCY} className={styles.Emergency}>
+                <Icon src={alertIcon} className={styles.EmergencyIcon} />
+                <Typography.Text variant="body-strong" className={styles.Grow}>
+                  Авария? Сначала позвоните
+                </Typography.Text>
+                <Chevron />
+              </Link>
+            </Flex>
+          )}
+
         <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
@@ -85,6 +104,7 @@ const NewRequestPage = () => {
           <CategoryInfo
             category={selected}
             orgName={house.data?.org?.name ?? null}
+            emergency={emergencyContact(house.data?.org)}
           />
         )}
 

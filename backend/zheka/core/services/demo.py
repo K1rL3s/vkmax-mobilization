@@ -283,7 +283,7 @@ class DemoService:
             resident=resident,
             house=house,
             flat=flat,
-            is_connected=True,
+            org=org,
         )
 
     async def org(self, user_id: UserId, number: int) -> Organization:

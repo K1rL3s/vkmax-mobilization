@@ -9,6 +9,7 @@ import {
 } from "@maxhub/max-ui";
 import { generatePath, Link, useNavigate } from "react-router-dom";
 
+import { EmergencyCard } from "@/features/emergency";
 import { confirmationCaption } from "@/features/flat-confirmation";
 import { useHouseCard } from "@/features/house";
 import { useNextPoll } from "@/features/meetings";
@@ -309,6 +310,8 @@ const HomePage = () => {
           )}
         </Card>
       )}
+
+      {!connected && <EmergencyCard org={house.org} />}
 
       {!connected && (
         <DemandCard

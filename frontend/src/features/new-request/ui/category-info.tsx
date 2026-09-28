@@ -1,20 +1,26 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
+import type { EmergencyContact } from "@/features/emergency";
 import {
   NO_NORM,
   ZONE_LABEL,
   type RequestCategoryItem,
 } from "@/features/request";
-import { buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
+import { alertIcon, buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
 
 import styles from "./category-info.module.css";
 
 type CategoryInfoProps = {
   category: RequestCategoryItem;
   orgName: string | null;
+  emergency: EmergencyContact | null;
 };
 
-export const CategoryInfo = ({ category, orgName }: CategoryInfoProps) => {
+export const CategoryInfo = ({
+  category,
+  orgName,
+  emergency,
+}: CategoryInfoProps) => {
   const responsible =
     category.zone === "management"
       ? (orgName ?? "Управляющая компания дома")
@@ -50,6 +56,24 @@ export const CategoryInfo = ({ category, orgName }: CategoryInfoProps) => {
           </Typography.Text>
         </Flex>
       </Flex>
+
+      {emergency &&
+        (category.category === "leak" ||
+          category.category === "electricity") && (
+          <Flex asChild align="center" gap={12}>
+            <a href={`tel:${emergency.phone}`} className={styles.Emergency}>
+              <Icon src={alertIcon} className={styles.EmergencyIcon} />
+              <Flex align="stretch" direction="column" gapY={2}>
+                <Typography.Text variant="description" color="secondary">
+                  Течёт или искрит прямо сейчас? Звоните
+                </Typography.Text>
+                <Typography.Text variant="body-strong" color="primary">
+                  {emergency.label}: {emergency.phone}
+                </Typography.Text>
+              </Flex>
+            </a>
+          </Flex>
+        )}
     </div>
   );
 };

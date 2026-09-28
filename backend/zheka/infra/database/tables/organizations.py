@@ -34,6 +34,7 @@ organizations_table = Table(
     Column("registered_at", DateTime(timezone=True), nullable=True),
     Column("is_demo", Boolean, default=False, server_default=false(), nullable=False),
     Column("timezone", String, nullable=False),
+    Column("emergency_phone", String, nullable=True),
 )
 
 org_settings_table = Table(

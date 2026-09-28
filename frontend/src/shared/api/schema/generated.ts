@@ -3219,6 +3219,11 @@ export interface components {
       /** Reception Note */
       reception_note?: string | null;
       /**
+       * Emergency Phone
+       * @description Аварийно-диспетчерская служба дома, если УК ее указала
+       */
+      emergency_phone?: string | null;
+      /**
        * Is Demo
        * @default false
        */
@@ -3333,6 +3338,8 @@ export interface components {
       phone: string;
       /** Reception Note */
       reception_note: string | null;
+      /** Emergency Phone */
+      emergency_phone: string | null;
     };
     /** OverhaulWork */
     OverhaulWork: {
@@ -4250,6 +4257,8 @@ export interface components {
       phone: string;
       /** Reception Note */
       reception_note?: string | null;
+      /** Emergency Phone */
+      emergency_phone?: string | null;
     };
     /** VerificationRequestItem */
     VerificationRequestItem: {

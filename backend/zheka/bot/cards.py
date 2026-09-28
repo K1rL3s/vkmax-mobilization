@@ -117,3 +117,6 @@ def app_link(bot: Bot, text: str, path: str) -> list[list[LinkButton]] | None:
         return None
     url = create_startapp_link(bot, app_payload(path))
     return [[LinkButton(text=text, url=url)]]
+
+
+EMERGENCY = Const("🚨 Авария")

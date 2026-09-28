@@ -9,6 +9,7 @@ import { formatArea } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 import {
+  alertIcon,
   buildingIcon,
   clockIcon,
   documentIcon,
@@ -122,6 +123,25 @@ const Org = ({ house }: { house: HouseCard }) => {
           asChild
         >
           <a href={`tel:${org.phone}`} />
+        </CellSimple>
+        <CellSimple
+          separator
+          before={<Icon src={alertIcon} className={styles.CellIcon} />}
+          overline="Аварийная служба"
+          title={org.emergency_phone ?? "Что делать при аварии"}
+          subtitle={
+            org.emergency_phone
+              ? undefined
+              : "Номер есть в квитанции и на доске объявлений в подъезде"
+          }
+          showChevron
+          asChild
+        >
+          {org.emergency_phone ? (
+            <a href={`tel:${org.emergency_phone}`} />
+          ) : (
+            <Link to={Routes.EMERGENCY} />
+          )}
         </CellSimple>
         <CellSimple
           separator

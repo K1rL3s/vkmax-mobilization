@@ -52,6 +52,7 @@ async def update_org_settings(
         body.group_window_hours,
         body.phone,
         body.reception_note,
+        body.emergency_phone,
     )
     return OrgSettingsResponse.of(view)
 

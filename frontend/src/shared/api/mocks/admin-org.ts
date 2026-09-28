@@ -57,6 +57,7 @@ const state = {
     group_window_hours: 24,
     phone: "+7 843 200-10-10",
     reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
+    emergency_phone: "+7 843 200-10-11",
   } as Schemas["OrgSettingsResponse"],
   members: [
     member(
@@ -133,7 +134,8 @@ const settingsError = (body: Record<string, unknown>): string | null => {
     !numbers.every(isInteger) ||
     typeof body.meter_window_always_open !== "boolean" ||
     typeof body.phone !== "string" ||
-    !(body.reception_note == null || typeof body.reception_note === "string")
+    !(body.reception_note == null || typeof body.reception_note === "string") ||
+    !(body.emergency_phone == null || typeof body.emergency_phone === "string")
   ) {
     return "Некорректные поля настроек";
   }
@@ -183,6 +185,8 @@ export const adminOrgConfigs = [
       ...(request.body as Schemas["UpdateOrgSettingsRequest"]),
       reception_note:
         (request.body.reception_note as string | undefined) ?? null,
+      emergency_phone:
+        (request.body.emergency_phone as string | undefined)?.trim() || null,
     };
 
     return ok(state.settings);

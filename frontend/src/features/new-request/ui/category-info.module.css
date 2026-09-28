@@ -11,3 +11,13 @@
   flex-shrink: 0;
   color: var(--icon-tertiary);
 }
+
+.Emergency {
+  color: inherit;
+  text-decoration: none;
+}
+
+.EmergencyIcon {
+  flex-shrink: 0;
+  color: var(--icon-negative);
+}

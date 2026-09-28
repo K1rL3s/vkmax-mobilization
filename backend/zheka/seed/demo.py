@@ -356,6 +356,7 @@ class Seeder:
             registered_at=self._now - HISTORY - timedelta(days=30),
             is_demo=True,
             timezone=timezone,
+            emergency_phone=f"+7 (000) 000-01-{PROFILES.index(profile) + 1:02d}",
         )
         self._session.add(org)
         await self._session.flush()

@@ -129,9 +129,7 @@ def database_url() -> Generator[str]:
 
 
 def _migrate() -> None:
-    alembic_cfg = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
-    alembic_cfg.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
-    command.upgrade(alembic_cfg, "head")
+    command.upgrade(alembic_config(), "head")
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -597,3 +595,9 @@ async def add_tariff(
     session.add(tariff)
     await session.flush()
     return tariff
+
+
+def alembic_config() -> AlembicConfig:
+    config = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    return config

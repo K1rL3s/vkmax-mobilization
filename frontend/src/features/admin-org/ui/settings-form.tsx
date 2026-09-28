@@ -190,7 +190,7 @@ export const SettingsForm = ({ settings, readOnly }: SettingsFormProps) => {
 
         <Section
           title="Контакты для жителей"
-          note="Жители видят телефон и часы приёма в карточке дома"
+          note="Жители видят телефоны и часы приёма в карточке дома. Аварийный номер ещё и на экране «Авария» в приложении и в боте"
         >
           <Field label="Телефон">
             <Input
@@ -200,6 +200,18 @@ export const SettingsForm = ({ settings, readOnly }: SettingsFormProps) => {
               hint={errors.phone?.message}
               innerClassNames={{ hint: styles.Error }}
               {...register("phone")}
+            />
+          </Field>
+
+          <Field label="Телефон аварийной службы">
+            <Input
+              type="tel"
+              inputMode="tel"
+              placeholder="Если есть круглосуточная диспетчерская"
+              maxLength={limits.phone}
+              hint={errors.emergency_phone?.message}
+              innerClassNames={{ hint: styles.Error }}
+              {...register("emergency_phone")}
             />
           </Field>
 

@@ -11707,6 +11707,12 @@ components:
           - type: string
           - type: 'null'
           title: Reception Note
+        emergency_phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Emergency Phone
+          description: Аварийно-диспетчерская служба дома, если УК ее указала
         is_demo:
           type: boolean
           title: Is Demo
@@ -11908,6 +11914,11 @@ components:
           - type: string
           - type: 'null'
           title: Reception Note
+        emergency_phone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Emergency Phone
       type: object
       required:
       - meter_window_day_from
@@ -11917,6 +11928,7 @@ components:
       - group_window_hours
       - phone
       - reception_note
+      - emergency_phone
       title: OrgSettingsResponse
     OverhaulWork:
       properties:
@@ -12594,6 +12606,7 @@ components:
           title: Name
         phone:
           type: string
+          maxLength: 32
           title: Phone
         address:
           type: string
@@ -13437,6 +13450,7 @@ components:
           title: Group Window Hours
         phone:
           type: string
+          maxLength: 32
           title: Phone
         reception_note:
           anyOf:
@@ -13444,6 +13458,12 @@ components:
             maxLength: 4000
           - type: 'null'
           title: Reception Note
+        emergency_phone:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Emergency Phone
       type: object
       required:
       - meter_window_day_from

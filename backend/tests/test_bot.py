@@ -30,6 +30,7 @@ from maxo.types import (
     BotRemovedFromChat,
     BotStarted,
     BotStopped,
+    ClipboardButton,
     DialogMuted,
     DialogUnmuted,
     GetPinnedMessageResult,
@@ -88,9 +89,14 @@ from zheka.bot.handlers.errors.router import UNEXPECTED
 from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
 from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
 from zheka.bot.handlers.menu.windows import (
+    CALL_NOTE_TEXT,
+    EMERGENCY_PHONE_TEXT,
+    EMERGENCY_TEXT,
     GREETING,
     HOUSE_MENU_TEXT,
     MENU_TEXT,
+    NO_EMERGENCY_PHONE_TEXT,
+    ORG_PHONE_TEXT,
     STAFF_TEXT,
 )
 from zheka.bot.handlers.onboarding.handlers import HOUSE_LINKED
@@ -2741,6 +2747,7 @@ async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
 
     assert _text(message_manager) == HOUSE_MENU_TEXT.format(address=address)
     assert _button_texts(message_manager.last_message()) == [
+        "🚨 Авария",
         "📝 Подать заявку",
         "📱 Открыть приложение",
         "🔎 Другой дом",
@@ -2775,6 +2782,7 @@ async def test_every_category_is_one_tap_away(
     await client.click(message_manager.last_message(), NEW_REQUEST)
 
     assert _button_texts(message_manager.last_message()) == [
+        "🚨 Авария",
         *(CATEGORY_RULES[category].caption for category in RequestCategory),
         "🏠 Меню",
     ]
@@ -3443,3 +3451,107 @@ async def test_a_demo_executor_link_without_a_request_keeps_the_staff_role(
     assert notices.texts[-1] == NO_DEMO_REQUEST.format(number=2)
     roles, _houses = await _demo_roles(bot_session, client)
     assert roles == [(org_id, OrgRole.EMPLOYEE)]
+
+
+EMERGENCY = InlineButtonTextLocator("🚨 Авария")
+
+
+def _copied(message: Message) -> list[tuple[str, str]]:
+    return [
+        (button.text, button.payload)
+        for button in _buttons(message)
+        if isinstance(button, ClipboardButton)
+    ]
+
+
+async def test_the_emergency_screen_gives_the_house_emergency_line_to_copy(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    phone = "+7 (000) 111-22-33"
+    house_id, _ = await _bot_house(
+        bot_session,
+        org_id=await _org(bot_session, emergency_phone=phone),
+    )
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    await client.send("/start")
+
+    await client.click(message_manager.last_message(), EMERGENCY)
+
+    assert _text(message_manager) == "\n\n".join(
+        [
+            EMERGENCY_TEXT,
+            EMERGENCY_PHONE_TEXT.format(emergency_phone=phone),
+            CALL_NOTE_TEXT,
+        ],
+    )
+    assert _copied(message_manager.last_message()) == [
+        ("📋 Номер аварийной службы", phone),
+    ]
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    assert FIRST_CATEGORY.find_button(message_manager.last_message()) is not None
+
+
+async def test_the_emergency_screen_labels_the_org_phone_of_a_registry_house(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    org_id = await _org(bot_session, registered_at=None, phone="+7 (000) 555-00-00")
+    house_id, address = await _bot_house(bot_session, org_id=org_id)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    assert NOT_CONNECTED_TEXT.format(address=address) in _text(message_manager)
+
+    await client.click(message_manager.last_message(), EMERGENCY)
+
+    assert _text(message_manager) == "\n\n".join(
+        [
+            EMERGENCY_TEXT,
+            NO_EMERGENCY_PHONE_TEXT,
+            ORG_PHONE_TEXT.format(org_phone="+7 (000) 555-00-00"),
+            CALL_NOTE_TEXT,
+        ],
+    )
+    assert _button_texts(message_manager.last_message()) == [
+        "📋 Телефон УК",
+        "🏠 Меню",
+    ]
+
+
+async def test_the_emergency_screen_works_without_a_house(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await _consented(client, message_manager)
+
+    await client.click(message_manager.last_message(), EMERGENCY)
+
+    assert _text(message_manager) == (
+        f"{EMERGENCY_TEXT}\n\n{NO_EMERGENCY_PHONE_TEXT}\n\n{CALL_NOTE_TEXT}"
+    )
+    assert _button_texts(message_manager.last_message()) == ["🏠 Меню"]
+
+
+async def test_a_free_text_on_the_emergency_screen_starts_a_request(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), EMERGENCY)
+
+    await client.send(PROBLEM)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=PROBLEM,
+    )

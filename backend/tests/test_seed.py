@@ -8,10 +8,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select, update
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.script import ScriptDirectory
+from sqlalchemy import Connection, func, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
-from tests.conftest import make_config
+from tests.conftest import alembic_config, make_config
 from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
 
@@ -440,3 +443,42 @@ async def test_the_mini_app_activation_returns_a_demo_executor_to_staff(
 
 async def test_no_seeded_deadline_is_due_at_the_seed(db: AsyncSession) -> None:
     assert await RequestsRepo(db).list_deadline_due(NOW) == []
+
+
+async def test_only_demo_organizations_have_an_emergency_phone(
+    db: AsyncSession,
+) -> None:
+    stmt = select(
+        organizations_table.c.is_demo,
+        organizations_table.c.emergency_phone.is_not(None),
+    ).distinct()
+
+    assert set((await db.execute(stmt)).tuples()) == {(True, True), (False, False)}
+
+
+async def test_the_emergency_phone_migration_numbers_the_seeded_demo_orgs(
+    seeded: AsyncConnection,
+) -> None:
+    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
+        "2c4883d34de8",
+    )
+    assert migration is not None
+
+    def rerun(connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.module.downgrade()
+            migration.module.upgrade()
+
+    stmt = select(
+        organizations_table.c.inn,
+        organizations_table.c.emergency_phone,
+    ).where(organizations_table.c.emergency_phone.is_not(None))
+    savepoint = await seeded.begin_nested()
+    await seeded.run_sync(rerun)
+    phones = dict((await seeded.execute(stmt)).tuples().all())
+    await savepoint.rollback()
+
+    assert phones == {
+        profile.inn: f"+7 (000) 000-01-{number:02d}"
+        for number, profile in enumerate(PROFILES, start=1)
+    }
