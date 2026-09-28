@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.expression import FromClause
 
 from zheka.base import ZhekaType
 from zheka.core.enums import (
@@ -53,10 +54,13 @@ class RequestFilters(ZhekaType):
     grouped: bool = False
 
 
-def overdue_at(now: datetime) -> ColumnElement[bool]:
+def overdue_at(
+    now: datetime,
+    table: FromClause = requests_table,
+) -> ColumnElement[bool]:
     return and_(
-        requests_table.c.deadline_at < now,
-        requests_table.c.status.not_in((RequestStatus.DONE, RequestStatus.ON_REVIEW)),
+        table.c.deadline_at < now,
+        table.c.status.not_in((RequestStatus.DONE, RequestStatus.ON_REVIEW)),
     )
 
 
@@ -276,9 +280,20 @@ class RequestsRepo(BaseAlchemyRepo):
             if value is not None:
                 stmt = stmt.where(requests_table.c[name] == value)
         overdue = overdue_at(now)
+        escalated = escalation_active(now, requests_table)
         if filters.overdue:
             stmt = stmt.where(overdue)
         if filters.grouped:
+            members = requests_table.alias()
+            escalated = or_(
+                escalated,
+                select(members.c.id)
+                .where(
+                    members.c.group_id == requests_table.c.group_id,
+                    escalation_active(now, members),
+                )
+                .exists(),
+            )
             leaders = (
                 select(func.min(requests_table.c.id))
                 .where(requests_table.c.group_id.is_not(None))
@@ -291,7 +306,11 @@ class RequestsRepo(BaseAlchemyRepo):
                 ),
             )
 
-        stmt = stmt.order_by(overdue.desc(), requests_table.c.created_at.desc())
+        stmt = stmt.order_by(
+            escalated.desc(),
+            overdue.desc(),
+            requests_table.c.created_at.desc(),
+        )
         return await self._page(stmt, limit, offset)
 
     async def set_status(
@@ -510,3 +529,29 @@ class RequestsRepo(BaseAlchemyRepo):
         if request.react_deadline_at is not None:
             request.react_deadline_at = min(request.react_deadline_at, deadline_at)
         await self._session.flush()
+
+    async def escalate(self, request: Request, at: datetime) -> None:
+        request.escalated_at = at
+        await self._session.flush()
+
+    async def group_escalations(
+        self,
+        group_ids: Collection[RequestGroupId],
+        now: datetime,
+    ) -> dict[RequestGroupId, datetime]:
+        if not group_ids:
+            return {}
+        stmt = (
+            select(requests_table.c.group_id, func.min(requests_table.c.escalated_at))
+            .where(
+                requests_table.c.group_id.in_(group_ids),
+                escalation_active(now, requests_table),
+            )
+            .group_by(requests_table.c.group_id)
+        )
+        result = await self._session.execute(stmt)
+        return {RequestGroupId(group_id): at for group_id, at in result.tuples()}
+
+
+def escalation_active(now: datetime, table: FromClause) -> ColumnElement[bool]:
+    return and_(table.c.escalated_at.is_not(None), overdue_at(now, table))

@@ -239,6 +239,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   a deploy sends nothing stale. The demo button moves `deadline_at` (and a
   later `react_deadline_at`) to a minute ago, so a phone clock slightly behind
   the server still shows the request overdue.
+- `RequestsService.escalate`: the author of an overdue open request, once
+  (`escalated_at`). Staff and the executor hear via `_notify_crew`, the author
+  gets a confirmation, each user once. Escalated overdue requests lead
+  `list_for_org`; a finished one drops back. Grouped, any member's active
+  escalation lifts the group and `AdminRequestRow.escalated_at` carries the
+  earliest one.
 - A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,

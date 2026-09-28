@@ -54,6 +54,7 @@ class EventType(StrEnum):
     REQUEST_REVIEWED = "request_reviewed"
     REQUEST_AUTO_CLOSED = "request_auto_closed"
     REQUEST_EXPORTED = "request_exported"
+    REQUEST_ESCALATED = "request_escalated"
 
     FLAT_INVITE_CREATED = "flat_invite_created"
     FLAT_INVITE_ACTIVATED = "flat_invite_activated"

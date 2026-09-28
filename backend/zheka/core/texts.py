@@ -267,3 +267,20 @@ def _fitted(quote: str, frame: str) -> str:
             break
         kept.append(part)
     return f"{''.join(kept)}…"
+
+
+def request_escalated(request: Request, house: House, now: datetime) -> str:
+    hours = max(1, ceil((now - request.deadline_at) / timedelta(hours=1)))
+    return (
+        "⬆️ Житель просит руководство вмешаться: заявка "
+        f"{_request(request.id, request.category)} просрочена на {hours} ч\n"
+        f"🏢 {escape(house.address)}"
+    )
+
+
+def request_escalated_author(request: Request) -> str:
+    return (
+        "⬆️ Руководство УК уведомлено о просрочке заявки "
+        f"{_request(request.id, request.category)}\n"
+        "📄 Если ничего не изменится, можно подать жалобу в ГЖИ"
+    )

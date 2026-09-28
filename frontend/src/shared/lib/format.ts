@@ -61,3 +61,11 @@ export const duration = (ms: number) => {
 
   return `${Math.max(1, Math.floor(ms / MINUTE))} мин`;
 };
+
+const shortDayFormat = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "2-digit",
+});
+
+export const formatShortDay = (iso: string) =>
+  shortDayFormat.format(new Date(iso));

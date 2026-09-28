@@ -22,6 +22,7 @@ import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
+import { escalationNote } from "./domain/request-filters";
 import { CHANNEL_LABEL } from "./domain/request-workflow";
 import { useAdminRequest } from "./model/use-admin-request";
 import { NoOrgAccess } from "./ui/no-org-access";
@@ -61,6 +62,7 @@ const AdminRequestPage = () => {
   const tone = STATUS_TONE[request.status];
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
   const actor = currentActor(request, "staff");
+  const escalation = escalationNote(request);
   const isAssignable =
     request.status === "accepted" ||
     request.status === "in_progress" ||
@@ -92,6 +94,7 @@ const AdminRequestPage = () => {
       <Flex align="center" wrap="wrap" gap={8}>
         <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
         <StatusPill tone="neutral">{request.category_label}</StatusPill>
+        {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
         {request.group_id != null && (
           <Typography.Text asChild variant="description-strong">
             <Link

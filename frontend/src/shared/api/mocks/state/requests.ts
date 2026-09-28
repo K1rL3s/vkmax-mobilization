@@ -24,6 +24,7 @@ type MockRequest = {
   feedback: string | null;
   has_result_photos: boolean;
   deadline_at: string | null;
+  escalated_at: string | null;
   parent_request_id: number | null;
   completion_reason: Schemas["RequestCompletionReason"] | null;
   photo_names: string[];
@@ -49,6 +50,7 @@ const request = (
     feedback: null,
     has_result_photos: false,
     deadline_at: null,
+    escalated_at: null,
     parent_request_id: null,
     completion_reason: null,
     photo_names: [],
@@ -318,6 +320,7 @@ export const requestListItem = (
   rating: item.rating,
   deadline_at: item.deadline_at,
   completion_reason: item.completion_reason,
+  escalated_at: item.escalated_at,
 });
 
 const STEP: {

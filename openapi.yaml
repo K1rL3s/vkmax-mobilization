@@ -2650,6 +2650,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/escalate:
+    post:
+      tags:
+      - Заявки
+      summary: Попросить руководство УК вмешаться
+      description: 'Только автор просроченной открытой заявки, один раз: сотрудники УК и исполнитель получают сообщение, автор - подтверждение, заявка встает первой во входящих. Повтор или непросроченная заявка - 409, чужая - 404'
+      operationId: escalate_request
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/flats/{flat_id}/meters:
     get:
       tags:
@@ -9740,6 +9813,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
         house_id:
           type: integer
           title: House Id
@@ -9925,6 +10005,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
         house_id:
           type: integer
           title: House Id
@@ -12915,6 +13002,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
         house_id:
           type: integer
           title: House Id
@@ -13198,6 +13292,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/RequestCompletionReason'
           - type: 'null'
+        escalated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Escalated At
+          description: Когда автор попросил руководство УК вмешаться
       type: object
       required:
       - id

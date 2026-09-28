@@ -51,6 +51,7 @@ class Request(ZhekaMutableType):
     react_deadline_at: datetime | None = None
     deadline_warned_at: datetime | None = None
     overdue_notified_at: datetime | None = None
+    escalated_at: datetime | None = None
 
     @property
     def warn_at(self) -> datetime:

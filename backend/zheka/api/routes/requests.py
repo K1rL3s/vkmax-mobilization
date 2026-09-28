@@ -210,3 +210,27 @@ async def expire_request_deadline(
         datetime.now(UTC),
     )
     return _card(card, files_service)
+
+
+@router.post(
+    "/requests/{request_id}/escalate",
+    summary="Попросить руководство УК вмешаться",
+    description=(
+        "Только автор просроченной открытой заявки, один раз: сотрудники УК и "
+        "исполнитель получают сообщение, автор - подтверждение, заявка "
+        "встает первой во входящих. Повтор или непросроченная заявка - 409, "
+        "чужая - 404"
+    ),
+)
+async def escalate_request(
+    request_id: RequestId,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+) -> RequestCard:
+    card = await requests_service.escalate(
+        current_account.user_id,
+        request_id,
+        datetime.now(UTC),
+    )
+    return _card(card, files_service)

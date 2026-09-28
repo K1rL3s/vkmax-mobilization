@@ -537,6 +537,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/escalate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Попросить руководство УК вмешаться
+     * @description Только автор просроченной открытой заявки, один раз: сотрудники УК и исполнитель получают сообщение, автор - подтверждение, заявка встает первой во входящих. Повтор или непросроченная заявка - 409, чужая - 404
+     */
+    post: operations["escalate_request"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/flats/{flat_id}/meters": {
     parameters: {
       query?: never;
@@ -2017,6 +2037,11 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -2112,6 +2137,11 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -3869,6 +3899,11 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -4036,6 +4071,11 @@ export interface components {
       deadline_at?: string | null;
       completion_reason?:
         components["schemas"]["RequestCompletionReason"] | null;
+      /**
+       * Escalated At
+       * @description Когда автор попросил руководство УК вмешаться
+       */
+      escalated_at?: string | null;
     };
     /** RequestMessageItem */
     RequestMessageItem: {
@@ -7289,6 +7329,93 @@ export interface operations {
     };
   };
   expire_request_deadline: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  escalate_request: {
     parameters: {
       query?: never;
       header?: {

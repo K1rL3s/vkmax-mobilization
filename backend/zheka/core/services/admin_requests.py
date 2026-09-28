@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 
 from zheka.base import ZhekaType
@@ -82,6 +82,7 @@ _DEMO_OPEN = (RequestStatus.NEW, RequestStatus.ACCEPTED)
 class AdminRequestRow(RequestRow):
     house: House
     author: User | None
+    escalated_at: datetime | None = None
 
 
 class AdminRequestCardData(ZhekaType):
@@ -153,14 +154,21 @@ class AdminRequestsService:
         limit: int,
         offset: int,
     ) -> tuple[list[AdminRequestRow], int]:
+        now = datetime.now(UTC)
         requests, total = await self._requests.list_for_org(
             org_id,
             filters,
-            datetime.now(UTC),
+            now,
             limit,
             offset,
         )
-        return await self._rows(requests), total
+        if not filters.grouped:
+            return await self._rows(requests), total
+        escalations = await self._requests.group_escalations(
+            {request.group_id for request in requests if request.group_id is not None},
+            now,
+        )
+        return await self._rows(requests, escalations), total
 
     async def card(self, org_id: OrgId, request_id: RequestId) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
@@ -411,7 +419,11 @@ class AdminRequestsService:
             flats_count=len(complaint_sources(members)),
         )
 
-    async def _rows(self, requests: Sequence[Request]) -> list[AdminRequestRow]:
+    async def _rows(
+        self,
+        requests: Sequence[Request],
+        group_escalations: Mapping[RequestGroupId, datetime] | None = None,
+    ) -> list[AdminRequestRow]:
         base_rows = await build_rows(
             self._requests,
             self._houses,
@@ -443,6 +455,11 @@ class AdminRequestsService:
                 executor=row.executor,
                 has_photos=row.has_photos,
                 group_size=row.group_size,
+                escalated_at=(
+                    row.request.escalated_at
+                    if group_escalations is None or row.request.group_id is None
+                    else group_escalations.get(row.request.group_id)
+                ),
             )
             for row in base_rows
         ]

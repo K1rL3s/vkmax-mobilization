@@ -74,6 +74,8 @@ REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано пло
 ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
 REJECT_NOT_ON_REVIEW = "Работу возвращают только с приемки"
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
+ESCALATED_ALREADY = "Руководство УК уже уведомлено"
+ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
 
 
 class RequestDraft(ZhekaType):
@@ -641,6 +643,43 @@ class RequestsService:
                 category=NotificationCategory.REQUESTS,
                 mandatory=False,
             )
+
+    async def escalate(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        now: datetime,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._active_resident(user_id, request.house_id)
+        await self._requests.lock(request)
+        if request.escalated_at is not None:
+            raise InvalidState(ESCALATED_ALREADY)
+        if request.status not in OPEN_STATUSES or request.deadline_at > now:
+            raise InvalidState(ESCALATE_NOT_OVERDUE)
+        house = await self._get_house(request.house_id)
+        await self._requests.escalate(request, now)
+        await self._events.record(
+            EventType.REQUEST_ESCALATED,
+            user_id=user_id,
+            request_id=request.id,
+            house_id=house.id,
+            category=request.category.value,
+        )
+        self._notifications.notify_user(
+            user_id,
+            texts.request_escalated_author(request),
+            category=NotificationCategory.REQUESTS,
+            mandatory=False,
+            app_button=texts.OPEN_REQUEST,
+            app_path=request_app_path(request.id),
+        )
+        await self._notify_crew(
+            request,
+            house,
+            texts.request_escalated(request, house, now),
+        )
+        return await self._built_card(request, house)
 
 
 async def build_rows(

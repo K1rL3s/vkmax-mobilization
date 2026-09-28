@@ -8,7 +8,7 @@ import { Routes } from "@/shared/model/routes";
 import { Chevron } from "@/shared/ui/chevron";
 import { StatusPill } from "@/shared/ui/status-pill";
 
-import { overdueNote } from "../domain/request-filters";
+import { escalationNote, overdueNote } from "../domain/request-filters";
 import {
   CHANNEL_LABEL,
   type AdminRequestItem,
@@ -26,6 +26,7 @@ export const RequestRow = ({
   const navigate = useNavigate();
   const grouped = !member && request.group_id != null;
   const overdue = overdueNote(request);
+  const escalation = escalationNote(request, grouped);
   const flat = request.flat_number;
   const title = member
     ? (request.author_name ?? request.caller_name ?? "Звонок в УК")
@@ -70,6 +71,11 @@ export const RequestRow = ({
             {STATUS_LABEL[request.status]}
           </StatusPill>
         </Flex>
+        {escalation && (
+          <Flex>
+            <StatusPill tone="negative">{escalation}</StatusPill>
+          </Flex>
+        )}
         <Typography.Text
           className={styles.Ellipsis}
           variant="description"

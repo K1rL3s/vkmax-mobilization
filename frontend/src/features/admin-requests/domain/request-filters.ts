@@ -4,6 +4,7 @@ import {
   isOnReview,
   type RequestStatus,
 } from "@/features/request";
+import { formatShortDay, formatTime } from "@/shared/lib/format";
 
 import type { AdminRequestItem } from "./request-workflow";
 
@@ -55,3 +56,11 @@ export const toSections = (items: AdminRequestItem[]) =>
       items: items.filter((item) => isFinished(item.status)),
     },
   ].filter((section) => section.items.length > 0);
+
+export const escalationNote = (
+  request: AdminRequestItem,
+  grouped = false,
+): string | null =>
+  request.escalated_at && (grouped || overdueNote(request))
+    ? `Житель просит руководство с ${formatShortDay(request.escalated_at)} ${formatTime(request.escalated_at)}`
+    : null;

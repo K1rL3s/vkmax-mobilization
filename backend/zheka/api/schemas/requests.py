@@ -82,6 +82,10 @@ class RequestListItem(BaseSchema):
     rating: int | None = Field(default=None, description="Оценка жителя от 1 до 5")
     deadline_at: datetime | None = None
     completion_reason: RequestCompletionReason | None = None
+    escalated_at: datetime | None = Field(
+        default=None,
+        description="Когда автор попросил руководство УК вмешаться",
+    )
 
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
@@ -103,6 +107,7 @@ class RequestListItem(BaseSchema):
             rating=request.rating,
             deadline_at=request.deadline_at,
             completion_reason=request.completion_reason,
+            escalated_at=request.escalated_at,
         )
 
 
@@ -259,7 +264,8 @@ class AdminRequestListItem(RequestListItem):
         base = RequestListItem.of_row(row)
         request = row.request
         return cls(
-            **base.model_dump(),
+            **base.model_dump(exclude={"escalated_at"}),
+            escalated_at=row.escalated_at,
             house_id=request.house_id,
             address=row.house.address,
             is_staff_author=request.is_staff_author,
