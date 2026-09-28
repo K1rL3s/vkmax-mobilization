@@ -49,7 +49,7 @@ from maxo.types import (
 from maxo.types.chat import Chat as MaxChat
 from maxo.types.link_button import LinkButton
 from maxo.types.simple_query_result import SimpleQueryResult
-from maxo.utils.deeplink import create_start_link
+from maxo.utils.deeplink import create_start_link, create_startapp_link
 from maxo.utils.link import id_to_message_url
 from maxo.utils.payload import decode_payload
 from sqlalchemy import delete, select, update
@@ -59,6 +59,7 @@ from taskiq import InMemoryBroker
 from tests.conftest import PROBE_ROUTERS, RecordingBroker
 
 from zheka.bot import BotSetup
+from zheka.bot.cards import app_payload
 from zheka.bot.dialog_data import NewRequestData
 from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
@@ -189,7 +190,12 @@ from zheka.core.services.requests import (
     REJECT_NOT_ON_REVIEW,
     RequestsService,
 )
-from zheka.core.texts import CABINET_BUTTON, OPEN_REQUEST, REQUEST_STATUS_LABELS
+from zheka.core.texts import (
+    CABINET_BUTTON,
+    OPEN_REQUEST,
+    REQUEST_STATUS_LABELS,
+    VOTE,
+)
 from zheka.infra.database.models import (
     Chat,
     ChatPin,
@@ -3217,3 +3223,23 @@ async def test_a_free_text_in_the_menu_without_consent_asks_for_it(
     await client.send(PROBLEM)
 
     assert CONSENT_TEXT in _text(message_manager)
+
+
+async def test_a_chat_broadcast_carries_the_link_into_the_app(
+    task_broker: InMemoryBroker,
+    fake_bot: FakeBot,
+    notices: _RecordingBot,
+) -> None:
+    chat_id = _chat_id()
+
+    await _run(
+        task_broker,
+        broadcast_to_chats,
+        chat_ids=[chat_id],
+        text="🗳 Опрос",
+        app_button=VOTE,
+        app_path="/meetings/7",
+    )
+
+    url = create_startapp_link(fake_bot, app_payload("/meetings/7"))
+    assert notices.buttons == [[LinkButton(text=VOTE, url=url)]]

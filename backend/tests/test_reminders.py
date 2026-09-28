@@ -19,6 +19,7 @@ from zheka.broker.tasks.reminders import (
     warn_verification,
 )
 from zheka.broker.tasks.requests import auto_close_reviewed_requests
+from zheka.core import texts
 from zheka.core.enums import (
     AppointmentStatus,
     ChatStatus,
@@ -274,6 +275,10 @@ async def test_the_reading_reminder_goes_once_to_a_flat_that_did_not_submit(
     [queued] = _to_users(bot_broker, lagging)
     assert queued["category"] == NotificationCategory.METERS.value
     assert queued["mandatory"] is False
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.SUBMIT_READINGS,
+        "/meters",
+    )
     assert _to_users(bot_broker, done) == []
     assert _to_users(bot_broker, unverified) == []
 
@@ -374,6 +379,10 @@ async def test_the_poll_reminder_goes_once_only_to_flats_without_a_vote(
     assert {voted, flatmate, tenant, blocked, flatless}.isdisjoint(queued["user_ids"])
     assert queued["category"] == NotificationCategory.ANNOUNCEMENTS.value
     assert queued["mandatory"] is False
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.VOTE,
+        f"/meetings/{poll_id}",
+    )
 
 
 async def _chat(session: AsyncSession, house_id: HouseId, *, bound: bool) -> MaxChatId:
@@ -400,17 +409,20 @@ async def test_the_poll_reminder_goes_into_the_bound_chat_only(
     house_id = await _house(bot_session)
     bound = await _chat(bot_session, house_id, bound=True)
     unbound = await _chat(bot_session, house_id, bound=False)
-    await _poll(bot_session, house_id, timedelta(hours=24))
+    poll_id = await _poll(bot_session, house_id, timedelta(hours=24))
 
     await _run(task_broker, remind_polls)
 
-    chat_ids = [
-        chat_id
+    [queued] = [
+        kwargs
         for kwargs in bot_broker.enqueued(TaskName.BROADCAST_TO_CHATS)
-        for chat_id in kwargs["chat_ids"]
+        if bound in kwargs["chat_ids"]
     ]
-    assert bound in chat_ids
-    assert unbound not in chat_ids
+    assert unbound not in queued["chat_ids"]
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.VOTE,
+        f"/meetings/{poll_id}",
+    )
 
 
 async def _poll_status(session: AsyncSession, poll_id: PollId) -> PollStatus:
@@ -470,8 +482,9 @@ async def test_each_verification_warning_goes_once(
     await _run(task_broker, warn_verification)
     await _run(task_broker, warn_verification)
 
-    [text] = _texts(bot_broker, user_id)
-    assert expected.format(due=due) in text
+    [queued] = _to_users(bot_broker, user_id)
+    assert expected.format(due=due) in queued["text"]
+    assert (queued["app_button"], queued["app_path"]) == (texts.MY_METERS, "/meters")
     assert await _warned_at(bot_session, meter_id) == _today()
 
 
@@ -537,8 +550,12 @@ async def test_only_tomorrows_appointment_is_reminded_once(
     await _run(task_broker, remind_appointments)
     await _run(task_broker, remind_appointments)
 
-    queued = _to_user(bot_broker, user_id)
-    assert [kwargs["mandatory"] for kwargs in queued] == ([True] if reminded else [])
+    queued = [
+        (kwargs["mandatory"], kwargs["app_button"], kwargs["app_path"])
+        for kwargs in _to_user(bot_broker, user_id)
+    ]
+    reminder = (True, texts.MY_APPOINTMENTS, "/appointments")
+    assert queued == ([reminder] if reminded else [])
 
 
 async def test_each_moment_of_each_window_is_reminded_once(
@@ -855,7 +872,11 @@ async def test_the_manual_reading_reminder_counts_the_day_in_local_time(
     )
     await publisher.flush()
 
-    assert len(_to_users(broker, user_id)) == 1
+    [queued] = _to_users(broker, user_id)
+    assert (queued["app_button"], queued["app_path"]) == (
+        texts.SUBMIT_READINGS,
+        "/meters",
+    )
 
 
 async def test_a_verification_due_in_thirty_one_days_waits(

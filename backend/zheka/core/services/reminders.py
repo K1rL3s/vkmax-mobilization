@@ -5,6 +5,11 @@ from datetime import date, datetime, timedelta
 from enum import StrEnum
 
 from zheka.core import texts
+from zheka.core.deeplinks import (
+    APPOINTMENTS_APP_PATH,
+    METERS_APP_PATH,
+    poll_app_path,
+)
 from zheka.core.enums import (
     SERVICE_LABELS,
     SERVICE_OF_METER,
@@ -167,10 +172,14 @@ class RemindersService:
                 texts.poll_reminder(poll.title, ends_at),
                 category=NotificationCategory.ANNOUNCEMENTS,
                 mandatory=False,
+                app_button=texts.VOTE,
+                app_path=poll_app_path(poll.id),
             )
             self._notifications.notify_chats(
                 [chat.chat_id for chat in chats],
                 texts.poll_chat_reminder(poll.title, ends_at),
+                app_button=texts.VOTE,
+                app_path=poll_app_path(poll.id),
             )
             reminded += 1
         logger.info("Напоминание об опросах: опросов %s", reminded)
@@ -212,6 +221,8 @@ class RemindersService:
                 text,
                 category=NotificationCategory.METERS,
                 mandatory=False,
+                app_button=texts.MY_METERS,
+                app_path=METERS_APP_PATH,
             )
             warned += 1
         logger.info("Предупреждение о поверке: счетчиков %s", warned)
@@ -249,6 +260,8 @@ class RemindersService:
                 ),
                 category=NotificationCategory.REQUESTS,
                 mandatory=True,
+                app_button=texts.MY_APPOINTMENTS,
+                app_path=APPOINTMENTS_APP_PATH,
             )
             reminded += 1
         logger.info("Напоминание о приеме: записей %s", reminded)
@@ -289,6 +302,8 @@ class RemindersService:
             _READING_TEXTS[kind](),
             category=NotificationCategory.METERS,
             mandatory=False,
+            app_button=texts.SUBMIT_READINGS,
+            app_path=METERS_APP_PATH,
         )
         return len(fresh)
 

@@ -92,13 +92,22 @@ class NotificationsService:
             app_path=app_path,
         )
 
-    def notify_chats(self, chat_ids: Sequence[MaxChatId], text: str) -> None:
+    def notify_chats(
+        self,
+        chat_ids: Sequence[MaxChatId],
+        text: str,
+        *,
+        app_button: str | None = None,
+        app_path: str | None = None,
+    ) -> None:
         if not chat_ids:
             return
         self._publisher.publish(
             TaskName.BROADCAST_TO_CHATS,
             chat_ids=list(chat_ids),
             text=text,
+            app_button=app_button,
+            app_path=app_path,
         )
 
     def open_executor_card(

@@ -7,6 +7,10 @@ from zheka.core.ids import RequestId
 
 BLOCKED = "УК закрыла вам доступ к этому дому"
 OPEN_REQUEST = "📱 Открыть заявку"
+SUBMIT_READINGS = "📟 Передать показания"
+MY_METERS = "📟 Мои счетчики"
+VOTE = "🗳 Проголосовать"
+MY_APPOINTMENTS = "📅 Мои записи"
 CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
 MOMENT = "%H:%M %d.%m"
 
@@ -89,7 +93,7 @@ def request_auto_closed(request_id: RequestId) -> str:
 
 
 def reading_window_opened() -> str:
-    return "📟 Открыт прием показаний счетчиков. Передайте их в мини-приложении"
+    return "📟 Открыт прием показаний счетчиков"
 
 
 def reading_window_closing(days: int) -> str:
@@ -107,10 +111,7 @@ def poll_reminder(title: str, ends_at: datetime) -> str:
 
 
 def poll_chat_reminder(title: str, ends_at: datetime) -> str:
-    return (
-        f"🗳 Идет опрос «{escape(title)}», голосование закончится "
-        f"{ends_at:%d.%m.%Y}. Проголосовать можно в мини-приложении"
-    )
+    return f"🗳 Идет опрос «{escape(title)}», голосование закончится {ends_at:%d.%m.%Y}"
 
 
 def verification_soon(meter: str, serial: str, due: date) -> str:
@@ -145,8 +146,7 @@ def _days(count: int) -> str:
 
 def reading_reminder_manual() -> str:
     return (
-        "📟 Управляющая организация напоминает: прием показаний открыт, а "
-        "ваших еще нет. Передайте их в мини-приложении"
+        "📟 Управляющая организация напоминает: прием показаний открыт, а ваших еще нет"
     )
 
 

@@ -11,7 +11,9 @@ from maxo.fsm import State
 from maxo.omit import Omitted, is_defined
 from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.types import MessageCallback, OpenAppButton
+from maxo.types.link_button import LinkButton
 from maxo.types.update_context import UpdateContext
+from maxo.utils.deeplink import create_startapp_link
 from maxo.utils.payload import encode_payload
 
 from zheka.bot.states import Menu
@@ -108,3 +110,10 @@ def open_app(
         return None
     payload = Omitted() if path is None else app_payload(path)
     return [[OpenAppButton(text=text, web_app=web_app, payload=payload)]]
+
+
+def app_link(bot: Bot, text: str, path: str) -> list[list[LinkButton]] | None:
+    if web_app_name(bot) is None:
+        return None
+    url = create_startapp_link(bot, app_payload(path))
+    return [[LinkButton(text=text, url=url)]]

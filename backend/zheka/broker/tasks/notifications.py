@@ -6,7 +6,7 @@ from maxo import Bot
 from maxo.types.buttons import InlineButtons
 from taskiq import async_shared_broker
 
-from zheka.bot.cards import open_app
+from zheka.bot.cards import app_link, open_app
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import recheck_chat_rights
 from zheka.core.enums import NotificationCategory
@@ -100,11 +100,23 @@ async def broadcast_to_chats(
     bot: FromDishka[Bot],
     chats_service: FromDishka[ChatsService],
     users_repo: FromDishka[UsersRepo],
+    app_button: str | None = None,
+    app_path: str | None = None,
 ) -> int:
+    keyboard = (
+        None
+        if app_button is None or app_path is None
+        else app_link(bot, app_button, app_path)
+    )
     logger.info("Рассылка по чатам: чатов %s", len(chat_ids))
     sent = 0
     for chat_id in chat_ids:
-        result = await sender.send_message(text, chat_id=chat_id, notify=False)
+        result = await sender.send_message(
+            text,
+            chat_id=chat_id,
+            notify=False,
+            keyboard=keyboard,
+        )
         if result is None:
             await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
         else:
