@@ -26,6 +26,7 @@ class House(ZhekaMutableType, Zoned):
     overhaul: Any = field(default_factory=dict)
     documents: Any = field(default_factory=list)
     timezone: str
+    added_by_resident: bool = False
 
     @property
     def address(self) -> str:

@@ -15,6 +15,7 @@ from zheka.core.enums import (
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat
+from zheka.core.services.house_point import HouseAtPoint
 from zheka.core.services.houses import (
     AdminHouseCardData,
     AdminHouseRow,
@@ -56,6 +57,8 @@ class HouseListItem(BaseSchema):
     is_connected: bool
     org_name: str | None = None
     distance_m: int | None = None
+    lat: float | None = None
+    lon: float | None = None
 
     @classmethod
     def of(cls, found: HouseFound) -> Self:
@@ -69,6 +72,8 @@ class HouseListItem(BaseSchema):
             is_connected=found.is_connected,
             org_name=None if found.org is None else found.org.name,
             distance_m=found.distance_m,
+            lat=None if house.lat is None else float(house.lat),
+            lon=None if house.lon is None else float(house.lon),
         )
 
 
@@ -411,3 +416,47 @@ class BindingCodeResponse(BaseSchema):
     house_id: HouseId
     code: str
     deeplink: str
+
+
+class PointAddress(BaseSchema):
+    region: str
+    city: str
+    street: str
+    building: str
+    address: str
+
+
+class HouseAtPointResponse(BaseSchema):
+    house: HouseListItem | None = None
+    address: PointAddress | None = Field(
+        default=None,
+        description="Адрес здания в точке, если дома нет в справочнике",
+    )
+    geocoder_failed: bool = Field(
+        default=False,
+        description="Сервис адресов не ответил, стоит повторить позже",
+    )
+
+    @classmethod
+    def of(cls, found: HouseAtPoint) -> Self:
+        address = found.address
+        return cls(
+            house=None if found.house is None else HouseListItem.of(found.house),
+            address=(
+                None
+                if address is None
+                else PointAddress(
+                    region=address.region,
+                    city=address.city,
+                    street=address.street,
+                    building=address.building,
+                    address=address.address,
+                )
+            ),
+            geocoder_failed=found.geocoder_failed,
+        )
+
+
+class AddHouseRequest(BaseSchema):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)

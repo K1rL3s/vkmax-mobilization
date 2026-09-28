@@ -1,5 +1,6 @@
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     ForeignKey,
     Index,
@@ -8,6 +9,7 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -35,6 +37,13 @@ houses_table = Table(
     Column("overhaul", JSONB, default=dict, nullable=False),
     Column("documents", JSONB, default=list, nullable=False),
     Column("timezone", String, nullable=False),
+    Column(
+        "added_by_resident",
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
+    ),
     Index(None, "city", "street"),
 )
 

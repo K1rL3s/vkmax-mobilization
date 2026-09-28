@@ -1,3 +1,4 @@
+import math
 from collections.abc import Collection, Sequence
 from decimal import Decimal
 
@@ -16,6 +17,9 @@ from zheka.infra.database.tables.houses import flats_table, houses_table
 from zheka.infra.database.tables.organizations import org_settings_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import demand_signals_table
+
+NEARBY_METERS_PER_DEGREE = 111_320
+ADD_HOUSE_LOCK = 2
 
 
 class HousesRepo(BaseAlchemyRepo):
@@ -73,27 +77,32 @@ class HousesRepo(BaseAlchemyRepo):
 
     async def nearest(
         self,
-        lat: Decimal,
-        lon: Decimal,
-        lon_scale: Decimal,
-        radius_degrees: Decimal,
+        lat: float,
+        lon: float,
+        radius_m: int,
         limit: int,
-    ) -> Sequence[tuple[House, Decimal]]:
-        lat_delta = houses_table.c.lat - lat
-        lon_delta = (houses_table.c.lon - lon) * lon_scale
+    ) -> Sequence[tuple[House, int]]:
+        lat_value = Decimal(str(lat))
+        lon_scale = Decimal(str(math.cos(math.radians(lat))))
+        radius = Decimal(radius_m) / NEARBY_METERS_PER_DEGREE
+        lat_delta = houses_table.c.lat - lat_value
+        lon_delta = (houses_table.c.lon - Decimal(str(lon))) * lon_scale
         distance = lat_delta * lat_delta + lon_delta * lon_delta
         stmt = (
             select(House, distance.label("distance"))
             .where(
                 houses_table.c.lat.is_not(None),
                 houses_table.c.lon.is_not(None),
-                distance <= radius_degrees * radius_degrees,
+                distance <= radius * radius,
             )
-            .order_by(distance)
+            .order_by(distance, houses_table.c.id)
             .limit(limit)
         )
         result = await self._session.execute(stmt)
-        return result.tuples().all()
+        return [
+            (house, round(math.sqrt(float(value)) * NEARBY_METERS_PER_DEGREE))
+            for house, value in result.tuples().all()
+        ]
 
     async def list_cities(
         self,
@@ -344,3 +353,24 @@ class HousesRepo(BaseAlchemyRepo):
         )
         house: House | None = await self._session.scalar(stmt)
         return house
+
+    async def add(self, house: House) -> House:
+        self._session.add(house)
+        await self._session.flush()
+        return house
+
+    async def unplaced(self, city: str) -> Sequence[House]:
+        stmt = (
+            select(House)
+            .where(
+                houses_table.c.city == city,
+                or_(houses_table.c.lat.is_(None), houses_table.c.lon.is_(None)),
+            )
+            .order_by(houses_table.c.id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def lock_adding(self) -> None:
+        stmt = select(func.pg_advisory_xact_lock(ADD_HOUSE_LOCK))
+        await self._session.execute(stmt)

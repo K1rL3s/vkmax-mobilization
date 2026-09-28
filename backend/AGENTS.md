@@ -386,6 +386,27 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   (platform for a region; region and platform for a city) must be 0 or >= 3.
   Peers share the caller's `is_demo`.
 
+## Map
+
+- `GET /api/map/houses` (any consented user; the staff map's platform layer
+  too) returns only what `HouseCard` shows: address, org name and `is_demo`,
+  the public stats of a connected org (`PUBLIC_STATS_PERIOD`, none under
+  `PUBLIC_STATS_MIN_CLOSED` closed) and the demand count (0 once
+  connected). It loads every house in the box and filters in Python: fine
+  for the directory's 2000 houses, not for a country.
+- A map tap (`GET /houses/at`, `POST /houses`) takes the house nearest
+  within `MATCH_RADIUS_M` (houses at one point: the lowest id, and the
+  address match walks its candidates the same way), else asks
+  `NominatimClient`: one request a second for the whole app (Redis
+  `SET nominatim:slot NX PX 1000`, waited for at most 1.5 s, then
+  `geocoder_failed`), answers cached in Redis for 30 days per point rounded
+  to 5 digits, failures never cached. The request keeps its db
+  connection and the account upsert's `users` row through the call (about
+  4.5 s at worst). `HouseLookupQuota` (60) and `HouseAddQuota` (5, new houses
+  only) count per user per api worker an hour. `POST /houses` rechecks the
+  address under `pg_advisory_xact_lock(ADD_HOUSE_LOCK)`; advisory keys:
+  `SEED_LOCK = 1`, `ADD_HOUSE_LOCK = 2`.
+
 ## Seed and demo
 
 - Real where public, fictional where it would be a claim. Registry orgs are

@@ -1,0 +1,46 @@
+DEFAULT_TIMEZONE = "Europe/Moscow"
+
+REGION_TIMEZONES = {
+    "RU-KGD": "Europe/Kaliningrad",
+    "RU-SAM": "Europe/Samara",
+    "RU-UD": "Europe/Samara",
+    "RU-AST": "Europe/Astrakhan",
+    "RU-SAR": "Europe/Saratov",
+    "RU-ULY": "Europe/Ulyanovsk",
+    "RU-VGG": "Europe/Volgograd",
+    "RU-KIR": "Europe/Kirov",
+    "RU-SVE": "Asia/Yekaterinburg",
+    "RU-CHE": "Asia/Yekaterinburg",
+    "RU-KGN": "Asia/Yekaterinburg",
+    "RU-TYU": "Asia/Yekaterinburg",
+    "RU-KHM": "Asia/Yekaterinburg",
+    "RU-YAN": "Asia/Yekaterinburg",
+    "RU-BA": "Asia/Yekaterinburg",
+    "RU-PER": "Asia/Yekaterinburg",
+    "RU-ORE": "Asia/Yekaterinburg",
+    "RU-OMS": "Asia/Omsk",
+    "RU-NVS": "Asia/Novosibirsk",
+    "RU-TOM": "Asia/Tomsk",
+    "RU-KEM": "Asia/Novokuznetsk",
+    "RU-ALT": "Asia/Barnaul",
+    "RU-AL": "Asia/Barnaul",
+    "RU-KYA": "Asia/Krasnoyarsk",
+    "RU-KK": "Asia/Krasnoyarsk",
+    "RU-TY": "Asia/Krasnoyarsk",
+    "RU-IRK": "Asia/Irkutsk",
+    "RU-BU": "Asia/Irkutsk",
+    "RU-ZAB": "Asia/Chita",
+    "RU-AMU": "Asia/Yakutsk",
+    "RU-SA": "Asia/Yakutsk",
+    "RU-PRI": "Asia/Vladivostok",
+    "RU-KHA": "Asia/Vladivostok",
+    "RU-YEV": "Asia/Vladivostok",
+    "RU-MAG": "Asia/Magadan",
+    "RU-SAK": "Asia/Sakhalin",
+    "RU-KAM": "Asia/Kamchatka",
+    "RU-CHU": "Asia/Anadyr",
+}
+
+
+def region_timezone(iso_region: str | None) -> str:
+    return REGION_TIMEZONES.get(iso_region or "", DEFAULT_TIMEZONE)

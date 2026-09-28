@@ -73,6 +73,7 @@ class EventType(StrEnum):
     ACCOUNT_DELETED = "account_deleted"
     PHONE_VERIFIED = "phone_verified"
     PHONE_FORGOTTEN = "phone_forgotten"
+    HOUSE_ADDED = "house_added"
 
 
 class EventSource(StrEnum):

@@ -1,9 +1,7 @@
-import math
 import secrets
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta
-from decimal import Decimal
 
 from zheka.base import ZhekaType
 from zheka.core import texts
@@ -31,7 +29,6 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-NEARBY_METERS_PER_DEGREE = 111_320
 PUBLIC_STATS_PERIOD = timedelta(days=90)
 PUBLIC_STATS_MIN_CLOSED = 10
 
@@ -191,13 +188,7 @@ class HousesService:
         radius_m: int,
         limit: int,
     ) -> list[HouseFound]:
-        rows = await self._houses.nearest(
-            Decimal(str(lat)),
-            Decimal(str(lon)),
-            Decimal(str(math.cos(math.radians(lat)))),
-            Decimal(radius_m) / NEARBY_METERS_PER_DEGREE,
-            limit,
-        )
+        rows = await self._houses.nearest(lat, lon, radius_m, limit)
         found = await self._with_orgs([house for house, _ in rows])
         await self._events.record(
             EventType.HOUSE_SEARCH,
@@ -206,10 +197,7 @@ class HousesService:
             found=len(found),
         )
         return [
-            replace(
-                item,
-                distance_m=round(math.sqrt(float(distance)) * NEARBY_METERS_PER_DEGREE),
-            )
+            replace(item, distance_m=distance)
             for item, (_, distance) in zip(found, rows, strict=True)
         ]
 

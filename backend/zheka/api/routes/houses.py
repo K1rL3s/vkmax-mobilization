@@ -9,9 +9,11 @@ from zheka.api.dependencies import RequireConsentDep, ResidencyForHouseDep
 from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.houses import (
+    AddHouseRequest,
     CityItem,
     DemandSignalResponse,
     FlatListItem,
+    HouseAtPointResponse,
     HouseCard,
     HouseListItem,
     LinkHouseRequest,
@@ -19,6 +21,7 @@ from zheka.api.schemas.houses import (
 )
 from zheka.core.ids import HouseId, ResidentId
 from zheka.core.services.files import FilesService
+from zheka.core.services.house_point import HousePointService
 from zheka.core.services.houses import HousesService
 
 router = APIRouter(tags=["Дома"], route_class=DishkaRoute)
@@ -86,6 +89,17 @@ async def search_houses_nearby(
         limit,
     )
     return [HouseListItem.of(item) for item in found]
+
+
+@router.get("/houses/at", summary="Дом или адрес в точке карты")
+async def house_at_point(
+    current_account: RequireConsentDep,
+    point_service: FromDishka[HousePointService],
+    lat: Annotated[float, Query(ge=-90, le=90)],
+    lon: Annotated[float, Query(ge=-180, le=180)],
+) -> HouseAtPointResponse:
+    found = await point_service.at(current_account.user_id, lat, lon)
+    return HouseAtPointResponse.of(found)
 
 
 @router.get("/houses/{house_id}", summary="Карточка дома")
@@ -165,3 +179,13 @@ async def list_house_flats(
         items=[FlatListItem.of(flat, flat.id in taken) for flat in flats],
         total=total,
     )
+
+
+@router.post("/houses", summary="Добавить дом по точке на карте")
+async def add_house(
+    current_account: RequireConsentDep,
+    point_service: FromDishka[HousePointService],
+    body: AddHouseRequest,
+) -> HouseListItem:
+    found = await point_service.add(current_account.user_id, body.lat, body.lon)
+    return HouseListItem.of(found)

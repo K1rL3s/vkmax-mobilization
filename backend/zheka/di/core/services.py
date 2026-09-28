@@ -14,7 +14,9 @@ from zheka.core.services.demo import DemoService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
+from zheka.core.services.house_point import HousePointService
 from zheka.core.services.houses import HousesService
+from zheka.core.services.map import MapService
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.meter_photo import MeterPhotoService
 from zheka.core.services.meters import MetersService
@@ -29,7 +31,7 @@ from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
 from zheka.core.services.retention import RetentionService
-from zheka.infra.quota import UploadQuota
+from zheka.infra.quota import HouseAddQuota, HouseLookupQuota, UploadQuota
 
 
 class ServicesProvider(Provider):
@@ -63,8 +65,12 @@ class ServicesProvider(Provider):
         AnalyticsService,
         DemoService,
         RetentionService,
+        MapService,
+        HousePointService,
     )
     upload_quota = provide(UploadQuota, scope=Scope.APP)
+    house_add_quota = provide(HouseAddQuota, scope=Scope.APP)
+    house_lookup_quota = provide(HouseLookupQuota, scope=Scope.APP)
 
     @provide(scope=Scope.APP)
     def files_service(self, config: FilesConfig, max_config: MaxConfig) -> FilesService:

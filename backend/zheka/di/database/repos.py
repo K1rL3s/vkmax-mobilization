@@ -10,6 +10,7 @@ from zheka.infra.database.repos.files import FilesRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
+from zheka.infra.database.repos.map import MapRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -42,4 +43,5 @@ class ReposProvider(Provider):
         AccessRepo,
         AnalyticsRepo,
         FilesRepo,
+        MapRepo,
     )

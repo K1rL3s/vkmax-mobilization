@@ -899,6 +899,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+    post:
+      tags:
+      - Дома
+      summary: Добавить дом по точке на карте
+      operationId: add_house
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddHouseRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseListItem'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/houses/nearby:
     get:
       tags:
@@ -958,6 +1029,88 @@ paths:
                 items:
                   $ref: '#/components/schemas/HouseListItem'
                 title: Response Search Houses Nearby
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/at:
+    get:
+      tags:
+      - Дома
+      summary: Дом или адрес в точке карты
+      operationId: house_at_point
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: Lat
+      - name: lon
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: Lon
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseAtPointResponse'
         '400':
           description: Некорректный запрос
           content:
@@ -1361,6 +1514,180 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Page_FlatListItem_'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/map/houses:
+    get:
+      tags:
+      - Карта
+      summary: Дома в рамке карты
+      operationId: map_houses
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: west
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: West
+      - name: south
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: South
+      - name: east
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: East
+      - name: north
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: North
+      - name: kinds
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/MapHouseKind'
+          - type: 'null'
+          title: Kinds
+      - name: org_ids
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: integer
+          - type: 'null'
+          title: Org Ids
+      - name: waiting
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Waiting
+      - name: on_time_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 10000
+            minimum: 0
+          - type: 'null'
+          title: On Time From
+      - name: on_time_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 10000
+            minimum: 0
+          - type: 'null'
+          title: On Time To
+      - name: rating_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 500
+            minimum: 0
+          - type: 'null'
+          title: Rating From
+      - name: rating_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 500
+            minimum: 0
+          - type: 'null'
+          title: Rating To
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 5000
+          minimum: 1
+          default: 5000
+          title: Limit
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapHousesResponse'
         '400':
           description: Некорректный запрос
           content:
@@ -9753,6 +10080,23 @@ components:
       - flat_id
       - flat_number
       title: AccessTargetCell
+    AddHouseRequest:
+      properties:
+        lat:
+          type: number
+          maximum: 90.0
+          minimum: -90.0
+          title: Lat
+        lon:
+          type: number
+          maximum: 180.0
+          minimum: -180.0
+          title: Lon
+      type: object
+      required:
+      - lat
+      - lon
+      title: AddHouseRequest
     AddMeterRequest:
       properties:
         type:
@@ -11693,6 +12037,24 @@ components:
       required:
       - ok
       title: HealthcheckResponse
+    HouseAtPointResponse:
+      properties:
+        house:
+          anyOf:
+          - $ref: '#/components/schemas/HouseListItem'
+          - type: 'null'
+        address:
+          anyOf:
+          - $ref: '#/components/schemas/PointAddress'
+          - type: 'null'
+          description: Адрес здания в точке, если дома нет в справочнике
+        geocoder_failed:
+          type: boolean
+          title: Geocoder Failed
+          description: Сервис адресов не ответил, стоит повторить позже
+          default: false
+      type: object
+      title: HouseAtPointResponse
     HouseCard:
       properties:
         id:
@@ -11839,6 +12201,16 @@ components:
           - type: integer
           - type: 'null'
           title: Distance M
+        lat:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lat
+        lon:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lon
       type: object
       required:
       - id
@@ -11950,6 +12322,115 @@ components:
           default: miniapp
       type: object
       title: LinkHouseRequest
+    MapHouse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        lat:
+          type: number
+          title: Lat
+        lon:
+          type: number
+          title: Lon
+        building:
+          type: string
+          title: Building
+        address:
+          type: string
+          title: Address
+        kind:
+          $ref: '#/components/schemas/MapHouseKind'
+        is_demo:
+          type: boolean
+          title: Is Demo
+        demand_count:
+          type: integer
+          title: Demand Count
+        org_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Org Id
+        org_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Org Name
+        on_time_share:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: On Time Share
+          description: Доля заявок УК в срок за 90 дней, в сотых долях процента
+        rating:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rating
+          description: Средняя оценка УК за 90 дней, в сотых долях балла
+      type: object
+      required:
+      - id
+      - lat
+      - lon
+      - building
+      - address
+      - kind
+      - is_demo
+      - demand_count
+      title: MapHouse
+    MapHouseKind:
+      type: string
+      enum:
+      - connected
+      - unconnected
+      - added
+      title: MapHouseKind
+    MapHousesResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/MapHouse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+          description: Сколько домов подходит под фильтры в рамке
+        orgs:
+          items:
+            $ref: '#/components/schemas/MapOrg'
+          type: array
+          title: Orgs
+          description: Подключенные УК в рамке, без фильтра по УК
+      type: object
+      required:
+      - items
+      - total
+      - orgs
+      title: MapHousesResponse
+    MapOrg:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        is_demo:
+          type: boolean
+          title: Is Demo
+        houses:
+          type: integer
+          title: Houses
+      type: object
+      required:
+      - id
+      - name
+      - is_demo
+      - houses
+      title: MapOrg
     MeResponse:
       properties:
         user_id:
@@ -12803,6 +13284,31 @@ components:
       - charge_id
       - paid_at
       title: PayChargeResponse
+    PointAddress:
+      properties:
+        region:
+          type: string
+          title: Region
+        city:
+          type: string
+          title: City
+        street:
+          type: string
+          title: Street
+        building:
+          type: string
+          title: Building
+        address:
+          type: string
+          title: Address
+      type: object
+      required:
+      - region
+      - city
+      - street
+      - building
+      - address
+      title: PointAddress
     PollCard:
       properties:
         id:
