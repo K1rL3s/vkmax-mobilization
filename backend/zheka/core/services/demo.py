@@ -39,7 +39,7 @@ CHECKER_RESERVED = (
 )
 
 CHARGED_MONTHS = 6
-VERIFICATION_SOON = timedelta(days=21)
+VERIFICATION_SOON = timedelta(days=7)
 
 _MONTHLY: dict[MeterType, dict[TariffZone, int]] = {
     MeterType.COLD_WATER: {TariffZone.SINGLE: 7_000},

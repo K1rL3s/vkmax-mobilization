@@ -42,6 +42,7 @@ POLL_REMINDER_BEFORE = timedelta(hours=48)
 READING_HOUR = 10
 POLL_HOUR = 10
 VERIFICATION_HOUR = 9
+VERIFICATION_STAGE_DAYS = (VERIFICATION_WARNING.days, 7, 1, 0, -1)
 APPOINTMENT_HOUR = 19
 
 
@@ -202,18 +203,24 @@ class RemindersService:
                 continue
             local = house.local(now)
             today = local.date()
-            if local.hour < VERIFICATION_HOUR or due > today + VERIFICATION_WARNING:
+            stage = verification_stage(today, due)
+            if (
+                local.hour < VERIFICATION_HOUR
+                or stage is None
+                or (
+                    meter.verification_warned_at is not None
+                    and meter.verification_warned_at >= stage
+                )
+            ):
                 continue
             label = SERVICE_LABELS[SERVICE_OF_METER[meter.type]]
-            if today > due:
+            days = (due - today).days
+            if days < 0:
                 text = texts.verification_expired(label, meter.serial)
-            elif (
-                meter.verification_warned_at is None
-                or meter.verification_warned_at < due - VERIFICATION_WARNING
-            ):
-                text = texts.verification_soon(label, meter.serial, due)
+            elif days == 0:
+                text = texts.verification_today(label, meter.serial)
             else:
-                continue
+                text = texts.verification_soon(label, meter.serial, due, days)
             residents = await self._residents.list_verified_for_flats([meter.flat_id])
             await self._meters.mark_warned(meter, today)
             self._notifications.notify_users(
@@ -326,3 +333,8 @@ class RemindersService:
             )
         logger.info("Ручное напоминание о показаниях: адресатов %s", sent)
         return sent
+
+
+def verification_stage(today: date, due: date) -> date | None:
+    stages = [due - timedelta(days=days) for days in VERIFICATION_STAGE_DAYS]
+    return max((stage for stage in stages if stage <= today), default=None)

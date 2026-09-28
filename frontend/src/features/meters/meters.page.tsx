@@ -1,11 +1,16 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link, useNavigate } from "react-router-dom";
 
+import { plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { meterIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
-import { formatPeriod, METER_UNIT } from "./domain/reading";
+import {
+  formatPeriod,
+  METER_UNIT,
+  verificationDaysLeft,
+} from "./domain/reading";
 import { useReadingForm } from "./model/use-reading-form";
 import { PHOTO_LIMIT, useReadingPhotos } from "./model/use-reading-photos";
 import { MeterChips } from "./ui/meter-chips";
@@ -85,6 +90,9 @@ const MetersPage = () => {
     );
   }
 
+  const due = meter.next_verification_date;
+  const daysLeft = due && meter.can_submit ? verificationDaysLeft(due) : null;
+
   if (form.result) {
     return (
       <Panel className={styles.Page} mode="secondary">
@@ -136,6 +144,19 @@ const MetersPage = () => {
                 ? "Двухтарифный: день и ночь"
                 : `Счётчик № ${meter.serial}`}
             </Typography.Text>
+
+            {due && (
+              <Typography.Text variant="description" color="tertiary">
+                Поверка до {due.split("-").reverse().join(".")}
+                {daysLeft !== null && daysLeft >= 0 && daysLeft <= 30 && (
+                  <span className={styles.Failed}>
+                    {daysLeft === 0
+                      ? ", сегодня последний день"
+                      : `, ${plural(daysLeft, ["остался", "осталось", "осталось"])} ${daysLeft} ${plural(daysLeft, ["день", "дня", "дней"])}`}
+                  </span>
+                )}
+              </Typography.Text>
+            )}
 
             {!meter.can_submit && (
               <Typography.Text variant="description" className={styles.Failed}>

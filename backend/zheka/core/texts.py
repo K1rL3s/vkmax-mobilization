@@ -114,10 +114,10 @@ def poll_chat_reminder(title: str, ends_at: datetime) -> str:
     return f"🗳 Идет опрос «{escape(title)}», голосование закончится {ends_at:%d.%m.%Y}"
 
 
-def verification_soon(meter: str, serial: str, due: date) -> str:
+def verification_soon(meter: str, serial: str, due: date, days: int) -> str:
     return (
-        f"⏰ {due:%d.%m.%Y} истекает поверка счетчика «{meter}» №{escape(serial)}. "
-        "После этого начисление пойдет по нормативу"
+        f"⏰ Через {_days(days)}, {due:%d.%m.%Y}, истекает поверка счетчика "
+        f"«{meter}» №{escape(serial)}. После этого начисление пойдет по нормативу"
     )
 
 
@@ -187,3 +187,10 @@ def _request(request_id: RequestId, category: RequestCategory) -> str:
 
 def _deadline(deadline: datetime) -> str:
     return f"⏰ Срок: до {deadline:{MOMENT}}"
+
+
+def verification_today(meter: str, serial: str) -> str:
+    return (
+        f"⏰ Сегодня последний день поверки счетчика «{meter}» №{escape(serial)}. "
+        "С завтрашнего дня начисление пойдет по нормативу"
+    )

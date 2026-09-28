@@ -96,3 +96,10 @@ export const baselineOf = (meter: Meter, period: string) =>
   meter.last_period === period
     ? { period: meter.prior_period, values: meter.prior_values }
     : { period: meter.last_period, values: meter.last_values };
+
+export const verificationDaysLeft = (due: string, today = new Date()) =>
+  Math.round(
+    (Date.parse(due) -
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) /
+      86_400_000,
+  );

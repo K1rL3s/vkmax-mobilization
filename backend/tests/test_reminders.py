@@ -460,9 +460,14 @@ def _texts(bot_broker: RecordingBroker, user_id: UserId) -> list[str]:
 @pytest.mark.parametrize(
     ("due_in", "warned_ago", "expected"),
     [
-        (10, None, "{due:%d.%m.%Y} истекает поверка"),
+        (30, None, "Через 30 дней, {due:%d.%m.%Y}, истекает поверка"),
+        (7, 8, "Через 7 дней, {due:%d.%m.%Y}, истекает поверка"),
+        (6, 20, "Через 6 дней, {due:%d.%m.%Y}, истекает поверка"),
+        (1, 6, "Через 1 день, {due:%d.%m.%Y}, истекает поверка"),
+        (0, 1, "Сегодня последний день поверки"),
+        (-1, 1, "Истекла поверка"),
         (-1, 30, "Истекла поверка"),
-        (10, 365, "{due:%d.%m.%Y} истекает поверка"),
+        (10, 365, "Через 10 дней, {due:%d.%m.%Y}, истекает поверка"),
     ],
 )
 async def test_each_verification_warning_goes_once(
@@ -809,7 +814,7 @@ async def test_the_verification_warning_waits_for_nine_of_the_local_day(
     await service.warn_verification(datetime(2026, 9, 14, 23, tzinfo=UTC))
     await publisher.flush()
     [text] = _texts(broker, user_id)
-    assert "15.10.2026 истекает поверка" in text
+    assert "15.10.2026, истекает поверка" in text
 
 
 async def test_the_appointment_reminder_goes_at_seven_pm_for_the_local_tomorrow(
@@ -893,7 +898,7 @@ async def test_a_verification_due_in_thirty_one_days_waits(
     assert await _warned_at(bot_session, meter_id) is None
 
 
-async def test_verification_expires_only_the_day_after_the_due_date(
+async def test_a_due_date_brings_one_verification_notice_per_stage(
     session: AsyncSession,
     publisher: TaskPublisher,
     broker: RecordingBroker,
@@ -902,11 +907,36 @@ async def test_verification_expires_only_the_day_after_the_due_date(
     meter_id = await _meter(session, flat_id, due=date(2026, 10, 15))
     service = reminders_service(session, publisher)
 
-    for day in (15, 16, 17):
+    day = date(2026, 9, 10)
+    while day <= date(2026, 10, 20):
+        now = datetime.combine(day, time(6), UTC)
+        await service.warn_verification(now)
+        await service.warn_verification(now)
+        await publisher.flush()
+        day += timedelta(days=1)
+
+    assert [text.split(" поверк")[0] for text in _texts(broker, user_id)] == [
+        "⏰ Через 30 дней, 15.10.2026, истекает",
+        "⏰ Через 7 дней, 15.10.2026, истекает",
+        "⏰ Через 1 день, 15.10.2026, истекает",
+        "⏰ Сегодня последний день",
+        "⚠️ Истекла",
+    ]
+    assert await _warned_at(session, meter_id) == date(2026, 10, 16)
+
+
+async def test_a_missed_stage_arrives_the_next_day_once(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    flat_id, user_id = await _resident(session, await _house(session))
+    await _meter(session, flat_id, due=date(2026, 10, 15), warned_at=date(2026, 9, 15))
+    service = reminders_service(session, publisher)
+
+    for day in (9, 10):
         await service.warn_verification(datetime(2026, 10, day, 6, tzinfo=UTC))
         await publisher.flush()
 
-    soon, expired = _texts(broker, user_id)
-    assert "15.10.2026 истекает поверка" in soon
-    assert "Истекла поверка" in expired
-    assert await _warned_at(session, meter_id) == date(2026, 10, 16)
+    [text] = _texts(broker, user_id)
+    assert "Через 6 дней, 15.10.2026, истекает поверка" in text
