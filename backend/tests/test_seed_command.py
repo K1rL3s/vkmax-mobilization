@@ -10,6 +10,9 @@ import pytest
 from dishka import AsyncContainer
 from maxo.dialogs.test_tools import BotClient
 from maxo.dialogs.test_tools.bot_client import FakeBot
+from maxo.enums import ChatType
+from maxo.types import Message, MessageBody, Recipient
+from maxo.types.send_message_result import SendMessageResult
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from taskiq import InMemoryBroker
@@ -29,6 +32,8 @@ from zheka.infra.database.repos.users import UsersRepo
 from zheka.seed.demo import SEED_LOCK, seed
 
 WAITER_TIMEOUT = 30.0
+MID = "seed-1"
+CHAT_ID = 1
 
 
 async def test_seed_command_queues_the_task_and_answers_at_once(
@@ -44,7 +49,14 @@ async def test_seed_command_queues_the_task_and_answers_at_once(
 
     async def recording(**kwargs: Any) -> Any:
         sent.append(kwargs)
-        return await original(**kwargs)
+        await original(**kwargs)
+        return SendMessageResult(
+            message=Message(
+                recipient=Recipient(chat_type=ChatType.DIALOG, chat_id=CHAT_ID),
+                timestamp=datetime.now(UTC),
+                body=MessageBody(mid=MID, seq=1, text=kwargs["text"]),
+            ),
+        )
 
     monkeypatch.setattr(fake_bot, "send_message", recording)
     max_user_id = MaxUserId(secrets.randbits(40))
@@ -60,7 +72,11 @@ async def test_seed_command_queues_the_task_and_answers_at_once(
     user = await UsersRepo(bot_session).get_by_max_id(max_user_id)
     assert user is not None
     assert [message["text"] for message in sent] == [SEEDING_TEXT]
-    assert bot_broker.enqueued(TaskName.SEED_DEMO)[-1] == {"user_id": user.id}
+    assert bot_broker.enqueued(TaskName.SEED_DEMO)[-1] == {
+        "user_id": user.id,
+        "mid": MID,
+        "chat_id": CHAT_ID,
+    }
 
 
 @pytest.mark.parametrize(
@@ -98,6 +114,37 @@ async def test_the_task_seeds_today_and_tells_the_caller(
         "app_button": None,
         "app_path": None,
     }
+
+
+async def test_the_task_turns_the_waiting_message_into_the_result(
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def stub(*_: Any) -> bool:
+        return True
+
+    edits: list[dict[str, Any]] = []
+
+    async def recording(**kwargs: Any) -> Any:
+        edits.append(kwargs)
+        return None
+
+    monkeypatch.setattr(seed_task, "seed", stub)
+    monkeypatch.setattr(fake_bot, "edit_message", recording, raising=False)
+    queued = len(bot_broker.messages)
+
+    await _run(
+        task_broker,
+        seed_demo,
+        user_id=UserId(secrets.randbits(30)),
+        mid=MID,
+        chat_id=CHAT_ID,
+    )
+
+    assert [(edit["message_id"], edit["text"]) for edit in edits] == [(MID, SEEDED)]
+    assert bot_broker.messages[queued:] == []
 
 
 async def _waits_on_the_lock(

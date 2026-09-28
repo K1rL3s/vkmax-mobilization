@@ -76,8 +76,13 @@ async def seed_handler(
     user: User,
     publisher: FromDishka[TaskPublisher],
 ) -> None:
-    publisher.publish(TaskName.SEED_DEMO, user_id=int(user.id))
-    await update.answer_text(SEEDING_TEXT, notify=False)
+    reply = await update.answer_text(SEEDING_TEXT, notify=False)
+    publisher.publish(
+        TaskName.SEED_DEMO,
+        user_id=int(user.id),
+        mid=reply.body.mid,
+        chat_id=reply.recipient.chat_id,
+    )
 
 
 @router.after_startup()

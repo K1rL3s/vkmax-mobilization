@@ -400,8 +400,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   per entity; after `pg_advisory_xact_lock(SEED_LOCK)` an existing `DEMO_INN`
   org makes it return `False`. History rows are written directly, not via
   services; no request is left `ON_REVIEW` (the scheduler would auto-close
-  and message the author). `/seed` (unadvertised, open) only queues
-  `seed_demo`, which replies after commit; `seed()` gets no publisher.
+  and message the author). `/seed` (unadvertised, open) answers «⏳» and queues
+  `seed_demo` with that message's id and chat: the task edits it into the
+  result, and only when there is nothing to edit does it fall back to a message
+  after commit; `seed()` gets no publisher.
   `/demo` (unadvertised) queues one real text of every reminder kind to the
   caller alone, mandatory, from the caller's demo flat or stubs
   (`RemindersService.demo`); it stamps nothing.
