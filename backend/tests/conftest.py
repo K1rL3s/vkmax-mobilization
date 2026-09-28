@@ -515,6 +515,7 @@ def requests_service(
         EventsService(EventsRepo(session)),
         classifier or StubClassifier(None),
         category_executors_service(session, publisher),
+        ChatsRepo(session),
     )
 
 

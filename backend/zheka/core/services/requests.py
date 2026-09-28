@@ -51,6 +51,7 @@ from zheka.core.services.request_groups import (
     SimilarRequests,
     rules_of,
 )
+from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import OPEN_STATUSES, RequestsRepo
@@ -74,6 +75,7 @@ REPEAT_NOT_DONE = "Повторную заявку подают после пр�
 REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано плохо"
 ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
 REJECT_NOT_ON_REVIEW = "Работу возвращают только с приемки"
+SHARE_DONE = "Закрытую заявку соседям уже не показать"
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
@@ -119,9 +121,16 @@ class RequestCardData(ZhekaType):
     can_demo_expire: bool
 
 
+class SharedRequest(ZhekaType):
+    request: Request
+    house: House
+    posted: bool
+
+
 class RequestsService:
     __slots__ = (
         "_category_executors",
+        "_chats",
         "_classifier",
         "_events",
         "_files",
@@ -147,7 +156,9 @@ class RequestsService:
         events_service: EventsService,
         classifier: YandexClassifier,
         category_executors_service: CategoryExecutorsService,
+        chats_repo: ChatsRepo,
     ) -> None:
+        self._chats = chats_repo
         self._requests = requests_repo
         self._houses = houses_repo
         self._residents = residents_repo
@@ -362,6 +373,7 @@ class RequestsService:
             **{"from": RequestStatus.ON_REVIEW.value, "to": RequestStatus.DONE.value},
             by_role=by_role.value,
         )
+        self._notifications.sync_chat_card(ChatCardKind.REQUEST, request.id, post=False)
         if request.group_id is not None:
             self._notifications.sync_chat_card(
                 ChatCardKind.GROUP,
@@ -537,6 +549,31 @@ class RequestsService:
         if parent.status is not RequestStatus.ON_REVIEW:
             raise InvalidState(REJECT_NOT_ON_REVIEW)
         return await self.repeat(user_id, request_id, comment, [], channel)
+
+    async def share_to_chat(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+    ) -> SharedRequest:
+        request = await self._own_request(user_id, request_id)
+        if request.status is RequestStatus.DONE:
+            raise InvalidState(SHARE_DONE)
+        house = await self._get_house(request.house_id)
+        posted = bool(await self._chats.list_for_houses([house.id]))
+        if posted:
+            kind, ref_id = (
+                (ChatCardKind.REQUEST, request.id)
+                if request.group_id is None
+                else (ChatCardKind.GROUP, request.group_id)
+            )
+            self._notifications.sync_chat_card(kind, ref_id, post=True)
+        await self._events.record(
+            EventType.REQUEST_SHARED,
+            user_id=user_id,
+            request_id=request_id,
+            channel="chat" if posted else "share",
+        )
+        return SharedRequest(request=request, house=house, posted=posted)
 
     async def export(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
         card = await self.get_card(user_id, request_id)

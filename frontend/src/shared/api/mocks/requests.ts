@@ -197,6 +197,25 @@ export const requestsConfigs = [
 
     return ok(requestCard(item));
   }),
+  endpoint("post", "/requests/:request_id/chat-card", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
+
+    if (item.status === "done") {
+      return conflict("Закрытую заявку соседям уже не показать");
+    }
+
+    const shared: Schemas["SharedRequestResponse"] = {
+      posted: false,
+      share_text: `Заявка №${item.id}. Если у вас то же самое, присоединяйтесь к заявке`,
+      share_link: `https://max.ru/zheka_bot?startapp=house_${item.house_id}_${item.category}`,
+    };
+
+    return ok(shared);
+  }),
   endpoint("get", "/request-categories", () => ok(requestCategories())),
   endpoint("post", "/files", async (request) => {
     const name = nextFileName();

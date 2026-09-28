@@ -29,6 +29,7 @@ import { LetterPanel } from "./ui/letter-panel";
 import { RatePanel } from "./ui/rate-panel";
 import { RequestPhotos } from "./ui/request-photos";
 import { RequestTimeline } from "./ui/request-timeline";
+import { SharePanel } from "./ui/share-panel";
 
 import styles from "./request.module.css";
 
@@ -156,6 +157,8 @@ const RequestPage = () => {
       </div>
 
       {overdue && <EscalationPanel request={request} />}
+
+      {!isFinished(request.status) && <SharePanel request={request} />}
 
       {letter && <LetterPanel {...letter} />}
 

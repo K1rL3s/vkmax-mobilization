@@ -381,6 +381,7 @@ class AdminRequestsService:
             **{"from": current.value, "to": target.value},
             by_role=by_role.value,
         )
+        self._notifications.sync_chat_card(ChatCardKind.REQUEST, request.id, post=False)
         if request.group_id is not None:
             self._notifications.sync_chat_card(
                 ChatCardKind.GROUP,

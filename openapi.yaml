@@ -2566,6 +2566,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/chat-card:
+    post:
+      tags:
+      - Заявки
+      summary: Рассказать соседям о заявке
+      description: Только автор и только незакрытая заявка. Если у дома есть привязанный чат с ботом-администратором, туда уходит карточка заявки (или общей заявки дома, если заявка в нее вошла), иначе клиент открывает шеринг
+      operationId: share_request_to_chat
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedRequestResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/requests/classify:
     post:
       tags:
@@ -13640,6 +13713,26 @@ components:
       required:
       - windows
       title: SetReceptionWindowsRequest
+    SharedRequestResponse:
+      properties:
+        posted:
+          type: boolean
+          title: Posted
+          description: Карточка ушла в привязанный чат дома; иначе поделиться вручную
+        share_text:
+          type: string
+          title: Share Text
+          description: Текст для нативного шеринга MAX
+        share_link:
+          type: string
+          title: Share Link
+          description: Ссылка «У меня тоже» на форму заявки
+      type: object
+      required:
+      - posted
+      - share_text
+      - share_link
+      title: SharedRequestResponse
     SimilarRequestsResponse:
       properties:
         category:

@@ -251,6 +251,14 @@ class RequestExport(BaseSchema):
     disclaimer: str
 
 
+class SharedRequestResponse(BaseSchema):
+    posted: bool = Field(
+        description="Карточка ушла в привязанный чат дома; иначе поделиться вручную",
+    )
+    share_text: str = Field(description="Текст для нативного шеринга MAX")
+    share_link: str = Field(description="Ссылка «У меня тоже» на форму заявки")
+
+
 class AdminRequestListItem(RequestListItem):
     house_id: HouseId
     address: str

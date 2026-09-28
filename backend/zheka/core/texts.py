@@ -323,3 +323,32 @@ def group_card_done(category: RequestCategory, flats: int) -> str:
         f"✅ {CATEGORY_RULES[category].label}: УК отметила работы выполненными "
         f"(сообщали {flats_count(flats)})"
     )
+
+
+def request_card(request: Request, house: House) -> str:
+    rule = CATEGORY_RULES[request.category]
+    return (
+        f"{rule.emoji} Заявка №{request.id} · {rule.label}\n"
+        f"Статус: {REQUEST_STATUS_LABELS[request.status].lower()}\n"
+        f"⏰ Срок: до {house.local(request.deadline_at):{MOMENT}}\n"
+        f"{CARD_HASHTAG}"
+    )
+
+
+def request_card_done(request_id: RequestId) -> str:
+    return f"✅ Заявка №{request_id}: УК отметила выполненной"
+
+
+def request_card_grouped(request_id: RequestId, category: RequestCategory) -> str:
+    return (
+        f"🔗 Заявка №{request_id} · {CATEGORY_RULES[category].label} вошла в общую "
+        "заявку дома, статус теперь в ее карточке"
+    )
+
+
+def request_share_text(request: Request, house: House) -> str:
+    return (
+        f"{CATEGORY_RULES[request.category].emoji} Заявка №{request.id} · "
+        f"{CATEGORY_RULES[request.category].label}, {house.address}. "
+        "Если у вас то же самое, присоединяйтесь к заявке"
+    )

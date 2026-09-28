@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
+from maxo import Bot
+from maxo.utils.deeplink import create_startapp_link
 
 from zheka.api.dependencies import CurrentResidencyDep, RequireConsentDep
 from zheka.api.schemas.base import Limit, Offset, Page
@@ -18,14 +20,16 @@ from zheka.api.schemas.requests import (
     RequestCategoryItem,
     RequestExport,
     RequestListItem,
+    SharedRequestResponse,
     SimilarRequestsResponse,
 )
+from zheka.core.deeplinks import house_category_payload
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
 from zheka.core.models import RequestPhoto
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
-from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
+from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER, request_share_text
 from zheka.infra.yandex import YandexQuota
 
 router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
@@ -173,6 +177,33 @@ async def export_request(
     return RequestExport(
         request=_card(card, files_service),
         disclaimer=REQUEST_EXPORT_DISCLAIMER,
+    )
+
+
+@router.post(
+    "/requests/{request_id}/chat-card",
+    summary="Рассказать соседям о заявке",
+    description=(
+        "Только автор и только незакрытая заявка. Если у дома есть привязанный "
+        "чат с ботом-администратором, туда уходит карточка заявки (или общей "
+        "заявки дома, если заявка в нее вошла), иначе клиент открывает шеринг"
+    ),
+)
+async def share_request_to_chat(
+    request_id: RequestId,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    bot: FromDishka[Bot],
+) -> SharedRequestResponse:
+    shared = await requests_service.share_to_chat(current_account.user_id, request_id)
+    request = shared.request
+    return SharedRequestResponse(
+        posted=shared.posted,
+        share_text=request_share_text(request, shared.house),
+        share_link=create_startapp_link(
+            bot,
+            house_category_payload(request.house_id, request.category),
+        ),
     )
 
 

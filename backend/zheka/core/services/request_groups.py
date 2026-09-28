@@ -85,6 +85,12 @@ class GroupingService:
         oldest = min(item.created_at for item in open_requests)
         group = await self._requests.create_group(house_id, request.category, oldest)
         await self._requests.attach_to_group(open_requests, group.id)
+        for member in open_requests:
+            self._notifications.sync_chat_card(
+                ChatCardKind.REQUEST,
+                member.id,
+                post=False,
+            )
         await self._events.record(
             EventType.REQUEST_GROUP_FORMED,
             user_id=request.author_user_id,

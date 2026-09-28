@@ -295,6 +295,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   every join, edited by `_move` and `_complete_review` of its members; no
   flats, names or descriptions in it. `bot_added` and deleting the card
   message forget it. «✋ У меня тоже» is a startapp `house_<id>_<category>`.
+  A request card goes to the chat only when its author asks
+  (`share_to_chat`, open request; grouped -> the group card; no chat -> the
+  client's native share), then every status move edits it; once grouped it
+  says so and stays.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap
   and after each failed chat send. `set_admin` records `CHAT_ADMIN_GRANTED`
   and queues the welcome only on `false -> true`; a failed send without rights

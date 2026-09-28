@@ -501,6 +501,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/chat-card": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Рассказать соседям о заявке
+     * @description Только автор и только незакрытая заявка. Если у дома есть привязанный чат с ботом-администратором, туда уходит карточка заявки (или общей заявки дома, если заявка в нее вошла), иначе клиент открывает шеринг
+     */
+    post: operations["share_request_to_chat"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/requests/classify": {
     parameters: {
       query?: never;
@@ -4247,6 +4267,24 @@ export interface components {
       /** Windows */
       windows: components["schemas"]["ReceptionWindowInput"][];
     };
+    /** SharedRequestResponse */
+    SharedRequestResponse: {
+      /**
+       * Posted
+       * @description Карточка ушла в привязанный чат дома; иначе поделиться вручную
+       */
+      posted: boolean;
+      /**
+       * Share Text
+       * @description Текст для нативного шеринга MAX
+       */
+      share_text: string;
+      /**
+       * Share Link
+       * @description Ссылка «У меня тоже» на форму заявки
+       */
+      share_link: string;
+    };
     /** SimilarRequestsResponse */
     SimilarRequestsResponse: {
       category: components["schemas"]["RequestCategory"];
@@ -7293,6 +7331,93 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RequestExport"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  share_request_to_chat: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SharedRequestResponse"];
         };
       };
       /** @description Некорректный запрос */
