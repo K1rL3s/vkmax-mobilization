@@ -50,9 +50,9 @@ const HouseRow = ({ house }: { house: House }) => {
 
         <Typography.Text variant="description" color="secondary">
           {house.flats_count}{" "}
-          {plural(house.flats_count, ["квартира", "квартиры", "квартир"])} ·{" "}
-          {house.residents_count}{" "}
-          {plural(house.residents_count, ["житель", "жителя", "жителей"])}
+          {plural(house.flats_count, ["квартира", "квартиры", "квартир"])}
+          {house.residents_count != null &&
+            ` · ${house.residents_count} ${plural(house.residents_count, ["житель", "жителя", "жителей"])}`}
         </Typography.Text>
 
         <Flex align="center" gap={6} wrap="wrap">
