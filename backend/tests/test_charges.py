@@ -22,9 +22,14 @@ from zheka.core.enums import (
     ResidentRole,
     ServiceType,
 )
-from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidState,
+    InvalidValue,
+    NotEnoughRights,
+)
 from zheka.core.ids import ChargeId, FlatId, UserId
-from zheka.core.services.charges import ChargesService
+from zheka.core.services.charges import LINE_QUESTION_ASK, ChargesService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess
@@ -319,3 +324,134 @@ async def test_list_for_flat_orders_by_period_descending_and_reports_total(
 
     assert total == 3
     assert [c.period for c in charges] == [date(2026, 3, 1), date(2026, 2, 1)]
+
+
+def _hot_water(amount: int, volume: int, tariff: int) -> dict[str, object]:
+    return {
+        "service": ServiceType.HOT_WATER.value,
+        "amount": amount,
+        "volume": volume,
+        "tariff": tariff,
+        "unit": "м³",
+    }
+
+
+async def test_a_line_question_cites_the_line_sum_calculation_and_change(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    await _add_charge(
+        session,
+        own.flat_id,
+        date(2026, 8, 1),
+        [_hot_water(40_460, 3_000, 1_348_667)],
+        40_460,
+    )
+    charge = await _add_charge(
+        session,
+        own.flat_id,
+        date(2026, 9, 1),
+        [_hot_water(47_460, 3_500, 1_356_000)],
+        47_460,
+    )
+
+    request_id = await _make_service(session).dispute(
+        charge.id,
+        own.user_id,
+        " Почему выросло? ",
+        ServiceType.HOT_WATER,
+    )
+
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
+    assert request.category is RequestCategory.CHARGE_DISPUTE
+    assert request.description == (
+        "По строке «Горячая вода» за 09.2026: 474.60 руб. "
+        "(3,5 м³ × 135.60 руб.), к прошлому месяцу +70.00 руб."
+        f"\n\nПочему выросло?\n\n{LINE_QUESTION_ASK}"
+    )
+
+
+async def test_a_line_question_about_a_line_not_in_the_bill_is_refused(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    charge = await _charge(session, own)
+
+    with pytest.raises(InvalidValue, match="Горячая вода"):
+        await _make_service(session).dispute(
+            charge.id,
+            own.user_id,
+            "Почему выросло?",
+            ServiceType.HOT_WATER,
+        )
+
+
+async def test_a_first_month_line_without_volume_cites_only_the_sum(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    line = {
+        "service": ServiceType.MAINTENANCE.value,
+        "amount": 189_000,
+        "tariff": 350_000,
+        "unit": "м²",
+    }
+    charge = await _add_charge(session, own.flat_id, date(2026, 9, 1), [line], 189_000)
+
+    request_id = await _make_service(session).dispute(
+        charge.id,
+        own.user_id,
+        "Откуда такая сумма?",
+        ServiceType.MAINTENANCE,
+    )
+
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
+    assert request.description == (
+        "По строке «Содержание жилья» за 09.2026: 1890.00 руб."
+        f"\n\nОткуда такая сумма?\n\n{LINE_QUESTION_ASK}"
+    )
+
+
+async def test_a_line_new_this_month_is_called_new_instead_of_a_change(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    maintenance = {
+        "service": ServiceType.MAINTENANCE.value,
+        "amount": 189_000,
+        "tariff": 350_000,
+        "unit": "м²",
+    }
+    await _add_charge(session, own.flat_id, date(2026, 8, 1), [maintenance], 189_000)
+    charge = await _add_charge(
+        session,
+        own.flat_id,
+        date(2026, 9, 1),
+        [maintenance, _hot_water(47_460, 3_500, 1_356_000)],
+        236_460,
+    )
+
+    request_id = await _make_service(session).dispute(
+        charge.id,
+        own.user_id,
+        "Откуда эта строка?",
+        ServiceType.HOT_WATER,
+    )
+
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
+    assert request.description == (
+        "По строке «Горячая вода» за 09.2026: 474.60 руб. "
+        "(3,5 м³ × 135.60 руб.), новая строка в этом месяце."
+        f"\n\nОткуда эта строка?\n\n{LINE_QUESTION_ASK}"
+    )

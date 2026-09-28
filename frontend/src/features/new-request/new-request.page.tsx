@@ -61,14 +61,18 @@ const NewRequestPage = () => {
         <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
-              <h2>Что случилось?</h2>
+              <h2>{form.subject ?? "Что случилось?"}</h2>
             </Typography.Text>
 
             <Textarea
               className={styles.Description}
               mode="secondary"
               rows={4}
-              placeholder="Опишите проблему своими словами: что, где и когда началось"
+              placeholder={
+                form.subject
+                  ? "Что непонятно в этой строке? Например: почему выросло"
+                  : "Опишите проблему своими словами: что, где и когда началось"
+              }
               value={form.description}
               onChange={(event) => form.setDescription(event.target.value)}
             />

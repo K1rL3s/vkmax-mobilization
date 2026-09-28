@@ -87,9 +87,11 @@ const DeltaSummary = ({ breakdown }: { breakdown: ChargeBreakdown }) => {
 const Lines = ({
   breakdown,
   card,
+  onAsk,
 }: {
   breakdown: ChargeBreakdown;
   card: ChargeCard;
+  onAsk: (line: ChargeBreakdown["lines"][number]) => void;
 }) => (
   <div className={styles.Panel}>
     {breakdown.lines.map((line) => {
@@ -147,6 +149,16 @@ const Lines = ({
             >
               {change()}
             </Typography.Text>
+          )}
+          {source && (
+            <Button
+              size="small"
+              variant="secondary"
+              className={styles.Ask}
+              onClick={() => onAsk(line)}
+            >
+              Вопрос по строке
+            </Button>
           )}
         </Flex>
       );
@@ -245,7 +257,20 @@ const ChargePage = () => {
               В квитанции нет строк: УК выставила пустой месяц
             </Typography.Text>
           ) : (
-            <Lines breakdown={breakdown.data} card={charge} />
+            <Lines
+              breakdown={breakdown.data}
+              card={charge}
+              onAsk={(line) =>
+                void navigate(Routes.REQUEST_NEW, {
+                  state: {
+                    category: "charge_dispute",
+                    chargeId: charge.id,
+                    service: line.service,
+                    subject: `Вопрос по строке «${line.label}» за ${period.toLowerCase()}`,
+                  },
+                })
+              }
+            />
           )}
         </section>
       </Flex>

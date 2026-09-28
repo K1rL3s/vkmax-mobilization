@@ -7,6 +7,7 @@ import { useRequestCategories, type RequestCategory } from "@/features/request";
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
+import type { components } from "@/shared/api/schema/generated";
 import { Routes } from "@/shared/model/routes";
 import { houseParams, useSession } from "@/shared/model/session";
 
@@ -17,6 +18,21 @@ export const DESCRIPTION_LIMIT = 1000;
 const handoverSchema = z.object({
   category: z.literal("charge_dispute"),
   chargeId: z.number().int().positive(),
+  service: z
+    .enum([
+      "cold_water",
+      "hot_water",
+      "electricity",
+      "gas",
+      "heating",
+      "maintenance",
+      "overhaul",
+      "waste",
+      "penalty",
+      "recalculation",
+    ] satisfies components["schemas"]["ServiceType"][])
+    .optional(),
+  subject: z.string().max(200).optional(),
 });
 
 export const useNewRequest = () => {
@@ -102,7 +118,7 @@ export const useNewRequest = () => {
     if (dispute) {
       disputeCharge.mutate({
         params: { ...authParams(), path: { charge_id: dispute.chargeId } },
-        body: { comment: description.trim() },
+        body: { comment: description.trim(), service: dispute.service },
       });
 
       return;
@@ -139,6 +155,7 @@ export const useNewRequest = () => {
     photos,
     neighbours,
     isDispute: dispute !== null,
+    subject: dispute?.subject ?? null,
     isJoining,
     isSending: isSubmitting && !isJoining,
     error:
