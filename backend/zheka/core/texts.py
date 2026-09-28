@@ -52,10 +52,9 @@ def request_status_changed(
 
 
 def request_reply(request_id: RequestId, category: RequestCategory, text: str) -> str:
-    return (
-        f"💬 Ответ УК по заявке {_request(request_id, category)}\n\n{escape(text)}\n\n"
-        "↩️ Ответить можно в приложении"
-    )
+    head = f"💬 Ответ УК по заявке {_request(request_id, category)}\n\n"
+    tail = "\n\n↩️ Ответить можно в приложении"
+    return f"{head}{_fitted(text, head + tail)}{tail}"
 
 
 def flat_verified(flat_number: str, address: str) -> str:
@@ -232,3 +231,39 @@ def request_overdue_author(request: Request) -> str:
 
 def request_overdue_chairman(request: Request) -> str:
     return f"🔴 В доме просрочена заявка {_request(request.id, request.category)}"
+
+
+def executor_declined(
+    request_id: RequestId,
+    category: RequestCategory,
+    executor: str,
+    reason: str,
+) -> str:
+    head = (
+        f"🙅 {escape(executor)} отказался от заявки {_request(request_id, category)}"
+        "\n💬 "
+    )
+    return f"{head}{_fitted(reason, head)}"
+
+
+MESSAGE_LIMIT = 4000
+
+
+def _units(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2
+
+
+def _fitted(quote: str, frame: str) -> str:
+    room = MESSAGE_LIMIT - _units(frame)
+    escaped = escape(quote)
+    if _units(escaped) <= room:
+        return escaped
+    kept: list[str] = []
+    size = _units("…")
+    for char in quote:
+        part = escape(char)
+        size += _units(part)
+        if size > room:
+            break
+        kept.append(part)
+    return f"{''.join(kept)}…"

@@ -92,3 +92,4 @@ class RequestMessage(ZhekaMutableType):
     author_user_id: UserId
     author_role: str
     text: str
+    is_internal: bool = False

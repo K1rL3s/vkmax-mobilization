@@ -392,6 +392,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
       author_role: "staff",
       author_name: "Диспетчер УК",
       text: message.text,
+      is_internal: false,
     })),
     timeline,
     can_review: item.status === "on_review",

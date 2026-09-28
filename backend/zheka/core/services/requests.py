@@ -39,6 +39,7 @@ from zheka.core.models import (
     Resident,
     User,
 )
+from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.houses import NOT_CONNECTED, is_connected
@@ -117,6 +118,7 @@ class RequestCardData(ZhekaType):
 
 class RequestsService:
     __slots__ = (
+        "_category_executors",
         "_classifier",
         "_events",
         "_files",
@@ -141,6 +143,7 @@ class RequestsService:
         notifications_service: NotificationsService,
         events_service: EventsService,
         classifier: YandexClassifier,
+        category_executors_service: CategoryExecutorsService,
     ) -> None:
         self._requests = requests_repo
         self._houses = houses_repo
@@ -152,6 +155,7 @@ class RequestsService:
         self._notifications = notifications_service
         self._events = events_service
         self._classifier = classifier
+        self._category_executors = category_executors_service
 
     async def create(
         self,
@@ -203,6 +207,7 @@ class RequestsService:
                 house_id=house_id,
                 category=draft.category.value,
             )
+        await self._category_executors.assign_default(request, house.org_id)
         await self._notify_staff(request, house, texts.request_created(request, house))
         return await self._built_card(request, house)
 
@@ -262,6 +267,7 @@ class RequestsService:
             is_repeat=True,
             parent_request_id=parent.id,
         )
+        await self._category_executors.assign_default(request, house.org_id)
         await self._notify_staff(request, house, texts.request_created(request, house))
         return await self._built_card(request, house)
 
@@ -688,9 +694,14 @@ async def build_card(
     house: House,
     *,
     authored: bool = False,
+    with_internal: bool = False,
 ) -> RequestCardData:
     photos = await requests_repo.list_photos(request.id)
-    messages = await requests_repo.list_messages(request.id)
+    messages = [
+        message
+        for message in await requests_repo.list_messages(request.id)
+        if with_internal or not message.is_internal
+    ]
     authors = {
         user.id: user
         for user in await users_repo.list_by_ids(

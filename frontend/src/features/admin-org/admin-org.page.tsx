@@ -11,6 +11,7 @@ import { StatusPill } from "@/shared/ui/status-pill";
 
 import { ROLE_LABEL } from "./domain/roles";
 import { useActorRole, useOrgCard, useOrgSettings } from "./model/use-org";
+import { CategoryExecutors } from "./ui/category-executors";
 import { MembersSection } from "./ui/members-section";
 import { OrgSwitcher } from "./ui/org-switcher";
 import { SettingsForm } from "./ui/settings-form";
@@ -117,6 +118,8 @@ const AdminOrgPage = () => {
       )}
 
       <SettingsForm settings={settings.data} readOnly={readOnly} />
+
+      <CategoryExecutors readOnly={readOnly} />
 
       {!readOnly && <MembersSection />}
     </Panel>

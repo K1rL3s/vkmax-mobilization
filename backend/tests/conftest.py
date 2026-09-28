@@ -60,6 +60,7 @@ from zheka.core.enums import (
 )
 from zheka.core.ids import FlatId, HouseId, MaxUserId, MeterId, OrgId, UserId
 from zheka.core.services.admin_requests import AdminRequestsService
+from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.notifications import NotificationsService
@@ -502,6 +503,7 @@ def requests_service(
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
         classifier or StubClassifier(None),
+        category_executors_service(session, publisher),
     )
 
 
@@ -518,6 +520,7 @@ def admin_requests_service(
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
+        category_executors_service(session, publisher),
     )
 
 
@@ -601,3 +604,15 @@ def alembic_config() -> AlembicConfig:
     config = AlembicConfig(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
     return config
+
+
+def category_executors_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> CategoryExecutorsService:
+    return CategoryExecutorsService(
+        RequestsRepo(session),
+        OrgsRepo(session),
+        make_notifications_service(session, publisher),
+        EventsService(EventsRepo(session)),
+    )

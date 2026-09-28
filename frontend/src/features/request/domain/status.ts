@@ -21,3 +21,27 @@ export const STATUS_TONE: Record<RequestStatus, StatusPillTone> = {
 export const isFinished = (status: RequestStatus) => status === "done";
 
 export const isOnReview = (status: RequestStatus) => status === "on_review";
+
+export const currentActor = (
+  {
+    status,
+    executor_name: executor,
+    author_name: author,
+  }: {
+    status: RequestStatus;
+    executor_name?: string | null;
+    author_name?: string | null;
+  },
+  audience: "resident" | "staff" = "resident",
+): string | null => {
+  if (status === "done") return null;
+  if (status === "new") return "УК принимает заявку";
+  if (status === "on_review") {
+    if (audience === "resident") return "Вы: проверьте работу";
+    return author == null ? "УК проверяет работу" : "Житель проверяет работу";
+  }
+  if (!executor) return "УК подбирает исполнителя";
+  return status === "accepted"
+    ? `${executor} готовится к выезду`
+    : `${executor} выполняет работы`;
+};

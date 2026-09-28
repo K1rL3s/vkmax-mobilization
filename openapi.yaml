@@ -5646,6 +5646,165 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/org/category-executors:
+    get:
+      tags:
+      - 'Админка: организация'
+      summary: Исполнители по умолчанию для категорий заявок
+      operationId: list_category_executors
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryExecutorItem'
+                title: Response List Category Executors
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+    put:
+      tags:
+      - 'Админка: организация'
+      summary: Назначить исполнителя по умолчанию для категории
+      operationId: set_category_executor
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCategoryExecutorRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryExecutorItem'
+                title: Response Set Category Executor
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/admin/houses:
     get:
       tags:
@@ -10117,6 +10276,18 @@ components:
       required:
       - starts_at
       title: BookAppointmentRequest
+    CategoryExecutorItem:
+      properties:
+        category:
+          $ref: '#/components/schemas/RequestCategory'
+        executor_user_id:
+          type: integer
+          title: Executor User Id
+      type: object
+      required:
+      - category
+      - executor_user_id
+      title: CategoryExecutorItem
     ChangeGroupStatusRequest:
       properties:
         status:
@@ -13047,6 +13218,11 @@ components:
         text:
           type: string
           title: Text
+        is_internal:
+          type: boolean
+          title: Is Internal
+          description: Заметка только для УК, например причина отказа исполнителя
+          default: false
       type: object
       required:
       - created_at
@@ -13213,6 +13389,21 @@ components:
       - penalty
       - recalculation
       title: ServiceType
+    SetCategoryExecutorRequest:
+      properties:
+        category:
+          $ref: '#/components/schemas/RequestCategory'
+        executor_user_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Executor User Id
+          description: Исполнитель, которому сразу уходят новые заявки категории; null снимает назначение
+      type: object
+      required:
+      - category
+      - executor_user_id
+      title: SetCategoryExecutorRequest
     SetChairmanRequest:
       properties:
         is_chairman:

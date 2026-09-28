@@ -1116,6 +1116,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/admin/org/category-executors": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Исполнители по умолчанию для категорий заявок */
+    get: operations["list_category_executors"];
+    /** Назначить исполнителя по умолчанию для категории */
+    put: operations["set_category_executor"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/admin/houses": {
     parameters: {
       query?: never;
@@ -2297,6 +2315,12 @@ export interface components {
       starts_at: string;
       /** Request Id */
       request_id?: number | null;
+    };
+    /** CategoryExecutorItem */
+    CategoryExecutorItem: {
+      category: components["schemas"]["RequestCategory"];
+      /** Executor User Id */
+      executor_user_id: number;
     };
     /** ChangeGroupStatusRequest */
     ChangeGroupStatusRequest: {
@@ -4021,6 +4045,12 @@ export interface components {
       author_name: string;
       /** Text */
       text: string;
+      /**
+       * Is Internal
+       * @description Заметка только для УК, например причина отказа исполнителя
+       * @default false
+       */
+      is_internal: boolean;
     };
     /**
      * RequestStatus
@@ -4115,6 +4145,15 @@ export interface components {
       | "waste"
       | "penalty"
       | "recalculation";
+    /** SetCategoryExecutorRequest */
+    SetCategoryExecutorRequest: {
+      category: components["schemas"]["RequestCategory"];
+      /**
+       * Executor User Id
+       * @description Исполнитель, которому сразу уходят новые заявки категории; null снимает назначение
+       */
+      executor_user_id: number | null;
+    };
     /** SetChairmanRequest */
     SetChairmanRequest: {
       /** Is Chairman */
@@ -10709,6 +10748,182 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OkResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  list_category_executors: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CategoryExecutorItem"][];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  set_category_executor: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetCategoryExecutorRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CategoryExecutorItem"][];
         };
       };
       /** @description Некорректный запрос */

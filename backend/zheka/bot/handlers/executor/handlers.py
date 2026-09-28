@@ -4,7 +4,7 @@ from typing import Any
 from dishka import FromDishka
 from maxo.dialogs import DialogManager
 from maxo.dialogs.integrations.dishka import inject
-from maxo.dialogs.widgets.input import MessageInput
+from maxo.dialogs.widgets.input import ManagedTextInput, MessageInput
 from maxo.dialogs.widgets.kbd import Button
 from maxo.types import MessageCallback, MessageCreated, PhotoAttachment
 
@@ -23,6 +23,7 @@ from zheka.core.services.requests import MAX_PHOTOS
 from zheka.core.texts import REQUEST_STATUS_LABELS
 
 PHOTO_TAKEN = "✅ Фото получил, карточка заявки обновится"
+DECLINE_SENT = "✅ Отказ передан в УК"
 
 
 def _request_id(dialog_manager: DialogManager) -> RequestId:
@@ -109,3 +110,35 @@ async def on_result_photo(
         photo_urls=urls[:MAX_PHOTOS],
     )
     await back_to_menu(dialog_manager, PHOTO_TAKEN)
+
+
+async def on_decline(
+    _callback: MessageCallback,
+    _button: Button,
+    dialog_manager: DialogManager,
+) -> None:
+    await ask_in_default_stack(
+        dialog_manager,
+        ExecutorCard.decline,
+        ExecutorCardData(request_id=_request_id(dialog_manager)).to_data(),
+    )
+
+
+@inject
+async def on_decline_reason(
+    _update: MessageCreated,
+    _widget: ManagedTextInput[str],
+    dialog_manager: DialogManager,
+    reason: str,
+    admin_requests_service: FromDishka[AdminRequestsService],
+) -> None:
+    try:
+        await admin_requests_service.executor_decline(
+            dialog_user_id(dialog_manager),
+            _request_id(dialog_manager),
+            reason,
+        )
+    except ZhekaError as error:
+        await back_to_menu(dialog_manager, str(error))
+        return
+    await back_to_menu(dialog_manager, DECLINE_SENT)

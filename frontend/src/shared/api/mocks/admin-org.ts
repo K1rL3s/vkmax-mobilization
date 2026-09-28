@@ -107,6 +107,7 @@ const state = {
     ),
     invite("Rt4mZa9-Ngk", "employee", hours(-400), hours(-328), 1),
   ],
+  categoryExecutors: [] as Schemas["CategoryExecutorItem"][],
 };
 
 const memberItem = (item: MockMember): Schemas["OrgMemberItem"] => ({
@@ -261,5 +262,27 @@ export const adminOrgConfigs = [
     found.revoked_at = new Date().toISOString();
 
     return ok({ ok: true });
+  }),
+  endpoint("get", "/admin/org/category-executors", () =>
+    ok(state.categoryExecutors),
+  ),
+  endpoint("put", "/admin/org/category-executors", (request) => {
+    const body = request.body as Schemas["SetCategoryExecutorRequest"];
+    const others = state.categoryExecutors.filter(
+      (item) => item.category !== body.category,
+    );
+
+    state.categoryExecutors =
+      body.executor_user_id == null
+        ? others
+        : [
+            ...others,
+            {
+              category: body.category,
+              executor_user_id: body.executor_user_id,
+            },
+          ];
+
+    return ok(state.categoryExecutors);
   }),
 ];

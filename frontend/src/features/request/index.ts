@@ -5,6 +5,7 @@ export { DeadlinePanel } from "./ui/deadline-panel";
 export { RequestPhotos } from "./ui/request-photos";
 export { RequestTimeline } from "./ui/request-timeline";
 export {
+  currentActor,
   isFinished,
   isOnReview,
   STATUS_LABEL,

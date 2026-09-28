@@ -14,6 +14,7 @@ from tests.conftest import (
     Fixture,
     OrgHouseFlatUser,
     RecordingBroker,
+    category_executors_service,
     make_notifications_service,
 )
 
@@ -234,6 +235,7 @@ def _admin_service(
         GroupingService(RequestsRepo(session), EventsService(EventsRepo(session))),
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
+        category_executors_service(session, publisher),
     )
 
 

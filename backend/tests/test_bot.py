@@ -86,8 +86,12 @@ from zheka.bot.handlers.commands.start import (
 )
 from zheka.bot.handlers.consent.windows import GIVEN_TEXT
 from zheka.bot.handlers.errors.router import UNEXPECTED
-from zheka.bot.handlers.executor.handlers import PHOTO_TAKEN
-from zheka.bot.handlers.executor.windows import HANDED_OVER_TEXT, RESULT_PHOTO_TEXT
+from zheka.bot.handlers.executor.handlers import DECLINE_SENT, PHOTO_TAKEN
+from zheka.bot.handlers.executor.windows import (
+    DECLINE_TEXT,
+    NOT_YOURS_TEXT,
+    RESULT_PHOTO_TEXT,
+)
 from zheka.bot.handlers.menu.windows import (
     CALL_NOTE_TEXT,
     EMERGENCY_PHONE_TEXT,
@@ -892,7 +896,7 @@ async def test_a_tap_on_a_card_that_is_no_longer_his_shows_the_handover(
 
     await client.click(card, DEPART)
 
-    assert HANDED_OVER_TEXT.format(request_id=request_id) in (_text(message_manager))
+    assert NOT_YOURS_TEXT.format(request_id=request_id) in (_text(message_manager))
 
 
 async def test_a_tap_on_a_review_closed_elsewhere_renders_the_closed_request(
@@ -977,7 +981,7 @@ async def test_a_refused_photo_rerenders_the_card_for_the_sender(
     assert enqueued == {"request_id": request_id, "user_id": sender_id}
     await _run(task_broker, send_executor_card, **enqueued)
     _, text, chat_id, _ = shows[-1]
-    assert HANDED_OVER_TEXT.format(request_id=request_id) in (text or "")
+    assert NOT_YOURS_TEXT.format(request_id=request_id) in (text or "")
     assert chat_id == client.chat.chat_id
     assert (await _status(bot_session, request_id)).status is (
         RequestStatus.IN_PROGRESS
@@ -3555,3 +3559,37 @@ async def test_a_free_text_on_the_emergency_screen_starts_a_request(
         address=address,
         description=PROBLEM,
     )
+
+
+DECLINE = InlineButtonTextLocator("🙅 Не могу")
+
+
+async def test_a_declining_executor_is_asked_why_and_loses_the_card(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    shows: list[Show],
+    notices: _RecordingBot,
+) -> None:
+    request_id = await _executor_on(bot_session, client, RequestStatus.ACCEPTED)
+    executor = (await _status(bot_session, request_id)).executor_user_id
+    await _run(task_broker, send_executor_card, request_id=request_id)
+    await client.click(message_manager.last_message(), DECLINE)
+    await _rendered(message_manager, DECLINE_TEXT)
+    assert _shown(shows, DECLINE_TEXT)[0] is ShowMode.SEND
+
+    await client.send("Уехал на другой вызов")
+
+    request = await _status(bot_session, request_id)
+    assert request.executor_user_id is None
+    assert request.status is RequestStatus.ACCEPTED
+    assert DECLINE_SENT in notices.texts
+    assert MENU_TEXT in _text(message_manager)
+    enqueued = bot_broker.enqueued(TaskName.SEND_EXECUTOR_CARD)[-1]
+    assert enqueued == {"request_id": request_id, "user_id": executor}
+    await _run(task_broker, send_executor_card, **enqueued)
+    _, text, chat_id, _ = shows[-1]
+    assert NOT_YOURS_TEXT.format(request_id=request_id) in (text or "")
+    assert chat_id == client.chat.chat_id

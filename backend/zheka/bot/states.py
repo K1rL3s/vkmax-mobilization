@@ -35,6 +35,7 @@ class NewRequest(StatesGroup):
 class ExecutorCard(StatesGroup):
     card = State()
     result_photo = State()
+    decline = State()
 
 
 class Review(StatesGroup):

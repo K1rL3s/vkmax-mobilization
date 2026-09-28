@@ -5,6 +5,7 @@ import { generatePath, Link } from "react-router-dom";
 import {
   buildTimeline,
   CATEGORY_ICON,
+  currentActor,
   DeadlinePanel,
   isFinished,
   isOnReview,
@@ -59,6 +60,7 @@ const AdminRequestPage = () => {
 
   const tone = STATUS_TONE[request.status];
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
+  const actor = currentActor(request, "staff");
   const isAssignable =
     request.status === "accepted" ||
     request.status === "in_progress" ||
@@ -116,6 +118,12 @@ const AdminRequestPage = () => {
           </Typography.Text>
         )}
       </Flex>
+
+      {actor && (
+        <Typography.Text variant="description" color="secondary">
+          Сейчас: {actor}
+        </Typography.Text>
+      )}
 
       <RequestStatusAction target={{ kind: "request", request }} />
 

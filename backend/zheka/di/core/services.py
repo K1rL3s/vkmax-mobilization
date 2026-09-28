@@ -6,6 +6,7 @@ from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.analytics import AnalyticsService
 from zheka.core.services.announcements import AnnouncementsService
+from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.charges import ChargesService
 from zheka.core.services.chats import ChatsService
 from zheka.core.services.demo import DemoService
@@ -40,6 +41,7 @@ class ServicesProvider(Provider):
         ModerationService,
         FlatsService,
         GroupingService,
+        CategoryExecutorsService,
         RequestsService,
         MeterAccess,
         ReadingsService,

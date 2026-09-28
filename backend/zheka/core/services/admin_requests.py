@@ -3,8 +3,10 @@ from datetime import UTC, datetime
 
 from zheka.base import ZhekaType
 from zheka.core import texts
+from zheka.core.deeplinks import admin_request_app_path
 from zheka.core.enums import (
     EventType,
+    NotificationCategory,
     OrgRole,
     RequestActorRole,
     RequestCategory,
@@ -34,6 +36,7 @@ from zheka.core.ids import (
     UserId,
 )
 from zheka.core.models import House, Request, RequestGroup, Resident, User
+from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.demo import demo_flat_number
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
@@ -53,17 +56,22 @@ from zheka.core.services.requests import (
 )
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.infra.database.repos.requests import RequestFilters, RequestsRepo
+from zheka.infra.database.repos.requests import (
+    OPEN_STATUSES,
+    RequestFilters,
+    RequestsRepo,
+)
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
-EXECUTOR_NOT_FOUND = "Исполнитель не найден"
-NOT_AN_EXECUTOR = "Заявку ведет исполнитель, а не сотрудник кабинета"
 EMPTY_REPLY = "Напишите ответ жителю"
 GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе"
 NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
 NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнитель"
 RESULT_PHOTO_REQUIRED = "Пришлите фото результата"
+DECLINE_REASON_REQUIRED = "Напишите, почему не получится"
+DECLINE_TOO_LATE = "От заявки отказываются до того, как работа сдана"
+UNKNOWN_EXECUTOR = "Исполнитель"
 RESIDENT_NOT_FOUND = "Житель не найден"
 RESIDENT_BLOCKED = "Житель заблокирован в доме"
 FLAT_NOT_RESIDENTS = "Квартира не совпадает с квартирой жителя"
@@ -105,6 +113,7 @@ class PhoneRequestDraft(ZhekaType):
 
 class AdminRequestsService:
     __slots__ = (
+        "_category_executors",
         "_events",
         "_grouping",
         "_houses",
@@ -125,6 +134,7 @@ class AdminRequestsService:
         grouping_service: GroupingService,
         notifications_service: NotificationsService,
         events_service: EventsService,
+        category_executors_service: CategoryExecutorsService,
     ) -> None:
         self._requests = requests_repo
         self._houses = houses_repo
@@ -134,6 +144,7 @@ class AdminRequestsService:
         self._grouping = grouping_service
         self._notifications = notifications_service
         self._events = events_service
+        self._category_executors = category_executors_service
 
     async def inbox(
         self,
@@ -197,11 +208,7 @@ class AdminRequestsService:
         actor: UserId,
     ) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
-        member = await self._orgs.get_member(org_id, executor_user_id)
-        if member is None:
-            raise EntityNotFound(EXECUTOR_NOT_FOUND)
-        if member.role is not OrgRole.EXECUTOR:
-            raise InvalidRequest(NOT_AN_EXECUTOR)
+        await self._category_executors.check(org_id, executor_user_id)
 
         await self._requests.set_executor(request, executor_user_id)
         await self._events.record(
@@ -311,6 +318,7 @@ class AdminRequestsService:
             has_photo=False,
             is_repeat=False,
         )
+        await self._category_executors.assign_default(request, org_id)
         return await self._card(request)
 
     async def executors(self, org_id: OrgId) -> list[ExecutorView]:
@@ -384,6 +392,7 @@ class AdminRequestsService:
                 self._orgs,
                 request,
                 await self._house(request.house_id),
+                with_internal=True,
             ),
             author=(
                 None
@@ -560,3 +569,53 @@ class AdminRequestsService:
             RequestActorRole.STAFF,
         )
         await self.assign(org_id, request.id, user_id, user_id)
+
+    async def executor_decline(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        reason: str,
+    ) -> None:
+        request = await self._requests.get(request_id)
+        if request is None:
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        await self._requests.lock(request)
+        if not await self._can_act(request, user_id):
+            raise NotEnoughRights(NOT_YOUR_REQUEST)
+        if request.status not in OPEN_STATUSES:
+            raise InvalidState(DECLINE_TOO_LATE)
+        text = stated(reason, DECLINE_REASON_REQUIRED)
+
+        await self._requests.set_executor(request, None)
+        await self._requests.add_message(
+            request_id,
+            user_id,
+            RequestActorRole.EXECUTOR.value,
+            text,
+            is_internal=True,
+        )
+        await self._events.record(
+            EventType.EXECUTOR_DECLINED,
+            user_id=user_id,
+            request_id=request_id,
+            status=request.status.value,
+        )
+        house = await self._house(request.house_id)
+        executor = await self._users.get_by_id(user_id)
+        members = (
+            [] if house.org_id is None else await self._orgs.list_members(house.org_id)
+        )
+        self._notifications.notify_users(
+            [member.user_id for member in members if member.role.is_staff],
+            texts.executor_declined(
+                request_id,
+                request.category,
+                UNKNOWN_EXECUTOR if executor is None else executor.name,
+                text,
+            ),
+            category=NotificationCategory.REQUESTS,
+            mandatory=False,
+            app_button=texts.OPEN_REQUEST,
+            app_path=admin_request_app_path(request_id),
+        )
+        self._notifications.open_executor_card(request_id, user_id)

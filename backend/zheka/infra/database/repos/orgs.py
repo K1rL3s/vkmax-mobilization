@@ -1,14 +1,15 @@
 from collections.abc import Collection, Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from zheka.core.enums import OrgRole
+from zheka.core.enums import OrgRole, RequestCategory
 from zheka.core.errors import ORG_NOT_FOUND, EntityNotFound
 from zheka.core.ids import OrgId, UserId
 from zheka.infra.database.models import OrgMember, OrgSettings, Organization
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.organizations import (
+    org_category_executors_table,
     org_members_table,
     org_settings_table,
     organizations_table,
@@ -85,9 +86,12 @@ class OrgsRepo(BaseAlchemyRepo):
 
     async def set_member_role(self, member: OrgMember, role: OrgRole) -> None:
         member.role = role
+        if role is not OrgRole.EXECUTOR:
+            await self._unset_executor_categories(member)
         await self._session.flush()
 
     async def remove_member(self, member: OrgMember) -> None:
+        await self._unset_executor_categories(member)
         await self._session.delete(member)
         await self._session.flush()
 
@@ -128,3 +132,51 @@ class OrgsRepo(BaseAlchemyRepo):
         if org is None:
             raise EntityNotFound(ORG_NOT_FOUND)
         return org
+
+    async def list_category_executors(
+        self,
+        org_id: OrgId,
+    ) -> dict[RequestCategory, UserId]:
+        stmt = select(
+            org_category_executors_table.c.category,
+            org_category_executors_table.c.executor_user_id,
+        ).where(org_category_executors_table.c.org_id == org_id)
+        result = await self._session.execute(stmt)
+        return {category: UserId(user_id) for category, user_id in result.tuples()}
+
+    async def set_category_executor(
+        self,
+        org_id: OrgId,
+        category: RequestCategory,
+        user_id: UserId,
+    ) -> None:
+        stmt = (
+            pg_insert(org_category_executors_table)
+            .values(org_id=org_id, category=category, executor_user_id=user_id)
+            .on_conflict_do_update(
+                index_elements=[
+                    org_category_executors_table.c.org_id,
+                    org_category_executors_table.c.category,
+                ],
+                set_={"executor_user_id": user_id},
+            )
+        )
+        await self._session.execute(stmt)
+
+    async def unset_category_executor(
+        self,
+        org_id: OrgId,
+        category: RequestCategory,
+    ) -> None:
+        stmt = delete(org_category_executors_table).where(
+            org_category_executors_table.c.org_id == org_id,
+            org_category_executors_table.c.category == category,
+        )
+        await self._session.execute(stmt)
+
+    async def _unset_executor_categories(self, member: OrgMember) -> None:
+        stmt = delete(org_category_executors_table).where(
+            org_category_executors_table.c.org_id == member.org_id,
+            org_category_executors_table.c.executor_user_id == member.user_id,
+        )
+        await self._session.execute(stmt)

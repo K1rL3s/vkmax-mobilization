@@ -113,4 +113,11 @@ request_messages_table = Table(
     Column("author_user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("author_role", String(16), nullable=False),
     Column("text", Text, nullable=False),
+    Column(
+        "is_internal",
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
+    ),
 )

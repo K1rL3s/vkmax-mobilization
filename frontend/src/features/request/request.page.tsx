@@ -11,6 +11,7 @@ import { StatusPill } from "@/shared/ui/status-pill";
 import { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
 import { deadlineLeft } from "./domain/format";
 import {
+  currentActor,
   isFinished,
   isOnReview,
   STATUS_LABEL,
@@ -42,6 +43,7 @@ const RequestPage = () => {
   const tone = STATUS_TONE[request.status];
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
   const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
+  const actor = currentActor(request);
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -96,6 +98,12 @@ const RequestPage = () => {
           </StatusPill>
         )}
       </Flex>
+
+      {actor && (
+        <Typography.Text variant="description" color="secondary">
+          Сейчас: {actor}
+        </Typography.Text>
+      )}
 
       {isRunning && <DeadlinePanel request={request} />}
 

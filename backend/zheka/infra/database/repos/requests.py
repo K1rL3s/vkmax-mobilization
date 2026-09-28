@@ -211,6 +211,8 @@ class RequestsRepo(BaseAlchemyRepo):
         author_user_id: UserId,
         author_role: str,
         text: str,
+        *,
+        is_internal: bool = False,
     ) -> None:
         self._session.add(
             RequestMessage(
@@ -218,6 +220,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 author_user_id=author_user_id,
                 author_role=author_role,
                 text=text,
+                is_internal=is_internal,
             ),
         )
         await self._session.flush()
@@ -319,7 +322,7 @@ class RequestsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
-    async def set_executor(self, request: Request, user_id: UserId) -> None:
+    async def set_executor(self, request: Request, user_id: UserId | None) -> None:
         request.executor_user_id = user_id
         await self._session.flush()
 

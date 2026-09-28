@@ -111,6 +111,10 @@ class RequestMessageItem(BaseSchema):
     author_role: str
     author_name: str
     text: str
+    is_internal: bool = Field(
+        default=False,
+        description="Заметка только для УК, например причина отказа исполнителя",
+    )
 
     @classmethod
     def of(cls, view: RequestMessageView) -> Self:
@@ -119,6 +123,7 @@ class RequestMessageItem(BaseSchema):
             author_role=view.message.author_role,
             author_name=UNKNOWN_AUTHOR if view.author is None else view.author.name,
             text=view.message.text,
+            is_internal=view.message.is_internal,
         )
 
 

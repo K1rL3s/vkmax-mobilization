@@ -233,6 +233,7 @@ const changeStatus = (
       author_role: "staff",
       author_name: "Диспетчер УК",
       text: comment.trim(),
+      is_internal: false,
     });
 };
 
@@ -309,6 +310,7 @@ export const adminRequestsConfigs = [
       author_role: "staff",
       author_name: "Диспетчер УК",
       text,
+      is_internal: false,
     });
     return ok(item);
   }),

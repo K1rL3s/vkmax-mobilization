@@ -214,6 +214,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   the house's org (a removed executor keeps the id and a live card):
   `executor_advance` checks both before writing, `executor_card` returns
   `None`.
+- An executor's decline clears `executor_user_id`, keeps the status and writes
+  the reason as an `is_internal` message: only `build_card(with_internal=True)`
+  (staff and executor cards) returns it. The org's default executor per
+  category (`org_category_executors`) is assigned on create, repeat and phone
+  requests only while still `OrgRole.EXECUTOR`, never again after a decline.
 - The author's review card is queued only in `AdminRequestsService._move`,
   the one road into `ON_REVIEW`. Every status write first takes
   `RequestsRepo.lock` (`FOR UPDATE`, refreshed), so a concurrent tap sees the

@@ -1,4 +1,8 @@
+from collections.abc import Callable
+
 import pytest
+from fastapi.dependencies.models import Dependant
+from fastapi.routing import APIRoute
 from maxo.utils.webapp import WebAppChat, WebAppInitData, WebAppUser
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,11 +12,13 @@ from tests.conftest import (
     OrgHouseFlatUser,
     RecordingBroker,
     admin_requests_service,
+    category_executors_service,
     events_of,
     make_config,
     photo_name,
     requests_service,
 )
+from tests.test_orgs import make_orgs_service
 from tests.test_requests import (
     _age,
     _complain,
@@ -21,12 +27,14 @@ from tests.test_requests import (
     _neighbour,
 )
 
-from zheka.api.dependencies.current_org import CurrentOrg
+from zheka.api.dependencies.current_org import CurrentOrg, require_admin_org
 from zheka.api.dependencies.current_user import API_CHECKER
+from zheka.api.routes.admin.orgs import router as admin_orgs_router
 from zheka.api.routes.admin.requests import change_request_status
 from zheka.api.schemas.requests import AdminRequestCard, ChangeRequestStatusRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
+from zheka.core import texts
 from zheka.core.enums import (
     CATEGORY_RULES,
     EventType,
@@ -49,6 +57,7 @@ from zheka.core.errors import (
 from zheka.core.ids import RequestId, ResidentId, UserId
 from zheka.core.services.admin_requests import RESIDENT_BLOCKED, PhoneRequestDraft
 from zheka.core.services.files import FilesService
+from zheka.core.services.requests import RequestDraft
 from zheka.infra.database.models import Flat
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters
@@ -852,3 +861,300 @@ async def test_the_checker_takes_its_own_request_no_further_than_accepted(
     else:
         with pytest.raises(NotEnoughRights):
             await move(RequestStatus.IN_PROGRESS)
+
+
+async def test_a_declining_executor_hands_the_request_back_with_an_internal_reason(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request_id, executor = await _in_progress(session, own)
+
+    await admin_requests_service(session, publisher).executor_decline(
+        executor,
+        request_id,
+        "  Уехал на другой вызов ",
+    )
+
+    admin_card = await admin_requests_service(session).card(own.org_id, request_id)
+    request = admin_card.card.request
+    assert request.executor_user_id is None
+    assert request.status is RequestStatus.IN_PROGRESS
+    [note] = admin_card.card.messages
+    assert note.message.text == "Уехал на другой вызов"
+    assert note.message.is_internal
+    assert note.message.author_role == RequestActorRole.EXECUTOR.value
+    resident_card = await requests_service(session).get_card(own.user_id, request_id)
+    assert resident_card.messages == []
+    declined = await events_of(session, EventType.EXECUTOR_DECLINED)
+    assert [(event.user_id, event.payload) for event in declined] == [
+        (executor, {"request_id": request_id, "status": "in_progress"}),
+    ]
+    await publisher.flush()
+    [broadcast] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
+    assert broadcast["user_ids"] == [staff]
+    assert "Уехал на другой вызов" in broadcast["text"]
+    assert broadcast["app_path"] == f"/admin/requests/{request_id}"
+    assert broker.enqueued(TaskName.SEND_EXECUTOR_CARD) == [
+        {"request_id": request_id, "user_id": executor},
+    ]
+    assert broker.enqueued(TaskName.SEND_TO_USER) == []
+
+
+@pytest.mark.parametrize("loss", ["another_executor", "removed", "demoted"])
+async def test_only_the_assigned_executor_of_the_org_can_decline(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    loss: str,
+) -> None:
+    request_id, executor = await _assigned(session, own)
+    orgs_repo = OrgsRepo(session)
+    member = await orgs_repo.get_member(own.org_id, executor)
+    assert member is not None
+    actor = executor
+    if loss == "another_executor":
+        actor = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    elif loss == "removed":
+        await orgs_repo.remove_member(member)
+    else:
+        await orgs_repo.set_member_role(member, OrgRole.EMPLOYEE)
+
+    with pytest.raises(NotEnoughRights):
+        await admin_requests_service(session).executor_decline(
+            actor,
+            request_id,
+            "Не успеваю",
+        )
+
+    card = await admin_requests_service(session).card(own.org_id, request_id)
+    assert card.card.request.executor_user_id == executor
+    assert card.card.messages == []
+
+
+async def test_a_request_handed_in_for_review_cannot_be_declined(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request_id, executor = await _in_progress(session, own)
+    service = admin_requests_service(session)
+    await service.executor_advance(
+        executor,
+        request_id,
+        RequestStatus.ON_REVIEW,
+        [photo_name()],
+    )
+
+    with pytest.raises(InvalidState):
+        await service.executor_decline(executor, request_id, "Передумал")
+
+    card = await service.card(own.org_id, request_id)
+    assert card.card.request.executor_user_id == executor
+
+
+async def test_a_decline_without_a_reason_is_refused(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request_id, executor = await _assigned(session, own)
+    service = admin_requests_service(session)
+
+    with pytest.raises(InvalidRequest):
+        await service.executor_decline(executor, request_id, "   ")
+
+    card = await service.card(own.org_id, request_id)
+    assert card.card.request.executor_user_id == executor
+
+
+async def test_a_new_request_goes_straight_to_the_category_executor(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    await category_executors_service(session).set(
+        own.org_id,
+        RequestCategory.ELEVATOR,
+        executor,
+    )
+    service = requests_service(session, publisher)
+    draft = RequestDraft(category=RequestCategory.ELEVATOR, description="Застрял")
+
+    lift = await service.create(own.user_id, own.house_id, draft)
+    leak = await service.create(
+        own.user_id,
+        own.house_id,
+        RequestDraft(category=RequestCategory.LEAK, description="Течет"),
+    )
+
+    assert lift.request.executor_user_id == executor
+    assert lift.request.status is RequestStatus.NEW
+    assert leak.request.executor_user_id is None
+    assigned = await events_of(session, EventType.REQUEST_ASSIGNED)
+    assert [(event.user_id, event.payload) for event in assigned] == [
+        (None, {"request_id": lift.request.id, "executor_user_id": executor}),
+    ]
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_EXECUTOR_CARD) == [
+        {"request_id": lift.request.id, "user_id": None},
+    ]
+
+
+async def test_repeat_and_phone_requests_go_to_the_category_executor(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    await category_executors_service(session).set(
+        own.org_id,
+        RequestCategory.LEAK,
+        executor,
+    )
+
+    phone = await admin_requests_service(session).create_phone(
+        own.org_id,
+        _phone_draft(own, resident_id=await _resident_id(session, own)),
+        staff,
+    )
+    parent_id = phone.card.request.id
+    service = admin_requests_service(session)
+    for target in TO_REVIEW:
+        await service.change_status(own.org_id, parent_id, target, None, staff)
+    repeat = await requests_service(session).reject(
+        own.user_id,
+        parent_id,
+        "Снова течет",
+        RequestChannel.MINIAPP,
+    )
+
+    assert phone.card.request.executor_user_id == executor
+    assert repeat.request.executor_user_id == executor
+
+
+async def test_a_category_executor_who_is_no_longer_an_executor_gets_nothing(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    categories = category_executors_service(session)
+    await categories.set(own.org_id, RequestCategory.LEAK, executor)
+    orgs_repo = OrgsRepo(session)
+    member = await orgs_repo.get_member(own.org_id, executor)
+    assert member is not None
+    await orgs_repo.set_member_role(member, OrgRole.EMPLOYEE)
+
+    request = await _complain(session, own.user_id, own.house_id)
+
+    assert request.executor_user_id is None
+    assert await categories.mapping(own.org_id) == {}
+
+
+async def test_a_category_executor_must_be_an_executor_of_the_org(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    own: OrgHouseFlatUser,
+) -> None:
+    foreign = await make_org_house_flat_user()
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    alien = await _member(session, foreign.org_id, OrgRole.EXECUTOR)
+    categories = category_executors_service(session)
+
+    with pytest.raises(InvalidRequest):
+        await categories.set(own.org_id, RequestCategory.LEAK, staff)
+    with pytest.raises(EntityNotFound):
+        await categories.set(own.org_id, RequestCategory.LEAK, alien)
+
+    assert await OrgsRepo(session).list_category_executors(own.org_id) == {}
+
+
+async def test_a_category_executor_is_replaced_and_cleared(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    first = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    second = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    categories = category_executors_service(session)
+
+    await categories.set(own.org_id, RequestCategory.LEAK, first)
+    replaced = await categories.set(own.org_id, RequestCategory.LEAK, second)
+    cleared = await categories.set(own.org_id, RequestCategory.LEAK, None)
+
+    assert replaced == {RequestCategory.LEAK: second}
+    assert cleared == {}
+
+
+def test_only_an_admin_sets_a_category_executor() -> None:
+    guards = {
+        method: _calls(route.dependant)
+        for route in admin_orgs_router.routes
+        if isinstance(route, APIRoute) and route.path == "/admin/org/category-executors"
+        for method in route.methods or ()
+    }
+
+    assert require_admin_org in guards["PUT"]
+    assert require_admin_org not in guards["GET"]
+
+
+def _calls(dependant: Dependant) -> set[object]:
+    calls: set[object] = {dependant.call}
+    for dependency in dependant.dependencies:
+        calls |= _calls(dependency)
+    return calls
+
+
+async def test_a_category_executor_is_unset_when_removed_or_no_longer_an_executor(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    removed = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    promoted = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    kept = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    categories = category_executors_service(session)
+    await categories.set(own.org_id, RequestCategory.LEAK, removed)
+    await categories.set(own.org_id, RequestCategory.ELEVATOR, promoted)
+    await categories.set(own.org_id, RequestCategory.HEATING, kept)
+    orgs = make_orgs_service(session)
+    invite = await orgs.create_invite(
+        own.org_id,
+        own.user_id,
+        OrgRole.CREATOR,
+        OrgRole.EMPLOYEE,
+        1,
+        1,
+    )
+
+    await orgs.remove_member(own.org_id, OrgRole.CREATOR, removed)
+    await orgs.activate_invite(promoted, invite.code)
+
+    assert await OrgsRepo(session).list_category_executors(own.org_id) == {
+        RequestCategory.HEATING: kept,
+    }
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda quote: texts.request_reply(RequestId(1), RequestCategory.LEAK, quote),
+        lambda quote: texts.executor_declined(
+            RequestId(1),
+            RequestCategory.LEAK,
+            "Иван",
+            quote,
+        ),
+    ],
+)
+def test_a_quoted_free_text_is_cut_to_fit_a_max_message(
+    build: Callable[[str], str],
+) -> None:
+    quote = f"<&>{'😀' * 2500}"
+
+    text = build(quote)
+
+    units = len(text.encode("utf-16-le")) // 2
+    assert texts.MESSAGE_LIMIT - 2 < units <= texts.MESSAGE_LIMIT
+    assert "&lt;&amp;&gt;😀" in text
+    assert "😀…" in text
+    assert "…" not in build("Уехал на другой вызов")

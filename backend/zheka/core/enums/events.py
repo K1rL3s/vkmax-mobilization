@@ -50,6 +50,7 @@ class EventType(StrEnum):
     REQUEST_GROUP_FORMED = "request_group_formed"
     REQUEST_ASSIGNED = "request_assigned"
     EXECUTOR_STATUS_CHANGED = "executor_status_changed"
+    EXECUTOR_DECLINED = "executor_declined"
     REQUEST_REVIEWED = "request_reviewed"
     REQUEST_AUTO_CLOSED = "request_auto_closed"
     REQUEST_EXPORTED = "request_exported"

@@ -5,7 +5,7 @@ from pydantic import Field
 
 from zheka.api.schemas.base import BaseSchema, FreeText, Phone
 from zheka.api.schemas.houses import HouseListItem
-from zheka.core.enums import OrgRole
+from zheka.core.enums import OrgRole, RequestCategory
 from zheka.core.ids import OrgId, UserId
 from zheka.core.models import OrgInvite
 from zheka.core.services.orgs import (
@@ -187,3 +187,16 @@ class CreateOrgInviteRequest(BaseSchema):
     role: OrgRole
     expires_in_hours: int = 72
     max_activations: int = 1
+
+
+class CategoryExecutorItem(BaseSchema):
+    category: RequestCategory
+    executor_user_id: UserId
+
+
+class SetCategoryExecutorRequest(BaseSchema):
+    category: RequestCategory
+    executor_user_id: UserId | None = Field(
+        description="Исполнитель, которому сразу уходят новые заявки категории; "
+        "null снимает назначение",
+    )
