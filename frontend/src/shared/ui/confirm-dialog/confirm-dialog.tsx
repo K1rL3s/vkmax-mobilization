@@ -1,5 +1,7 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button, Flex, Typography } from "@maxhub/max-ui";
+
+import { BottomSheet } from "@/shared/ui/bottom-sheet";
 
 import styles from "./confirm-dialog.module.css";
 
@@ -26,18 +28,8 @@ export const ConfirmDialog = ({
   onConfirm,
   onClose,
 }: ConfirmDialogProps) => {
-  const dialog = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      dialog.current?.showModal();
-    } else {
-      dialog.current?.close();
-    }
-  }, [isOpen]);
-
   return (
-    <dialog ref={dialog} className={styles.Dialog} onClose={onClose}>
+    <BottomSheet isOpen={isOpen} onClose={onClose}>
       <Flex direction="column" align="stretch" gapY={12}>
         <Typography.Text asChild variant="title" color="primary">
           <h2 className={styles.Title}>{title}</h2>
@@ -75,6 +67,6 @@ export const ConfirmDialog = ({
           Отмена
         </Button>
       </Flex>
-    </dialog>
+    </BottomSheet>
   );
 };

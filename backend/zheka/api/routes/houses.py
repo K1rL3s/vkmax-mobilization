@@ -4,11 +4,14 @@ from typing import Annotated
 from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter, Query
+from maxo import Bot
+from maxo.utils.deeplink import create_start_link
 
 from zheka.api.dependencies import RequireConsentDep, ResidencyForHouseDep
 from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.houses import (
+    ChairmanHandoverItem,
     CityItem,
     DemandSignalResponse,
     FlatListItem,
@@ -17,7 +20,9 @@ from zheka.api.schemas.houses import (
     LinkHouseRequest,
     ResidencySummary,
 )
+from zheka.core.deeplinks import chairman_payload
 from zheka.core.ids import HouseId, ResidentId
+from zheka.core.services.chairman import ChairmanService
 from zheka.core.services.files import FilesService
 from zheka.core.services.houses import HousesService
 
@@ -165,3 +170,52 @@ async def list_house_flats(
         items=[FlatListItem.of(flat, flat.id in taken) for flat in flats],
         total=total,
     )
+
+
+@router.get(
+    "/houses/{house_id}/chairman-handover",
+    summary="Открытая ссылка на передачу роли председателя",
+)
+async def get_chairman_handover(
+    house_id: HouseId,
+    residency: ResidencyForHouseDep,
+    chairman_service: FromDishka[ChairmanService],
+    bot: FromDishka[Bot],
+) -> ChairmanHandoverItem | None:
+    handover = await chairman_service.open_handover(residency.user_id, house_id)
+    if handover is None:
+        return None
+    return ChairmanHandoverItem.of(
+        handover,
+        create_start_link(bot, chairman_payload(handover.code)),
+    )
+
+
+@router.post(
+    "/houses/{house_id}/chairman-handover",
+    summary="Выдать ссылку на передачу роли председателя",
+)
+async def create_chairman_handover(
+    house_id: HouseId,
+    residency: ResidencyForHouseDep,
+    chairman_service: FromDishka[ChairmanService],
+    bot: FromDishka[Bot],
+) -> ChairmanHandoverItem:
+    handover = await chairman_service.create_handover(residency.user_id, house_id)
+    return ChairmanHandoverItem.of(
+        handover,
+        create_start_link(bot, chairman_payload(handover.code)),
+    )
+
+
+@router.delete(
+    "/houses/{house_id}/chairman-handover",
+    summary="Отозвать ссылку на передачу роли председателя",
+)
+async def revoke_chairman_handover(
+    house_id: HouseId,
+    residency: ResidencyForHouseDep,
+    chairman_service: FromDishka[ChairmanService],
+) -> OkResponse:
+    await chairman_service.revoke_handover(residency.user_id, house_id)
+    return OkResponse()

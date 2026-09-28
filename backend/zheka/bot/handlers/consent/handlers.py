@@ -17,6 +17,7 @@ from zheka.core.deeplinks import parse_deeplink
 from zheka.core.enums import EventSource
 from zheka.core.models import User
 from zheka.core.services.admin_requests import AdminRequestsService
+from zheka.core.services.chairman import ChairmanService
 from zheka.core.services.demo import DemoService
 from zheka.core.services.flats import FlatsService
 from zheka.core.services.orgs import OrgsService
@@ -33,6 +34,7 @@ async def on_accept(
     flats_service: FromDishka[FlatsService],
     demo_service: FromDishka[DemoService],
     admin_requests_service: FromDishka[AdminRequestsService],
+    chairman_service: FromDishka[ChairmanService],
 ) -> None:
     user: User = dialog_manager.middleware_data[USER_KEY]
     payload = ConsentData.load_start(dialog_manager).payload or ""
@@ -58,6 +60,7 @@ async def on_accept(
             flats_service,
             demo_service,
             admin_requests_service,
+            chairman_service,
         )
         return
 

@@ -175,6 +175,7 @@ from zheka.core import texts
 from zheka.core.consent import CONSENT_TEXT, CONSENT_VERSION
 from zheka.core.deeplinks import (
     DeeplinkKind,
+    chairman_payload,
     entrance_qr_payload,
     house_payload,
     org_invite_payload,
@@ -213,9 +214,10 @@ from zheka.core.ids import (
     RequestId,
     UserId,
 )
-from zheka.core.models import User
+from zheka.core.models import ChairmanHandover, User
 from zheka.core.services.access import SLOT_FULL
 from zheka.core.services.admin_requests import NO_DEMO_REQUEST
+from zheka.core.services.chairman import NOT_A_NEIGHBOUR
 from zheka.core.services.chats import (
     CHAT_NOT_BOUND,
     CHAT_TAKEN,
@@ -268,6 +270,7 @@ from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
+from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
 from zheka.infra.database.tables.announcements import announcements_table
@@ -4505,3 +4508,130 @@ async def test_a_reading_below_the_last_one_needs_a_second_tap(
     await client.click(message_manager.last_message(), SEND_ANYWAY)
     bot_session.expire_all()
     assert len(await MetersRepo(bot_session).list_readings(meter_id, 5)) == 2
+
+
+ACCEPT_CHAIR = InlineButtonTextLocator("✅ Принять")
+DECLINE_CHAIR = InlineButtonTextLocator("❌ Отказаться")
+
+
+async def _chairman_offer(
+    session: AsyncSession,
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> tuple[HouseId, UserId, str]:
+    user_id = await _started(session, client)
+    _, house_id = await _org_house(session)
+    issuer = User(max_user_id=_max_id(), name="Пётр Председателев")
+    session.add(issuer)
+    await session.flush()
+    session.add_all(
+        [
+            Resident(
+                user_id=issuer.id,
+                house_id=house_id,
+                role=ResidentRole.OWNER,
+                verified_at=datetime.now(UTC),
+                is_chairman=True,
+            ),
+            Resident(
+                user_id=user_id,
+                house_id=house_id,
+                role=ResidentRole.OWNER,
+                verified_at=datetime.now(UTC),
+            ),
+        ],
+    )
+    code = secrets.token_hex(4)
+    session.add(
+        ChairmanHandover(
+            code=code,
+            house_id=house_id,
+            created_by=issuer.id,
+            expires_at=datetime.now(UTC) + timedelta(hours=48),
+        ),
+    )
+    await session.commit()
+    await client.click(message_manager.last_message(), ACCEPT)
+    return house_id, user_id, code
+
+
+async def test_a_chairman_deeplink_offers_the_role_and_hands_it_over(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    house_id, user_id, code = await _chairman_offer(
+        bot_session,
+        client,
+        message_manager,
+    )
+
+    await _bot_started(client, chairman_payload(code))
+    assert "предлагает вам стать председателем" in _text(message_manager)
+
+    await client.click(message_manager.last_message(), ACCEPT_CHAIR)
+
+    bot_session.expire_all()
+    chairman = await ResidentsRepo(bot_session).get_chairman(house_id)
+    assert chairman is not None
+    assert chairman.user_id == user_id
+    assert any("Вы председатель совета дома" in (text or "") for text in notices.texts)
+
+
+async def test_a_declined_chairman_offer_leaves_the_role_with_the_issuer(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    house_id, user_id, code = await _chairman_offer(
+        bot_session,
+        client,
+        message_manager,
+    )
+
+    await _bot_started(client, chairman_payload(code))
+    await client.click(message_manager.last_message(), DECLINE_CHAIR)
+
+    bot_session.expire_all()
+    chairman = await ResidentsRepo(bot_session).get_chairman(house_id)
+    assert chairman is not None
+    assert chairman.user_id != user_id
+    assert any("Вы отказались" in (text or "") for text in notices.texts)
+
+
+async def test_a_chairman_link_opened_by_a_stranger_says_why(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _chairman_offer(bot_session, client, message_manager)
+    _, other_house_id = await _org_house(bot_session)
+    code = secrets.token_hex(4)
+    issuer = User(max_user_id=_max_id(), name="Чужой Председатель")
+    bot_session.add(issuer)
+    await bot_session.flush()
+    bot_session.add_all(
+        [
+            Resident(
+                user_id=issuer.id,
+                house_id=other_house_id,
+                role=ResidentRole.OWNER,
+                verified_at=datetime.now(UTC),
+                is_chairman=True,
+            ),
+            ChairmanHandover(
+                code=code,
+                house_id=other_house_id,
+                created_by=issuer.id,
+                expires_at=datetime.now(UTC) + timedelta(hours=48),
+            ),
+        ],
+    )
+    await bot_session.commit()
+
+    await _bot_started(client, chairman_payload(code))
+
+    assert NOT_A_NEIGHBOUR in notices.texts

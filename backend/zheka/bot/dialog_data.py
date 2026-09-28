@@ -148,3 +148,8 @@ class ChatBindingData(BaseDialogData):
 class AccessSlotsData(BaseDialogData):
     access_request_id: int
     notice: str | None = None
+
+
+class ChairmanData(BaseDialogData):
+    code: str
+    offer: str

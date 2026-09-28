@@ -60,6 +60,9 @@ class EventType(StrEnum):
     FLAT_INVITE_CREATED = "flat_invite_created"
     FLAT_INVITE_ACTIVATED = "flat_invite_activated"
 
+    CHAIRMAN_HANDOVER_CREATED = "chairman_handover_created"
+    CHAIRMAN_HANDED_OVER = "chairman_handed_over"
+
     APPOINTMENT_BOOKED = "appointment_booked"
     APPOINTMENT_REMINDER_SENT = "appointment_reminder_sent"
 

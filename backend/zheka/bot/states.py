@@ -65,3 +65,7 @@ class MeterPhoto(StatesGroup):
     wait = State()
     confirm = State()
     edit = State()
+
+
+class Chairman(StatesGroup):
+    accept = State()

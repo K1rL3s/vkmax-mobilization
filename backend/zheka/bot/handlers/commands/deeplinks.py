@@ -9,8 +9,9 @@ from maxo.routing.sentinels import UNHANDLED
 from maxo.types import BotStarted
 
 from zheka.bot.cards import back_to_menu
-from zheka.bot.dialog_data import ConsentData, OnboardingData
-from zheka.bot.states import Consent, Onboarding
+from zheka.bot.dialog_data import ChairmanData, ConsentData, OnboardingData
+from zheka.bot.states import Chairman, Consent, Onboarding
+from zheka.core import texts
 from zheka.core.deeplinks import (
     ADMIN_APP_PATH,
     Deeplink,
@@ -22,6 +23,7 @@ from zheka.core.enums import EventType, OrgRole
 from zheka.core.errors import ZhekaError
 from zheka.core.models import User
 from zheka.core.services.admin_requests import AdminRequestsService
+from zheka.core.services.chairman import ChairmanService
 from zheka.core.services.demo import DemoService, demo_flat_number
 from zheka.core.services.events import EventsService
 from zheka.core.services.flats import FlatsService
@@ -73,6 +75,7 @@ async def deeplink_handler(
     flats_service: FromDishka[FlatsService],
     demo_service: FromDishka[DemoService],
     admin_requests_service: FromDishka[AdminRequestsService],
+    chairman_service: FromDishka[ChairmanService],
 ) -> Any:
     payload = update.payload
     if is_not_defined(payload):
@@ -97,6 +100,7 @@ async def deeplink_handler(
         flats_service,
         demo_service,
         admin_requests_service,
+        chairman_service,
     )
     return None
 
@@ -110,6 +114,7 @@ async def open_deeplink(
     flats_service: FlatsService,
     demo_service: DemoService,
     admin_requests_service: AdminRequestsService,
+    chairman_service: ChairmanService,
 ) -> None:
     if user.consent_at is None:
         await dialog_manager.start(
@@ -135,6 +140,16 @@ async def open_deeplink(
         elif deeplink.kind is DeeplinkKind.FLAT_INVITE:
             await flats_service.activate_invite(user_id, deeplink.value)
             await back_to_menu(dialog_manager, FLAT_JOINED)
+        elif deeplink.kind is DeeplinkKind.CHAIRMAN:
+            offer = await chairman_service.offer(user_id, deeplink.value)
+            await dialog_manager.start(
+                Chairman.accept,
+                data=ChairmanData(
+                    code=deeplink.value,
+                    offer=texts.chairman_offer(offer.from_name, offer.address),
+                ).to_data(),
+                mode=StartMode.RESET_STACK,
+            )
         elif deeplink.kind is DeeplinkKind.ORG_REGISTER:
             await back_to_menu(
                 dialog_manager,

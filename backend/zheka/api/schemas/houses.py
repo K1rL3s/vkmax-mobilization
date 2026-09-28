@@ -14,7 +14,7 @@ from zheka.core.enums import (
     VerificationStatus,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
-from zheka.core.models import Flat
+from zheka.core.models import ChairmanHandover, Flat
 from zheka.core.services.houses import (
     AdminHouseCardData,
     AdminHouseRow,
@@ -419,3 +419,21 @@ class BindingCodeResponse(BaseSchema):
     house_id: HouseId
     code: str
     deeplink: str
+
+
+class ChairmanHandoverItem(BaseSchema):
+    code: str
+    house_id: HouseId
+    created_at: datetime
+    expires_at: datetime
+    deeplink: str
+
+    @classmethod
+    def of(cls, handover: ChairmanHandover, deeplink: str) -> Self:
+        return cls(
+            code=handover.code,
+            house_id=HouseId(handover.house_id),
+            created_at=handover.created_at,
+            expires_at=handover.expires_at,
+            deeplink=deeplink,
+        )

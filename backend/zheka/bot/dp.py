@@ -15,6 +15,7 @@ from maxo.integrations.magic_filter import MagicData
 from zheka.base import ZhekaType
 from zheka.bot.handlers import (
     access_dialog,
+    chairman_dialog,
     chat_binding_dialog,
     chats_router,
     commands_router,
@@ -97,6 +98,7 @@ def make_dispatcher(
         executor_dialog,
         review_dialog,
         chat_binding_dialog,
+        chairman_dialog,
         access_dialog,
         forget_dialog,
         meter_photo_dialog,

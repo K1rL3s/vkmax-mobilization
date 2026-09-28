@@ -1,0 +1,22 @@
+.Title {
+  margin: 0;
+}
+
+.Link {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-accent-neutral-fade-secondary);
+}
+
+.Code {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: 0.06em;
+}
+
+.Error {
+  color: var(--text-negative);
+}

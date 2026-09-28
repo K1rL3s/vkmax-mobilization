@@ -38,6 +38,7 @@ from zheka.infra.database.tables.requests import (
     requests_table,
 )
 from zheka.infra.database.tables.residents import (
+    chairman_handovers_table,
     demand_signals_table,
     flat_verification_requests_table,
     residents_table,
@@ -91,3 +92,4 @@ mapper_registry.map_imperatively(
     models.VerificationRevocation,
     verification_revocations_table,
 )
+mapper_registry.map_imperatively(models.ChairmanHandover, chairman_handovers_table)

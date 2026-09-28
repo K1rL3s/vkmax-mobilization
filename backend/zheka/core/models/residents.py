@@ -53,3 +53,21 @@ class VerificationRevocation(ZhekaMutableType):
     created_at: datetime = UNSET
     user_id: UserId
     flat_id: FlatId
+
+
+class ChairmanHandover(ZhekaMutableType):
+    code: str
+    created_at: datetime = UNSET
+    house_id: HouseId
+    created_by: UserId
+    expires_at: datetime
+    accepted_by: UserId | None = None
+    decided_at: datetime | None = None
+    revoked_at: datetime | None = None
+
+    def is_open(self, now: datetime) -> bool:
+        return (
+            self.decided_at is None
+            and self.revoked_at is None
+            and self.expires_at > now
+        )

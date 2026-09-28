@@ -54,6 +54,12 @@ residents_table = Table(
         nullable=False,
     ),
     UniqueConstraint("user_id", "house_id"),
+    Index(
+        "ix_residents_house_chairman",
+        "house_id",
+        unique=True,
+        postgresql_where=text("is_chairman"),
+    ),
 )
 
 flat_verification_requests_table = Table(
@@ -98,4 +104,24 @@ verification_revocations_table = Table(
     Column("user_id", BigInteger, ForeignKey("users.id"), primary_key=True),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), primary_key=True),
     created_at_column(),
+)
+
+
+chairman_handovers_table = Table(
+    "chairman_handovers",
+    metadata,
+    Column("code", String(16), primary_key=True),
+    created_at_column(),
+    Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
+    Column("created_by", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("accepted_by", BigInteger, ForeignKey("users.id"), nullable=True),
+    Column("decided_at", DateTime(timezone=True), nullable=True),
+    Column("revoked_at", DateTime(timezone=True), nullable=True),
+    Index(
+        "ix_chairman_handovers_house_open",
+        "house_id",
+        unique=True,
+        postgresql_where=text("decided_at IS NULL AND revoked_at IS NULL"),
+    ),
 )

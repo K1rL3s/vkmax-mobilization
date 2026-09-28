@@ -8,6 +8,7 @@ import { adminRequestsConfigs } from "./admin-requests";
 import { adminVerificationsConfigs } from "./admin-verifications";
 import { announcementsConfigs } from "./announcements";
 import { appointmentsConfigs } from "./appointments";
+import { chairmanHandoverConfigs } from "./chairman-handover";
 import { chargesConfigs } from "./charges";
 import { flatInvitesConfigs } from "./flat-invites";
 import { flatsConfigs } from "./flats";
@@ -28,6 +29,7 @@ export const mockConfigs = [
   ...pollsConfigs,
   ...chargesConfigs,
   ...flatInvitesConfigs,
+  ...chairmanHandoverConfigs,
   ...notificationsConfigs,
   ...appointmentsConfigs,
   ...announcementsConfigs,

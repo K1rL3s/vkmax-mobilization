@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Button, Flex, Typography } from "@maxhub/max-ui";
 
 import { authParams } from "@/shared/api/instance";
+import { BottomSheet } from "@/shared/ui/bottom-sheet";
 
 import { InviteCard } from "./invite-card";
 import { useIssueInvite } from "./use-flat-invites";
@@ -50,18 +51,9 @@ export const IssueInviteDialog = ({
   isOpen,
   onClose,
 }: IssueInviteDialogProps) => {
-  const dialog = useRef<HTMLDialogElement>(null);
   const [hours, setHours] = useState(72);
   const [activations, setActivations] = useState(1);
   const issue = useIssueInvite(flatId);
-
-  useEffect(() => {
-    if (isOpen) {
-      dialog.current?.showModal();
-    } else {
-      dialog.current?.close();
-    }
-  }, [isOpen]);
 
   const close = () => {
     issue.reset();
@@ -69,7 +61,7 @@ export const IssueInviteDialog = ({
   };
 
   return (
-    <dialog ref={dialog} className={styles.Dialog} onClose={close}>
+    <BottomSheet isOpen={isOpen} onClose={close}>
       {issue.data ? (
         <Flex direction="column" align="stretch" gapY={12}>
           <Typography.Text asChild variant="title" color="primary">
@@ -154,6 +146,6 @@ export const IssueInviteDialog = ({
           </Flex>
         </Flex>
       )}
-    </dialog>
+    </BottomSheet>
   );
 };

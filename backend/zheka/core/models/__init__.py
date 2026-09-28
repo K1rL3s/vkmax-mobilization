@@ -17,6 +17,7 @@ from zheka.core.models.requests import (
     RequestStatusLog,
 )
 from zheka.core.models.residents import (
+    ChairmanHandover,
     DemandSignal,
     Resident,
     VerificationRequest,
@@ -30,6 +31,7 @@ __all__ = (
     "AccessTarget",
     "Announcement",
     "Appointment",
+    "ChairmanHandover",
     "Charge",
     "Chat",
     "ChatCard",

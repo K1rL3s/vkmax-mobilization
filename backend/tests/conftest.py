@@ -61,9 +61,11 @@ from zheka.core.enums import (
 from zheka.core.ids import FlatId, HouseId, MaxUserId, MeterId, OrgId, UserId
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.category_executors import CategoryExecutorsService
+from zheka.core.services.chairman import ChairmanService
 from zheka.core.services.chat_cards import ChatCardsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.moderation import ModerationService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.polls import PollsService
 from zheka.core.services.reminders import RemindersService
@@ -81,6 +83,7 @@ from zheka.infra.database.models import (
     Tariff,
     User,
 )
+from zheka.infra.database.repos.chairman import ChairmanRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -497,6 +500,35 @@ def grouping_service(
         RequestsRepo(session),
         EventsService(EventsRepo(session)),
         make_notifications_service(session, publisher),
+    )
+
+
+def chairman_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> ChairmanService:
+    return ChairmanService(
+        ChairmanRepo(session),
+        ResidentsRepo(session),
+        HousesRepo(session),
+        UsersRepo(session),
+        OrgsRepo(session),
+        make_notifications_service(session, publisher),
+        EventsService(EventsRepo(session)),
+    )
+
+
+def moderation_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> ModerationService:
+    return ModerationService(
+        ResidentsRepo(session),
+        UsersRepo(session),
+        HousesRepo(session),
+        make_notifications_service(session, publisher),
+        EventsService(EventsRepo(session)),
+        OrgsRepo(session),
     )
 
 

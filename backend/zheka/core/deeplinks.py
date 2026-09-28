@@ -11,6 +11,7 @@ class DeeplinkKind(StrEnum):
     ORG_REGISTER = "reg"
     ORG_INVITE = "inv"
     FLAT_INVITE = "flat"
+    CHAIRMAN = "chair"
     HOUSE = "house"
     ENTRANCE_QR = "qr"
     DEMO_ADMIN = "demo_admin"
@@ -52,6 +53,10 @@ def org_invite_payload(code: str) -> str:
 
 def flat_invite_payload(code: str) -> str:
     return f"{DeeplinkKind.FLAT_INVITE}_{code}"
+
+
+def chairman_payload(code: str) -> str:
+    return f"{DeeplinkKind.CHAIRMAN}_{code}"
 
 
 def house_payload(house_id: HouseId) -> str:

@@ -7,6 +7,7 @@ from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.analytics import AnalyticsService
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.category_executors import CategoryExecutorsService
+from zheka.core.services.chairman import ChairmanService
 from zheka.core.services.charges import ChargesService
 from zheka.core.services.chat_cards import ChatCardsService
 from zheka.core.services.chats import ChatsService
@@ -43,6 +44,7 @@ class ServicesProvider(Provider):
         OrgsService,
         ModerationService,
         FlatsService,
+        ChairmanService,
         GroupingService,
         CategoryExecutorsService,
         RequestsService,

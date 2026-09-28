@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button, CellSimple, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { useQuery } from "@tanstack/react-query";
 import { generatePath, Link, Navigate, useNavigate } from "react-router-dom";
@@ -8,6 +9,7 @@ import {
   residencyState,
   type ResidencyState,
 } from "@/features/flat-confirmation";
+import { HandoverDialog } from "@/features/chairman-handover";
 import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
 import { useSession, workingOrgs } from "@/shared/model/session";
@@ -21,6 +23,7 @@ import {
   Icon,
   infoIcon,
   trashIcon,
+  usersIcon,
 } from "@/shared/ui/icon";
 import { StatusPill } from "@/shared/ui/status-pill";
 
@@ -65,6 +68,7 @@ const ProfilePage = () => {
   } = useSession();
   const notifications = useQuery(settingsQueryOptions());
   const forgetMe = useForgetMe();
+  const [handoverOpen, setHandoverOpen] = useState(false);
 
   if (!residency) {
     return <Navigate to={Routes.HOME} replace />;
@@ -112,6 +116,16 @@ const ProfilePage = () => {
               showChevron
               onClick={() => void navigate(Routes.FLAT)}
             />
+            {residency.is_chairman && (
+              <CellSimple
+                separator
+                before={<Icon src={usersIcon} className={styles.CellIcon} />}
+                title="Передать роль председателя"
+                subtitle="Ссылка соседу, действует 48 часов"
+                showChevron
+                onClick={() => setHandoverOpen(true)}
+              />
+            )}
           </div>
         </section>
       </Flex>
@@ -269,6 +283,15 @@ const ProfilePage = () => {
         onConfirm={forgetMe.submit}
         onClose={forgetMe.cancel}
       />
+
+      {residency.is_chairman && (
+        <HandoverDialog
+          houseId={residency.house_id}
+          address={residency.address}
+          isOpen={handoverOpen}
+          onClose={() => setHandoverOpen(false)}
+        />
+      )}
     </Panel>
   );
 };

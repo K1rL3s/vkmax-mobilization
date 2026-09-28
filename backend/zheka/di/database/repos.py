@@ -3,6 +3,7 @@ from dishka import BaseScope, Provider, Scope, provide_all
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
+from zheka.infra.database.repos.chairman import ChairmanRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
@@ -30,6 +31,7 @@ class ReposProvider(Provider):
         OrgsRepo,
         EventsRepo,
         InvitesRepo,
+        ChairmanRepo,
         FlatsRepo,
         RequestsRepo,
         MetersRepo,

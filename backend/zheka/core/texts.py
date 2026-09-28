@@ -400,3 +400,24 @@ def vote_button(number: int, text: str) -> str:
     if len(label) <= VOTE_OPTION_LIMIT:
         return label
     return f"{label[: VOTE_OPTION_LIMIT - 1]}…"
+
+
+def chairman_offer(name: str, address: str) -> str:
+    return (
+        f"🏛 {escape(name)} предлагает вам стать председателем совета дома "
+        f"{escape(address)}\n\n"
+        "✅ Вы сможете создавать опросы жителей и привязать чат дома\n\n"
+        "ℹ️ Председателя совета дома избирает общее собрание собственников "
+        "(ст. 161.1 ЖК РФ): приложение передает права в сервисе и не заменяет "
+        "протокол собрания"
+    )
+
+
+def chairman_accepted(name: str, address: str) -> str:
+    return f"✅ {escape(name)} теперь председатель совета дома {escape(address)}"
+
+
+def chairman_declined(name: str, address: str) -> str:
+    return (
+        f"😔 {escape(name)} отказался стать председателем совета дома {escape(address)}"
+    )
