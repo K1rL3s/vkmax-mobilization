@@ -195,3 +195,16 @@ async def test_a_key_that_cannot_be_a_header_turns_the_classifier_off(
     [record] = caplog.records
     assert record.levelno == logging.ERROR
     assert KEY not in record.getMessage()
+
+
+async def test_the_model_gets_the_text_without_phone_and_flat(serve: Serve) -> None:
+    classifier, sent = await serve(_answer("leak"))
+
+    await classifier.classify("Течет стояк в кв. 45, звоните 8 917 123-45-67")
+
+    [request] = sent
+    body = await request.json()
+    assert body["messages"][-1] == {
+        "role": "user",
+        "text": "Течет стояк в [КВАРТИРА], звоните [ТЕЛЕФОН]",
+    }

@@ -6,6 +6,7 @@ import aiohttp
 
 from zheka.config import YandexConfig
 from zheka.core.enums import CATEGORY_RULES, RequestCategory
+from zheka.core.masking import mask_pii
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class YandexClassifier:
             "completionOptions": {"temperature": 0, "maxTokens": _MAX_TOKENS},
             "messages": [
                 {"role": "system", "text": _INSTRUCTION},
-                {"role": "user", "text": text},
+                {"role": "user", "text": mask_pii(text)},
             ],
         }
         try:

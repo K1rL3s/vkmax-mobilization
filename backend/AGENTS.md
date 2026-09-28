@@ -242,7 +242,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   / `YANDEX_FOLDER_ID`; 401, 403 or a non-header key disables it per process;
   other failures or answers outside `RequestCategory` -> `category: null`.
   Key never logged. The model picks only the category (`CATEGORY_RULES` give
-  the zone), the resident's text is its own `user` message. `YandexQuota`
+  the zone), the resident's text is its own `user` message, masked by
+  `mask_pii` (`core/masking.py`: phones, e-mails, 8+ digit runs, flat numbers;
+  names and street addresses stay). `YandexQuota`
   caps classify and OCR together per user per api worker (`QUOTA_CALLS` an
   hour); past it the route answers as if Yandex were off. The bot does not
   classify. OCR gets the photo's real type and skips types it can't read.
