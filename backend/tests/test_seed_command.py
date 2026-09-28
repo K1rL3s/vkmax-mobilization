@@ -2,7 +2,7 @@ import asyncio
 import secrets
 import subprocess
 import sys
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +16,7 @@ from taskiq import InMemoryBroker
 
 from tests.conftest import RecordingBroker, make_config
 from tests.test_bot import _run
-from tests.test_seed import FILES, TODAY, _demo
+from tests.test_seed import FILES, NOW, _demo
 
 from zheka.bot import BotSetup
 from zheka.bot.handlers.commands.start import SEEDING_TEXT
@@ -68,26 +68,29 @@ async def test_seed_command_queues_the_task_and_answers_at_once(
     [(True, SEEDED), (False, ALREADY_SEEDED)],
     ids=["seeded", "already"],
 )
-async def test_the_task_seeds_today_and_tells_the_caller(
+async def test_the_task_seeds_now_and_tells_the_caller(
     task_broker: InMemoryBroker,
     bot_broker: RecordingBroker,
     monkeypatch: pytest.MonkeyPatch,
     seeded: bool,
     reply: str,
 ) -> None:
-    calls: list[tuple[Path, date]] = []
+    calls: list[tuple[Path, datetime]] = []
 
-    async def stub(_session: Any, _demo: Any, files_dir: Path, today: date) -> bool:
-        calls.append((files_dir, today))
+    async def stub(_session: Any, _demo: Any, files_dir: Path, now: datetime) -> bool:
+        calls.append((files_dir, now))
         return seeded
 
     monkeypatch.setattr(seed_task, "seed", stub)
     queued = len(bot_broker.messages)
     user_id = UserId(secrets.randbits(30))
 
+    before = datetime.now(UTC)
     await _run(task_broker, seed_demo, user_id=user_id)
 
-    assert calls == [(Path(make_config().files.dir), datetime.now(UTC).date())]
+    [(files_dir, now)] = calls
+    assert files_dir == Path(make_config().files.dir)
+    assert before <= now <= datetime.now(UTC)
     [message] = bot_broker.messages[queued:]
     assert message.task_name == TaskName.SEND_TO_USER.value
     assert message.kwargs == {
@@ -129,7 +132,7 @@ async def test_a_second_seed_waits_for_the_first(engine: AsyncEngine) -> None:
             bind=second,
             join_transaction_mode="create_savepoint",
         ) as session:
-            pending = asyncio.create_task(seed(session, _demo(session), FILES, TODAY))
+            pending = asyncio.create_task(seed(session, _demo(session), FILES, NOW))
             try:
                 waited = await _waits_on_the_lock(engine, pid, pending)
             finally:

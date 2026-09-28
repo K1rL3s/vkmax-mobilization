@@ -26,7 +26,7 @@ async def seed_demo(
     files: FromDishka[FilesConfig],
     notifications: FromDishka[NotificationsService],
 ) -> bool:
-    seeded = await seed(session, demo, Path(files.dir), datetime.now(UTC).date())
+    seeded = await seed(session, demo, Path(files.dir), datetime.now(UTC))
     notifications.notify_user(
         user_id,
         SEEDED if seeded else ALREADY_SEEDED,

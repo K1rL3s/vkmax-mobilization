@@ -393,22 +393,40 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   reformagkh card names unambiguously; registered orgs are fictional
   «Демо-УК ...» (`is_demo`, checksum-failing INNs). No invented licence or
   cadastral numbers; images are generated. Fictional orgs take only unmanaged
-  houses in the flat range, earliest in `houses.csv` first: demo house
-  Ленинский проспект 61/1 leads Москва (`test_no_real_manager_is_replaced`).
+  houses in the flat range (`test_no_real_manager_is_replaced`), each a
+  compact territory: the i-th org of a city takes the i-th slice of the free
+  houses by `(lat, lon)`, centres on its densest house (the one whose
+  `houses`-th nearest free neighbour is closest) and takes the nearest ones.
+  5 enterable orgs (`PROFILES`, 12 houses) and 12 background ones
+  (`BACKGROUND_PROFILES`, 8-15 houses, no deeplink) share 3 cities.
 - Seeded users: negative `max_user_id`, no `max_chat_id`.
-- The seed is one transaction, offline, takes `today`, seeds `random.Random`
-  per entity; after `pg_advisory_xact_lock(SEED_LOCK)` an existing `DEMO_INN`
-  org makes it return `False`. History rows are written directly, not via
-  services; no request is left `ON_REVIEW` (the scheduler would auto-close
-  and message the author). `/seed` (unadvertised, open) only queues
+- The seed is one transaction, offline, takes `now` (history ends at its UTC
+  midnight: a later hour ties the benchmark ranks; deadline stamps and the
+  pinned urgent notice follow `now`), seeds `random.Random` per entity;
+  after `pg_advisory_xact_lock(SEED_LOCK)` an existing `DEMO_INN` org makes
+  it return `False`. History rows are written directly, not via services; no
+  request is left `ON_REVIEW` (the scheduler would auto-close and message
+  the author). `/seed` (unadvertised, open) only queues
   `seed_demo`, which replies after commit; `seed()` gets no publisher.
   `/demo` (unadvertised) queues one real text of every reminder kind to the
   caller alone, mandatory, from the caller's demo flat or stubs
   (`RemindersService.demo`); it stamps nothing.
-- All five demo orgs have history in Москва (region = city), so both benchmark
-  cuts survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: five distinct ranks per
-  metric). They group requests from `REVIEWERS_GROUP_THRESHOLD` flats, not 3:
-  reviewers share an org's first house and file the same category.
+- Each city has 5-6 demo orgs (region = city), so both benchmark cuts
+  survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: the enterable five rank
+  distinct per metric). They group requests from `REVIEWERS_GROUP_THRESHOLD`
+  flats, not 3: reviewers share an org's first house (`list_for_org` order,
+  which `Seeder` reads back) and file the same category.
+- Every enterable org shows each staff map state for 72 h after the seed
+  (`test_seed.py` seeds at 20:30 UTC and checks six instants): the `overdue`
+  knob puts one open overdue request on each of its first houses, the next
+  five follow `MAP_STATES` (history ends `CLOSED_BEFORE` early, so all of it
+  is closed) with one fixed `STATE_CATEGORIES` request: a fresh LEAK, a
+  GARBAGE one escalated after its deadline (as `escalate` would), an overdue
+  ELECTRICITY one, a fresh OTHER one (10 working days), and nothing. The
+  emergency house gets an urgent announcement from the hour before the seed
+  (the map counts 3 days), the open house an active poll. The shared
+  announcements are one row per org naming all its houses; the poll results
+  note goes only to the demo house.
 - Demo deeplinks are only `demo_{admin,staff,resident,executor}_N`, N 1-4 (5
   is the API checker's), granting only that role in demo org N:
   `DemoService.join` sets exactly ADMIN, EMPLOYEE or EXECUTOR (lowering too);

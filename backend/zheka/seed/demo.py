@@ -28,6 +28,7 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
     ServiceType,
+    VerificationStatus,
 )
 from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
 from zheka.core.models import (
@@ -37,12 +38,14 @@ from zheka.core.models import (
     Event,
     Flat,
     House,
+    Meter,
     OrgMember,
     OrgSettings,
     Organization,
     Poll,
     PollOption,
     PollVote,
+    Reading,
     ReceptionWindow,
     Request,
     RequestGroup,
@@ -51,9 +54,18 @@ from zheka.core.models import (
     Resident,
     Tariff,
     User,
+    VerificationRequest,
 )
-from zheka.core.services.demo import DEMO_INN, DEMO_INNS, DemoService, demo_account_no
+from zheka.core.services.demo import (
+    DEMO_INN,
+    DEMO_INNS,
+    MONTHLY_USAGE,
+    SERIAL_CODES,
+    DemoService,
+    demo_account_no,
+)
 from zheka.core.services.readings import current_period
+from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.seed.directory import DATA_DIR, DirectoryHouse, load_directory
 
@@ -77,21 +89,32 @@ HISTORY = timedelta(days=182)
 REQUESTS_PER_WEEK = 3
 RECENT = timedelta(days=30)
 AUTO_CLOSE_AFTER = timedelta(hours=48)
-RESIDENTS_PER_HOUSE = 8
+MIN_OWNERS = 4
+MAX_OWNERS = 30
 REVIEWERS_GROUP_THRESHOLD = 10
 DEMO_AUTHORS = 15
 POLL_TURNOUT = 4_870
-DEMAND = (7, 5, 4, 2, 1)
+DEMAND = {
+    "Москва": (7, 5, 4, 2, 1),
+    "Санкт-Петербург": (6, 4, 3, 2, 1),
+    "Казань": (7, 3, 3, 2, 1),
+}
 RATED_PERCENT = 85
 MIN_FLATS = 40
 MAX_FLATS = 250
 SEED_LOCK = 1
+HOUSES_PER_DEMO_ORG = 12
+CLOSED_BEFORE = timedelta(days=4)
+URGENT_EVERY = 6
+ACTIVE_POLL_EVERY = 5
+RECEPTION_DAYS = 30
 
 
 class OrgProfile(ZhekaType):
     name: str
     inn: str
-    cities: tuple[str, ...]
+    city: str
+    houses: int
     accept_minutes: int
     phone_percent: int
     repeat_percent: int
@@ -99,13 +122,15 @@ class OrgProfile(ZhekaType):
     auto_close_percent: int
     ratings: tuple[int, ...]
     overdue: int
+    requests_per_week: int = REQUESTS_PER_WEEK
 
 
 PROFILES = (
     OrgProfile(
         name="Демо-УК «Жэка Коммуналкин»",
         inn=DEMO_INNS[0],
-        cities=("Москва",),
+        city="Москва",
+        houses=HOUSES_PER_DEMO_ORG,
         accept_minutes=40,
         phone_percent=3,
         repeat_percent=5,
@@ -117,19 +142,21 @@ PROFILES = (
     OrgProfile(
         name="Демо-УК «Северный квартал»",
         inn=DEMO_INNS[1],
-        cities=("Москва", "Санкт-Петербург"),
+        city="Санкт-Петербург",
+        houses=HOUSES_PER_DEMO_ORG,
         accept_minutes=20,
         phone_percent=25,
         repeat_percent=3,
         recent_repeats=0,
         auto_close_percent=3,
         ratings=(5, 5, 5, 4),
-        overdue=0,
+        overdue=1,
     ),
     OrgProfile(
         name="Демо-УК «Надежный дом»",
         inn=DEMO_INNS[2],
-        cities=("Москва", "Казань"),
+        city="Казань",
+        houses=HOUSES_PER_DEMO_ORG,
         accept_minutes=75,
         phone_percent=15,
         repeat_percent=8,
@@ -141,7 +168,8 @@ PROFILES = (
     OrgProfile(
         name="Демо-УК «Уютный двор»",
         inn=DEMO_INNS[3],
-        cities=("Москва", "Казань"),
+        city="Москва",
+        houses=HOUSES_PER_DEMO_ORG,
         accept_minutes=150,
         phone_percent=40,
         repeat_percent=12,
@@ -153,7 +181,8 @@ PROFILES = (
     OrgProfile(
         name="Демо-УК «Городской сервис»",
         inn=DEMO_INNS[4],
-        cities=("Москва", "Казань"),
+        city="Санкт-Петербург",
+        houses=HOUSES_PER_DEMO_ORG,
         accept_minutes=300,
         phone_percent=35,
         repeat_percent=18,
@@ -226,16 +255,212 @@ INITIALS = "АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЭЮЯ"
 POLL_OPTIONS = ("За", "Против", "Воздержался")
 ANNOUNCEMENTS = (
     (
-        40,
+        timedelta(days=40),
         "Плановое отключение горячей воды с 10:00 до 18:00, работы на теплотрассе",
         True,
     ),
     (
-        20,
+        timedelta(days=20),
         "Во дворе начнется ремонт асфальта, машины просим переставить к торцу дома",
         False,
     ),
-    (5, "Итоги опроса о шлагбауме опубликованы в разделе собраний", False),
+)
+POLL_RESULTS = (
+    timedelta(days=5),
+    "Итоги опроса о шлагбауме опубликованы в разделе собраний",
+    False,
+)
+URGENT_ANNOUNCEMENTS = (
+    "Аварийное отключение холодной воды, бригада уже работает на месте",
+    "Прорыв трубы отопления в подвале, возможны перебои с отоплением до вечера",
+    "Не работает лифт во втором подъезде, специалисты приедут сегодня",
+)
+CLOSED_POLL = (
+    "Установка шлагбаума во дворе",
+    "Шлагбаум на въезде во двор за счет собственников",
+)
+ACTIVE_POLL = (
+    "Покраска подъездов",
+    "Покраска стен и перил во всех подъездах за счет текущего ремонта",
+)
+RECEPTION_WINDOWS = ((0, 9, 12), (1, 9, 12), (2, 15, 19), (3, 15, 19), (4, 9, 12))
+MAP_STATES = ("emergency", "escalated", "overdue", "open", "calm")
+STATE_CATEGORIES = {
+    "emergency": RequestCategory.LEAK,
+    "escalated": RequestCategory.GARBAGE,
+    "overdue": RequestCategory.ELECTRICITY,
+    "open": RequestCategory.OTHER,
+}
+OVERDUE_AGE = timedelta(days=2)
+BACKGROUND_PROFILES = (
+    OrgProfile(
+        name="Демо-УК «Столичный дом»",
+        inn="9900000050",
+        city="Москва",
+        houses=10,
+        accept_minutes=55,
+        phone_percent=10,
+        repeat_percent=6,
+        recent_repeats=1,
+        auto_close_percent=15,
+        ratings=(5, 4, 4, 3, 5),
+        overdue=2,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Зеленый квартал»",
+        inn="9900000060",
+        city="Москва",
+        houses=8,
+        accept_minutes=120,
+        phone_percent=30,
+        repeat_percent=10,
+        recent_repeats=2,
+        auto_close_percent=22,
+        ratings=(4, 4, 3, 5),
+        overdue=1,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Садовое кольцо»",
+        inn="9900000080",
+        city="Москва",
+        houses=12,
+        accept_minutes=35,
+        phone_percent=8,
+        repeat_percent=4,
+        recent_repeats=0,
+        auto_close_percent=6,
+        ratings=(5, 5, 4, 4),
+        overdue=0,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Рассвет»",
+        inn="9900000090",
+        city="Москва",
+        houses=9,
+        accept_minutes=240,
+        phone_percent=45,
+        repeat_percent=16,
+        recent_repeats=3,
+        auto_close_percent=40,
+        ratings=(3, 4, 2, 4, 3),
+        overdue=3,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Невская линия»",
+        inn="9900000100",
+        city="Санкт-Петербург",
+        houses=14,
+        accept_minutes=90,
+        phone_percent=18,
+        repeat_percent=7,
+        recent_repeats=1,
+        auto_close_percent=12,
+        ratings=(5, 4, 4, 4),
+        overdue=1,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Балтийский двор»",
+        inn="9900000110",
+        city="Санкт-Петербург",
+        houses=11,
+        accept_minutes=180,
+        phone_percent=35,
+        repeat_percent=14,
+        recent_repeats=2,
+        auto_close_percent=33,
+        ratings=(4, 3, 3, 4, 2),
+        overdue=2,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Белые ночи»",
+        inn="9900000130",
+        city="Санкт-Петербург",
+        houses=9,
+        accept_minutes=28,
+        phone_percent=6,
+        repeat_percent=3,
+        recent_repeats=0,
+        auto_close_percent=4,
+        ratings=(5, 5, 5, 4, 5),
+        overdue=0,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Петроградский дом»",
+        inn="9900000140",
+        city="Санкт-Петербург",
+        houses=15,
+        accept_minutes=65,
+        phone_percent=22,
+        repeat_percent=9,
+        recent_repeats=2,
+        auto_close_percent=20,
+        ratings=(4, 5, 4, 3),
+        overdue=1,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Волжская набережная»",
+        inn="9900000150",
+        city="Казань",
+        houses=15,
+        accept_minutes=45,
+        phone_percent=12,
+        repeat_percent=5,
+        recent_repeats=1,
+        auto_close_percent=9,
+        ratings=(5, 4, 5, 4),
+        overdue=1,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Казанский двор»",
+        inn="9900000160",
+        city="Казань",
+        houses=13,
+        accept_minutes=210,
+        phone_percent=40,
+        repeat_percent=15,
+        recent_repeats=3,
+        auto_close_percent=38,
+        ratings=(3, 3, 4, 2, 4),
+        overdue=3,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Кремлевский квартал»",
+        inn="9900000170",
+        city="Казань",
+        houses=10,
+        accept_minutes=100,
+        phone_percent=20,
+        repeat_percent=8,
+        recent_repeats=1,
+        auto_close_percent=17,
+        ratings=(4, 4, 5, 3),
+        overdue=1,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Идель»",
+        inn="9900000180",
+        city="Казань",
+        houses=12,
+        accept_minutes=150,
+        phone_percent=28,
+        repeat_percent=11,
+        recent_repeats=2,
+        auto_close_percent=26,
+        ratings=(4, 3, 4, 4, 3),
+        overdue=2,
+        requests_per_week=2,
+    ),
 )
 
 
@@ -267,7 +492,7 @@ async def seed(
     session: AsyncSession,
     demo: DemoService,
     files_dir: Path,
-    today: date,
+    now: datetime,
 ) -> bool:
     stmt = select(func.pg_advisory_xact_lock(SEED_LOCK))
     await session.execute(stmt)
@@ -276,7 +501,7 @@ async def seed(
         return False
     _copy_files(files_dir)
     directory = await load_directory(session)
-    await Seeder(session, demo, today).run(directory)
+    await Seeder(session, demo, now).run(directory)
     logger.info("Сид готов: домов в справочнике %s", len(directory))
     return True
 
@@ -293,70 +518,86 @@ def _history_houses(
     directory: Sequence[DirectoryHouse],
 ) -> dict[str, list[DirectoryHouse]]:
     by_city: dict[str, list[DirectoryHouse]] = {}
-    for item in sorted(directory, key=lambda item: item.house.org_id is not None):
+    for item in directory:
         house = item.house
-        if house.lat is not None and MIN_FLATS <= item.living_flats <= MAX_FLATS:
+        if (
+            house.org_id is None
+            and house.lat is not None
+            and house.lon is not None
+            and MIN_FLATS <= item.living_flats <= MAX_FLATS
+        ):
             by_city.setdefault(house.city, []).append(item)
+    for items in by_city.values():
+        items.sort(key=lambda item: (item.house.lat, item.house.lon))
     return by_city
 
 
 class Seeder:
-    __slots__ = ("_demo", "_max_ids", "_names", "_now", "_session", "_today")
+    __slots__ = (
+        "_demo",
+        "_max_ids",
+        "_names",
+        "_now",
+        "_seeded_at",
+        "_session",
+        "_today",
+    )
 
-    def __init__(self, session: AsyncSession, demo: DemoService, today: date) -> None:
+    def __init__(self, session: AsyncSession, demo: DemoService, now: datetime) -> None:
         self._session = session
         self._demo = demo
-        self._today = today
-        self._now = datetime.combine(today, time(), UTC)
+        self._today = now.date()
+        self._now = datetime.combine(self._today, time(), UTC)
+        self._seeded_at = now
         self._max_ids: Iterator[int] = itertools.count(-1, -1)
         self._names = Random("names")
 
     async def run(self, directory: Sequence[DirectoryHouse]) -> None:
         free = _history_houses(directory)
+        profiles = (*PROFILES, *BACKGROUND_PROFILES)
         voters: list[User] = []
         taken: set[HouseId] = set()
-        for profile in PROFILES:
-            org = await self._org(profile, free[profile.cities[0]][0].house.timezone)
+        for number, profile in enumerate(profiles, start=1):
+            neighbours = [other for other in profiles if other.city == profile.city]
+            items = self._territory(
+                free[profile.city],
+                neighbours.index(profile),
+                len(neighbours),
+                profile.houses,
+            )
+            org = await self._org(profile, number, items[0].house.timezone)
             staff = await self._staff(org, profile)
-            for city in profile.cities:
-                item = free[city].pop(0)
+            for item in items:
                 item.house.org_id = org.id
                 taken.add(item.house.id)
-                await self._session.flush()
-                flats = await self._flats(item)
-                await self._tariffs(item.house, item.overhaul_rate)
-                if profile.inn == DEMO_INN:
-                    authors, voters = await self._demo_house(item, org, staff, flats)
-                else:
-                    authors = await self._owners(item.house, flats, staff)
-                await self._requests(item.house, profile, staff, authors)
-        await self._demand(
-            [
-                item.house
-                for item in directory
-                if item.house.city == "Москва" and item.house.id not in taken
-            ],
-            voters,
-        )
+            await self._session.flush()
+            by_id = {item.house.id: item for item in items}
+            ordered = [
+                by_id[house.id]
+                for house in await HousesRepo(self._session).list_for_org(org.id)
+            ]
+            voters.extend(await self._houses(profile, org, staff, ordered))
+        await self._demand(directory, taken, voters)
 
     async def _user(self) -> User:
-        name = f"{self._names.choice(FIRST_NAMES)} {self._names.choice(INITIALS)}."
-        user = User(max_user_id=MaxUserId(next(self._max_ids)), name=name)
-        self._session.add(user)
-        await self._session.flush()
-        return user
+        return (await self._users(1))[0]
 
-    async def _org(self, profile: OrgProfile, timezone: str) -> Organization:
+    async def _org(
+        self,
+        profile: OrgProfile,
+        number: int,
+        timezone: str,
+    ) -> Organization:
         org = Organization(
             name=profile.name,
             inn=profile.inn,
-            phone=f"+7 (000) 000-00-{PROFILES.index(profile) + 1:02d}",
+            phone=f"+7 (000) 000-00-{number:02d}",
             address="Адрес вымышлен, организация создана для демо",
-            reception_note="Прием по вторникам и четвергам, запись в приложении",
+            reception_note="Прием по будням, запись в приложении",
             registered_at=self._now - HISTORY - timedelta(days=30),
             is_demo=True,
             timezone=timezone,
-            emergency_phone=f"+7 (000) 000-01-{PROFILES.index(profile) + 1:02d}",
+            emergency_phone=f"+7 (000) 000-01-{number:02d}",
         )
         self._session.add(org)
         await self._session.flush()
@@ -366,6 +607,17 @@ class Seeder:
                 meter_window_always_open=True,
                 group_threshold=REVIEWERS_GROUP_THRESHOLD,
             ),
+        )
+        self._session.add_all(
+            ReceptionWindow(
+                org_id=org.id,
+                weekday=weekday,
+                time_from=time(start),
+                time_to=time(end),
+                slot_minutes=30,
+                capacity=2,
+            )
+            for weekday, start, end in RECEPTION_WINDOWS
         )
         await self._session.flush()
         return org
@@ -406,12 +658,12 @@ class Seeder:
         await self._session.flush()
         return flats
 
-    async def _resident(
+    def _resident(
         self,
         user: User,
         flat: Flat,
         role: ResidentRole,
-        staff: Staff,
+        staff: Staff | None,
     ) -> Resident:
         is_owner = role is ResidentRole.OWNER
         resident = Resident(
@@ -421,11 +673,10 @@ class Seeder:
             role=role,
             can_see_charges=is_owner,
             can_vote=is_owner,
-            verified_at=self._now - HISTORY,
-            verified_by=staff.admin,
+            verified_at=None if staff is None else self._now - HISTORY,
+            verified_by=None if staff is None else staff.admin,
         )
         self._session.add(resident)
-        await self._session.flush()
         return resident
 
     async def _owners(
@@ -433,14 +684,28 @@ class Seeder:
         house: House,
         flats: Sequence[Flat],
         staff: Staff,
-    ) -> list[Author]:
+    ) -> list[tuple[User, Resident]]:
         rng = Random(f"owners:{house.city}:{house.street}:{house.building}")
-        authors = []
-        for flat in rng.sample(list(flats), RESIDENTS_PER_HOUSE):
-            user = await self._user()
-            await self._resident(user, flat, ResidentRole.OWNER, staff)
-            authors.append(Author(user_id=user.id, flat_id=flat.id))
-        return authors
+        chosen = rng.sample(
+            list(flats),
+            min(len(flats), rng.randint(MIN_OWNERS, MAX_OWNERS)),
+        )
+        verified = rng.randint(30, 100)
+        users = await self._users(len(chosen))
+        owners = [
+            (
+                user,
+                self._resident(
+                    user,
+                    flat,
+                    ResidentRole.OWNER,
+                    staff if index == 0 or rng.randint(1, 100) <= verified else None,
+                ),
+            )
+            for index, (user, flat) in enumerate(zip(users, chosen, strict=True))
+        ]
+        await self._session.flush()
+        return owners
 
     async def _demo_house(
         self,
@@ -448,7 +713,7 @@ class Seeder:
         org: Organization,
         staff: Staff,
         flats: Sequence[Flat],
-    ) -> tuple[list[Author], list[User]]:
+    ) -> list[tuple[User, Resident]]:
         house = item.house
         house.overhaul = {
             "program": f"Региональная программа капитального ремонта, {house.region}",
@@ -482,7 +747,7 @@ class Seeder:
             strict=True,
         ):
             user = await self._user()
-            resident = await self._resident(user, flat, ResidentRole.OWNER, staff)
+            resident = self._resident(user, flat, ResidentRole.OWNER, staff)
             owners.append((user, resident))
             await self._demo.furnish(
                 flat,
@@ -492,7 +757,7 @@ class Seeder:
                 below=scenario == "below",
                 verification_soon=scenario == "verification",
             )
-        await self._resident(await self._user(), main[0], ResidentRole.TENANT, staff)
+        self._resident(await self._user(), main[0], ResidentRole.TENANT, staff)
 
         total = sum(flat.area or 0 for flat in flats)
         voted = sum(flat.area or 0 for flat in main)
@@ -502,17 +767,19 @@ class Seeder:
                 continue
             voted += area
             user = await self._user()
-            resident = await self._resident(user, flat, ResidentRole.OWNER, staff)
+            resident = self._resident(user, flat, ResidentRole.OWNER, staff)
             owners.append((user, resident))
-        await self._poll(house, org, staff, owners)
-        await self._reception(house, org, owners)
-        await self._announcements(house, org, staff, len(owners) + 1)
-        authors = [
-            Author(user_id=user.id, flat_id=resident.flat_id)
-            for user, resident in owners[:DEMO_AUTHORS]
-            if resident.flat_id is not None
-        ]
-        return authors, [user for user, _resident in owners]
+        await self._session.flush()
+        await self._poll(house, org, staff, owners, self._now - timedelta(days=10))
+        await self._announcements(
+            org,
+            staff,
+            [house.id],
+            len(owners) + 1,
+            [POLL_RESULTS],
+        )
+        await self._meters(house, owners[len(main) :])
+        return owners
 
     async def _tariffs(self, house: House, overhaul_rate: int) -> None:
         current = current_period(self._today)
@@ -546,18 +813,27 @@ class Seeder:
         org: Organization,
         staff: Staff,
         owners: Sequence[tuple[User, Resident]],
+        ends_at: datetime,
     ) -> None:
-        ends_at = self._now - timedelta(days=10)
+        rng = Random(f"poll:{house.city}:{house.street}:{house.building}")
+        voters = [pair for pair in owners if pair[1].verified_at is not None]
+        is_active = ends_at > self._now
+        if is_active:
+            starts_at = self._now - timedelta(days=rng.randint(2, 6))
+            voters = rng.sample(voters, len(voters) * rng.randint(20, 70) // 100)
+        else:
+            starts_at = ends_at - timedelta(days=14)
+        title, description = ACTIVE_POLL if is_active else CLOSED_POLL
         poll = Poll(
             house_id=house.id,
             org_id=org.id,
             created_by_user_id=staff.admin,
             created_by_role="staff",
-            title="Установка шлагбаума во дворе",
-            description="Шлагбаум на въезде во двор за счет собственников",
-            starts_at=ends_at - timedelta(days=14),
+            title=title,
+            description=description,
+            starts_at=starts_at,
             ends_at=ends_at,
-            status=PollStatus.CLOSED,
+            status=PollStatus.ACTIVE if is_active else PollStatus.CLOSED,
         )
         self._session.add(poll)
         await self._session.flush()
@@ -567,7 +843,7 @@ class Seeder:
         ]
         self._session.add_all(options)
         await self._session.flush()
-        rng = Random(f"poll:{house.city}:{house.street}:{house.building}")
+        hours = (min(ends_at, self._now) - starts_at) // timedelta(hours=1) - 1
         self._session.add_all(
             PollVote(
                 poll_id=poll.id,
@@ -576,82 +852,92 @@ class Seeder:
                 resident_id=resident.id,
                 flat_id=resident.flat_id,
                 counted_by_area=True,
-                created_at=poll.starts_at + timedelta(hours=rng.randint(1, 13 * 24)),
+                created_at=starts_at + timedelta(hours=rng.randint(1, hours)),
             )
-            for user, resident in owners
+            for user, resident in voters
         )
         await self._session.flush()
 
     async def _reception(
         self,
-        house: House,
         org: Organization,
-        owners: Sequence[tuple[User, Resident]],
+        houses: Sequence[tuple[House, Sequence[tuple[User, Resident]]]],
     ) -> None:
-        self._session.add_all(
-            ReceptionWindow(
-                org_id=org.id,
-                weekday=weekday,
-                time_from=time(start),
-                time_to=time(end),
-                slot_minutes=30,
-                capacity=2,
-            )
-            for weekday, start, end in ((1, 9, 12), (3, 15, 19))
-        )
-        past = self._today - timedelta(days=(self._today.weekday() - 1) % 7 or 7)
-        upcoming = self._today + timedelta(days=(3 - self._today.weekday()) % 7 or 7)
-        self._session.add_all(
-            Appointment(
-                org_id=org.id,
-                house_id=house.id,
-                user_id=user.id,
-                starts_at=datetime.combine(day, at, org.zone),
-                status=status,
-            )
-            for (user, _resident), day, at, status in (
-                (owners[0], past, time(9, 30), AppointmentStatus.DONE),
-                (owners[1], upcoming, time(16), AppointmentStatus.BOOKED),
-            )
-        )
+        rng = Random(f"reception:{org.inn}")
+        chosen = rng.sample(list(houses), rng.randint(3, 4))
+        appointments = []
+        for offset in range(RECEPTION_DAYS):
+            day = self._today + timedelta(days=offset)
+            for weekday, start, end in RECEPTION_WINDOWS:
+                if weekday != day.weekday():
+                    continue
+                slots = [
+                    time(start + half // 2, half % 2 * 30)
+                    for half in range((end - start) * 2)
+                ]
+                for at in rng.sample(slots, rng.randint(1, 2)):
+                    house, owners = rng.choice(chosen)
+                    user, _resident = rng.choice(owners)
+                    appointments.append(
+                        Appointment(
+                            org_id=org.id,
+                            house_id=house.id,
+                            user_id=user.id,
+                            starts_at=datetime.combine(day, at, org.zone),
+                            status=AppointmentStatus.BOOKED,
+                        ),
+                    )
+        self._session.add_all(appointments)
         await self._session.flush()
 
     async def _announcements(
         self,
-        house: House,
         org: Organization,
         staff: Staff,
+        house_ids: Sequence[HouseId],
         recipients: int,
+        rows: Sequence[tuple[timedelta, str, bool]],
     ) -> None:
         self._session.add_all(
             Announcement(
                 org_id=org.id,
-                house_ids=[house.id],
+                house_ids=list(house_ids),
                 text=text,
                 channels=[AnnouncementChannel.DIRECT.value],
                 created_by=staff.admin,
                 recipients_count=recipients,
-                created_at=self._now - timedelta(days=days_ago),
+                created_at=self._now - age,
                 urgent=urgent,
                 delivered_direct=recipients - 1,
                 delivered_chat=0,
             )
-            for days_ago, text, urgent in ANNOUNCEMENTS
+            for age, text, urgent in rows
         )
         await self._session.flush()
 
-    async def _demand(self, houses: Sequence[House], users: Sequence[User]) -> None:
+    async def _demand(
+        self,
+        directory: Sequence[DirectoryHouse],
+        taken: set[HouseId],
+        users: Sequence[User],
+    ) -> None:
         rng = Random("demand")
         signals: list[DemandSignal] = []
-        for house, count in zip(houses, DEMAND, strict=False):
-            signals.extend(
-                DemandSignal(
-                    house_id=house.id,
-                    user_id=user.id,
-                    created_at=self._now - timedelta(days=rng.randint(1, 60)),
+        for city, counts in DEMAND.items():
+            houses = [
+                item.house
+                for item in directory
+                if item.house.city == city and item.house.id not in taken
+            ]
+            for house, count in zip(houses, counts, strict=False):
+                signals.extend(
+                    DemandSignal(
+                        house_id=house.id,
+                        user_id=user.id,
+                        created_at=self._now - timedelta(days=rng.randint(1, 60)),
+                    )
+                    for user in rng.sample(list(users), count)
                 )
-                for user in rng.sample(list(users), count)
-            )
         self._session.add_all(signals)
         await self._session.flush()
 
@@ -661,14 +947,19 @@ class Seeder:
         profile: OrgProfile,
         staff: Staff,
         authors: Sequence[Author],
+        *,
+        demo: bool,
+        overdue_count: int,
+        pinned: str | None,
     ) -> None:
         rng = Random(f"requests:{house.city}:{house.street}:{house.building}")
+        until = self._now - (CLOSED_BEFORE if pinned else timedelta(hours=2))
         moments = []
         moment = self._now - HISTORY
-        step = timedelta(days=7) / REQUESTS_PER_WEEK
+        step = timedelta(days=7) / profile.requests_per_week
         while True:
             moment += step * rng.randint(20, 180) // 100
-            if moment >= self._now - timedelta(hours=2):
+            if moment >= until:
                 break
             moments.append(moment)
         phone = set(
@@ -695,7 +986,7 @@ class Seeder:
         overdue = set(
             rng.sample(
                 overdue_candidates,
-                min(profile.overdue, len(overdue_candidates)),
+                min(overdue_count, len(overdue_candidates)),
             ),
         )
 
@@ -714,8 +1005,26 @@ class Seeder:
                     keep_open=index in overdue,
                 ),
             )
-        if profile.inn == DEMO_INN:
+        if demo:
             plans.extend(await self._group(rng, house, profile, staff, authors))
+        if pinned in STATE_CATEGORIES:
+            created = self._now - timedelta(minutes=rng.randint(30, 180))
+            if pinned in {"escalated", "overdue"}:
+                created -= OVERDUE_AGE
+            fresh = self._plan(
+                rng,
+                house,
+                profile,
+                staff,
+                created,
+                STATE_CATEGORIES[pinned],
+                rng.choice(authors),
+                keep_open=True,
+            )
+            if pinned == "escalated":
+                deadline = fresh.request.deadline_at
+                fresh.request.escalated_at = deadline + (self._now - deadline) / 2
+            plans.append(fresh)
         self._session.add_all(plan.request for plan in plans)
         await self._session.flush()
 
@@ -737,12 +1046,15 @@ class Seeder:
         chosen += rng.sample(recent, min(len(recent), profile.recent_repeats))
         repeats = []
         for request, done_at, author in chosen:
+            created = done_at + timedelta(days=rng.randint(1, 5))
+            if created >= until:
+                continue
             repeat = self._plan(
                 rng,
                 house,
                 profile,
                 staff,
-                done_at + timedelta(days=rng.randint(1, 5)),
+                created,
                 request.category,
                 author,
                 keep_open=False,
@@ -779,7 +1091,7 @@ class Seeder:
                         created_at=plan.assigned_at,
                     ),
                 )
-        if profile.inn == DEMO_INN:
+        if demo:
             accepted = sorted(
                 (
                     plan.request.created_at,
@@ -974,13 +1286,211 @@ class Seeder:
             done_at=reached.get(RequestStatus.DONE),
             is_staff_author=author is None,
         )
-        if request.warn_at <= self._now:
-            request.deadline_warned_at = self._now
-        if deadline_at <= self._now:
-            request.overdue_notified_at = self._now
+        if request.warn_at <= self._seeded_at:
+            request.deadline_warned_at = self._seeded_at
+        if deadline_at <= self._seeded_at:
+            request.overdue_notified_at = self._seeded_at
         return Plan(
             request=request,
             author=author,
             steps=steps,
             assigned_at=assigned if is_assigned else None,
         )
+
+    async def _houses(
+        self,
+        profile: OrgProfile,
+        org: Organization,
+        staff: Staff,
+        ordered: Sequence[DirectoryHouse],
+    ) -> list[User]:
+        is_enterable = profile in PROFILES
+        rng = Random(f"pending:{profile.inn}")
+        pending = (
+            set(rng.sample(range(1, len(ordered)), rng.randint(1, 3)))
+            if is_enterable
+            else set()
+        )
+        voters: list[User] = []
+        booked: list[tuple[House, Sequence[tuple[User, Resident]]]] = []
+        for index, item in enumerate(ordered):
+            house = item.house
+            flats = await self._flats(item)
+            await self._tariffs(house, item.overhaul_rate)
+            demo = index == 0 and profile.inn == DEMO_INN
+            if demo:
+                owners = await self._demo_house(item, org, staff, flats)
+                voters = [user for user, _resident in owners]
+            else:
+                owners = await self._owners(house, flats, staff)
+                await self._meters(house, owners)
+            if index in pending:
+                await self._pending(house, flats, owners)
+            shift = index - profile.overdue
+            pinned = (
+                MAP_STATES[shift]
+                if is_enterable and 0 <= shift < len(MAP_STATES)
+                else None
+            )
+            await self._requests(
+                house,
+                profile,
+                staff,
+                [
+                    Author(user_id=user.id, flat_id=resident.flat_id)
+                    for user, resident in owners[:DEMO_AUTHORS]
+                    if resident.flat_id is not None
+                ],
+                demo=demo,
+                overdue_count=int(index < profile.overdue),
+                pinned=pinned,
+            )
+            await self._activity(house, org, staff, owners, pinned)
+            booked.append((house, owners))
+        await self._announcements(
+            org,
+            staff,
+            [house.id for house, _owners in booked],
+            sum(len(owners) for _house, owners in booked),
+            ANNOUNCEMENTS,
+        )
+        if is_enterable:
+            await self._reception(org, booked)
+        return voters
+
+    async def _users(self, count: int) -> list[User]:
+        names = self._names
+        users = [
+            User(
+                max_user_id=MaxUserId(next(self._max_ids)),
+                name=f"{names.choice(FIRST_NAMES)} {names.choice(INITIALS)}.",
+            )
+            for _ in range(count)
+        ]
+        self._session.add_all(users)
+        await self._session.flush()
+        return users
+
+    async def _meters(
+        self,
+        house: House,
+        owners: Sequence[tuple[User, Resident]],
+    ) -> None:
+        rng = Random(f"meters:{house.city}:{house.street}:{house.building}")
+        verified = [
+            (user, resident.flat_id)
+            for user, resident in owners
+            if resident.verified_at is not None and resident.flat_id is not None
+        ]
+        readers = set(
+            rng.sample(
+                range(len(verified)),
+                ceil(len(verified) * rng.randint(10, 95) / 100),
+            ),
+        )
+        meters = [
+            (
+                index in readers,
+                user,
+                monthly,
+                Meter(
+                    flat_id=flat_id,
+                    type=meter_type,
+                    tariff_zones=len(monthly),
+                    serial=f"ДЕМО-{SERIAL_CODES[meter_type]}-{flat_id:06d}",
+                    next_verification_date=date(
+                        self._today.year + rng.randint(2, 6),
+                        self._today.month,
+                        1,
+                    ),
+                ),
+            )
+            for index, (user, flat_id) in enumerate(verified)
+            for meter_type, monthly in MONTHLY_USAGE.items()
+        ]
+        self._session.add_all(meter for *_rest, meter in meters)
+        await self._session.flush()
+        period = current_period(self._today)
+        opened = datetime.combine(period, time(), UTC)
+        self._session.add_all(
+            Reading(
+                meter_id=meter.id,
+                period=period,
+                values={
+                    zone: base * rng.randint(20, 60) for zone, base in monthly.items()
+                },
+                ocr_used=False,
+                ocr_accepted=False,
+                is_below_previous=False,
+                submitted_at=opened + (self._now - opened) * rng.randint(10, 90) // 100,
+                submitted_by=user.id,
+            )
+            for reads, user, monthly, meter in meters
+            if reads
+        )
+        await self._session.flush()
+
+    async def _pending(
+        self,
+        house: House,
+        flats: Sequence[Flat],
+        owners: Sequence[tuple[User, Resident]],
+    ) -> None:
+        rng = Random(f"pending:{house.city}:{house.street}:{house.building}")
+        owned = {resident.flat_id for _user, resident in owners}
+        flat = rng.choice([flat for flat in flats if flat.id not in owned])
+        user = await self._user()
+        self._resident(user, flat, ResidentRole.OWNER, None)
+        account = demo_account_no(flat.number)
+        self._session.add(
+            VerificationRequest(
+                flat_id=flat.id,
+                user_id=user.id,
+                account_no=account[:-1] + str((int(account[-1]) + 1) % 10),
+                status=VerificationStatus.PENDING,
+                created_at=self._now - timedelta(hours=rng.randint(2, 72)),
+            ),
+        )
+        await self._session.flush()
+
+    async def _activity(
+        self,
+        house: House,
+        org: Organization,
+        staff: Staff,
+        owners: Sequence[tuple[User, Resident]],
+        pinned: str | None,
+    ) -> None:
+        rng = Random(f"activity:{house.city}:{house.street}:{house.building}")
+        urgent = None
+        if pinned == "emergency":
+            posted = self._seeded_at - timedelta(minutes=rng.randint(10, 50))
+            urgent = (self._now - posted, URGENT_ANNOUNCEMENTS[0], True)
+        elif rng.randrange(URGENT_EVERY) == 0:
+            urgent = (
+                timedelta(days=rng.randint(1, 2)),
+                rng.choice(URGENT_ANNOUNCEMENTS),
+                True,
+            )
+        if urgent is not None:
+            await self._announcements(org, staff, [house.id], len(owners), [urgent])
+        if pinned == "open" or rng.randrange(ACTIVE_POLL_EVERY) == 0:
+            ends_at = self._now + timedelta(days=rng.randint(7, 20))
+            await self._poll(house, org, staff, owners, ends_at)
+
+    @staticmethod
+    def _territory(
+        free: list[DirectoryHouse],
+        index: int,
+        orgs: int,
+        count: int,
+    ) -> list[DirectoryHouse]:
+        start, end = index * len(free) // orgs, (index + 1) * len(free) // orgs
+        centre = min(
+            free[start:end],
+            key=lambda item: sorted(item.distance(other) for other in free)[count - 1],
+        )
+        nearest = sorted(free, key=centre.distance)[:count]
+        taken = {item.house.id for item in nearest}
+        free[:] = [item for item in free if item.house.id not in taken]
+        return nearest

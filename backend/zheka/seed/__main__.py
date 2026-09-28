@@ -23,7 +23,7 @@ async def main() -> None:
                 session,
                 demo,
                 Path(config.files.dir),
-                datetime.now(UTC).date(),
+                datetime.now(UTC),
             ):
                 await session.commit()
     finally:
