@@ -17,6 +17,7 @@ import { MeterChips } from "./ui/meter-chips";
 import { PeriodCard } from "./ui/period-card";
 import { PhotoStrip } from "./ui/photo-strip";
 import { ReadingFields } from "./ui/reading-fields";
+import { ReadingQuestion } from "./ui/reading-question";
 import { SubmitResult } from "./ui/submit-result";
 
 import styles from "./meters.module.css";
@@ -263,6 +264,18 @@ const MetersPage = () => {
           Отправить показания
         </Button>
       </div>
+
+      <ReadingQuestion
+        meter={meter}
+        period={form.period.period}
+        zones={form.zones}
+        question={form.question}
+        anomalies={form.anomalies}
+        replaced={form.replaced}
+        valueOf={form.valueOf}
+        onConfirm={form.confirm}
+        onClose={form.dismissQuestion}
+      />
     </Panel>
   );
 };

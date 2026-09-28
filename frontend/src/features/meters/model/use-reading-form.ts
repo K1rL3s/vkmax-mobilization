@@ -5,6 +5,7 @@ import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 
 import {
+  anomalyOf,
   formatReading,
   parseReading,
   zonesOf,
@@ -19,6 +20,7 @@ export const useReadingForm = () => {
   const [meterId, setMeterId] = useState<number | null>(null);
   const [period, setPeriod] = useState<string | null>(null);
   const [edited, setEdited] = useState<Partial<Record<TariffZone, string>>>({});
+  const [question, setQuestion] = useState<"anomaly" | "replace" | null>(null);
 
   const meter =
     readings.meters.find((item) => item.id === meterId) ??
@@ -65,7 +67,19 @@ export const useReadingForm = () => {
       item.last_period !== selectedPeriod?.period,
   );
 
-  const send = () => {
+  const anomalies =
+    meter && selectedPeriod
+      ? zones.flatMap(
+          (zone, index) =>
+            anomalyOf(meter, selectedPeriod.period, zone, parsed[index]) ?? [],
+        )
+      : [];
+  const replaced =
+    meter?.last_period === selectedPeriod?.period ? meter?.last_values : null;
+
+  const post = () => {
+    setQuestion(null);
+
     if (!meter || !selectedPeriod || parsed.some((value) => value === null)) {
       return;
     }
@@ -122,6 +136,25 @@ export const useReadingForm = () => {
       photos.photos.length > 0 &&
       !photos.isUploading &&
       parsed.every((value) => value !== null),
-    send,
+    send: () => {
+      if (anomalies.length > 0) {
+        setQuestion("anomaly");
+      } else if (replaced) {
+        setQuestion("replace");
+      } else {
+        post();
+      }
+    },
+    question,
+    anomalies,
+    replaced,
+    confirm: () => {
+      if (question === "anomaly" && replaced) {
+        setQuestion("replace");
+      } else {
+        post();
+      }
+    },
+    dismissQuestion: () => setQuestion(null),
   };
 };
