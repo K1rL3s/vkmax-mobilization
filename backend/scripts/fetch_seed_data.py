@@ -429,7 +429,7 @@ HOUSE_FIELDS = (
     "source_id",
     "timezone",
 )
-ORG_FIELDS = ("inn", "name", "phone", "address", "timezone")
+ORG_FIELDS = ("inn", "name", "phone", "address", "email", "site", "timezone")
 FULL_DIGITS = 11
 LOCAL_DIGITS = 7
 AREA_CODES = {"город Санкт-Петербург": "812", "Республика Татарстан": "843"}
@@ -585,8 +585,33 @@ def _org(row: dict[str, str], timezone: str) -> dict[str, str]:
         "name": _clean(row["name_short"]),
         "phone": phone(row["phone"], AREA_CODES.get(row["subject_rf"])),
         "address": _clean(row["actual_address"] or row["legal_address"]),
+        "email": email(row["email"]),
+        "site": site(row["site"]),
         "timezone": timezone,
     }
+
+
+def email(value: str) -> str:
+    first = _clean(re.split(r"[,;\s]", value, maxsplit=1)[0]).lower()
+    return first if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", first) else ""
+
+
+def site(value: str) -> str:
+    first = _clean(re.split(r"[,;\s]", value, maxsplit=1)[0])
+    if not first:
+        return ""
+    if not re.match(r"https?://", first, re.IGNORECASE):
+        first = f"https://{first}"
+    parts = urllib.parse.urlsplit(first.replace(" ", ""))
+    host = parts.netloc.lower()
+    known = ("reformagkh.ru", "dom.mos.ru", "dom.gosuslugi.ru")
+    if not host or any(
+        host == domain or host.endswith(f".{domain}") for domain in known
+    ):
+        return ""
+    return urllib.parse.urlunsplit(
+        parts._replace(scheme=parts.scheme.lower(), netloc=host),
+    )
 
 
 def main() -> None:

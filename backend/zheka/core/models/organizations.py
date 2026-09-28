@@ -18,6 +18,8 @@ class Organization(ZhekaMutableType, Zoned):
     is_demo: bool = False
     timezone: str
     emergency_phone: str | None = None
+    email: str | None = None
+    site: str | None = None
 
 
 class OrgSettings(ZhekaMutableType):

@@ -1,6 +1,8 @@
+import re
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import cast
+from urllib.parse import urlsplit
 
 from sqlalchemy.exc import IntegrityError
 
@@ -31,6 +33,26 @@ MIN_GROUP_THRESHOLD = 2
 MIN_GROUP_WINDOW_HOURS = 1
 MAX_GROUP_WINDOW_HOURS = 168
 INVITE_USED_UP = "Код приглашения истек, отозван или исчерпан"
+
+
+def checked_email(email: str | None) -> str | None:
+    value = (email or "").strip().lower()
+    if not value:
+        return None
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+        raise InvalidRequest("Почта УК указана неверно")
+    return value
+
+
+def checked_site(site: str | None) -> str | None:
+    value = (site or "").strip()
+    if not value:
+        return None
+    if not re.match(r"https?://", value, re.IGNORECASE):
+        value = f"https://{value}"
+    if not re.fullmatch(r"[\w-]+(\.[\w-]+)+\.?", urlsplit(value).netloc):
+        raise InvalidRequest("Сайт УК указан неверно: нужен адрес вида uk-primer.ru")
+    return value
 
 
 class OrgLookupView(ZhekaType):
@@ -162,6 +184,8 @@ class OrgsService:
         phone: str,
         reception_note: str | None,
         emergency_phone: str | None,
+        email: str | None,
+        site: str | None,
     ) -> OrgSettingsView:
         for day in (meter_window_day_from, meter_window_day_to):
             if not MIN_METER_WINDOW_DAY <= day <= MAX_METER_WINDOW_DAY:
@@ -192,6 +216,8 @@ class OrgsService:
         org.phone = phone
         org.reception_note = reception_note
         org.emergency_phone = (emergency_phone or "").strip() or None
+        org.email = checked_email(email)
+        org.site = checked_site(site)
         return OrgSettingsView(org=org, settings=settings)
 
     async def members(self, org_id: OrgId) -> list[OrgMemberView]:

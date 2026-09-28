@@ -347,16 +347,19 @@ class Seeder:
         return user
 
     async def _org(self, profile: OrgProfile, timezone: str) -> Organization:
+        number = PROFILES.index(profile) + 1
         org = Organization(
             name=profile.name,
             inn=profile.inn,
-            phone=f"+7 (000) 000-00-{PROFILES.index(profile) + 1:02d}",
+            phone=f"+7 (000) 000-00-{number:02d}",
             address="Адрес вымышлен, организация создана для демо",
             reception_note="Прием по вторникам и четвергам, запись в приложении",
             registered_at=self._now - HISTORY - timedelta(days=30),
             is_demo=True,
             timezone=timezone,
-            emergency_phone=f"+7 (000) 000-01-{PROFILES.index(profile) + 1:02d}",
+            emergency_phone=f"+7 (000) 000-01-{number:02d}",
+            email=f"priem-{number}@demo-uk.example.com",
+            site=f"https://demo-uk-{number}.example.com",
         )
         self._session.add(org)
         await self._session.flush()

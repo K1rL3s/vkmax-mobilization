@@ -35,6 +35,14 @@ class OrgContacts(BaseSchema):
     name: str
     phone: str
     address: str
+    email: str | None = Field(
+        default=None,
+        description="Почта УК, у реестровой - по данным Реформы ЖКХ",
+    )
+    site: str | None = Field(
+        default=None,
+        description="Сайт УК со схемой, у реестровой - по данным Реформы ЖКХ",
+    )
     license_no: str | None = None
     reception_note: str | None = None
     emergency_phone: str | None = Field(

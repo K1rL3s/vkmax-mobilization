@@ -35,6 +35,8 @@ organizations_table = Table(
     Column("is_demo", Boolean, default=False, server_default=false(), nullable=False),
     Column("timezone", String, nullable=False),
     Column("emergency_phone", String, nullable=True),
+    Column("email", String, nullable=True),
+    Column("site", String, nullable=True),
 )
 
 org_settings_table = Table(

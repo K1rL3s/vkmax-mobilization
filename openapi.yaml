@@ -12291,6 +12291,18 @@ components:
         address:
           type: string
           title: Address
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+          description: Почта УК, у реестровой - по данным Реформы ЖКХ
+        site:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site
+          description: Сайт УК со схемой, у реестровой - по данным Реформы ЖКХ
         license_no:
           anyOf:
           - type: string
@@ -12555,6 +12567,16 @@ components:
           - type: string
           - type: 'null'
           title: Emergency Phone
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+        site:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site
       type: object
       required:
       - meter_window_day_from
@@ -12565,6 +12587,8 @@ components:
       - phone
       - reception_note
       - emergency_phone
+      - email
+      - site
       title: OrgSettingsResponse
     OutageItem:
       properties:
@@ -14190,6 +14214,18 @@ components:
             maxLength: 32
           - type: 'null'
           title: Emergency Phone
+        email:
+          anyOf:
+          - type: string
+            maxLength: 120
+          - type: 'null'
+          title: Email
+        site:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Site
       type: object
       required:
       - meter_window_day_from

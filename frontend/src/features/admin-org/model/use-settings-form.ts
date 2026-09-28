@@ -47,6 +47,26 @@ const settingsSchema = z.object({
     .string()
     .trim()
     .max(limits.phone, `Телефон длиннее ${limits.phone} символов`),
+  email: z
+    .string()
+    .trim()
+    .max(limits.email, `Почта длиннее ${limits.email} символов`)
+    .refine(
+      (value) => value === "" || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value),
+      "Похоже, в адресе опечатка",
+    ),
+  site: z
+    .string()
+    .trim()
+    .max(limits.site, `Ссылка длиннее ${limits.site} символов`)
+    .refine(
+      (value) =>
+        value === "" ||
+        /^([\w-]+(\.[\w-]+)+\.?)(\/|$)/.test(
+          value.replace(/^https?:\/\//i, ""),
+        ),
+      "Нужен адрес вида uk-primer.ru",
+    ),
   reception_note: z
     .string()
     .trim()
@@ -62,6 +82,8 @@ const draftOf = (settings: OrgSettings): SettingsDraft => ({
   ...settings,
   reception_note: settings.reception_note ?? "",
   emergency_phone: settings.emergency_phone ?? "",
+  email: settings.email ?? "",
+  site: settings.site ?? "",
 });
 
 export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
@@ -93,6 +115,8 @@ export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
           ...draft,
           reception_note: draft.reception_note || null,
           emergency_phone: draft.emergency_phone || null,
+          email: draft.email || null,
+          site: draft.site || null,
         },
       },
       { onSuccess: (saved) => form.reset(draftOf(saved)) },

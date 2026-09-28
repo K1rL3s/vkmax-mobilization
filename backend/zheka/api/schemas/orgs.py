@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field
 
@@ -112,6 +112,8 @@ class OrgSettingsResponse(BaseSchema):
     phone: str
     reception_note: str | None
     emergency_phone: str | None
+    email: str | None
+    site: str | None
 
     @classmethod
     def of(cls, view: OrgSettingsView) -> Self:
@@ -125,6 +127,8 @@ class OrgSettingsResponse(BaseSchema):
             phone=view.org.phone,
             reception_note=view.org.reception_note,
             emergency_phone=view.org.emergency_phone,
+            email=view.org.email,
+            site=view.org.site,
         )
 
 
@@ -137,6 +141,8 @@ class UpdateOrgSettingsRequest(BaseSchema):
     phone: Phone
     reception_note: FreeText | None = None
     emergency_phone: Phone | None = None
+    email: Annotated[str, Field(max_length=120)] | None = None
+    site: Annotated[str, Field(max_length=200)] | None = None
 
 
 class OrgMemberItem(BaseSchema):

@@ -41,6 +41,32 @@ def test_a_registry_phone_is_dialable_or_empty(
     assert SCRIPT["phone"](raw, area_code) == expected
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Priem@uk-ran.ru", "priem@uk-ran.ru"),
+        ("info@uk.ru, buh@uk.ru", "info@uk.ru"),
+        ("нет почты", ""),
+    ],
+)
+def test_a_registry_mail_is_writable_or_empty(raw: str, expected: str) -> None:
+    assert SCRIPT["email"](raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("www.uk-ran.ru", "https://www.uk-ran.ru"),
+        ("HTTPS://UK.ru/Docs/Ustav", "https://uk.ru/Docs/Ustav"),
+        ("www.reformagkh.ru/myhouse", ""),
+        ("my.dom.gosuslugi.ru", ""),
+        ("https://reformagkh.ru.uk-kazan.ru", "https://reformagkh.ru.uk-kazan.ru"),
+    ],
+)
+def test_a_registry_site_skips_the_registry_itself(raw: str, expected: str) -> None:
+    assert SCRIPT["site"](raw) == expected
+
+
 def test_an_osm_address_matches_a_card_number() -> None:
     addresses = {
         "70": ("0", "0"),

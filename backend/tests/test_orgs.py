@@ -30,7 +30,7 @@ from zheka.core.errors import (
 from zheka.core.ids import MaxUserId
 from zheka.core.services.events import EventsService
 from zheka.core.services.moderation import ModerationService
-from zheka.core.services.orgs import OrgsService
+from zheka.core.services.orgs import OrgSettingsView, OrgsService
 from zheka.infra.database.models import Event, User
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -144,6 +144,8 @@ async def test_org_surface(
         phone="+79990000000",
         reception_note="по записи",
         emergency_phone=" +79990000112 ",
+        email=None,
+        site=None,
     )
     assert updated.settings.meter_window_day_to == 20
     assert updated.org.reception_note == "по записи"
@@ -167,6 +169,45 @@ async def test_org_surface(
     await orgs_service.revoke_invite(own.org_id, invite.code)
     with pytest.raises(InvalidState):
         await orgs_service.activate_invite(own.user_id, invite.code)
+
+
+async def test_org_mail_and_site_reach_house_contacts(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
+    orgs_service = make_orgs_service(session)
+
+    async def save(email: str | None, site: str | None) -> OrgSettingsView:
+        return await orgs_service.update_settings(
+            own.org_id,
+            15,
+            25,
+            meter_window_always_open=False,
+            group_threshold=3,
+            group_window_hours=24,
+            phone="+79990000000",
+            reception_note=None,
+            emergency_phone=None,
+            email=email,
+            site=site,
+        )
+
+    contacts = OrgContacts.model_validate(
+        (await save(" Priem@UK.RU ", "www.uk.ru")).org,
+    )
+    assert contacts.email == "priem@uk.ru"
+    assert contacts.site == "https://www.uk.ru"
+
+    cleared = OrgContacts.model_validate((await save("  ", "")).org)
+    assert cleared.email is None
+    assert cleared.site is None
+
+    with pytest.raises(InvalidRequest):
+        await save("почта без собаки", None)
+
+    with pytest.raises(InvalidRequest):
+        await save(None, "не знаю")
 
 
 async def test_register(
@@ -354,6 +395,8 @@ async def test_update_settings_rejects_values_outside_the_limits(
             phone="+79990000000",
             reception_note=None,
             emergency_phone=None,
+            email=None,
+            site=None,
         )
 
 
@@ -462,6 +505,8 @@ async def test_a_blank_emergency_phone_is_cleared(
         phone="+79990000000",
         reception_note=None,
         emergency_phone="   ",
+        email=None,
+        site=None,
     )
 
     assert updated.org.emergency_phone is None

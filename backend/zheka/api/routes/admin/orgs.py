@@ -57,6 +57,8 @@ async def update_org_settings(
         body.phone,
         body.reception_note,
         body.emergency_phone,
+        body.email,
+        body.site,
     )
     return OrgSettingsResponse.of(view)
 

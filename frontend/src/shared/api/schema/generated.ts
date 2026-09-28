@@ -3349,6 +3349,16 @@ export interface components {
       phone: string;
       /** Address */
       address: string;
+      /**
+       * Email
+       * @description Почта УК, у реестровой - по данным Реформы ЖКХ
+       */
+      email?: string | null;
+      /**
+       * Site
+       * @description Сайт УК со схемой, у реестровой - по данным Реформы ЖКХ
+       */
+      site?: string | null;
       /** License No */
       license_no?: string | null;
       /** Reception Note */
@@ -3510,6 +3520,10 @@ export interface components {
       reception_note: string | null;
       /** Emergency Phone */
       emergency_phone: string | null;
+      /** Email */
+      email: string | null;
+      /** Site */
+      site: string | null;
     };
     /** OutageItem */
     OutageItem: {
@@ -4500,6 +4514,10 @@ export interface components {
       reception_note?: string | null;
       /** Emergency Phone */
       emergency_phone?: string | null;
+      /** Email */
+      email?: string | null;
+      /** Site */
+      site?: string | null;
     };
     /** VerificationRequestItem */
     VerificationRequestItem: {

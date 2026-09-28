@@ -323,6 +323,7 @@ const HomePage = () => {
           houseId={house.id}
           demandSent={house.demand_sent}
           demandCount={house.demand_count}
+          orgEmail={house.org?.email ?? null}
           onSent={() => void card.refetch()}
         />
       )}

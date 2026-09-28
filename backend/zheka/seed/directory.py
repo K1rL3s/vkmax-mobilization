@@ -27,6 +27,8 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
                 inn=row["inn"],
                 phone=row["phone"],
                 address=row["address"],
+                email=row["email"] or None,
+                site=row["site"] or None,
                 timezone=row["timezone"],
             )
     session.add_all(orgs.values())

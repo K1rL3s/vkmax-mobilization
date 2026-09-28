@@ -25,8 +25,10 @@ import {
   clockIcon,
   documentIcon,
   geoPinIcon,
+  globeIcon,
   Icon,
   infoIcon,
+  mailIcon,
   phoneIcon,
   starIcon,
   wrenchIcon,
@@ -153,6 +155,30 @@ const Org = ({ house }: { house: HouseCard }) => {
             <Link to={Routes.EMERGENCY} />
           )}
         </CellSimple>
+        {org.email && (
+          <CellSimple
+            separator
+            before={<Icon src={mailIcon} className={styles.CellIcon} />}
+            overline="Почта"
+            title={org.email}
+            showChevron
+            asChild
+          >
+            <a href={`mailto:${org.email}`} />
+          </CellSimple>
+        )}
+        {org.site && (
+          <CellSimple
+            separator
+            before={<Icon src={globeIcon} className={styles.CellIcon} />}
+            overline="Сайт"
+            title={org.site.replace(/^https?:\/\//, "")}
+            showChevron
+            asChild
+          >
+            <a href={org.site} target="_blank" rel="noreferrer" />
+          </CellSimple>
+        )}
         <CellSimple
           separator
           before={<Icon src={geoPinIcon} className={styles.CellIcon} />}
@@ -179,7 +205,8 @@ const Org = ({ house }: { house: HouseCard }) => {
       ) : (
         <Typography.Text variant="description" color="secondary">
           УК ещё не подключилась к сервису, поэтому запись на приём, тарифы и
-          документы здесь недоступны. По всем вопросам звоните в УК
+          документы здесь недоступны. По всем вопросам звоните в УК, а её
+          контакты здесь - по данным реестра Реформы ЖКХ, они могли устареть
         </Typography.Text>
       )}
     </>

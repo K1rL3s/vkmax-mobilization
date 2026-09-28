@@ -13,6 +13,7 @@ type DemandCardProps = {
   houseId: number;
   demandSent: boolean;
   demandCount: number;
+  orgEmail: string | null;
   onSent: () => void;
 };
 
@@ -20,6 +21,7 @@ export const DemandCard = ({
   houseId,
   demandSent,
   demandCount,
+  orgEmail,
   onSent,
 }: DemandCardProps) => {
   const demand = rqClient.useMutation("post", "/api/houses/{house_id}/demand", {
@@ -65,6 +67,17 @@ export const DemandCard = ({
           >
             Мне нужен
           </Button>
+        )}
+
+        {orgEmail && (
+          <>
+            <Typography.Text variant="description" color="secondary">
+              Напишите УК, что ждёте её в Жэке
+            </Typography.Text>
+            <Button asChild size="medium" variant="secondary" stretched>
+              <a href={`mailto:${orgEmail}`}>Написать в УК</a>
+            </Button>
+          </>
         )}
 
         {demand.isError && (

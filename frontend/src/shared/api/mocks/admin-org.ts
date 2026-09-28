@@ -58,6 +58,8 @@ const state = {
     phone: "+7 843 200-10-10",
     reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
     emergency_phone: "+7 843 200-10-11",
+    email: "priem@zhilservis-kzn.ru",
+    site: "https://zhilservis-kzn.ru",
   } as Schemas["OrgSettingsResponse"],
   members: [
     member(
@@ -123,6 +125,18 @@ const inviteItem = (item: MockInvite): Schemas["OrgInviteItem"] => ({
 const isInteger = (value: unknown): value is number =>
   typeof value === "number" && Number.isInteger(value);
 
+const withScheme = (site: string | undefined): string | null => {
+  const value = site?.trim();
+
+  if (!value) {
+    return null;
+  }
+
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+};
+
+const host = (site: string) => site.replace(/^https?:\/\//i, "").split("/")[0];
+
 const settingsError = (body: Record<string, unknown>): string | null => {
   const numbers = [
     body.meter_window_day_from,
@@ -136,9 +150,25 @@ const settingsError = (body: Record<string, unknown>): string | null => {
     typeof body.meter_window_always_open !== "boolean" ||
     typeof body.phone !== "string" ||
     !(body.reception_note == null || typeof body.reception_note === "string") ||
-    !(body.emergency_phone == null || typeof body.emergency_phone === "string")
+    !(
+      body.emergency_phone == null || typeof body.emergency_phone === "string"
+    ) ||
+    !(body.email == null || typeof body.email === "string") ||
+    !(body.site == null || typeof body.site === "string")
   ) {
     return "Некорректные поля настроек";
+  }
+
+  const email = (body.email as string | null)?.trim();
+
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return "Почта УК указана неверно";
+  }
+
+  const site = withScheme((body.site as string | null) ?? undefined);
+
+  if (site && !/^[\w-]+(\.[\w-]+)+\.?$/.test(host(site))) {
+    return "Сайт УК указан неверно: нужен адрес вида uk-primer.ru";
   }
 
   const [dayFrom, dayTo, threshold, windowHours] = numbers;
@@ -188,6 +218,10 @@ export const adminOrgConfigs = [
         (request.body.reception_note as string | undefined) ?? null,
       emergency_phone:
         (request.body.emergency_phone as string | undefined)?.trim() || null,
+      email:
+        (request.body.email as string | undefined)?.trim().toLowerCase() ||
+        null,
+      site: withScheme(request.body.site as string | undefined),
     };
 
     return ok(state.settings);
