@@ -2,6 +2,7 @@ import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
+import { FilterChip } from "@/shared/ui/filter-chip";
 import { Icon, megaphoneIcon, plusIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
@@ -28,6 +29,17 @@ const AdminAnnouncementsPage = () => {
 
     if (list.isError) {
       return <ErrorState error={list.loadError} fill onRetry={list.retry} />;
+    }
+
+    if (list.items.length === 0 && list.houseId) {
+      return (
+        <EmptyState
+          fill
+          icon={megaphoneIcon}
+          title="По этому дому объявлений нет"
+          description="Снимите фильтр по дому, чтобы увидеть все рассылки"
+        />
+      );
     }
 
     if (list.items.length === 0) {
@@ -80,6 +92,12 @@ const AdminAnnouncementsPage = () => {
           Рассылки жителям домов организации
         </Typography.Text>
       </Flex>
+
+      {list.houseId && (
+        <FilterChip onRemove={list.clearHouse}>
+          Дом: {list.houseAddress ?? "выбран на карте"}
+        </FilterChip>
+      )}
 
       {outcome.sent && (
         <SentNotice sent={outcome.sent} onClose={outcome.dismiss} />

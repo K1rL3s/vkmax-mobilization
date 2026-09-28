@@ -21,6 +21,10 @@
   .Error {
     color: var(--text-negative);
   }
+
+  .Stack {
+    margin: 0 -12px;
+  }
 }
 
 .Close {

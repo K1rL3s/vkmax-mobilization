@@ -86,6 +86,7 @@ export const usePublicMap = () => {
 
   return {
     points,
+    houses: items ?? [],
     total: houses.data?.total,
     orgs: houses.data?.orgs ?? [],
     isError: houses.isError && !houses.data,

@@ -19,9 +19,7 @@ import styles from "./admin-tab-bar.module.css";
 
 export const AdminTabBar = () => {
   const navigate = useNavigate();
-  const { currentOrg, currentResidency, selectCabinet } = useSession();
-  const isAdmin =
-    currentOrg?.role === "creator" || currentOrg?.role === "admin";
+  const { currentResidency, selectCabinet } = useSession();
 
   const exit = currentResidency
     ? { label: "Кабинет жителя", to: Routes.HOME }
@@ -51,9 +49,7 @@ export const AdminTabBar = () => {
           },
           { to: Routes.ADMIN_POLLS, label: "Опросы", icon: pollIcon },
           { to: Routes.ADMIN_RECEPTION, label: "Приём", icon: navMeetingsIcon },
-          ...(isAdmin
-            ? [{ to: Routes.ADMIN_HOUSES, label: "Дома", icon: buildingIcon }]
-            : []),
+          { to: Routes.ADMIN_HOUSES, label: "Дома", icon: buildingIcon },
           { to: Routes.ADMIN_ANALYTICS, label: "Аналитика", icon: chartIcon },
         ].map((tab) => (
           <NavLink

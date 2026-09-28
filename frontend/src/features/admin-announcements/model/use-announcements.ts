@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 import { rqClient } from "@/shared/api/instance";
@@ -18,12 +18,23 @@ export const useOrgHouses = () =>
     params: { ...orgParams(), query: { limit: 100 } },
   });
 
+const houseFilterSchema = z.coerce
+  .number()
+  .int()
+  .positive()
+  .optional()
+  .catch(undefined);
+
 export const useAnnouncementList = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const houseId = houseFilterSchema.parse(
+    searchParams.get("house") ?? undefined,
+  );
   const houses = useOrgHouses();
   const announcements = rqClient.useInfiniteQuery(
     "get",
     "/api/admin/announcements",
-    { params: { ...orgParams(), query: { limit: 20 } } },
+    { params: { ...orgParams(), query: { limit: 20, house_id: houseId } } },
     {
       pageParamName: "offset",
       initialPageParam: 0,
@@ -34,6 +45,10 @@ export const useAnnouncementList = () => {
   );
 
   return {
+    houseId,
+    houseAddress: houses.data?.items.find((house) => house.id === houseId)
+      ?.address,
+    clearHouse: () => setSearchParams({}, { replace: true }),
     houses: houses.data?.items ?? [],
     items: announcements.data?.pages.flatMap((page) => page.items) ?? [],
     isPending: announcements.isPending,

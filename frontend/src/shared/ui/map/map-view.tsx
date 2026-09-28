@@ -65,7 +65,7 @@ export type MapViewProps = {
   initialView: MapFocus;
   focus?: MapFocus | null;
   interactive?: boolean;
-  onPointClick?: (id: number) => void;
+  onPointClick?: (id: number, stack: number[]) => void;
   onMapClick?: (click: MapClick) => void;
   onViewChange?: (bounds: MapBounds, zoom: number) => void;
   onUnavailable?: () => void;
@@ -88,6 +88,24 @@ const PIN_RADIUS: ExpressionSpecification = [
   6,
   20,
   16,
+];
+
+const TONE_RANK: ExpressionSpecification = [
+  "match",
+  ["get", "tone"],
+  "red",
+  6,
+  "orange",
+  5,
+  "yellow",
+  4,
+  "blue",
+  3,
+  "brand",
+  2,
+  "green",
+  1,
+  0,
 ];
 
 const NOT_CLUSTER: ExpressionSpecification = ["!", ["has", "point_count"]];
@@ -113,28 +131,38 @@ const HOUSE_LAYERS = [
   "heat",
   "clusters",
   "cluster-count",
+  "pin-stacks",
   "pins",
   "pin-labels",
   "selected",
 ];
 
+const spot = (point: MapPoint) => `${point.lat},${point.lon}`;
+
 const collection = (
   points: readonly MapPoint[],
-): GeoJSON.FeatureCollection<GeoJSON.Point> => ({
-  type: "FeatureCollection",
-  features: points.map((point) => ({
-    type: "Feature",
-    id: point.id,
-    geometry: { type: "Point", coordinates: [point.lon, point.lat] },
-    properties: {
+): GeoJSON.FeatureCollection<GeoJSON.Point> => {
+  const stacks = new Map<string, number>();
+  for (const point of points) {
+    stacks.set(spot(point), (stacks.get(spot(point)) ?? 0) + 1);
+  }
+  return {
+    type: "FeatureCollection",
+    features: points.map((point) => ({
+      type: "Feature",
       id: point.id,
-      tone: point.tone,
-      label: point.label ?? "",
-      size: point.size ?? 0,
-      weight: point.weight ?? 1,
-    },
-  })),
-});
+      geometry: { type: "Point", coordinates: [point.lon, point.lat] },
+      properties: {
+        id: point.id,
+        tone: point.tone,
+        label: point.label ?? "",
+        size: point.size ?? 0,
+        weight: point.weight ?? 1,
+        stack: stacks.get(spot(point)),
+      },
+    })),
+  };
+};
 
 const shape = (
   geometry: GeoJSON.Geometry | null | undefined,
@@ -192,7 +220,7 @@ export const MapViewComponent = ({
       paint: {
         "heatmap-weight": ["get", "weight"],
         "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 9, 20, 16, 50],
-        "heatmap-opacity": 0.6,
+        "heatmap-opacity": 0.5,
       },
     });
     target.addLayer({
@@ -220,17 +248,27 @@ export const MapViewComponent = ({
       },
       paint: { "text-color": "#ffffff" },
     });
+    const pinPaint = {
+      "circle-color": TONE_COLOR,
+      "circle-radius": pinRadius(settings.sizeByCount),
+      "circle-stroke-width": pinStroke(heat),
+      "circle-stroke-color": "#ffffff",
+    };
+    target.addLayer({
+      id: "pin-stacks",
+      type: "circle",
+      source: "houses",
+      filter: ["all", NOT_CLUSTER, [">", ["get", "stack"], 1]],
+      layout: { "circle-sort-key": ["-", TONE_RANK] },
+      paint: { ...pinPaint, "circle-translate": [4, -4] },
+    });
     target.addLayer({
       id: "pins",
       type: "circle",
       source: "houses",
       filter: NOT_CLUSTER,
-      paint: {
-        "circle-color": TONE_COLOR,
-        "circle-radius": pinRadius(settings.sizeByCount),
-        "circle-stroke-width": 1.5,
-        "circle-stroke-color": "#ffffff",
-      },
+      layout: { "circle-sort-key": TONE_RANK },
+      paint: pinPaint,
     });
     target.addLayer({
       id: "pin-labels",
@@ -322,15 +360,37 @@ export const MapViewComponent = ({
       type: "geojson",
       data: collection(backgroundPoints ?? []),
     });
+    const backgroundPaint = {
+      "circle-radius": 4,
+      "circle-color": TONE_COLOR,
+      "circle-stroke-width": 1,
+      "circle-stroke-color": "#ffffff",
+    };
+    target.addLayer({
+      id: "background-stacks",
+      type: "circle",
+      source: "background",
+      filter: [">", ["get", "stack"], 1],
+      layout: { "circle-sort-key": ["-", TONE_RANK] },
+      paint: { ...backgroundPaint, "circle-translate": [3, -3] },
+    });
     target.addLayer({
       id: "background-points",
       type: "circle",
       source: "background",
+      layout: { "circle-sort-key": TONE_RANK },
+      paint: backgroundPaint,
+    });
+    target.addLayer({
+      id: "background-selected",
+      type: "circle",
+      source: "background",
+      filter: selectedFilter(selectedId),
       paint: {
-        "circle-radius": 4,
-        "circle-color": TONE_COLOR,
-        "circle-stroke-width": 1,
-        "circle-stroke-color": "#ffffff",
+        "circle-radius": 8,
+        "circle-color": "rgba(0, 0, 0, 0)",
+        "circle-stroke-width": 3,
+        "circle-stroke-color": TONE_COLORS.brand,
       },
     });
 
@@ -362,20 +422,41 @@ export const MapViewComponent = ({
           .toSorted((a, b) => distance(a) - distance(b)),
       ];
 
+      const stackOf = (id: number) => {
+        const all = [...points, ...(backgroundPoints ?? [])];
+        const hit = all.find((point) => point.id === id);
+        return hit
+          ? all
+              .filter((point) => spot(point) === spot(hit))
+              .map((point) => point.id)
+          : [id];
+      };
+
       if (feature?.layer.id === "clusters") {
         const center = (feature.geometry as GeoJSON.Point).coordinates as [
           number,
           number,
         ];
-        void target
-          .getSource<GeoJSONSource>("houses")
-          ?.getClusterExpansionZoom(feature.properties.cluster_id as number)
-          .then((zoom) => target.easeTo({ center, zoom }));
+        const source = target.getSource<GeoJSONSource>("houses");
+        const clusterId = feature.properties.cluster_id as number;
+        void source
+          ?.getClusterLeaves(clusterId, Infinity, 0)
+          .then(async (leaves) => {
+            const ids = leaves.map((leaf) => leaf.properties?.id as number);
+            const stack = stackOf(ids[0]);
+            if (ids.every((id) => stack.includes(id))) {
+              onPointClick?.(ids[0], stack);
+            } else {
+              const zoom = await source.getClusterExpansionZoom(clusterId);
+              target.easeTo({ center, zoom });
+            }
+          });
         return;
       }
 
       if (feature) {
-        onPointClick?.(feature.properties.id as number);
+        const id = feature.properties.id as number;
+        onPointClick?.(id, stackOf(id));
         return;
       }
 
@@ -506,14 +587,17 @@ export const MapViewComponent = ({
   }, [map, highlight]);
 
   useEffect(() => {
-    if (map?.getLayer("selected")) {
-      map.setFilter("selected", selectedFilter(selectedId));
+    for (const id of ["selected", "background-selected"]) {
+      if (map?.getLayer(id)) map.setFilter(id, selectedFilter(selectedId));
     }
   }, [map, selectedId]);
 
   useEffect(() => {
     if (map?.getLayer("heat")) {
       map.setLayoutProperty("heat", "visibility", visibility(heat));
+      for (const id of ["pins", "pin-stacks"]) {
+        map.setPaintProperty(id, "circle-stroke-width", pinStroke(heat));
+      }
     }
   }, [map, heat]);
 
@@ -529,11 +613,13 @@ export const MapViewComponent = ({
 
   useEffect(() => {
     if (map?.getLayer("pins")) {
-      map.setPaintProperty(
-        "pins",
-        "circle-radius",
-        pinRadius(settings.sizeByCount),
-      );
+      for (const id of ["pins", "pin-stacks"]) {
+        map.setPaintProperty(
+          id,
+          "circle-radius",
+          pinRadius(settings.sizeByCount),
+        );
+      }
       map.setPaintProperty(
         "selected",
         "circle-radius",
@@ -592,3 +678,5 @@ export const MapViewComponent = ({
 };
 
 export default MapViewComponent;
+
+const pinStroke = (heat: boolean) => (heat ? 2.5 : 1.5);

@@ -90,8 +90,14 @@ export const PublicHouseMap = ({
           highlight={pick.highlight}
           initialView={initialFocus}
           focus={map.focus}
-          onPointClick={(id) => {
-            pick.pickHouse(id);
+          onPointClick={(id, stack) => {
+            if (stack.length > 1) {
+              pick.pickStack(
+                map.houses.filter((house) => stack.includes(house.id)),
+              );
+            } else {
+              pick.pickHouse(id);
+            }
             const point = map.points.find((house) => house.id === id);
             if (point) map.flyTo({ lat: point.lat, lon: point.lon });
           }}
@@ -168,6 +174,7 @@ export const PublicHouseMap = ({
                 isAdding={pick.isAdding}
                 addError={pick.addError}
                 onChoose={pick.choose}
+                onPickHouse={pick.pickHouse}
                 onAdd={pick.addHouse}
                 onClose={pick.close}
               />

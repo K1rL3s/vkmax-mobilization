@@ -1,9 +1,16 @@
 import type { ReactNode } from "react";
-import { Button, Flex, IconButton, Spinner, Typography } from "@maxhub/max-ui";
+import {
+  Button,
+  CellSimple,
+  Flex,
+  IconButton,
+  Spinner,
+  Typography,
+} from "@maxhub/max-ui";
 
 import type { HouseCard } from "@/features/house";
 import { errorMessage } from "@/shared/api/errors";
-import { formatPercent } from "@/shared/lib/format";
+import { formatPercent, plural } from "@/shared/lib/format";
 import { closeIcon, Icon } from "@/shared/ui/icon";
 import { StatusPill } from "@/shared/ui/status-pill";
 
@@ -17,6 +24,7 @@ type HouseSheetProps = {
   isAdding: boolean;
   addError: unknown;
   onChoose: (house: HouseCard) => void;
+  onPickHouse: (id: number) => void;
   onAdd: () => void;
   onClose: () => void;
 };
@@ -102,6 +110,7 @@ export const HouseSheet = ({
   isAdding,
   addError,
   onChoose,
+  onPickHouse,
   onAdd,
   onClose,
 }: HouseSheetProps) => (
@@ -160,6 +169,25 @@ export const HouseSheet = ({
               {errorMessage(addError, "Не получилось добавить дом")}
             </Typography.Text>
           )}
+        </>
+      )}
+
+      {place.kind === "stack" && (
+        <>
+          <Title>
+            В этой точке {place.houses.length}{" "}
+            {plural(place.houses.length, ["дом", "дома", "домов"])}
+          </Title>
+          <Flex direction="column" align="stretch" className={styles.Stack}>
+            {place.houses.map((house) => (
+              <CellSimple
+                key={house.id}
+                title={house.address}
+                showChevron
+                onClick={() => onPickHouse(house.id)}
+              />
+            ))}
+          </Flex>
         </>
       )}
 

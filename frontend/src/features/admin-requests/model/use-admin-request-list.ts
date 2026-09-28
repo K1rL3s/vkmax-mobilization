@@ -21,6 +21,7 @@ const filterSchema = z.object({
     .custom<FilterId>((value) => FILTERS.some(({ id }) => id === value))
     .catch("all"),
   category: z.custom<RequestCategory>(isCategory).optional().catch(undefined),
+  house: z.coerce.number().int().positive().optional().catch(undefined),
 });
 
 export const useAdminRequestList = () => {
@@ -33,13 +34,16 @@ export const useAdminRequestList = () => {
     {
       params: {
         ...orgParams(),
-        query: { limit: PAGE_SIZE, grouped: true },
+        query: { limit: PAGE_SIZE, grouped: true, house_id: filters.house },
       },
     },
     { retry: retryUnlessForbidden },
   );
 
-  const updateFilter = (name: "filter" | "category", value: string) => {
+  const updateFilter = (
+    name: "filter" | "category" | "house",
+    value: string,
+  ) => {
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous);
@@ -69,7 +73,9 @@ export const useAdminRequestList = () => {
     isError: requests.isError,
     loadError: requests.error,
     isSuccess: requests.isSuccess,
-    hasFilters: filters.filter !== "all" || !!filters.category,
+    hasFilters:
+      filters.filter !== "all" || !!filters.category || !!filters.house,
+    houseAddress: requests.data?.items[0]?.address,
     updateFilter,
     clearFilters: () => setSearchParams({}, { replace: true }),
     retry: () => {
