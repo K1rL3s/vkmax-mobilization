@@ -27,5 +27,7 @@ announcements_table = Table(
     Column("created_by", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("recipients_count", Integer, nullable=False, default=0, server_default="0"),
     Column("urgent", Boolean, nullable=False, default=False, server_default=false()),
+    Column("delivered_direct", Integer, nullable=True),
+    Column("delivered_chat", Integer, nullable=True),
     Index(None, "house_ids", postgresql_using="gin"),
 )

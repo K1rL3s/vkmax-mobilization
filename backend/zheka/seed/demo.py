@@ -633,6 +633,8 @@ class Seeder:
                 recipients_count=recipients,
                 created_at=self._now - timedelta(days=days_ago),
                 urgent=urgent,
+                delivered_direct=recipients - 1,
+                delivered_chat=0,
             )
             for days_ago, text, urgent in ANNOUNCEMENTS
         )

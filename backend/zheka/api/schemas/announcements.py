@@ -26,6 +26,13 @@ class AnnouncementItem(BaseSchema):
             "для канала direct и по одному на привязанный чат для канала chat"
         ),
     )
+    delivered_count: int | None = Field(
+        description=(
+            "Скольким адресатам MAX принял сообщение, по всем каналам вместе. "
+            "null, пока рассылка идет, и у объявлений, отправленных до "
+            "появления отчета"
+        ),
+    )
     houses_without_chat: list[HouseId] = Field(
         default_factory=list,
         description=(

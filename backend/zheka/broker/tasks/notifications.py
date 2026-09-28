@@ -10,8 +10,9 @@ from zheka.bot.cards import app_link, open_app
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import recheck_chat_rights
 from zheka.core.enums import NotificationCategory
-from zheka.core.ids import MaxChatId, UserId
+from zheka.core.ids import AnnouncementId, MaxChatId, UserId
 from zheka.core.services.chats import ChatsService
+from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
@@ -84,11 +85,16 @@ async def broadcast_to_users(
     sender: FromDishka[MaxSender],
     repo: FromDishka[NotificationsRepo],
     bot: FromDishka[Bot],
+    announcements_repo: FromDishka[AnnouncementsRepo],
     app_button: str | None = None,
     app_path: str | None = None,
+    announcement_id: AnnouncementId | None = None,
 ) -> int:
     keyboard = None if app_button is None else open_app(bot, app_button, app_path)
-    return await _fan_out(sender, repo, user_ids, text, category, mandatory, keyboard)
+    sent = await _fan_out(sender, repo, user_ids, text, category, mandatory, keyboard)
+    if announcement_id is not None:
+        await announcements_repo.set_delivered(announcement_id, direct=sent)
+    return sent
 
 
 @async_shared_broker.task(task_name=TaskName.BROADCAST_TO_CHATS.value)
@@ -100,8 +106,10 @@ async def broadcast_to_chats(
     bot: FromDishka[Bot],
     chats_service: FromDishka[ChatsService],
     users_repo: FromDishka[UsersRepo],
+    announcements_repo: FromDishka[AnnouncementsRepo],
     app_button: str | None = None,
     app_path: str | None = None,
+    announcement_id: AnnouncementId | None = None,
 ) -> int:
     keyboard = (
         None
@@ -123,4 +131,6 @@ async def broadcast_to_chats(
             sent += 1
 
     logger.info("Рассылка по чатам: отправлено %s из %s", sent, len(chat_ids))
+    if announcement_id is not None:
+        await announcements_repo.set_delivered(announcement_id, chat=sent)
     return sent

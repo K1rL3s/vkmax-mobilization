@@ -2154,6 +2154,11 @@ export interface components {
        */
       recipients_count: number;
       /**
+       * Delivered Count
+       * @description Скольким адресатам MAX принял сообщение, по всем каналам вместе. null, пока рассылка идет, и у объявлений, отправленных до появления отчета
+       */
+      delivered_count: number | null;
+      /**
        * Houses Without Chat
        * @description Дома, у которых не привязан чат, поэтому объявление туда не ушло. Заполняется только при создании объявления
        */

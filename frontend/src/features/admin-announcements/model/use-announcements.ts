@@ -7,6 +7,8 @@ import { nextOffset } from "@/shared/api/next-offset";
 import type { components } from "@/shared/api/schema/generated";
 import { orgParams } from "@/shared/model/session";
 
+import { isSending } from "../domain/labels";
+
 export type Announcement = components["schemas"]["AnnouncementItem"];
 
 export type OrgHouse = components["schemas"]["AdminHouseListItem"];
@@ -26,6 +28,8 @@ export const useAnnouncementList = () => {
       pageParamName: "offset",
       initialPageParam: 0,
       getNextPageParam: nextOffset,
+      refetchInterval: (query) =>
+        query.state.data?.pages[0]?.items.some(isSending) ? 3000 : false,
     },
   );
 

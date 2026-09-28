@@ -1,9 +1,9 @@
 from collections.abc import Sequence
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, select, update
 
 from zheka.core.enums import AnnouncementChannel
-from zheka.core.ids import HouseId, OrgId, UserId
+from zheka.core.ids import AnnouncementId, HouseId, OrgId, UserId
 from zheka.infra.database.models import Announcement
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.announcements import announcements_table
@@ -20,6 +20,8 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         recipients_count: int,
         *,
         urgent: bool,
+        delivered_direct: int | None,
+        delivered_chat: int | None,
     ) -> Announcement:
         announcement = Announcement(
             org_id=org_id,
@@ -29,6 +31,8 @@ class AnnouncementsRepo(BaseAlchemyRepo):
             created_by=created_by,
             recipients_count=recipients_count,
             urgent=urgent,
+            delivered_direct=delivered_direct,
+            delivered_chat=delivered_chat,
         )
         self._session.add(announcement)
         await self._session.flush()
@@ -68,3 +72,18 @@ class AnnouncementsRepo(BaseAlchemyRepo):
             announcements_table.c.id.desc(),
         )
         return await self._page(stmt, limit, offset)
+
+    async def set_delivered(
+        self,
+        announcement_id: AnnouncementId,
+        *,
+        direct: int | None = None,
+        chat: int | None = None,
+    ) -> None:
+        values = {"delivered_direct": direct, "delivered_chat": chat}
+        stmt = (
+            update(announcements_table)
+            .where(announcements_table.c.id == announcement_id)
+            .values({key: value for key, value in values.items() if value is not None})
+        )
+        await self._session.execute(stmt)

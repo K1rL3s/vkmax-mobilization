@@ -162,6 +162,7 @@ export const announcementsConfigs = [
               house_ids: [houseId],
               channels: ["chat" as const],
               recipients_count: 0,
+              delivered_count: 0,
             }))
           : [],
         request.query,

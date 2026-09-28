@@ -144,7 +144,11 @@ from zheka.broker.tasks.chats import (
     sync_chat_pins,
     welcome_chat,
 )
-from zheka.broker.tasks.notifications import broadcast_to_chats, send_to_user
+from zheka.broker.tasks.notifications import (
+    broadcast_to_chats,
+    broadcast_to_users,
+    send_to_user,
+)
 from zheka.broker.tasks.reminders import broadcast_access_request
 from zheka.broker.tasks.requests import (
     attach_result_photo,
@@ -176,6 +180,7 @@ from zheka.core.errors import HOUSE_NOT_FOUND, NotEnoughRights
 from zheka.core.ids import (
     AccessRequestId,
     AccessSlotId,
+    AnnouncementId,
     FlatId,
     HouseId,
     MaxChatId,
@@ -216,6 +221,7 @@ from zheka.core.texts import (
     VOTE,
 )
 from zheka.infra.database.models import (
+    Announcement,
     Chat,
     ChatPin,
     Flat,
@@ -233,6 +239,7 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
+from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
@@ -3593,3 +3600,98 @@ async def test_a_declining_executor_is_asked_why_and_loses_the_card(
     _, text, chat_id, _ = shows[-1]
     assert NOT_YOURS_TEXT.format(request_id=request_id) in (text or "")
     assert chat_id == client.chat.chat_id
+
+
+async def _announcement(
+    session: AsyncSession,
+    house_id: HouseId,
+    created_by: UserId,
+) -> AnnouncementId:
+    house = await HousesRepo(session).get(house_id)
+    assert house is not None
+    assert house.org_id is not None
+    announcement = Announcement(
+        org_id=house.org_id,
+        house_ids=[house_id],
+        text="Отключат воду",
+        channels=["direct", "chat"],
+        created_by=created_by,
+        recipients_count=2,
+    )
+    session.add(announcement)
+    await session.flush()
+    announcement_id = announcement.id
+    await session.commit()
+    return announcement_id
+
+
+async def _delivered(
+    session: AsyncSession,
+    announcement_id: AnnouncementId,
+) -> tuple[int | None, int | None]:
+    stmt = select(
+        announcements_table.c.delivered_direct,
+        announcements_table.c.delivered_chat,
+    ).where(announcements_table.c.id == announcement_id)
+    result = await session.execute(stmt)
+    direct, chat = result.one()
+    return direct, chat
+
+
+@pytest.mark.usefixtures("refusing_chats")
+async def test_a_chat_that_refused_the_announcement_counts_as_undelivered(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_api.is_admin = False
+    chat_id = await _bound_chat(bot_session, client)
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.house_id is not None
+    user = await _user(bot_session, client)
+    announcement_id = await _announcement(bot_session, chat.house_id, user.id)
+
+    await _run(
+        task_broker,
+        broadcast_to_chats,
+        chat_ids=[chat_id],
+        text="Отключат воду",
+        announcement_id=announcement_id,
+    )
+
+    assert await _delivered(bot_session, announcement_id) == (None, 0)
+
+
+async def test_a_resident_who_stopped_the_bot_is_not_counted_as_delivered(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    house_id = await _staff(bot_session, client)
+    user_id = (await _user(bot_session, client)).id
+    stopped = User(
+        max_user_id=_max_id(),
+        max_chat_id=MaxChatId(secrets.randbits(40)),
+        name="Сосед",
+        bot_stopped_at=datetime.now(UTC),
+    )
+    bot_session.add(stopped)
+    await bot_session.flush()
+    stopped_id = stopped.id
+    announcement_id = await _announcement(bot_session, house_id, user_id)
+
+    await _run(
+        task_broker,
+        broadcast_to_users,
+        user_ids=[user_id, stopped_id],
+        text="Отключат воду",
+        category=NotificationCategory.ANNOUNCEMENTS.value,
+        mandatory=False,
+        announcement_id=announcement_id,
+    )
+
+    assert notices.texts == ["Отключат воду"]
+    assert await _delivered(bot_session, announcement_id) == (1, None)

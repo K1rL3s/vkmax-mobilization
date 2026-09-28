@@ -10002,6 +10002,12 @@ components:
           title: Recipients Count
           description: 'Сколько адресатов было на момент отправки: по одному на жителя для канала direct и по одному на привязанный чат для канала chat'
           default: 0
+        delivered_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Delivered Count
+          description: Скольким адресатам MAX принял сообщение, по всем каналам вместе. null, пока рассылка идет, и у объявлений, отправленных до появления отчета
         houses_without_chat:
           items:
             type: integer
@@ -10020,6 +10026,7 @@ components:
       - text
       - house_ids
       - channels
+      - delivered_count
       title: AnnouncementItem
     ApiError_BaseError_:
       properties:

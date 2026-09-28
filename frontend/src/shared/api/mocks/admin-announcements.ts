@@ -26,7 +26,11 @@ const deliver = (houseIds: number[], channels: Channel[]) => {
     ? houseIds.reduce((sum, id) => sum + ORG_HOUSES[id].residents, 0)
     : 0;
 
-  return { recipients: chats + residents, withoutChat };
+  return {
+    recipients: chats + residents,
+    delivered: chats + Math.round(residents * 0.85),
+    withoutChat,
+  };
 };
 
 const item = (
@@ -44,6 +48,8 @@ const item = (
   channels,
   org_name: ZHILSERVIS.name,
   recipients_count: deliver(houseIds, channels).recipients,
+  delivered_count:
+    hoursAgo === 0 ? null : deliver(houseIds, channels).delivered,
   urgent,
 });
 
