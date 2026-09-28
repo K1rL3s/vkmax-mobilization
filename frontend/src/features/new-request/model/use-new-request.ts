@@ -8,6 +8,7 @@ import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import type { components } from "@/shared/api/schema/generated";
+import { haptic, useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { houseParams, useSession } from "@/shared/model/session";
 
@@ -45,6 +46,10 @@ export const useNewRequest = () => {
     dispute?.category ?? null,
   );
   const photos = usePhotos();
+
+  useClosingConfirmation(
+    description.trim().length > 0 || photos.names.length > 0,
+  );
 
   const categories = useRequestCategories();
 
@@ -85,6 +90,7 @@ export const useNewRequest = () => {
   );
 
   const openCreated = async (requestId: number) => {
+    haptic.success();
     await invalidatePaths("/api/requests");
     await navigate(
       generatePath(Routes.REQUEST, { requestId: String(requestId) }),
@@ -94,12 +100,16 @@ export const useNewRequest = () => {
 
   const create = rqClient.useMutation("post", "/api/requests", {
     onSuccess: (request) => openCreated(request.id),
+    onError: haptic.error,
   });
 
   const disputeCharge = rqClient.useMutation(
     "post",
     "/api/charges/{charge_id}/dispute",
-    { onSuccess: (response) => openCreated(response.request_id) },
+    {
+      onSuccess: (response) => openCreated(response.request_id),
+      onError: haptic.error,
+    },
   );
 
   const isSubmitting =

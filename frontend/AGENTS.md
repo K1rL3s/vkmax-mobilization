@@ -114,9 +114,12 @@ Knows every feature; nothing imports it.
 - `lib/`: `css.ts` (`cn`), `format.ts` (dates, numbers, `plural`),
   `router.ts` (`useRouteParams`, zod-parsed), `analytics/` (`useTrack` ->
   `/api/events`), `max/` (the Bridge: typed `getWebApp`, `getMaxLaunch` with
-  `isInsideMax`, `initData`, `startParam`, and `useBackNavigation`). The
-  bridge is the CDN script in `index.html`; outside MAX `getWebApp()` is
-  `null` and the back button is a no-op.
+  `isInsideMax`, `initData`, `startParam`, `useBackNavigation`,
+  `useClosingConfirmation(active)` for forms with unsaved input, and
+  `haptic.success/error/select`). The bridge is the CDN script in
+  `index.html`; outside MAX `getWebApp()` is `null` and the back button,
+  closing confirmation and haptics are no-ops (the web and desktop clients
+  have no haptics either).
 - `ui/`: the kit over max-ui. Every recharts chart goes in `ChartBox` (owns
   `ResponsiveContainer`, kills the tap focus ring from `accessibilityLayer`),
   never a bare `<div>`. `StatusPill` is the one status badge of both

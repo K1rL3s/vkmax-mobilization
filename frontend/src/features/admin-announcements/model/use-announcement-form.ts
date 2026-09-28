@@ -6,6 +6,7 @@ import { z } from "zod";
 import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
+import { useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
 import { useConfirm } from "@/shared/ui/confirm-dialog";
@@ -50,6 +51,8 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
       urgent: false,
     },
   });
+
+  useClosingConfirmation(form.formState.isDirty);
 
   const [text, houseIds, channels, urgent] = useWatch({
     control: form.control,

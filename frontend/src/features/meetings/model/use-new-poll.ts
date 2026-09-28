@@ -4,6 +4,7 @@ import { generatePath, useNavigate } from "react-router-dom";
 
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
+import { useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 
@@ -28,6 +29,8 @@ export const useNewPoll = () => {
       options: [{ text: "" }, { text: "" }],
     },
   });
+
+  useClosingConfirmation(form.formState.isDirty);
 
   const options = useFieldArray({ control: form.control, name: "options" });
 

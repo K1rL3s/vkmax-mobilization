@@ -3,6 +3,7 @@ import { useState } from "react";
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
+import { haptic, useClosingConfirmation } from "@/shared/lib/max";
 
 import {
   anomalyOf,
@@ -38,10 +39,18 @@ export const useReadingForm = () => {
     "/api/meters/{meter_id}/readings",
     {
       onSuccess: async () => {
+        haptic.success();
         await invalidatePaths("/api/flats/{flat_id}/meters");
         await invalidatePaths("/api/flats/{flat_id}/reading-periods");
       },
+      onError: haptic.error,
     },
+  );
+
+  useClosingConfirmation(
+    !submit.isSuccess &&
+      (photos.photos.length > 0 ||
+        Object.values(edited).some((value) => value.trim().length > 0)),
   );
 
   const valueOf = (zone: TariffZone) => {

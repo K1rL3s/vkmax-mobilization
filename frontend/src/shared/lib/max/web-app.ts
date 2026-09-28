@@ -13,9 +13,17 @@ interface MaxWebApp {
     onClick(callback: () => void): void;
     offClick(callback: () => void): void;
   };
+  readonly HapticFeedback?: {
+    notificationOccurred(
+      type: "error" | "success" | "warning",
+    ): Promise<unknown>;
+    selectionChanged(): Promise<unknown>;
+  };
 
   close(): void;
   shareMaxContent(params: MaxShareText): Promise<void>;
+  enableClosingConfirmation?(): void;
+  disableClosingConfirmation?(): void;
 }
 
 declare global {
