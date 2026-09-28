@@ -8,7 +8,10 @@ kit). pnpm, Node 24. `CLAUDE.md` is a symlink to this file.
 - `pnpm pre-commit` (lint, format, `tsc -b`) is the gate before every commit;
   nothing runs it for you. Type-checking is `tsc -b`: `tsconfig.json` is a
   solution file, so bare `tsc` checks nothing and exits 0. One file:
-  `pnpm eslint <path>`; no per-file type-check. No test runner.
+  `pnpm eslint <path>`; no per-file type-check. `pnpm test` runs
+  `node:test` over `scripts/*.test.ts`; Node strips types but resolves no
+  `@/`, so a tested module has only `import type` imports and the test loads
+  it by a runtime URL.
 - eslint and prettier target `src` only, keeping `.agents/` (vendored docs)
   and top-level configs out. No `.prettierignore`: after `pnpm api` run
   `pnpm format` (openapi-typescript indents 4 spaces).
