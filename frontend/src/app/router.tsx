@@ -183,6 +183,16 @@ const router = createBrowserRouter([
             ],
           },
           {
+            loader: onboardedLoader,
+            element: <PushedPage fallback={Routes.APPOINTMENTS} />,
+            children: [
+              {
+                path: Routes.APPOINTMENT,
+                lazy: () => import("@/features/appointments/appointment.page"),
+              },
+            ],
+          },
+          {
             element: <PushedPage fallback={Routes.HOME} />,
             children: [
               {

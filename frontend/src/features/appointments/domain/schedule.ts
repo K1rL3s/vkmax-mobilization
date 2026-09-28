@@ -1,4 +1,5 @@
 import type { components } from "@/shared/api/schema/generated";
+import type { StatusPillTone } from "@/shared/ui/status-pill";
 
 export type ReceptionSlot = components["schemas"]["ReceptionSlotItem"];
 
@@ -157,3 +158,33 @@ export const appointmentSubject = (appointment: Appointment) =>
   appointment.request_id
     ? `Обсудить заявку №${appointment.request_id} · офис УК`
     : "Общий вопрос · офис УК";
+
+export type AppointmentState = "upcoming" | "passed" | "cancelled" | "done";
+
+export const appointmentState = (
+  appointment: Appointment,
+): AppointmentState => {
+  if (appointment.status !== "booked") {
+    return appointment.status;
+  }
+
+  return Date.parse(appointment.starts_at) > Date.now() ? "upcoming" : "passed";
+};
+
+export const appointmentLabel = (state: AppointmentState): string =>
+  ({
+    upcoming: "Запись активна",
+    passed: "Приём прошёл",
+    cancelled: "Запись отменена",
+    done: "Приём состоялся",
+  })[state];
+
+export const appointmentTone = (state: AppointmentState): StatusPillTone =>
+  (
+    ({
+      upcoming: "themed",
+      passed: "neutral",
+      cancelled: "negative",
+      done: "positive",
+    }) satisfies Record<AppointmentState, StatusPillTone>
+  )[state];

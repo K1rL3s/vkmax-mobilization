@@ -1,6 +1,8 @@
-import { CellSimple, IconButton } from "@maxhub/max-ui";
+import { CellSimple } from "@maxhub/max-ui";
+import { generatePath, Link } from "react-router-dom";
 
-import { clockIcon, closeIcon, Icon } from "@/shared/ui/icon";
+import { Routes } from "@/shared/model/routes";
+import { clockIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
 import {
@@ -14,14 +16,9 @@ import styles from "./appointment-list.module.css";
 type AppointmentListProps = {
   items: Appointment[];
   schedule: Schedule;
-  onCancel: (appointment: Appointment) => void;
 };
 
-export const AppointmentList = ({
-  items,
-  schedule,
-  onCancel,
-}: AppointmentListProps) => (
+export const AppointmentList = ({ items, schedule }: AppointmentListProps) => (
   <div className={styles.Panel}>
     {items.map((item, index) => (
       <CellSimple
@@ -30,17 +27,15 @@ export const AppointmentList = ({
         before={<IconTile icon={clockIcon} tone="themed" />}
         title={schedule.appointmentTitle(item.starts_at)}
         subtitle={appointmentSubject(item)}
-        after={
-          <IconButton
-            size="xsmall"
-            variant="ghost"
-            aria-label={`Отменить запись на ${schedule.appointmentTitle(item.starts_at)}`}
-            onClick={() => onCancel(item)}
-          >
-            <Icon src={closeIcon} size={18} className={styles.Close} />
-          </IconButton>
-        }
-      />
+        showChevron
+        asChild
+      >
+        <Link
+          to={generatePath(Routes.APPOINTMENT, {
+            appointmentId: String(item.id),
+          })}
+        />
+      </CellSimple>
     ))}
   </div>
 );

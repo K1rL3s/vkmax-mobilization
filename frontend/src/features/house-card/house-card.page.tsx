@@ -334,7 +334,12 @@ const HouseCardPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <HouseSummary as="h1" title={house.address} state="plain" />
+      <HouseSummary
+        as="h1"
+        title={house.address}
+        state="plain"
+        subtitle={`${house.region} · многоквартирный дом`}
+      />
 
       <Facts house={house} />
 

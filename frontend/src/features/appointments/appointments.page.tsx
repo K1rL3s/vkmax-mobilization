@@ -5,7 +5,6 @@ import { generatePath } from "react-router-dom";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 import { buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { closedDaysCaption, dayTitle, monthLabel } from "./domain/schedule";
@@ -241,11 +240,7 @@ const AppointmentsPage = () => {
 
         <Section title="Мои записи">
           {mine.items.length > 0 ? (
-            <AppointmentList
-              items={mine.items}
-              schedule={schedule}
-              onCancel={mine.ask}
-            />
+            <AppointmentList items={mine.items} schedule={schedule} />
           ) : (
             <Typography.Text variant="description" color="tertiary">
               {day
@@ -255,23 +250,6 @@ const AppointmentsPage = () => {
           )}
         </Section>
       </div>
-
-      <ConfirmDialog
-        isOpen={mine.isOpen}
-        title="Отменить запись?"
-        description={
-          mine.target &&
-          `Приём ${schedule.appointmentTitle(mine.target.starts_at)} освободится для других жителей`
-        }
-        confirmLabel="Отменить запись"
-        error={
-          mine.isFailed &&
-          "Не получилось отменить запись. Проверьте связь и попробуйте ещё раз"
-        }
-        isPending={mine.isCancelling}
-        onConfirm={mine.confirm}
-        onClose={mine.dismiss}
-      />
     </Panel>
   );
 };
