@@ -1,0 +1,66 @@
+.MapView {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.Canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.Overlay {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.Pulse {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: pulse 1.5s ease-out 2;
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+
+  to {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+.MapView :global(.maplibregl-ctrl-attrib-button)::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+}
+
+.MapView :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
+  background-color: var(--background-card);
+  color: var(--text-primary);
+}
+
+.MapView :global(.maplibregl-ctrl-attrib a) {
+  color: var(--text-secondary);
+}
+
+.MapView :global(.maplibregl-ctrl-attrib-button:focus:not(:focus-visible)) {
+  box-shadow: none;
+}
+
+.dark :global(.maplibregl-ctrl-attrib-button) {
+  filter: invert(1) hue-rotate(180deg);
+}

@@ -18,6 +18,8 @@ export { default as geoPinIcon } from "./geo-pin.svg";
 export { default as homeIcon } from "./home.svg";
 export { default as houseOutlineIcon } from "./house-outline.svg";
 export { default as infoIcon } from "./info.svg";
+export { default as layersIcon } from "./layers.svg";
+export { default as locateIcon } from "./locate.svg";
 export { default as megaphoneIcon } from "./megaphone.svg";
 export { default as meterIcon } from "./meter.svg";
 export { default as navHomeIcon } from "./nav-home.svg";
