@@ -3,7 +3,12 @@ import { Button, CellSimple, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link, Navigate } from "react-router-dom";
 
 import { MyAppointmentsSection } from "@/features/appointments";
-import { HouseSummary, type HouseCard, useHouseCard } from "@/features/house";
+import {
+  HouseSummary,
+  OutagesPanel,
+  type HouseCard,
+  useHouseCard,
+} from "@/features/house";
 import { cn } from "@/shared/lib/css";
 import {
   duration,
@@ -340,6 +345,8 @@ const HouseCardPage = () => {
         state="plain"
         subtitle={`${house.region} · многоквартирный дом`}
       />
+
+      <OutagesPanel outages={house.outages} />
 
       <Facts house={house} />
 

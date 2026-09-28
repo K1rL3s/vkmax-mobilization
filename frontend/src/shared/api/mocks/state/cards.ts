@@ -45,6 +45,18 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
     chat_bound: false,
     overhaul: null,
     documents: [],
+    outages: [
+      {
+        resource: "hot_water",
+        reason: "Плановая промывка системы горячего водоснабжения",
+        company: "Демо-РСО",
+        starts_at: new Date(Date.now() - 3_600_000).toISOString(),
+        ends_at: new Date(Date.now() + 6 * 3_600_000).toISOString(),
+        recalc_hint:
+          "Перерыв в ГВС дольше 4 ч подряд или 8 ч за месяц: плата за месяц снижается на 0,15% за каждый час сверх нормы (ПП 354, прил. 1, п. 4). Это оценка, не юридическая консультация",
+        is_demo: true,
+      },
+    ],
     org_stats: house.is_connected
       ? {
           closed: 38,

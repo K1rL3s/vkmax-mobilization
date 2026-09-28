@@ -2,7 +2,7 @@ import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { emergencyContact } from "@/features/emergency";
-import { useHouseCard } from "@/features/house";
+import { outageForCategory, outageTitle, useHouseCard } from "@/features/house";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 import { Chevron } from "@/shared/ui/chevron";
@@ -37,6 +37,7 @@ const NewRequestPage = () => {
     return <LoadingState fill title="Готовим форму" />;
   }
 
+  const outage = outageForCategory(house.data?.outages ?? [], form.category);
   const selected = form.categories.find(
     ({ category }) => category === form.category,
   );
@@ -110,6 +111,13 @@ const NewRequestPage = () => {
             orgName={house.data?.org?.name ?? null}
             emergency={emergencyContact(house.data?.org)}
           />
+        )}
+
+        {outage && (
+          <Typography.Text variant="description" color="secondary">
+            По дому {outageTitle(outage).toLowerCase()}, заявку можно не
+            подавать
+          </Typography.Text>
         )}
 
         {!form.isDispute &&

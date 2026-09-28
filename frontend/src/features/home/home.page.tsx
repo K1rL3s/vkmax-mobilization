@@ -11,7 +11,7 @@ import { generatePath, Link, useNavigate } from "react-router-dom";
 
 import { EmergencyCard } from "@/features/emergency";
 import { residencyState } from "@/features/flat-confirmation";
-import { HouseSummary, useHouseCard } from "@/features/house";
+import { HouseSummary, OutagesPanel, useHouseCard } from "@/features/house";
 import { useNextPoll } from "@/features/meetings";
 import {
   announcementWhen,
@@ -272,6 +272,8 @@ const HomePage = () => {
         state={residency ? residencyState(residency) : "not-connected"}
         onClick={() => void navigate(Routes.FLAT)}
       />
+
+      <OutagesPanel outages={house.outages} />
 
       {house.org && (
         <Card>

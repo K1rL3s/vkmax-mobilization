@@ -350,6 +350,13 @@ ignore it. zsh: quote globs (`--include='*.py'`).
     (`PINS_ERASED`); of a listed message drops that item. An emptied list is
     deleted, never unpinned.
 
+- Outages on `HouseCard` are a mock for every house (team decision, instead
+  of my.kzn.ru): `core/outages.py` derives today's and tomorrow's outage
+  from the house id and local date, no table, no network. Each carries
+  `is_demo` and the app labels it «демо-данные»: it is fiction about a real
+  house, so the label never goes. `recalc_hint` quotes ПП 354 прил. 1
+  without computing money.
+
 ## Readings, reminders, analytics
 
 - `window_period` (`core/services/readings.py`) alone decides the open

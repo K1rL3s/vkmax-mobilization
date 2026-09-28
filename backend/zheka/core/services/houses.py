@@ -22,6 +22,7 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat, House, Organization, Resident, User
+from zheka.core.outages import OutageView, demo_outages
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.analytics import AnalyticsRepo, PublicStats
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -77,6 +78,7 @@ class HouseCardData(ZhekaType):
     demand_sent: bool
     is_chat_bound: bool
     org_stats: PublicStats | None
+    outages: Sequence[OutageView] = ()
 
 
 class HouseResidentView(ZhekaType):
@@ -244,6 +246,7 @@ class HousesService:
             ),
             is_chat_bound=await self._houses.is_chat_bound(house_id),
             org_stats=org_stats,
+            outages=demo_outages(house, now),
         )
 
     async def link(

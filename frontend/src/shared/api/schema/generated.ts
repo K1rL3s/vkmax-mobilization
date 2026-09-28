@@ -3080,6 +3080,11 @@ export interface components {
       documents: components["schemas"]["FileRef"][];
       /** @description Показатели УК за 90 дней, нет при малом числе заявок */
       org_stats?: components["schemas"]["OrgPublicStats"] | null;
+      /**
+       * Outages
+       * @description Текущие и плановые отключения по дому, сейчас демо-данные
+       */
+      outages: components["schemas"]["OutageItem"][];
     };
     /** HouseListItem */
     HouseListItem: {
@@ -3505,6 +3510,34 @@ export interface components {
       reception_note: string | null;
       /** Emergency Phone */
       emergency_phone: string | null;
+    };
+    /** OutageItem */
+    OutageItem: {
+      resource: components["schemas"]["ServiceType"];
+      /** Reason */
+      reason: string;
+      /** Company */
+      company: string;
+      /**
+       * Starts At
+       * Format: date-time
+       */
+      starts_at: string;
+      /**
+       * Ends At
+       * Format: date-time
+       */
+      ends_at: string;
+      /**
+       * Recalc Hint
+       * @description Норма перерасчета по ПП 354, без расчета
+       */
+      recalc_hint: string;
+      /**
+       * Is Demo
+       * @description Отключение выдумано для демонстрации
+       */
+      is_demo: boolean;
     };
     /** OverhaulWork */
     OverhaulWork: {

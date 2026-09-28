@@ -11787,6 +11787,12 @@ components:
           - $ref: '#/components/schemas/OrgPublicStats'
           - type: 'null'
           description: Показатели УК за 90 дней, нет при малом числе заявок
+        outages:
+          items:
+            $ref: '#/components/schemas/OutageItem'
+          type: array
+          title: Outages
+          description: Текущие и плановые отключения по дому, сейчас демо-данные
       type: object
       required:
       - id
@@ -11801,6 +11807,7 @@ components:
       - demand_count
       - demand_sent
       - documents
+      - outages
       title: HouseCard
     HouseListItem:
       properties:
@@ -12559,6 +12566,42 @@ components:
       - reception_note
       - emergency_phone
       title: OrgSettingsResponse
+    OutageItem:
+      properties:
+        resource:
+          $ref: '#/components/schemas/ServiceType'
+        reason:
+          type: string
+          title: Reason
+        company:
+          type: string
+          title: Company
+        starts_at:
+          type: string
+          format: date-time
+          title: Starts At
+        ends_at:
+          type: string
+          format: date-time
+          title: Ends At
+        recalc_hint:
+          type: string
+          title: Recalc Hint
+          description: Норма перерасчета по ПП 354, без расчета
+        is_demo:
+          type: boolean
+          title: Is Demo
+          description: Отключение выдумано для демонстрации
+      type: object
+      required:
+      - resource
+      - reason
+      - company
+      - starts_at
+      - ends_at
+      - recalc_hint
+      - is_demo
+      title: OutageItem
     OverhaulWork:
       properties:
         title:

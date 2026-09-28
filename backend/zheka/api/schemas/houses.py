@@ -10,6 +10,7 @@ from zheka.core.enums import (
     RequestCategory,
     ResidentRole,
     ResidentStatus,
+    ServiceType,
     VerificationStatus,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
@@ -142,6 +143,16 @@ class OrgPublicStats(BaseSchema):
     ratings_count: int
 
 
+class OutageItem(BaseSchema):
+    resource: ServiceType
+    reason: str
+    company: str
+    starts_at: datetime
+    ends_at: datetime
+    recalc_hint: str = Field(description="Норма перерасчета по ПП 354, без расчета")
+    is_demo: bool = Field(description="Отключение выдумано для демонстрации")
+
+
 class HouseCard(BaseSchema):
     id: HouseId
     address: str
@@ -171,6 +182,9 @@ class HouseCard(BaseSchema):
     org_stats: OrgPublicStats | None = Field(
         default=None,
         description="Показатели УК за 90 дней, нет при малом числе заявок",
+    )
+    outages: list[OutageItem] = Field(
+        description="Текущие и плановые отключения по дому, сейчас демо-данные",
     )
 
     @classmethod
@@ -210,6 +224,7 @@ class HouseCard(BaseSchema):
                 if card.org_stats is None
                 else OrgPublicStats.model_validate(card.org_stats)
             ),
+            outages=[OutageItem.model_validate(item) for item in card.outages],
         )
 
 
