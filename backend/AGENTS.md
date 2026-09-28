@@ -205,8 +205,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   chosen, several narrow, none keeps the list and says so; `on_back` clears it.
 - `BOT_COMMANDS` (`commands/start.py`) is set by an `after_startup` hook in
   every api worker (the taskiq worker feeds no signals); failure is logged. A
-  new command joins it, `/seed` never. Tests call the hook directly (a second
-  `AfterStartup` fails in `DialogRegistry.refresh`).
+  new command joins it, `/seed` and `/demo` never. Tests call the hook
+  directly (a second `AfterStartup` fails in `DialogRegistry.refresh`).
 
 ## Requests and chats
 
@@ -313,18 +313,25 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   services; no request is left `ON_REVIEW` (the scheduler would auto-close
   and message the author). `/seed` (unadvertised, open) only queues
   `seed_demo`, which replies after commit; `seed()` gets no publisher.
+  `/demo` (unadvertised) queues one real text of every reminder kind to the
+  caller alone, mandatory, from the caller's demo flat or stubs
+  (`RemindersService.demo`); it stamps nothing.
 - All five demo orgs have history in Москва (region = city), so both benchmark
   cuts survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: five distinct ranks per
   metric). They group requests from `REVIEWERS_GROUP_THRESHOLD` flats, not 3:
   reviewers share an org's first house and file the same category.
-- Demo deeplinks are only `demo_{admin,staff,resident}_N`, N 1-4 (5 is the
-  API checker's), granting only that role in demo org N: `DemoService.join`
-  sets exactly ADMIN or
-  EMPLOYEE (lowering too); `settle` gives the verified flat `Д{user_id}` in
-  the org's first house, filled by `furnish` (charges from tariffs: every demo
-  house has tariffs, every demo org `meter_window_always_open`).
+- Demo deeplinks are only `demo_{admin,staff,resident,executor}_N`, N 1-4 (5
+  is the API checker's), granting only that role in demo org N:
+  `DemoService.join` sets exactly ADMIN, EMPLOYEE or EXECUTOR (lowering too);
+  `demo_executor_N` finds the last NEW or ACCEPTED request of the caller's
+  demo flat first (`AdminRequestsService.demo_request`; none -> role kept),
+  then joins and hands it over (`assign_demo`: accept, assign, card;
+  `DemoService` can't take it, `deeplinks` imports `demo`).
+  `settle` gives the verified flat `Д{user_id}` in the org's first house,
+  filled by `furnish` (charges from tariffs: every demo house has tariffs,
+  every demo org `meter_window_always_open`).
   `POST /demo/activate` (`number`, `admin`) does both, keeping an existing
-  role unless `admin` raises it; both idempotent. No seed ->
+  role unless `admin` raises it or it is EXECUTOR; both idempotent. No seed ->
   `EntityNotFound`; no `consent_at` -> `NotEnoughRights`. A reviewer's flat
   account is random (seeded ones are the zero-padded number), so no other
   reviewer can verify into it.

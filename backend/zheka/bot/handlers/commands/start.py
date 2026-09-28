@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 
 from dishka import FromDishka
 from maxo import Bot, Router
@@ -13,6 +14,7 @@ from zheka.broker.task_names import TaskName
 from zheka.core.enums import EventSource, EventType
 from zheka.core.models import User
 from zheka.core.services.events import EventsService
+from zheka.core.services.reminders import RemindersService
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ HELP_TEXT = (
     "- в приложении"
 )
 SEEDING_TEXT = "⏳ Заполняю демо-данные, это займет до минуты"
+DEMO_REMINDERS_TEXT = "🧪 Так приходят напоминания по расписанию"
 CHAT_COMMANDS_ONLY = (
     "💬 Команды /pin, /unpin и /repin работают только в чате дома, "
     "и пользоваться ими могут председатель и сотрудники УК"
@@ -86,3 +89,13 @@ async def set_commands_handler(bot: Bot) -> None:
 @router.message_created(Command("pin", "unpin", "repin"))
 async def chat_command_handler(update: MessageCreated) -> None:
     await update.answer_text(CHAT_COMMANDS_ONLY, notify=False)
+
+
+@router.message_created(Command("demo"))
+async def demo_handler(
+    update: MessageCreated,
+    user: User,
+    reminders_service: FromDishka[RemindersService],
+) -> None:
+    await update.answer_text(DEMO_REMINDERS_TEXT, notify=False)
+    await reminders_service.demo(user.id, datetime.now(UTC))

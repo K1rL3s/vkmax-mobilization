@@ -34,6 +34,7 @@ from zheka.core.ids import (
     UserId,
 )
 from zheka.core.models import House, Request, RequestGroup, Resident, User
+from zheka.core.services.demo import demo_flat_number
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
@@ -66,6 +67,8 @@ RESULT_PHOTO_REQUIRED = "Пришлите фото результата"
 RESIDENT_NOT_FOUND = "Житель не найден"
 RESIDENT_BLOCKED = "Житель заблокирован в доме"
 FLAT_NOT_RESIDENTS = "Квартира не совпадает с квартирой жителя"
+NO_DEMO_REQUEST = "📝 Сначала подайте заявку по ссылке demo_resident_{number}"
+_DEMO_OPEN = (RequestStatus.NEW, RequestStatus.ACCEPTED)
 
 
 class AdminRequestRow(RequestRow):
@@ -529,3 +532,37 @@ class AdminRequestsService:
         if draft.flat_id is not None and draft.flat_id != resident.flat_id:
             raise InvalidRequest(FLAT_NOT_RESIDENTS)
         return resident
+
+    async def demo_request(
+        self,
+        org_id: OrgId,
+        number: int,
+        user_id: UserId,
+    ) -> Request:
+        request = None
+        houses = await self._houses.list_for_org(org_id)
+        if houses:
+            flat = await self._houses.get_flat_by_number(
+                houses[0].id,
+                demo_flat_number(user_id),
+            )
+            if flat is not None:
+                request = await self._requests.last_for_flat(flat.id, _DEMO_OPEN)
+        if request is None:
+            raise EntityNotFound(NO_DEMO_REQUEST.format(number=number))
+        return request
+
+    async def assign_demo(
+        self,
+        org_id: OrgId,
+        request: Request,
+        user_id: UserId,
+    ) -> None:
+        await self._move(
+            request,
+            RequestStatus.ACCEPTED,
+            None,
+            user_id,
+            RequestActorRole.STAFF,
+        )
+        await self.assign(org_id, request.id, user_id, user_id)

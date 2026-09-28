@@ -20,6 +20,7 @@ from zheka.broker.tasks.reminders import (
 )
 from zheka.broker.tasks.requests import auto_close_reviewed_requests
 from zheka.core import texts
+from zheka.core.deeplinks import MEETINGS_APP_PATH, poll_app_path
 from zheka.core.enums import (
     AppointmentStatus,
     ChatStatus,
@@ -41,8 +42,11 @@ from zheka.core.ids import (
     PollId,
     UserId,
 )
+from zheka.core.services.demo import demo_flat_number
 from zheka.core.services.readings import current_period
 from zheka.core.services.reminders import (
+    DEMO_ADDRESS,
+    DEMO_POLL,
     ReadingReminder,
     reading_reminder,
 )
@@ -940,3 +944,46 @@ async def test_a_missed_stage_arrives_the_next_day_once(
 
     [text] = _texts(broker, user_id)
     assert "Через 6 дней, 15.10.2026, истекает поверка" in text
+
+
+async def test_the_demo_reminders_take_nothing_from_a_flat_that_is_not_a_demo_one(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    house_id = await _house(session)
+    _flat_id, user_id = await _resident(session, house_id)
+    await _poll(session, house_id, timedelta(hours=24))
+
+    await reminders_service(session, publisher).demo(user_id, NOW)
+    await publisher.flush()
+
+    *_, poll, appointment = broker.enqueued(TaskName.SEND_TO_USER)
+    assert DEMO_POLL in poll["text"]
+    assert poll["app_path"] == MEETINGS_APP_PATH
+    assert DEMO_ADDRESS in appointment["text"]
+
+
+async def test_the_demo_poll_reminder_names_the_running_poll_of_the_demo_house(
+    session: AsyncSession,
+    publisher: TaskPublisher,
+    broker: RecordingBroker,
+) -> None:
+    house_id = await _house(session)
+    user = User(max_user_id=MaxUserId(secrets.randbits(40)), name="Проверяющий")
+    session.add(user)
+    await session.flush()
+    user_id = user.id
+    flat = Flat(house_id=house_id, number=demo_flat_number(user_id))
+    session.add(flat)
+    await session.flush()
+    await _resident(session, house_id, flat_id=flat.id, user_id=user_id)
+    running = await _poll(session, house_id, timedelta(hours=24))
+    await _poll(session, house_id, timedelta(hours=-1))
+    await _poll(session, house_id, timedelta(hours=24), PollStatus.CLOSED)
+
+    await reminders_service(session, publisher).demo(user_id, NOW)
+    await publisher.flush()
+
+    *_, poll, _appointment = broker.enqueued(TaskName.SEND_TO_USER)
+    assert poll["app_path"] == poll_app_path(running)

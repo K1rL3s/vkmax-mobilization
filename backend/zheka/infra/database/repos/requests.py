@@ -440,3 +440,20 @@ class RequestsRepo(BaseAlchemyRepo):
             .execution_options(populate_existing=True)
         )
         await self._session.execute(stmt)
+
+    async def last_for_flat(
+        self,
+        flat_id: FlatId,
+        statuses: Collection[RequestStatus],
+    ) -> Request | None:
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.flat_id == flat_id,
+                requests_table.c.status.in_(statuses),
+            )
+            .order_by(requests_table.c.id.desc())
+            .limit(1)
+        )
+        request: Request | None = await self._session.scalar(stmt)
+        return request

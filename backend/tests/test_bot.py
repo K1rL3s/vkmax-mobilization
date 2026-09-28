@@ -69,6 +69,7 @@ from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.commands.deeplinks import (
     APP_BUTTON,
     DEMO_ADMIN_NOTICE,
+    DEMO_EXECUTOR_NOTICE,
     DEMO_RESIDENT_NOTICE,
     DEMO_STAFF_NOTICE,
     EXECUTOR_JOINED,
@@ -79,6 +80,7 @@ from zheka.bot.handlers.commands.deeplinks import (
 from zheka.bot.handlers.commands.start import (
     BOT_COMMANDS,
     CHAT_COMMANDS_ONLY,
+    DEMO_REMINDERS_TEXT,
     set_commands_handler,
 )
 from zheka.bot.handlers.consent.windows import GIVEN_TEXT
@@ -174,6 +176,7 @@ from zheka.core.ids import (
 )
 from zheka.core.models import User
 from zheka.core.services.access import SLOT_FULL
+from zheka.core.services.admin_requests import NO_DEMO_REQUEST
 from zheka.core.services.chats import (
     CHAT_NOT_BOUND,
     CHAT_TAKEN,
@@ -181,9 +184,15 @@ from zheka.core.services.chats import (
     UNPIN_HINT,
     WRONG_CODE,
 )
-from zheka.core.services.demo import DEMO_INNS, NOT_SEEDED, demo_flat_number
+from zheka.core.services.demo import (
+    CHECKER_RESERVED,
+    DEMO_INNS,
+    NOT_SEEDED,
+    demo_flat_number,
+)
 from zheka.core.services.events import EventsService
 from zheka.core.services.profile import ProfileService
+from zheka.core.services.reminders import DEMO_ADDRESS, DEMO_SERIAL
 from zheka.core.services.requests import (
     MAX_RATING,
     MIN_RATING,
@@ -638,9 +647,11 @@ async def _request(
     *,
     author: UserId | None = None,
     executor: UserId | None = None,
+    flat: FlatId | None = None,
 ) -> RequestId:
     request = Request(
         house_id=house_id,
+        flat_id=flat,
         author_user_id=author,
         executor_user_id=executor,
         category=RequestCategory.LEAK,
@@ -3243,3 +3254,186 @@ async def test_a_chat_broadcast_carries_the_link_into_the_app(
 
     url = create_startapp_link(fake_bot, app_payload("/meetings/7"))
     assert notices.buttons == [[LinkButton(text=VOTE, url=url)]]
+
+
+async def _demo_flat(
+    session: AsyncSession,
+    client: BotClient,
+) -> tuple[UserId, HouseId, FlatId]:
+    user_id = (await _user(session, client)).id
+    residents = select(residents_table.c.flat_id).where(
+        residents_table.c.user_id == user_id,
+    )
+    flat_id = (await session.execute(residents)).scalar_one()
+    flat = await HousesRepo(session).get_flat(flat_id)
+    assert flat is not None
+    assert flat.number == demo_flat_number(user_id)
+    return user_id, flat.house_id, flat_id
+
+
+@pytest.mark.parametrize("status", [RequestStatus.NEW, RequestStatus.ACCEPTED])
+async def test_a_demo_executor_link_hands_the_own_demo_request_to_the_caller(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    shows: list[Show],
+    notices: _RecordingBot,
+    status: RequestStatus,
+) -> None:
+    org_id, _address = await _bot_demo(bot_session)
+    await _consented(client, message_manager)
+    await _bot_started(client, "demo_resident_1")
+    await _bot_started(client, "demo_staff_1")
+    user_id, house_id, flat_id = await _demo_flat(bot_session, client)
+    older = await _request(
+        bot_session,
+        house_id,
+        status,
+        author=user_id,
+        flat=flat_id,
+    )
+    request_id = await _request(
+        bot_session,
+        house_id,
+        status,
+        author=user_id,
+        flat=flat_id,
+    )
+    unrelated = await _request(bot_session, house_id, status)
+
+    await _bot_started(client, "demo_executor_1")
+
+    assert DEMO_EXECUTOR_NOTICE.format(org="Демо-УК «1»") in notices.texts
+    roles, _houses = await _demo_roles(bot_session, client)
+    assert roles == [(org_id, OrgRole.EXECUTOR)]
+    request = await _status(bot_session, request_id)
+    assert request.status is RequestStatus.ACCEPTED
+    assert request.executor_user_id == user_id
+    assert (await _status(bot_session, older)).executor_user_id is None
+    assert (await _status(bot_session, unrelated)).executor_user_id is None
+    enqueued = bot_broker.enqueued(TaskName.SEND_EXECUTOR_CARD)[-1]
+    assert enqueued == {"request_id": request_id, "user_id": None}
+
+    await _run(task_broker, send_executor_card, **enqueued)
+    await client.click(message_manager.last_message(), DEPART)
+
+    assert any(f"№{request_id}:" in (text or "") for _, text, *_ in shows)
+    assert (await _status(bot_session, request_id)).status is (
+        RequestStatus.IN_PROGRESS
+    )
+
+
+async def test_a_demo_executor_link_without_an_open_demo_request_asks_for_one(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    notices: _RecordingBot,
+) -> None:
+    await _bot_demo(bot_session, 2)
+    await _consented(client, message_manager)
+    await _bot_started(client, "demo_resident_2")
+    user_id, house_id, flat_id = await _demo_flat(bot_session, client)
+    done = await _request(
+        bot_session,
+        house_id,
+        RequestStatus.IN_PROGRESS,
+        author=user_id,
+        flat=flat_id,
+    )
+    cards = len(bot_broker.enqueued(TaskName.SEND_EXECUTOR_CARD))
+
+    await _bot_started(client, "demo_executor_2")
+
+    assert notices.texts[-1] == NO_DEMO_REQUEST.format(number=2)
+    assert (await _status(bot_session, done)).executor_user_id is None
+    assert len(bot_broker.enqueued(TaskName.SEND_EXECUTOR_CARD)) == cards
+
+
+async def test_the_checkers_demo_org_refuses_a_demo_executor_link(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _bot_demo(bot_session, 5)
+    await _consented(client, message_manager)
+
+    await _bot_started(client, "demo_executor_5")
+
+    assert notices.texts == [CHECKER_RESERVED]
+    assert await _demo_roles(bot_session, client) == ([], [])
+
+
+@pytest.mark.parametrize("with_flat", [True, False])
+async def test_the_demo_command_sends_every_reminder_to_the_caller_only(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    notices: _RecordingBot,
+    with_flat: bool,
+) -> None:
+    _org_id, address = await _bot_demo(bot_session, 3)
+    await _consented(client, message_manager)
+    serial, place = DEMO_SERIAL, DEMO_ADDRESS
+    if with_flat:
+        await _bot_started(client, "demo_resident_3")
+        _user_id, _house_id, flat_id = await _demo_flat(bot_session, client)
+        serial, place = f"ДЕМО-ГВ-{flat_id:06d}", address
+    user_id = (await _user(bot_session, client)).id
+    notices.texts.clear()
+    queued = len(bot_broker.enqueued(TaskName.SEND_TO_USER))
+
+    await client.send("/demo")
+
+    assert notices.texts == [DEMO_REMINDERS_TEXT]
+    sent = bot_broker.enqueued(TaskName.SEND_TO_USER)[queued:]
+    assert [message["text"].split()[0] for message in sent] == [
+        "📟",
+        "⏰",
+        "📟",
+        "⏰",
+        "⏰",
+        "⚠️",
+        "🗳",
+        "📅",
+    ]
+    assert {message["user_id"] for message in sent} == {user_id}
+    assert all(message["mandatory"] for message in sent)
+    assert all(message["app_button"] for message in sent)
+    assert all(serial in message["text"] for message in sent[3:6])
+    assert place in sent[-1]["text"]
+
+
+async def test_a_demo_executor_link_without_a_demo_flat_asks_for_a_request(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _bot_demo(bot_session, 2)
+    await _consented(client, message_manager)
+
+    await _bot_started(client, "demo_executor_2")
+
+    assert notices.texts[-1] == NO_DEMO_REQUEST.format(number=2)
+
+
+async def test_a_demo_executor_link_without_a_request_keeps_the_staff_role(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    org_id, _address = await _bot_demo(bot_session, 2)
+    await _consented(client, message_manager)
+    await _bot_started(client, "demo_staff_2")
+
+    await _bot_started(client, "demo_executor_2")
+
+    assert notices.texts[-1] == NO_DEMO_REQUEST.format(number=2)
+    roles, _houses = await _demo_roles(bot_session, client)
+    assert roles == [(org_id, OrgRole.EMPLOYEE)]

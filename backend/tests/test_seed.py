@@ -424,3 +424,14 @@ async def _checker(session: AsyncSession) -> UserId:
     session.add(user)
     await session.flush()
     return user.id
+
+
+async def test_the_mini_app_activation_returns_a_demo_executor_to_staff(
+    db: AsyncSession,
+) -> None:
+    user_id = await _positive_user(db)
+    await _demo(db).join(user_id, 1, OrgRole.EXECUTOR)
+
+    access = await _demo(db).activate(user_id)
+
+    assert access.membership.member.role is OrgRole.EMPLOYEE

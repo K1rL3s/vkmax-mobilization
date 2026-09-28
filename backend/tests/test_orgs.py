@@ -98,6 +98,8 @@ async def test_single_use_invite_is_not_activated_twice(
         ("qr_12_3", Deeplink(kind=DeeplinkKind.ENTRANCE_QR, value="12_3")),
         ("demo_staff_1", Deeplink(kind=DeeplinkKind.DEMO_STAFF, value="1")),
         ("demo_admin_5", Deeplink(kind=DeeplinkKind.DEMO_ADMIN, value="5")),
+        ("demo_executor_4", Deeplink(kind=DeeplinkKind.DEMO_EXECUTOR, value="4")),
+        ("demo_executor_6", None),
         ("demo_staff", None),
         ("demo_staff_6", None),
         ("demo_resident_0", None),
