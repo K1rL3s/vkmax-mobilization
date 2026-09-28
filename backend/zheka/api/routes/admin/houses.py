@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from maxo import Bot
 from maxo.utils.deeplink import create_start_link, create_startapp_link
 
-from zheka.api.dependencies import AdminOrgDep
+from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.flats import RejectVerificationRequest, VerificationRequestItem
 from zheka.api.schemas.houses import (
@@ -35,14 +35,20 @@ router = APIRouter(tags=["Админка: дома"], route_class=DishkaRoute)
 
 @router.get("/admin/houses", summary="Дома организации")
 async def list_org_houses(
-    current_org: AdminOrgDep,
+    current_org: CurrentOrgDep,
     houses_service: FromDishka[HousesService],
     q: str | None = None,
     limit: Limit = 50,
     offset: Offset = 0,
 ) -> Page[AdminHouseListItem]:
     rows, total = await houses_service.org_houses(current_org.org_id, q, limit, offset)
-    return Page(items=[AdminHouseListItem.of(row) for row in rows], total=total)
+    return Page(
+        items=[
+            AdminHouseListItem.of(row, current_org.role.can_manage_houses)
+            for row in rows
+        ],
+        total=total,
+    )
 
 
 @router.get("/admin/houses/{house_id}", summary="Карточка дома в админке")

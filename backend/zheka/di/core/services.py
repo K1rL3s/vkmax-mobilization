@@ -2,6 +2,7 @@ from dishka import BaseScope, Provider, Scope, provide, provide_all
 
 from zheka.config import FilesConfig, MaxConfig
 from zheka.core.services.access import AccessService
+from zheka.core.services.admin_map import AdminMapService
 from zheka.core.services.admin_readings import AdminReadingsService
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.analytics import AnalyticsService
@@ -67,6 +68,7 @@ class ServicesProvider(Provider):
         RetentionService,
         MapService,
         HousePointService,
+        AdminMapService,
     )
     upload_quota = provide(UploadQuota, scope=Scope.APP)
     house_add_quota = provide(HouseAddQuota, scope=Scope.APP)

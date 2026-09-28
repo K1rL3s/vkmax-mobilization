@@ -388,7 +388,7 @@ async def test_admin_house_surface(
 
     rows, total = await houses_service.org_houses(own.org_id, None, 50, 0)
     assert total == 1
-    item = AdminHouseListItem.of(rows[0])
+    item = AdminHouseListItem.of(rows[0], can_manage=True)
     assert (item.id, item.flats_count, item.residents_count) == (own.house_id, 2, 1)
     assert (item.open_requests, item.chat_bound) == (1, False)
 

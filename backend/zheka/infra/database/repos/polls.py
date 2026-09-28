@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import PollStatus
@@ -134,11 +134,7 @@ class PollsRepo(BaseAlchemyRepo):
     async def voted_flat_ids(self, poll_id: PollId) -> Sequence[FlatId]:
         stmt = (
             select(poll_votes_table.c.flat_id)
-            .where(
-                poll_votes_table.c.poll_id == poll_id,
-                poll_votes_table.c.flat_id.is_not(None),
-                poll_votes_table.c.counted_by_area.is_(True),
-            )
+            .where(poll_votes_table.c.poll_id == poll_id, COUNTED_FLAT_VOTE)
             .distinct()
         )
         result = await self._session.execute(stmt)
@@ -183,3 +179,9 @@ class PollsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+
+COUNTED_FLAT_VOTE = and_(
+    poll_votes_table.c.flat_id.is_not(None),
+    poll_votes_table.c.counted_by_area.is_(True),
+)

@@ -406,6 +406,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   only) count per user per api worker an hour. `POST /houses` rechecks the
   address under `pg_advisory_xact_lock(ADD_HOUSE_LOCK)`; advisory keys:
   `SEED_LOCK = 1`, `ADD_HOUSE_LOCK = 2`.
+- `GET /api/admin/map/houses` reads only the caller's org (`list_for_org`,
+  `scoped_to_org`, announcements by `org_id`). EMPLOYEE gets `null`
+  `residents_count`, `verified_residents`, `pending_verifications` and
+  `chat_bound`, and `pending` filters nothing; `flats_count` goes to every
+  staff role (an access request picks a flat). `GET /api/admin/houses` is
+  open to EMPLOYEE with `residents_count` null.
 
 ## Seed and demo
 
