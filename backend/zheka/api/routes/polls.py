@@ -11,7 +11,7 @@ from zheka.api.schemas.polls import (
     PollResults,
     VoteRequest,
 )
-from zheka.core.enums import PollStatus
+from zheka.core.enums import EventSource, PollStatus
 from zheka.core.ids import HouseId, PollId
 from zheka.core.services.polls import PollsService
 
@@ -66,6 +66,7 @@ async def vote_in_poll(
         poll_id,
         current_account.user_id,
         body.option_ids,
+        EventSource.MINIAPP,
     )
     return PollResults.of(results)
 

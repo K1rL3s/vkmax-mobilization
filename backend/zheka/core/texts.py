@@ -1,8 +1,9 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime, timedelta
 from html import escape
 from math import ceil
 
+from zheka.base import ZhekaType
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
 from zheka.core.models import House, Request
@@ -352,3 +353,46 @@ def request_share_text(request: Request, house: House) -> str:
         f"{CATEGORY_RULES[request.category].label}, {house.address}. "
         "Если у вас то же самое, присоединяйтесь к заявке"
     )
+
+
+POLL_HASHTAG = "#опрос"
+POLL_NOT_OSS = "Голосуют собственники, это не ОСС"
+VOTE_IN_APP = "📱 Голосовать в приложении"
+VOTE_OPTION_LIMIT = 40
+
+
+class PollCardRow(ZhekaType):
+    text: str
+    flats: int
+    percent: int
+
+
+def poll_card(
+    title: str,
+    by_staff: bool,
+    rows: Sequence[PollCardRow],
+    voted: int,
+    total: int,
+    ends_at: datetime | None,
+) -> str:
+    author = "Опрос УК" if by_staff else "Опрос председателя"
+    head = (
+        f"🗳 {author}: {escape(title)}"
+        if ends_at is not None
+        else f"🗳 {author} завершен: {escape(title)}"
+    )
+    lines = [head]
+    for number, row in enumerate(rows, start=1):
+        share = f"{row.flats} кв., {row.percent // 100}% площади"
+        lines.append(f"{number}. {escape(row.text)} - {share}")
+    until = "" if ends_at is None else f", до {ends_at:%d.%m}"
+    lines.append(f"Проголосовало {voted} из {flats_count(total)}{until}")
+    lines.extend((POLL_NOT_OSS, POLL_HASHTAG))
+    return "\n".join(lines)
+
+
+def vote_button(number: int, text: str) -> str:
+    label = f"{number}. {text}"
+    if len(label) <= VOTE_OPTION_LIMIT:
+        return label
+    return f"{label[: VOTE_OPTION_LIMIT - 1]}…"

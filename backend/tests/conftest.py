@@ -61,9 +61,11 @@ from zheka.core.enums import (
 from zheka.core.ids import FlatId, HouseId, MaxUserId, MeterId, OrgId, UserId
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.category_executors import CategoryExecutorsService
+from zheka.core.services.chat_cards import ChatCardsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.notifications import NotificationsService
+from zheka.core.services.polls import PollsService
 from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
@@ -495,6 +497,28 @@ def grouping_service(
         RequestsRepo(session),
         EventsService(EventsRepo(session)),
         make_notifications_service(session, publisher),
+    )
+
+
+def polls_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> PollsService:
+    return PollsService(
+        PollsRepo(session),
+        HousesRepo(session),
+        ResidentsRepo(session),
+        OrgsRepo(session),
+        EventsService(EventsRepo(session)),
+        make_notifications_service(session, publisher),
+    )
+
+
+def chat_cards_service(session: AsyncSession) -> ChatCardsService:
+    return ChatCardsService(
+        RequestsRepo(session),
+        HousesRepo(session),
+        polls_service(session),
     )
 
 

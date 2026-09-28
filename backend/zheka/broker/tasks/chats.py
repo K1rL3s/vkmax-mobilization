@@ -1,14 +1,18 @@
 import logging
+from collections.abc import Sequence
 from html import escape
 
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.dialogs import ShowMode
 from maxo.errors import MaxBotApiError, MaxBotNetworkError
+from maxo.types.buttons import InlineButtons
+from maxo.types.callback_button import CallbackButton
 from maxo.types.link_button import LinkButton
 from maxo.utils.deeplink import create_start_link, create_startapp_link
 from taskiq import async_shared_broker
 
+from zheka.bot.cards import VotePayload, app_link
 from zheka.bot.dialog_data import ChatBindingData
 from zheka.bot.states import ChatBinding
 from zheka.broker.task_names import TaskName
@@ -17,9 +21,9 @@ from zheka.core.enums import ChatCardKind
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId
 from zheka.core.models import ChatCard
-from zheka.core.services.chat_cards import ChatCardView, ChatCardsService
+from zheka.core.services.chat_cards import CardVote, ChatCardView, ChatCardsService
 from zheka.core.services.chats import ChatsService, pins_text
-from zheka.core.texts import ME_TOO
+from zheka.core.texts import ME_TOO, VOTE_IN_APP
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
@@ -208,8 +212,13 @@ async def sync_chat_card(
             await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
 
 
-def _card_keyboard(bot: Bot, view: ChatCardView) -> list[list[LinkButton]]:
-    keyboard: list[list[LinkButton]] = []
+def _card_keyboard(bot: Bot, view: ChatCardView) -> list[Sequence[InlineButtons]]:
+    keyboard: list[Sequence[InlineButtons]] = [
+        [CallbackButton(text=vote.text, payload=_vote_payload(vote))]
+        for vote in view.votes
+    ]
+    if view.app_path is not None:
+        keyboard.extend(app_link(bot, VOTE_IN_APP, view.app_path) or [])
     if view.me_too is not None:
         payload = house_category_payload(view.house_id, view.me_too)
         url = create_startapp_link(bot, payload)
@@ -217,6 +226,10 @@ def _card_keyboard(bot: Bot, view: ChatCardView) -> list[list[LinkButton]]:
     if view.join:
         keyboard.extend(_join_keyboard(bot, view.house_id))
     return keyboard
+
+
+def _vote_payload(vote: CardVote) -> str:
+    return VotePayload(poll_id=vote.poll_id, option_id=vote.option_id).pack()
 
 
 async def recheck_chat_rights(

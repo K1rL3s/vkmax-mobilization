@@ -162,7 +162,7 @@ class PollsRepo(BaseAlchemyRepo):
         poll.reminder_sent_at = at
         await self._session.flush()
 
-    async def close_expired(self, now: datetime) -> int:
+    async def close_expired(self, now: datetime) -> Sequence[PollId]:
         stmt = (
             update(polls_table)
             .where(
@@ -173,7 +173,7 @@ class PollsRepo(BaseAlchemyRepo):
             .returning(polls_table.c.id)
         )
         result = await self._session.execute(stmt)
-        return len(result.scalars().all())
+        return result.scalars().all()
 
     async def voter_ids(self, poll_id: PollId) -> Sequence[UserId]:
         stmt = (

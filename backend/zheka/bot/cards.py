@@ -9,6 +9,7 @@ from maxo.dialogs.widgets.text import Const
 from maxo.enums import AttachmentType
 from maxo.fsm import State
 from maxo.omit import Omitted, is_defined
+from maxo.routing.filters import Payload
 from maxo.routing.middlewares.update_context import UPDATE_CONTEXT_KEY
 from maxo.types import MessageCallback, OpenAppButton
 from maxo.types.link_button import LinkButton
@@ -120,3 +121,8 @@ def app_link(bot: Bot, text: str, path: str) -> list[list[LinkButton]] | None:
 
 
 EMERGENCY = Const("🚨 Авария")
+
+
+class VotePayload(Payload, prefix="vote"):
+    poll_id: int
+    option_id: int

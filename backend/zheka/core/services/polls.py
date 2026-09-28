@@ -3,7 +3,13 @@ from datetime import UTC, datetime
 
 from zheka.base import ZhekaType
 from zheka.core import texts
-from zheka.core.enums import EventType, PollStatus, ResidentStatus
+from zheka.core.enums import (
+    ChatCardKind,
+    EventSource,
+    EventType,
+    PollStatus,
+    ResidentStatus,
+)
 from zheka.core.errors import (
     HOUSE_NOT_FOUND,
     EntityNotFound,
@@ -13,8 +19,9 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, PollId, PollOptionId, UserId
-from zheka.core.models import Flat, Poll, PollOption, PollVote, Resident
+from zheka.core.models import Flat, House, Poll, PollOption, PollVote, Resident
 from zheka.core.services.events import EventsService
+from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.quorum import QuorumForecast, forecast
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -77,6 +84,14 @@ class PollResultsData(ZhekaType):
     flats_without_area: int
 
 
+class PollChatCardData(ZhekaType):
+    results: PollResultsData
+    house: House
+    voted_flats: int
+    total_flats: int
+    total_area: int
+
+
 class AdminPollListItemData(ZhekaType):
     item: PollListItemData
     address: str
@@ -106,7 +121,14 @@ def _validated_option_ids(
 
 
 class PollsService:
-    __slots__ = ("_events", "_houses", "_orgs", "_polls", "_residents")
+    __slots__ = (
+        "_events",
+        "_houses",
+        "_notifications",
+        "_orgs",
+        "_polls",
+        "_residents",
+    )
 
     def __init__(
         self,
@@ -115,12 +137,14 @@ class PollsService:
         residents_repo: ResidentsRepo,
         orgs_repo: OrgsRepo,
         events_service: EventsService,
+        notifications_service: NotificationsService,
     ) -> None:
         self._polls = polls_repo
         self._houses = houses_repo
         self._residents = residents_repo
         self._orgs = orgs_repo
         self._events = events_service
+        self._notifications = notifications_service
 
     async def create(
         self,
@@ -171,6 +195,7 @@ class PollsService:
             poll_id=poll.id,
             by_role=role,
         )
+        self._notifications.sync_chat_card(ChatCardKind.POLL, poll.id, post=True)
         return await self._card(poll, user_id)
 
     async def get_card(self, poll_id: PollId, user_id: UserId) -> PollCardData:
@@ -226,7 +251,27 @@ class PollsService:
         poll_id: PollId,
         user_id: UserId,
         option_ids: Sequence[PollOptionId],
+        source: EventSource = EventSource.MINIAPP,
     ) -> PollResultsData:
+        poll, _ = await self._vote(poll_id, user_id, option_ids, source)
+        return await self._results(poll)
+
+    async def vote_in_chat(
+        self,
+        poll_id: PollId,
+        user_id: UserId,
+        option_id: PollOptionId,
+    ) -> bool:
+        _, counted = await self._vote(poll_id, user_id, [option_id], EventSource.CHAT)
+        return counted
+
+    async def _vote(
+        self,
+        poll_id: PollId,
+        user_id: UserId,
+        option_ids: Sequence[PollOptionId],
+        source: EventSource,
+    ) -> tuple[Poll, bool]:
         poll = await self._get_poll(poll_id)
         resident = await self._residents.get_for_house(user_id, poll.house_id)
         if resident is None:
@@ -245,13 +290,14 @@ class PollsService:
         if await self._polls.get_vote(poll.id, user_id):
             raise InvalidState(ALREADY_VOTED)
 
+        counted = await self._counted_by_area(poll, resident)
         inserted = await self._polls.add_vote(
             poll.id,
             chosen,
             user_id,
             resident.id,
             resident.flat_id,
-            counted_by_area=await self._counted_by_area(poll, resident),
+            counted_by_area=counted,
         )
         if len(inserted) != len(chosen):
             raise InvalidState(ALREADY_VOTED)
@@ -260,8 +306,10 @@ class PollsService:
             EventType.POLL_VOTED,
             user_id=user_id,
             poll_id=poll.id,
+            source=source.value,
         )
-        return await self._results(poll)
+        self._notifications.sync_chat_card(ChatCardKind.POLL, poll.id, post=False)
+        return poll, counted
 
     async def results(self, poll_id: PollId, user_id: UserId) -> PollResultsData:
         poll = await self._reachable_poll(poll_id, user_id)
@@ -287,7 +335,22 @@ class PollsService:
         poll = await self._get_poll(poll_id)
         await self._require_initiator_or_staff(poll, user_id)
         await self._polls.close(poll)
+        self._notifications.sync_chat_card(ChatCardKind.POLL, poll.id, post=False)
         return await self._card(poll, user_id)
+
+    async def chat_card(self, poll_id: PollId) -> PollChatCardData | None:
+        poll = await self._polls.get(poll_id)
+        house = None if poll is None else await self._houses.get(poll.house_id)
+        if poll is None or house is None:
+            return None
+        flats = await self._house_flats(poll.house_id)
+        return PollChatCardData(
+            results=await self._results(poll),
+            house=house,
+            voted_flats=await self._voted_flats_count(poll.id),
+            total_flats=len(flats),
+            total_area=sum(flat.area or 0 for flat in flats),
+        )
 
     async def _card(self, poll: Poll, user_id: UserId) -> PollCardData:
         status = poll.effective_status(datetime.now(UTC))

@@ -6,9 +6,16 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import Fixture, OrgHouseFlatUser, add_resident, add_user
+from tests.conftest import (
+    Fixture,
+    OrgHouseFlatUser,
+    add_resident,
+    add_user,
+    polls_service,
+)
 
 from zheka.api.schemas.polls import AdminPollListItem, PollCard, PollResults
+from zheka.broker.publisher import TaskPublisher
 from zheka.core.enums import OrgRole, PollStatus, ResidentRole, ResidentStatus
 from zheka.core.errors import (
     EntityNotFound,
@@ -18,24 +25,17 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import PollId, UserId
-from zheka.core.services.events import EventsService
 from zheka.core.services.polls import PollDraft, PollsService
 from zheka.infra.database.models import Flat
-from zheka.infra.database.repos.events import EventsRepo
-from zheka.infra.database.repos.houses import HousesRepo
-from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 
 
-def _make_service(session: AsyncSession) -> PollsService:
-    return PollsService(
-        PollsRepo(session),
-        HousesRepo(session),
-        ResidentsRepo(session),
-        OrgsRepo(session),
-        EventsService(EventsRepo(session)),
-    )
+def _make_service(
+    session: AsyncSession,
+    publisher: TaskPublisher | None = None,
+) -> PollsService:
+    return polls_service(session, publisher)
 
 
 def _future(days: int = 3) -> datetime:

@@ -1,14 +1,20 @@
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import (
+    Fixture,
     OrgHouseFlatUser,
     RecordingBroker,
+    add_resident,
+    add_user,
     admin_requests_service,
+    chat_cards_service,
     events_of,
+    polls_service,
+    reminders_service,
     requests_service,
 )
 from tests.test_requests import _mark_done, _mark_on_review, _member, _neighbour
@@ -26,8 +32,8 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import EntityNotFound, InvalidState
 from zheka.core.ids import HouseId, MaxChatId, RequestGroupId
-from zheka.core.models import Chat, Request
-from zheka.core.services.chat_cards import ChatCardsService
+from zheka.core.models import Chat, Flat, Request
+from zheka.core.services.polls import PollCardData, PollDraft
 from zheka.core.services.requests import RequestDraft
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -118,7 +124,7 @@ async def test_the_group_card_counts_flats_and_shows_the_earliest_status(
     members = await RequestsRepo(session).list_for_group(group_id)
     members[0].status = RequestStatus.IN_PROGRESS
     await session.flush()
-    cards = ChatCardsService(RequestsRepo(session), HousesRepo(session))
+    cards = chat_cards_service(session)
 
     view = await cards.render(ChatCardKind.GROUP, group_id)
 
@@ -214,7 +220,7 @@ async def _own_request(session: AsyncSession, own: OrgHouseFlatUser) -> Request:
     card = await requests_service(session).create(
         own.user_id,
         own.house_id,
-        RequestDraft(category=RequestCategory.ELEVATOR, description="Кв. 12, лифт"),
+        RequestDraft(category=RequestCategory.ELEVATOR, description="Кв. 987, лифт"),
     )
     return card.request
 
@@ -290,14 +296,14 @@ async def test_the_request_card_hides_the_flat_and_closes_on_review(
     request = await _own_request(session, own)
     house = await HousesRepo(session).get(own.house_id)
     assert house is not None
-    cards = ChatCardsService(RequestsRepo(session), HousesRepo(session))
+    cards = chat_cards_service(session)
 
     view = await cards.render(ChatCardKind.REQUEST, request.id)
 
     assert view is not None
     assert view.text == texts.request_card(request, house)
     assert view.text.startswith(f"🛗 Заявка №{request.id} · Лифт\nСтатус: новая\n⏰")
-    assert "12" not in view.text.replace(str(request.id), "")
+    assert "987" not in view.text
     assert view.me_too is RequestCategory.ELEVATOR
     assert view.join is True
 
@@ -316,7 +322,7 @@ async def test_a_grouped_request_card_points_to_the_group(
 ) -> None:
     group_id = await _grouped(session, own, publisher)
     member = (await RequestsRepo(session).list_for_group(group_id))[0]
-    cards = ChatCardsService(RequestsRepo(session), HousesRepo(session))
+    cards = chat_cards_service(session)
 
     view = await cards.render(ChatCardKind.REQUEST, member.id)
 
@@ -353,3 +359,135 @@ async def test_a_status_change_and_grouping_sync_the_request_card(
     members = await RequestsRepo(session).list_for_group(group_id)
     synced = {sync["ref_id"] for sync in _syncs(broker, ChatCardKind.REQUEST)}
     assert synced == {member.id for member in members}
+
+
+def _poll_draft(*, is_multiple: bool = False) -> PollDraft:
+    return PollDraft(
+        title="Ставим шлагбаум?",
+        description=None,
+        options=["Да", "Нет"],
+        ends_at=datetime.now(UTC) + timedelta(days=3),
+        is_multiple=is_multiple,
+    )
+
+
+async def _staff_poll(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    publisher: TaskPublisher,
+    *,
+    is_multiple: bool = False,
+) -> tuple[OrgHouseFlatUser, PollCardData]:
+    staff = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    card = await polls_service(session, publisher).create(
+        staff.user_id,
+        staff.house_id,
+        _poll_draft(is_multiple=is_multiple),
+        org_id=staff.org_id,
+    )
+    return staff, card
+
+
+async def test_a_poll_card_is_posted_on_create_and_synced_on_vote_and_close(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff, card = await _staff_poll(session, make_org_house_flat_user, publisher)
+    voter = await add_user(session, "Сосед")
+    await add_resident(session, voter, staff.house_id, staff.flat_id)
+    service = polls_service(session, publisher)
+
+    counted = await service.vote_in_chat(card.poll.id, voter, card.options[0].id)
+    await publisher.flush()
+    await service.close(card.poll.id, staff.user_id)
+    await publisher.flush()
+
+    assert counted is True
+    poll = {"kind": ChatCardKind.POLL, "ref_id": card.poll.id}
+    assert _syncs(broker, ChatCardKind.POLL) == [
+        {**poll, "post": True},
+        {**poll, "post": False},
+        {**poll, "post": False},
+    ]
+    [voted] = await events_of(session, EventType.POLL_VOTED)
+    assert voted.payload["source"] == "chat"
+
+
+async def test_expired_polls_sync_their_cards(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    _, card = await _staff_poll(session, make_org_house_flat_user, publisher)
+    await publisher.flush()
+    broker.messages.clear()
+
+    closed = await reminders_service(session, publisher).close_expired_polls(
+        datetime.now(UTC) + timedelta(days=4),
+    )
+    await publisher.flush()
+
+    assert closed >= 1
+    assert {
+        "kind": ChatCardKind.POLL,
+        "ref_id": card.poll.id,
+        "post": False,
+    } in _syncs(broker, ChatCardKind.POLL)
+
+
+@pytest.mark.parametrize("is_multiple", [False, True])
+async def test_the_poll_card_counts_flats_and_area_and_closes_without_buttons(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    publisher: TaskPublisher,
+    is_multiple: bool,
+) -> None:
+    staff, card = await _staff_poll(
+        session,
+        make_org_house_flat_user,
+        publisher,
+        is_multiple=is_multiple,
+    )
+    flat = await HousesRepo(session).get_flat(staff.flat_id)
+    assert flat is not None
+    flat.area = 5000
+    second = Flat(house_id=staff.house_id, number="2", area=15000)
+    session.add(second)
+    await session.flush()
+    voter = await add_user(session, "Сосед")
+    await add_resident(session, voter, staff.house_id, staff.flat_id)
+    await polls_service(session).vote(card.poll.id, voter, [card.options[0].id])
+    cards = chat_cards_service(session)
+
+    view = await cards.render(ChatCardKind.POLL, card.poll.id)
+
+    assert view is not None
+    lines = view.text.split("\n")
+    assert lines[:3] == [
+        "🗳 Опрос УК: Ставим шлагбаум?",
+        "1. Да - 1 кв., 25% площади",
+        "2. Нет - 0 кв., 0% площади",
+    ]
+    assert lines[3].startswith("Проголосовало 1 из 2 квартиры, до ")
+    assert lines[-2:] == [texts.POLL_NOT_OSS, texts.POLL_HASHTAG]
+    assert len(view.votes) == (0 if is_multiple else 2)
+    assert view.app_path == (f"/meetings/{card.poll.id}" if is_multiple else None)
+
+    await polls_service(session).close(card.poll.id, staff.user_id)
+    closed = await cards.render(ChatCardKind.POLL, card.poll.id)
+
+    assert closed is not None
+    assert closed.text.startswith("🗳 Опрос УК завершен: Ставим шлагбаум?")
+    assert "до " not in closed.text.split("\n")[3]
+    assert (closed.votes, closed.app_path, closed.join) == ((), None, True)
+
+
+def test_a_long_option_is_cut_on_its_button() -> None:
+    label = texts.vote_button(2, "Очень длинный вариант ответа, который не влезет")
+
+    assert len(label) == texts.VOTE_OPTION_LIMIT
+    assert label.startswith("2. Очень")
+    assert label.endswith("…")

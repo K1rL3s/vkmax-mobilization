@@ -298,7 +298,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   A request card goes to the chat only when its author asks
   (`share_to_chat`, open request; grouped -> the group card; no chat -> the
   client's native share), then every status move edits it; once grouped it
-  says so and stays.
+  says so and stays. A poll card is posted on create, edited on every vote,
+  close and expiry, shows live counts by verified flats and area; a
+  single-answer poll votes by `VotePayload` buttons (chat router,
+  `PollsService.vote_in_chat`, `POLL_VOTED.source`), a multi-answer one opens
+  the app. The 48-hour chat reminder replies to the card.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap
   and after each failed chat send. `set_admin` records `CHAT_ADMIN_GRANTED`
   and queues the welcome only on `false -> true`; a failed send without rights

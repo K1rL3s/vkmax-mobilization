@@ -114,6 +114,7 @@ class NotificationsService:
         app_button: str | None = None,
         app_path: str | None = None,
         announcement_id: AnnouncementId | None = None,
+        reply_card: tuple[ChatCardKind, int] | None = None,
     ) -> None:
         if not chat_ids:
             return
@@ -124,6 +125,11 @@ class NotificationsService:
             app_button=app_button,
             app_path=app_path,
             announcement_id=announcement_id,
+            **(
+                {}
+                if reply_card is None
+                else {"card_kind": reply_card[0], "card_ref_id": reply_card[1]}
+            ),
         )
 
     def open_executor_card(

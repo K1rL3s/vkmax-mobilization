@@ -30,6 +30,7 @@ from maxo.types import (
     BotRemovedFromChat,
     BotStarted,
     BotStopped,
+    Callback,
     ClipboardButton,
     DialogMuted,
     DialogUnmuted,
@@ -37,6 +38,7 @@ from maxo.types import (
     LocationAttachment,
     Message,
     MessageBody,
+    MessageCallback,
     MessageCreated,
     MessageRemoved,
     NewMessageLink,
@@ -62,12 +64,12 @@ from taskiq import InMemoryBroker
 from tests.conftest import PROBE_ROUTERS, RecordingBroker
 
 from zheka.bot import BotSetup
-from zheka.bot.cards import app_payload
+from zheka.bot.cards import VotePayload, app_payload
 from zheka.bot.dialog_data import NewRequestData
 from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
-from zheka.bot.handlers.chats.router import UNPINNED
+from zheka.bot.handlers.chats.router import JOIN_TO_VOTE, UNPINNED, VOTE_UNWEIGHTED
 from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
 from zheka.bot.handlers.commands.deeplinks import (
     APP_BUTTON,
@@ -193,6 +195,8 @@ from zheka.core.ids import (
     MaxChatId,
     MaxUserId,
     OrgId,
+    PollId,
+    PollOptionId,
     RequestGroupId,
     RequestId,
     UserId,
@@ -214,6 +218,7 @@ from zheka.core.services.demo import (
     demo_flat_number,
 )
 from zheka.core.services.events import EventsService
+from zheka.core.services.polls import ALREADY_VOTED
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.reminders import DEMO_ADDRESS, DEMO_SERIAL
 from zheka.core.services.requests import (
@@ -228,6 +233,7 @@ from zheka.core.texts import (
     OPEN_REQUEST,
     REQUEST_STATUS_LABELS,
     VOTE,
+    VOTE_IN_APP,
 )
 from zheka.infra.database.models import (
     Announcement,
@@ -246,6 +252,7 @@ from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
@@ -1993,6 +2000,192 @@ async def test_a_reviewed_group_card_says_done_and_drops_the_buttons(
     assert edited["message_id"] == "c-1"
     assert edited["text"] == texts.group_card_done(RequestCategory.LEAK, 2)
     assert edited["attachments"] == []
+
+
+async def _polled_chat(
+    session: AsyncSession,
+    client: BotClient,
+    *,
+    is_multiple: bool = False,
+) -> tuple[MaxChatId, PollId, list[PollOptionId]]:
+    chat_id = await _bound_chat(session, client)
+    chat = await ChatsRepo(session).get(chat_id)
+    assert chat is not None
+    assert chat.house_id is not None
+    user = await _user(session, client)
+    flat = Flat(house_id=chat.house_id, number="7", area=5000)
+    session.add(flat)
+    await session.flush()
+    session.add(
+        Resident(
+            user_id=user.id,
+            house_id=chat.house_id,
+            flat_id=flat.id,
+            role=ResidentRole.OWNER,
+        ),
+    )
+    now = datetime.now(UTC)
+    repo = PollsRepo(session)
+    poll = await repo.create(
+        chat.house_id,
+        None,
+        user.id,
+        "staff",
+        "Ставим шлагбаум?",
+        None,
+        is_multiple,
+        now,
+        now + timedelta(days=3),
+        ["Да", "Нет"],
+    )
+    poll_id = poll.id
+    options = [option.id for option in await repo.list_options(poll_id)]
+    await session.commit()
+    return chat_id, poll_id, options
+
+
+class _CallbackAnswers:
+    def __init__(self) -> None:
+        self.notifications: list[str | None] = []
+
+    async def answer_on_callback(self, **kwargs: Any) -> SimpleQueryResult:
+        self.notifications.append(kwargs.get("notification"))
+        return SimpleQueryResult(success=True)
+
+
+@pytest.fixture
+def answers(fake_bot: FakeBot, monkeypatch: pytest.MonkeyPatch) -> _CallbackAnswers:
+    recorder = _CallbackAnswers()
+    monkeypatch.setattr(fake_bot, "answer_on_callback", recorder.answer_on_callback)
+    return recorder
+
+
+async def _vote_tap(
+    group: BotClient,
+    chat_id: MaxChatId,
+    poll_id: PollId,
+    option_id: PollOptionId,
+) -> None:
+    await _feed(
+        group,
+        MessageCallback(
+            timestamp=datetime.now(UTC),
+            callback=Callback(
+                callback_id=secrets.token_hex(4),
+                timestamp=datetime.now(UTC),
+                user=group.user,
+                payload=VotePayload(poll_id=poll_id, option_id=option_id).pack(),
+            ),
+            message=_chat_message(chat_id, "card-1", 1),
+        ),
+    )
+
+
+async def test_a_vote_tap_in_the_chat_votes_once_and_answers_with_a_toast(
+    client: BotClient,
+    bot_setup: BotSetup,
+    fake_bot: FakeBot,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    answers: _CallbackAnswers,
+) -> None:
+    chat_id, poll_id, options = await _polled_chat(bot_session, client)
+    group = _in_chat(bot_setup, fake_bot, chat_id, client.user.id)
+    stranger = _in_chat(bot_setup, fake_bot, chat_id, _max_id())
+    outsider_id = _max_id()
+    bot_session.add(User(max_user_id=outsider_id, name="Гость"))
+    await bot_session.commit()
+    outsider = _in_chat(bot_setup, fake_bot, chat_id, outsider_id)
+
+    await _vote_tap(stranger, chat_id, poll_id, options[0])
+    await _vote_tap(outsider, chat_id, poll_id, options[0])
+    await _vote_tap(group, chat_id, poll_id, options[0])
+    await _vote_tap(group, chat_id, poll_id, options[1])
+
+    assert answers.notifications == [
+        JOIN_TO_VOTE,
+        JOIN_TO_VOTE,
+        VOTE_UNWEIGHTED,
+        ALREADY_VOTED,
+    ]
+    user = await _user(bot_session, client)
+    stmt = select(events_table.c.payload).where(
+        events_table.c.type == EventType.POLL_VOTED,
+        events_table.c.user_id == user.id,
+    )
+    assert (await bot_session.execute(stmt)).scalars().all() == [
+        {
+            "poll_id": poll_id,
+            "source": "chat",
+        },
+    ]
+    assert {
+        "kind": "poll",
+        "ref_id": poll_id,
+        "post": False,
+    } in bot_broker.enqueued(TaskName.SYNC_CHAT_CARD)
+
+
+@pytest.mark.parametrize("is_multiple", [False, True])
+async def test_the_poll_card_votes_by_buttons_only_with_one_answer(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+    is_multiple: bool,
+) -> None:
+    chat_id, poll_id, options = await _polled_chat(
+        bot_session,
+        client,
+        is_multiple=is_multiple,
+    )
+
+    await _run(
+        task_broker,
+        sync_chat_card,
+        kind=ChatCardKind.POLL,
+        ref_id=poll_id,
+        post=True,
+    )
+
+    [sent] = pin_api.sent
+    assert sent["text"].startswith("🗳 Опрос УК: Ставим шлагбаум?\n1. Да - 0 кв., 0%")
+    assert "Голосуют собственники, это не ОСС" in sent["text"]
+    [attachment] = sent["attachments"]
+    rows = attachment.payload.buttons
+    if is_multiple:
+        assert [button.text for button in rows[0]] == [VOTE_IN_APP]
+    else:
+        assert [row[0].payload for row in rows[:2]] == [
+            VotePayload(poll_id=poll_id, option_id=option).pack() for option in options
+        ]
+    assert [button.text for button in rows[-1]] == [JOIN_HOUSE]
+    assert await _cards(bot_session, chat_id) == ["list-1"]
+
+
+async def test_a_chat_reminder_replies_to_the_poll_card(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, poll_id, _ = await _polled_chat(bot_session, client)
+    bot_session.add(
+        ChatCard(chat_id=chat_id, kind=ChatCardKind.POLL, ref_id=poll_id, mid="c-9"),
+    )
+    await bot_session.commit()
+
+    await _run(
+        task_broker,
+        broadcast_to_chats,
+        chat_ids=[chat_id],
+        text="🗳 Идет опрос",
+        card_kind=ChatCardKind.POLL,
+        card_ref_id=poll_id,
+    )
+
+    [sent] = pin_api.sent
+    assert sent["link"] == NewMessageLink(mid="c-9", type=MessageLinkType.REPLY)
 
 
 async def _listed_chat(

@@ -14,6 +14,7 @@ from zheka.core.deeplinks import (
 from zheka.core.enums import (
     SERVICE_LABELS,
     SERVICE_OF_METER,
+    ChatCardKind,
     EventType,
     MeterType,
     NotificationCategory,
@@ -189,6 +190,7 @@ class RemindersService:
                 texts.poll_chat_reminder(poll.title, ends_at),
                 app_button=texts.VOTE,
                 app_path=poll_app_path(poll.id),
+                reply_card=(ChatCardKind.POLL, poll.id),
             )
             reminded += 1
         logger.info("Напоминание об опросах: опросов %s", reminded)
@@ -196,8 +198,10 @@ class RemindersService:
 
     async def close_expired_polls(self, now: datetime) -> int:
         closed = await self._polls.close_expired(now)
-        logger.info("Закрыто опросов по сроку: %s", closed)
-        return closed
+        for poll_id in closed:
+            self._notifications.sync_chat_card(ChatCardKind.POLL, poll_id, post=False)
+        logger.info("Закрыто опросов по сроку: %s", len(closed))
+        return len(closed)
 
     async def warn_verification(self, now: datetime) -> int:
         meters = await self._meters.list_to_warn(

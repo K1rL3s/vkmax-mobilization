@@ -9,20 +9,29 @@ from maxo.routing.filters.command import CommandObject
 from maxo.types import (
     BotAddedToChat,
     BotRemovedFromChat,
+    MessageCallback,
     MessageCreated,
     MessageRemoved,
     UserAddedToChat,
 )
 
+from zheka.bot.cards import VotePayload, refused
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
-from zheka.core.ids import MaxChatId, MaxUserId
+from zheka.core.errors import EntityNotFound, ZhekaError
+from zheka.core.ids import MaxChatId, MaxUserId, PollId, PollOptionId
 from zheka.core.models import User
 from zheka.core.services.chats import ChatsService, MessageRef
+from zheka.core.services.polls import PollsService
 
 router = Router(name=__name__)
 
 UNPINNED = "🗑 Убрал из списка закрепленных"
+JOIN_TO_VOTE = "🏠 Сначала присоединитесь к дому: кнопка под опросом"
+VOTE_COUNTED = "✅ Голос учтен"
+VOTE_UNWEIGHTED = (
+    "✅ Голос учтен, в итоги по площади войдет после подтверждения квартиры"
+)
 
 
 @router.bot_added_to_chat()
@@ -120,4 +129,31 @@ async def repin_handler(
     await chats_service.repin(
         None if user is None else user.id,
         MaxChatId(update.message.recipient.unsafe_chat_id),
+    )
+
+
+@router.message_callback(VotePayload.filter(), IN_CHAT)
+async def vote_handler(
+    update: MessageCallback,
+    payload: VotePayload,
+    polls_service: FromDishka[PollsService],
+    user: User | None = None,
+) -> None:
+    if user is None:
+        await update.callback_answer(notification=JOIN_TO_VOTE)
+        return
+    try:
+        counted = await polls_service.vote_in_chat(
+            PollId(payload.poll_id),
+            user.id,
+            PollOptionId(payload.option_id),
+        )
+    except EntityNotFound:
+        await update.callback_answer(notification=JOIN_TO_VOTE)
+        return
+    except ZhekaError as error:
+        await refused(update, error)
+        return
+    await update.callback_answer(
+        notification=VOTE_COUNTED if counted else VOTE_UNWEIGHTED,
     )

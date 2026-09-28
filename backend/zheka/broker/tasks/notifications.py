@@ -9,10 +9,11 @@ from taskiq import async_shared_broker
 from zheka.bot.cards import app_link, open_app
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import recheck_chat_rights
-from zheka.core.enums import NotificationCategory
+from zheka.core.enums import ChatCardKind, NotificationCategory
 from zheka.core.ids import AnnouncementId, MaxChatId, UserId
 from zheka.core.services.chats import ChatsService
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
+from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
@@ -107,9 +108,12 @@ async def broadcast_to_chats(
     chats_service: FromDishka[ChatsService],
     users_repo: FromDishka[UsersRepo],
     announcements_repo: FromDishka[AnnouncementsRepo],
+    chats_repo: FromDishka[ChatsRepo],
     app_button: str | None = None,
     app_path: str | None = None,
     announcement_id: AnnouncementId | None = None,
+    card_kind: ChatCardKind | None = None,
+    card_ref_id: int | None = None,
 ) -> int:
     keyboard = (
         None
@@ -119,11 +123,17 @@ async def broadcast_to_chats(
     logger.info("Рассылка по чатам: чатов %s", len(chat_ids))
     sent = 0
     for chat_id in chat_ids:
+        card = (
+            None
+            if card_kind is None or card_ref_id is None
+            else await chats_repo.get_card(chat_id, card_kind, card_ref_id)
+        )
         result = await sender.send_message(
             text,
             chat_id=chat_id,
             notify=False,
             keyboard=keyboard,
+            reply_to=None if card is None else card.mid,
         )
         if result is None:
             await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
