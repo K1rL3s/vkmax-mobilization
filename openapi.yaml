@@ -11554,6 +11554,11 @@ components:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Documents
+        org_stats:
+          anyOf:
+          - $ref: '#/components/schemas/OrgPublicStats'
+          - type: 'null'
+          description: Показатели УК за 90 дней, нет при малом числе заявок
       type: object
       required:
       - id
@@ -12205,6 +12210,48 @@ components:
       - role
       - is_demo
       title: OrgMembership
+    OrgPublicStats:
+      properties:
+        closed:
+          type: integer
+          title: Closed
+          description: Заявок сдано на приемку, по всем домам УК
+        on_time:
+          type: integer
+          title: On Time
+          description: Из них сдано в нормативный срок
+        on_time_share:
+          type: integer
+          title: On Time Share
+          description: Доля сданных в срок в сотых долях процента, 50% это 5000
+        accept_time:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Accept Time
+          description: Среднее время до принятия заявки в минутах
+        accept_time_median:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Accept Time Median
+          description: Медиана времени до принятия заявки в минутах
+        rating:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rating
+          description: Средняя оценка жителей в сотых долях балла
+        ratings_count:
+          type: integer
+          title: Ratings Count
+      type: object
+      required:
+      - closed
+      - on_time
+      - on_time_share
+      - ratings_count
+      title: OrgPublicStats
     OrgRole:
       type: string
       enum:

@@ -33,9 +33,11 @@ from zheka.core.services.demo import (
 )
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
+from zheka.core.services.houses import PUBLIC_STATS_MIN_CLOSED, PUBLIC_STATS_PERIOD
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService, current_period
 from zheka.infra.database.models import Charge, User
+from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -481,3 +483,20 @@ async def test_the_emergency_phone_migration_numbers_the_seeded_demo_orgs(
         profile.inn: f"+7 (000) 000-01-{number:02d}"
         for number, profile in enumerate(PROFILES, start=1)
     }
+
+
+async def test_every_demo_organization_shows_its_own_stats(db: AsyncSession) -> None:
+    seen = set()
+    for profile in PROFILES:
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        stats = await AnalyticsRepo(db).public_stats(
+            org.id,
+            NOW - PUBLIC_STATS_PERIOD,
+            NOW,
+        )
+        assert stats.closed >= PUBLIC_STATS_MIN_CLOSED, profile.inn
+        assert None not in (stats.on_time_share, stats.accept_time, stats.rating)
+        seen.add((stats.on_time_share, stats.accept_time, stats.rating))
+
+    assert len(seen) == len(PROFILES)

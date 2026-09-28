@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from dishka import FromDishka
@@ -94,7 +95,11 @@ async def get_house_card(
     houses_service: FromDishka[HousesService],
     files_service: FromDishka[FilesService],
 ) -> HouseCard:
-    card = await houses_service.house_card(house_id, current_account.user_id)
+    card = await houses_service.house_card(
+        house_id,
+        current_account.user_id,
+        datetime.now(UTC),
+    )
     documents = [FileRef.signed(name, files_service) for name in card.house.documents]
     return HouseCard.of(card, documents)
 

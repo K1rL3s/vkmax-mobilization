@@ -1,6 +1,6 @@
 import secrets
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -38,6 +38,7 @@ from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService, ResidencyView
 from zheka.infra.database.models import Chat, Flat, House, Request
+from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -55,6 +56,7 @@ def _make_service(session: AsyncSession) -> HousesService:
         UsersRepo(session),
         FlatsRepo(session),
         EventsService(EventsRepo(session)),
+        AnalyticsRepo(session),
     )
 
 
@@ -159,7 +161,14 @@ async def test_demand_signal_counts_a_user_once(
 
     assert (first, second) == (1, 1)
     assert await _count(session, demand_signals_table.c.house_id, house.id) == 1
-    card = HouseCard.of(await service.house_card(fixture.house_id, fixture.user_id), [])
+    card = HouseCard.of(
+        await service.house_card(
+            fixture.house_id,
+            fixture.user_id,
+            datetime.now(UTC),
+        ),
+        [],
+    )
     assert (card.demand_count, card.demand_sent, card.org) == (1, True, None)
 
 
@@ -501,8 +510,14 @@ async def test_house_card_gives_the_binding_code_to_the_chairman_alone(
     await _make_chairman(session, own)
     service = _make_service(session)
 
-    card = HouseCard.of(await service.house_card(own.house_id, own.user_id), [])
-    seen = HouseCard.of(await service.house_card(own.house_id, stranger), [])
+    card = HouseCard.of(
+        await service.house_card(own.house_id, own.user_id, datetime.now(UTC)),
+        [],
+    )
+    seen = HouseCard.of(
+        await service.house_card(own.house_id, stranger, datetime.now(UTC)),
+        [],
+    )
 
     assert card.chat_binding_code == house.chat_binding_code
     assert card.lat == 55.751244
@@ -547,3 +562,119 @@ async def test_a_verified_tenant_cannot_relink_as_the_owner(
     again = await _link(session, fixture, fixture.flat_id, role=ResidentRole.TENANT)
     assert again.resident.role is ResidentRole.TENANT
     assert again.resident.can_see_charges is False
+
+
+async def _closed(
+    session: AsyncSession,
+    house_id: HouseId,
+    now: datetime,
+    *,
+    days_ago: int = 2,
+    late: bool = False,
+    accepted_after: int | None = None,
+    rating: int | None = None,
+) -> None:
+    created_at = now - timedelta(days=days_ago)
+    deadline_at = created_at + timedelta(days=1)
+    reviewed_at = deadline_at + timedelta(hours=1) if late else deadline_at
+    session.add(
+        Request(
+            house_id=house_id,
+            category=RequestCategory.OTHER,
+            description="Сделано",
+            status=RequestStatus.DONE,
+            channel=RequestChannel.MINIAPP,
+            created_at=created_at,
+            deadline_at=deadline_at,
+            accepted_at=(
+                None
+                if accepted_after is None
+                else created_at + timedelta(minutes=accepted_after)
+            ),
+            reviewed_at=reviewed_at,
+            done_at=reviewed_at,
+            rating=rating,
+        ),
+    )
+    await session.flush()
+
+
+async def test_the_house_card_shows_org_stats_from_ten_closed_requests(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user()
+    other_house = await _add_house(session, own.org_id)
+    foreign = await make_org_house_flat_user()
+    now = datetime.now(UTC)
+    for index, rating in enumerate((5, 4, 4, None, None, None)):
+        await _closed(
+            session,
+            own.house_id,
+            now,
+            late=index >= 4,
+            accepted_after=10,
+            rating=rating,
+        )
+    for rating in (3, None, None):
+        await _closed(session, other_house, now, accepted_after=40, rating=rating)
+    session.add(
+        Request(
+            house_id=own.house_id,
+            category=RequestCategory.OTHER,
+            description="В работе",
+            status=RequestStatus.ACCEPTED,
+            channel=RequestChannel.MINIAPP,
+            created_at=now - timedelta(days=1),
+            deadline_at=now + timedelta(days=1),
+            accepted_at=now - timedelta(days=1) + timedelta(minutes=70),
+        ),
+    )
+    await _closed(
+        session,
+        own.house_id,
+        now,
+        days_ago=91,
+        late=True,
+        accepted_after=1000,
+        rating=1,
+    )
+    for _ in range(3):
+        await _closed(session, foreign.house_id, now, late=True, rating=1)
+    service = _make_service(session)
+
+    nine = await service.house_card(own.house_id, own.user_id, now)
+    await _closed(session, other_house, now)
+    ten = await service.house_card(own.house_id, own.user_id, now)
+
+    assert nine.org_stats is None
+    stats = HouseCard.of(ten, []).org_stats
+    assert stats is not None
+    assert stats.model_dump() == {
+        "closed": 10,
+        "on_time": 8,
+        "on_time_share": 8000,
+        "accept_time": 25,
+        "accept_time_median": 10,
+        "rating": 400,
+        "ratings_count": 4,
+    }
+
+
+async def test_an_unregistered_org_shows_no_stats(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user(registered=False)
+    now = datetime.now(UTC)
+    for _ in range(10):
+        await _closed(session, fixture.house_id, now, rating=5)
+
+    card = await _make_service(session).house_card(
+        fixture.house_id,
+        fixture.user_id,
+        now,
+    )
+
+    assert card.org is not None
+    assert card.org_stats is None

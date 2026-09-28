@@ -500,7 +500,7 @@ async def test_an_empty_organization_is_explicitly_empty(session: AsyncSession) 
 
     by_category, by_week = dashboard.charts
     assert dashboard.is_empty is True
-    assert [tile.value for tile in dashboard.tiles] == [0, 0, 0, 0]
+    assert [tile.value for tile in dashboard.tiles] == [0, 0, 0, 0, 0]
     assert by_category.points == []
     assert [point.value for point in by_week.points] == [0] * 12
     assert (channels.is_empty, channels.total) == (True, 0)
@@ -886,3 +886,22 @@ async def test_a_period_ending_before_it_starts_is_refused(
             date(2031, 3, 1),
             NOW,
         )
+
+
+async def test_the_tiles_show_the_median_accept_time_beside_the_average(
+    session: AsyncSession,
+) -> None:
+    org_id, house_id = await _org(session)
+    for minutes in (10, 11, 60):
+        await _request(session, house_id, accepted_after=timedelta(minutes=minutes))
+    await _request(session, house_id)
+
+    dashboard = await _service(session).dashboard(org_id, house_id, None, None, NOW)
+
+    keys = [tile.key for tile in dashboard.tiles]
+    tiles = {tile.key: tile.value for tile in dashboard.tiles}
+    assert keys.index(AnalyticsMetric.ACCEPT_TIME_MEDIAN) == (
+        keys.index(AnalyticsMetric.ACCEPT_TIME) + 1
+    )
+    assert tiles[AnalyticsMetric.ACCEPT_TIME] == 27
+    assert tiles[AnalyticsMetric.ACCEPT_TIME_MEDIAN] == 11

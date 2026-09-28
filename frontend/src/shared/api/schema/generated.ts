@@ -3028,6 +3028,8 @@ export interface components {
       overhaul?: components["schemas"]["HouseOverhaul"] | null;
       /** Documents */
       documents: components["schemas"]["FileRef"][];
+      /** @description Показатели УК за 90 дней, нет при малом числе заявок */
+      org_stats?: components["schemas"]["OrgPublicStats"] | null;
     };
     /** HouseListItem */
     HouseListItem: {
@@ -3370,6 +3372,41 @@ export interface components {
       role: components["schemas"]["OrgRole"];
       /** Is Demo */
       is_demo: boolean;
+    };
+    /** OrgPublicStats */
+    OrgPublicStats: {
+      /**
+       * Closed
+       * @description Заявок сдано на приемку, по всем домам УК
+       */
+      closed: number;
+      /**
+       * On Time
+       * @description Из них сдано в нормативный срок
+       */
+      on_time: number;
+      /**
+       * On Time Share
+       * @description Доля сданных в срок в сотых долях процента, 50% это 5000
+       */
+      on_time_share: number;
+      /**
+       * Accept Time
+       * @description Среднее время до принятия заявки в минутах
+       */
+      accept_time?: number | null;
+      /**
+       * Accept Time Median
+       * @description Медиана времени до принятия заявки в минутах
+       */
+      accept_time_median?: number | null;
+      /**
+       * Rating
+       * @description Средняя оценка жителей в сотых долях балла
+       */
+      rating?: number | null;
+      /** Ratings Count */
+      ratings_count: number;
     };
     /**
      * OrgRole
