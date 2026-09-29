@@ -7,7 +7,7 @@
 ## Голосовая заявка
 
 Статус: реализовано, см.
-[features/23-voice-requests.md](features/23-voice-requests.md). В отличие
+[features/25-voice-requests.md](features/25-voice-requests.md). В отличие
 от описания ниже, бот сначала берет расшифровку MAX и отправляет запись в
 SpeechKit, только если расшифровки нет, а категорию житель выбирает кнопкой.
 
