@@ -5,17 +5,19 @@ import { emergencyContact } from "@/features/emergency";
 import { outageForCategory, outageTitle, useHouseCard } from "@/features/house";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
+import {
+  ATTACHMENT_LIMIT,
+  AttachmentPicker,
+} from "@/shared/ui/attachment-picker";
 import { Chevron } from "@/shared/ui/chevron";
 import { alertIcon, Icon } from "@/shared/ui/icon";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
-import { DESCRIPTION_LIMIT, useNewRequest } from "./model/use-new-request";
-import { ATTACHMENT_LIMIT } from "./model/use-attachments";
-import { CategoryChips } from "./ui/category-chips";
-import { CategoryInfo } from "./ui/category-info";
-import { AttachmentPicker } from "./ui/attachment-picker";
-import { SimilarPanel } from "./ui/similar-panel";
+import { CategoryChips } from "./category-chips";
+import { CategoryInfo } from "./category-info";
+import { SimilarPanel } from "./similar-panel";
+import { DESCRIPTION_LIMIT, useNewRequest } from "./use-new-request";
 
 import styles from "./new-request.module.css";
 

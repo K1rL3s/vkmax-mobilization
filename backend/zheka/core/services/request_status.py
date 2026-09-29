@@ -39,6 +39,4 @@ def transition_path(
     target: RequestStatus,
 ) -> tuple[RequestStatus, ...]:
     start, end = _CHAIN.index(current), _CHAIN.index(target)
-    if end < start:
-        raise InvalidState(BACKWARD)
     return _CHAIN[start + 1 : end + 1]

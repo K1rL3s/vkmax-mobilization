@@ -653,6 +653,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отменить свою заявку
+     * @description Только автор и только открытая заявка (новая, принятая или в работе): она закрывается с итогом resident_canceled, причина уходит в переписку, сотрудники УК и исполнитель получают сообщение. Заявка на приемке или закрытая - 409, причина other без комментария - 400, чужая - 404, тестовый токен - 403
+     */
+    post: operations["cancel_request"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/flats/{flat_id}/meters": {
     parameters: {
       query?: never;
@@ -2435,6 +2455,11 @@ export interface components {
        * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
        */
       can_demo_expire: boolean;
+      /**
+       * Rejection Needs Photo
+       * @description Вернуть работу с приемки можно только с фото или видео
+       */
+      rejection_needs_photo: boolean;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -2710,6 +2735,21 @@ export interface components {
       starts_at: string;
       /** Request Id */
       request_id?: number | null;
+    };
+    /**
+     * CancelReason
+     * @enum {string}
+     */
+    CancelReason:
+      "mistake" | "resolved" | "fixed_myself" | "duplicate" | "other";
+    /** CancelRequestRequest */
+    CancelRequestRequest: {
+      reason: components["schemas"]["CancelReason"];
+      /**
+       * Comment
+       * @description Пояснение жителя; обязательно для причины other
+       */
+      comment?: string | null;
     };
     /** CategoryExecutorItem */
     CategoryExecutorItem: {
@@ -4598,6 +4638,11 @@ export interface components {
        * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
        */
       can_demo_expire: boolean;
+      /**
+       * Rejection Needs Photo
+       * @description Вернуть работу с приемки можно только с фото или видео
+       */
+      rejection_needs_photo: boolean;
     };
     /**
      * RequestCategory
@@ -4647,7 +4692,10 @@ export interface components {
      * @enum {string}
      */
     RequestCompletionReason:
-      "resident_accepted" | "resident_rejected" | "auto_closed";
+      | "resident_accepted"
+      | "resident_rejected"
+      | "auto_closed"
+      | "resident_canceled";
     /** RequestExport */
     RequestExport: {
       request: components["schemas"]["RequestCard"];
@@ -8992,6 +9040,97 @@ export interface operations {
       cookie?: never;
     };
     requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  cancel_request: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CancelRequestRequest"];
+      };
+    };
     responses: {
       /** @description Successful Response */
       200: {

@@ -1,7 +1,7 @@
 import { Flex, Tappable, Typography } from "@maxhub/max-ui";
 import { generatePath, useNavigate } from "react-router-dom";
 
-import { STATUS_LABEL, STATUS_TONE } from "@/features/request";
+import { STATUS_TONE, statusLabel } from "@/features/request";
 import { cn } from "@/shared/lib/css";
 import { formatDayTime, plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
@@ -68,7 +68,7 @@ export const RequestRow = ({
             {title}
           </Typography.Text>
           <StatusPill tone={STATUS_TONE[request.status]}>
-            {STATUS_LABEL[request.status]}
+            {statusLabel(request, "staff")}
           </StatusPill>
         </Flex>
         {escalation && (

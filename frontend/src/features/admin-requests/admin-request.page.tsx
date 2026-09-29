@@ -11,8 +11,8 @@ import {
   isOnReview,
   RequestAttachments,
   RequestTimeline,
-  STATUS_LABEL,
   STATUS_TONE,
+  statusLabel,
 } from "@/features/request";
 import { isForbidden } from "@/shared/api/errors";
 import { formatDayTime, plural } from "@/shared/lib/format";
@@ -92,7 +92,7 @@ const AdminRequestPage = () => {
       </Flex>
 
       <Flex align="center" wrap="wrap" gap={8}>
-        <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
+        <StatusPill tone={tone}>{statusLabel(request, "staff")}</StatusPill>
         <StatusPill tone="neutral">{request.category_label}</StatusPill>
         {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
         {request.group_id != null && (

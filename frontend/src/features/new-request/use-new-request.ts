@@ -21,8 +21,7 @@ import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { haptic, useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { houseParams, useSession } from "@/shared/model/session";
-
-import { useAttachments } from "./use-attachments";
+import { useAttachments } from "@/shared/ui/attachment-picker";
 
 export const DESCRIPTION_LIMIT = 1000;
 

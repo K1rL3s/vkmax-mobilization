@@ -97,6 +97,9 @@ class ChatCardsService:
         if request.group_id is not None:
             text = texts.request_card_grouped(request.id, request.category)
             return ChatCardView(house_id=house.id, text=text)
+        if request.is_canceled:
+            text = texts.request_card_canceled(request.id)
+            return ChatCardView(house_id=house.id, text=text)
         if _reviewed(request.status):
             text = texts.request_card_done(request.id)
             return ChatCardView(house_id=house.id, text=text)
@@ -109,9 +112,15 @@ class ChatCardsService:
 
     async def _group(self, group_id: RequestGroupId) -> ChatCardView | None:
         group = await self._requests.get_group(group_id)
-        members = await self._requests.list_for_group(group_id)
-        if group is None or not members:
+        everyone = await self._requests.list_for_group(group_id)
+        if group is None or not everyone:
             return None
+        members = [member for member in everyone if not member.is_canceled]
+        if not members:
+            return ChatCardView(
+                house_id=group.house_id,
+                text=texts.group_card_canceled(group.category),
+            )
         flats = len(complaint_sources(members))
         status = min((member.status for member in members), key=STATUS_ORDER.index)
         if _reviewed(status):

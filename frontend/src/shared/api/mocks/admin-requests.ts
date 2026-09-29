@@ -121,6 +121,7 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     parent_request_id: null,
     auto_close_at: null,
     can_demo_expire: false,
+    rejection_needs_photo: true,
     ...fields,
   };
 };
@@ -358,11 +359,11 @@ export const adminRequestsConfigs = [
       return badRequest("Неизвестный статус");
     const targetIndex = statusOrder.indexOf(body.status);
     if (
-      members.some((member) => statusOrder.indexOf(member.status) > targetIndex)
+      members.every(
+        (member) => statusOrder.indexOf(member.status) >= targetIndex,
+      )
     )
-      return conflict("Статус заявки назад не двигается");
-    if (members.every((member) => member.status === body.status))
-      return conflict("Все заявки уже в этом статусе");
+      return conflict("Все заявки группы уже в этом статусе или дальше");
     if (
       body.status === "done" &&
       members.some(

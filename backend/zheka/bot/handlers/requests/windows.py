@@ -17,10 +17,12 @@ from zheka.bot.cards import BACK, EMERGENCY, TO_MENU
 from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.handlers.requests.handlers import (
     SENT_TEXT,
+    get_cancel,
     get_category,
     get_draft,
     get_sent,
     on_attachment,
+    on_cancel_reason,
     on_category,
     on_description,
     on_description_attachment,
@@ -53,6 +55,10 @@ CREATED_TEXT = (
     "✅ Заявка №{request_id} отправлена в УК\n"
     "{deadline}\n"
     "Сообщу, когда ее примут в работу"
+)
+CANCEL_TEXT = (
+    "↩️ Почему отменяете заявку №{request_id}?\n"
+    "Другую причину можно указать в приложении"
 )
 
 request_dialog = Dialog(
@@ -134,10 +140,31 @@ request_dialog = Dialog(
             payload=Format("{request_payload}"),
             when=F["request_payload"] & F["bot_username"],
         ),
+        SwitchTo(
+            Const("↩️ Отменить заявку"),
+            id="cancel_request",
+            state=NewRequest.cancel,
+            when=F["request_id"],
+        ),
         MessageInput(on_free_text),
         TO_MENU,
         state=NewRequest.sent,
         getter=get_sent,
+    ),
+    Window(
+        Format(CANCEL_TEXT),
+        Column(
+            Select(
+                Format("{item[label]}"),
+                id="cancel_reason",
+                item_id_getter=lambda reason: reason["id"],
+                items="reasons",
+                on_click=on_cancel_reason,
+            ),
+        ),
+        Row(SwitchTo(BACK, id="cancel_back", state=NewRequest.sent), TO_MENU),
+        state=NewRequest.cancel,
+        getter=get_cancel,
     ),
     on_start=on_start,
 )

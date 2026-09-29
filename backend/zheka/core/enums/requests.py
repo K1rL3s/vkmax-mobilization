@@ -21,6 +21,7 @@ class RequestCompletionReason(StrEnum):
     RESIDENT_ACCEPTED = "resident_accepted"
     RESIDENT_REJECTED = "resident_rejected"
     AUTO_CLOSED = "auto_closed"
+    RESIDENT_CANCELED = "resident_canceled"
 
 
 class RequestActorRole(StrEnum):
@@ -75,6 +76,7 @@ class CategoryRule(ZhekaType):
     fix_working_days: int | None = None
     react_minutes: int | None = None
     basis: str | None = None
+    rejection_needs_photo: bool = True
 
     @property
     def caption(self) -> str:
@@ -172,6 +174,7 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         zone=ResponsibilityZone.MANAGEMENT,
         fix_working_days=10,
         basis="ПП РФ № 354, п. 31 «е(2)»",
+        rejection_needs_photo=False,
     ),
     RequestCategory.CHARGE_DISPUTE: CategoryRule(
         label="Спор по начислению",
@@ -182,6 +185,7 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
             "ПП РФ № 416, п. 36; проверка начисления - при обращении "
             "или по договоренности до 1 месяца, ПП РФ № 354, п. 31 «д»"
         ),
+        rejection_needs_photo=False,
     ),
     RequestCategory.OTHER: CategoryRule(
         label="Другое",
@@ -201,3 +205,20 @@ def _amount(count: int, forms: tuple[str, str, str]) -> str:
     else:
         form = forms[2]
     return f"{count} {form}"
+
+
+class CancelReason(StrEnum):
+    MISTAKE = "mistake"
+    RESOLVED = "resolved"
+    FIXED_MYSELF = "fixed_myself"
+    DUPLICATE = "duplicate"
+    OTHER = "other"
+
+
+CANCEL_REASONS: Mapping[CancelReason, str] = {
+    CancelReason.MISTAKE: "Подана по ошибке",
+    CancelReason.RESOLVED: "Проблема решилась сама",
+    CancelReason.FIXED_MYSELF: "Починили сами или вызвали мастера",
+    CancelReason.DUPLICATE: "Уже есть другая заявка",
+    CancelReason.OTHER: "Другое",
+}

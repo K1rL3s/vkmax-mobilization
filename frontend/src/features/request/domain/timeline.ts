@@ -65,11 +65,13 @@ const COMPLETION_HINT: Record<
     resident_accepted: " · вы приняли работу",
     resident_rejected: " · вы не приняли работу",
     auto_closed: " · закрыта автоматически",
+    resident_canceled: " · вы отменили заявку",
   },
   staff: {
     resident_accepted: " · житель принял работу",
     resident_rejected: " · житель не принял работу",
     auto_closed: " · закрыта автоматически",
+    resident_canceled: " · житель отменил заявку",
   },
 };
 
@@ -109,9 +111,11 @@ export const buildTimeline = (
   );
   const current = ORDER.indexOf(request.status);
   const finished = isFinished(request.status);
+  const canceled = request.completion_reason === "resident_canceled";
 
-  return ORDER.map((status, index) => {
+  return ORDER.flatMap((status, index) => {
     const at = happened.get(status);
+    if (canceled && !at) return [];
     const closedBy =
       status === "done" && request.completion_reason
         ? COMPLETION_HINT[audience][request.completion_reason]
@@ -119,7 +123,7 @@ export const buildTimeline = (
 
     return {
       status,
-      title: STEP_TITLE[status],
+      title: canceled && status === "done" ? "Отменена" : STEP_TITLE[status],
       hint:
         index > current
           ? futureHint(status, request, audience)

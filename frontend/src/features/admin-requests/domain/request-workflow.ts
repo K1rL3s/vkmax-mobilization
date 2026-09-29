@@ -49,16 +49,15 @@ export const statusChoices = (target: StatusTarget): RequestStatus[] => {
   if (status === "closed" || requests.length === 0) return [];
 
   return statusOrder.filter((next, index) => {
-    const wouldMoveBackwards = requests.some(
-      (request) => statusOrder.indexOf(request.status) > index,
+    const hasChanges = requests.some(
+      (request) => statusOrder.indexOf(request.status) < index,
     );
-    const hasChanges = requests.some((request) => request.status !== next);
     const requiresResidentReview =
       next === "done" &&
       requests.some(
         (request) => request.status !== "done" && request.author_name != null,
       );
-    return !wouldMoveBackwards && hasChanges && !requiresResidentReview;
+    return hasChanges && !requiresResidentReview;
   });
 };
 

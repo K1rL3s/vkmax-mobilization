@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 
 const { checkVideo } = await import(
-  new URL("../src/features/new-request/model/check-video.ts", import.meta.url)
+  new URL("../src/shared/ui/attachment-picker/check-video.ts", import.meta.url)
     .href
 );
 

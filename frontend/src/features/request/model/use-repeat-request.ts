@@ -33,7 +33,7 @@ export const useRepeatRequest = () => {
     isPending: repeat.isPending,
     isSuccess: repeat.isSuccess,
     error: repeat.error,
-    send: (requestId: number, description: string) =>
+    send: (requestId: number, description: string, photos: string[] = []) =>
       repeat.mutate({
         params: {
           header: {
@@ -42,7 +42,7 @@ export const useRepeatRequest = () => {
           },
           path: { request_id: requestId },
         },
-        body: { description },
+        body: { description, photos },
       }),
   };
 };

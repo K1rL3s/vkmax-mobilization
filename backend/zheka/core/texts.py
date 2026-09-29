@@ -5,7 +5,9 @@ from math import ceil
 
 from zheka.base import ZhekaType
 from zheka.core.enums import (
+    CANCEL_REASONS,
     CATEGORY_RULES,
+    CancelReason,
     PollAuthor,
     RequestCategory,
     RequestStatus,
@@ -513,3 +515,29 @@ def _quoted(text: str) -> str:
     if len(line) <= DIGEST_QUOTE_LIMIT:
         return escape(line)
     return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"
+
+
+def cancel_note(reason: CancelReason, comment: str) -> str:
+    parts = [CANCEL_REASONS[reason].lower()] if reason is not CancelReason.OTHER else []
+    if comment:
+        parts.append(comment)
+    return f"↩️ Отменена: {'. '.join(parts)}"
+
+
+def request_canceled(request: Request, reason: CancelReason, comment: str) -> str:
+    head = (
+        f"↩️ Житель отменил заявку {_request(request.id, request.category)}: "
+        f"{CANCEL_REASONS[reason].lower()}"
+    )
+    if not comment:
+        return head
+    head = f"{head}\n💬 "
+    return f"{head}{_fitted(comment, head)}"
+
+
+def request_card_canceled(request_id: RequestId) -> str:
+    return f"↩️ Заявка №{request_id} отменена автором"
+
+
+def group_card_canceled(category: RequestCategory) -> str:
+    return f"↩️ {CATEGORY_RULES[category].label}: жители отменили заявки"

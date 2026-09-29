@@ -17,4 +17,4 @@ export type ResponsibilityZone = components["schemas"]["ResponsibilityZone"];
 
 export type RequestCategoryItem = components["schemas"]["RequestCategoryItem"];
 
-export type RequestMessage = components["schemas"]["RequestMessageItem"];
+export type CancelReason = components["schemas"]["CancelReason"];

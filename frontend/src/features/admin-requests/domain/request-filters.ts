@@ -14,7 +14,7 @@ export const FILTERS = [
   { id: "new", label: "Новые" },
   { id: "in_progress", label: "В работе" },
   { id: "on_review", label: "На приёмке" },
-  { id: "done", label: "Выполнены" },
+  { id: "done", label: "Закрытые" },
 ] as const;
 
 export type FilterId = (typeof FILTERS)[number]["id"];

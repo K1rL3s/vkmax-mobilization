@@ -5,6 +5,8 @@ from zheka.base import ZhekaType
 from zheka.core import texts
 from zheka.core.deeplinks import admin_request_app_path, request_app_path
 from zheka.core.enums import (
+    CATEGORY_RULES,
+    CancelReason,
     ChatCardKind,
     EventType,
     NotificationCategory,
@@ -81,6 +83,9 @@ SHARE_FINISHED = "Заявку на приемке или закрытую со�
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
+CANCEL_TOO_LATE = "Отменить можно, пока работу не сдали на приемку"
+CANCEL_COMMENT_REQUIRED = "Расскажите, почему отменяете заявку"
+REJECTION_PHOTO_REQUIRED = "Приложите фото: так УК увидит, что не так"
 
 
 class RequestDraft(ZhekaType):
@@ -252,6 +257,12 @@ class RequestsService:
                 EMPTY_DESCRIPTION,
             )
         checked = self._checked_attachments(attachments)
+        if (
+            rejected_on_review
+            and not checked
+            and CATEGORY_RULES[parent.category].rejection_needs_photo
+        ):
+            raise InvalidRequest(REJECTION_PHOTO_REQUIRED)
         if rejected_on_review:
             await self._complete_review(
                 parent,
@@ -375,13 +386,7 @@ class RequestsService:
             **{"from": RequestStatus.ON_REVIEW.value, "to": RequestStatus.DONE.value},
             by_role=by_role.value,
         )
-        self._notifications.sync_chat_card(ChatCardKind.REQUEST, request.id, post=False)
-        if request.group_id is not None:
-            self._notifications.sync_chat_card(
-                ChatCardKind.GROUP,
-                request.group_id,
-                post=False,
-            )
+        self._sync_cards(request)
         if auto:
             await self._events.record(
                 EventType.REQUEST_AUTO_CLOSED,
@@ -547,12 +552,13 @@ class RequestsService:
         user_id: UserId,
         request_id: RequestId,
         comment: str,
+        photos: Sequence[str],
         channel: RequestChannel,
     ) -> RequestCardData:
         parent = await self._own_request(user_id, request_id)
         if parent.status is not RequestStatus.ON_REVIEW:
             raise InvalidState(REJECT_NOT_ON_REVIEW)
-        return await self.repeat(user_id, request_id, comment, [], channel)
+        return await self.repeat(user_id, request_id, comment, photos, channel)
 
     async def share_to_chat(
         self,
@@ -728,6 +734,77 @@ class RequestsService:
             texts.request_escalated(request, house, now),
         )
         return await self._built_card(request, house)
+
+    async def cancel(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        reason: CancelReason,
+        comment: str | None,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._active_resident(user_id, request.house_id)
+        await self._requests.lock(request)
+        current = request.status
+        if current not in OPEN_STATUSES:
+            raise InvalidState(CANCEL_TOO_LATE)
+        note = (comment or "").strip()
+        if reason is CancelReason.OTHER and not note:
+            raise InvalidRequest(CANCEL_COMMENT_REQUIRED)
+
+        at = datetime.now(UTC)
+        role = RequestActorRole.RESIDENT.value
+        await self._requests.set_status(
+            request,
+            RequestStatus.DONE,
+            at,
+            completion_reason=RequestCompletionReason.RESIDENT_CANCELED,
+        )
+        await self._requests.add_log(
+            request.id,
+            current,
+            RequestStatus.DONE,
+            user_id,
+            role,
+            at,
+        )
+        await self._requests.add_message(
+            request.id,
+            user_id,
+            role,
+            texts.cancel_note(reason, note),
+        )
+        await self._events.record(
+            EventType.REQUEST_STATUS_CHANGED,
+            user_id=user_id,
+            request_id=request.id,
+            **{"from": current.value, "to": RequestStatus.DONE.value},
+            by_role=role,
+        )
+        await self._events.record(
+            EventType.REQUEST_CANCELED,
+            user_id=user_id,
+            request_id=request.id,
+            reason=reason.value,
+            status=current.value,
+        )
+        house = await self._get_house(request.house_id)
+        await self._notify_crew(
+            request,
+            house,
+            texts.request_canceled(request, reason, note),
+        )
+        self._sync_cards(request)
+        return await self._built_card(request, house)
+
+    def _sync_cards(self, request: Request) -> None:
+        self._notifications.sync_chat_card(ChatCardKind.REQUEST, request.id, post=False)
+        if request.group_id is not None:
+            self._notifications.sync_chat_card(
+                ChatCardKind.GROUP,
+                request.group_id,
+                post=False,
+            )
 
 
 async def build_rows(

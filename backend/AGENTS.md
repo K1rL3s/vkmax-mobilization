@@ -62,7 +62,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `MINIAPP_OPEN`, `ANNOUNCEMENT_CLICK` to `/api/events` (`TrackEventRequest`).
 - Repos: every statement is a named `stmt`, executed on the next line; no
   `session.get(Model, id)`.
-- Alembic: English messages and names, a new revision per schema change.
+- Alembic: English messages and names, a new revision per schema change. A
+  Postgres enum value is `ALTER TYPE ... ADD VALUE` (allowed in the migration
+  transaction on PG 16, unusable until commit); its downgrade recreates the
+  type without it.
 - Fractions are scaled ints with one explicit rounding, never
   `Decimal`/`float`: kopecks; tariff 1/10000 rouble per unit (both
   `BigInteger`); area 1/100 m2; volume, readings 1/1000 m3 or kWh; percent
@@ -83,8 +86,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `API_CHECKER_MAX_USER_ID` (below every seeded id); else `WebAppData` or 401.
   `/demo/activate` gives it only EMPLOYEE of `API_CHECKER_DEMO_NUMBER`, else
   403: the token is public and the jury sits in org 1. Its own requests stop
-  at `ACCEPTED` (`change_request_status`): `DATA-API.yaml` `staff_status`
-  moves the test request there and fails 409 once it is further. Demo org
+  at `ACCEPTED` (`change_request_status`) and it cancels none
+  (`cancel_request`): `DATA-API.yaml` `staff_status` moves the test request
+  there and fails 409 once it is further. Demo org
   `API_CHECKER_DEMO_NUMBER` is the token's alone (`DemoService._org` refuses
   anyone else) and the token activates no org invite: nobody can block its
   resident, move its test request or give it a second membership (staff
@@ -304,6 +308,22 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `list_for_org`; a finished one drops back. Grouped, any member's active
   escalation lifts the group and `AdminRequestRow.escalated_at` carries the
   earliest one.
+- `RequestsService.cancel`: the author of an open request (`OPEN_STATUSES`),
+  with a `CancelReason`; `other` also needs a comment. A cancel is a
+  completion reason, not a status: `DONE` + `resident_canceled`, no
+  `reviewed_at`, so every "not `DONE` = open" query holds as is. What counts
+  `DONE` as work done skips it (`_WORKED` in `repos/analytics.py`: auto-closed
+  share, "closed" of an executor and of the digest); a new metric over `DONE`
+  must too. The reason is the author's message in the conversation, staff and
+  the executor hear via `_notify_crew`; the request stays in its group, whose
+  card counts flats and status without canceled members and whose cabinet
+  row (`list_for_org`, `grouped`) is its first member not canceled.
+- A rejection on review (`repeat` from `ON_REVIEW`, `reject`) needs a comment
+  and an attachment unless `CategoryRule.rejection_needs_photo` is off (meter
+  error, charge dispute); `RequestCard` carries the flag. The bot's review
+  dialog collects the text, then photos, and `reject_bot_request` downloads
+  them and rejects; its outcome, a refusal of a stale draft included, reaches
+  the author as a notification.
 - A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,
@@ -344,8 +364,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   one only with `post=True`; a failed send or edit rechecks rights.
   `TaskPublisher` drops an exact duplicate of a `RENDERED_FROM_DB` task within
   a transaction, so a group status change queues one sync. A group card is
-  posted on forming and every join, edited by `_move` and `_complete_review`
-  of its members; no flats, names or descriptions in it. `bot_added` and
+  posted on forming and every join, edited by `_move`, `_complete_review`
+  and `cancel` of its members; no flats, names or descriptions in it. `bot_added` and
   deleting the card message forget it. «✋ У меня тоже» is a startapp
   `house_<id>_<category>`. A request card goes to the chat only when its
   author asks (`share_to_chat`, only before `ON_REVIEW`, so a new card never

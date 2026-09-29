@@ -37,6 +37,7 @@ from zheka.broker.task_names import TaskName
 from zheka.core import texts
 from zheka.core.enums import (
     CATEGORY_RULES,
+    CancelReason,
     EventType,
     OrgRole,
     RequestActorRole,
@@ -55,10 +56,14 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import RequestId, ResidentId, UserId
-from zheka.core.services.admin_requests import RESIDENT_BLOCKED, PhoneRequestDraft
+from zheka.core.services.admin_requests import (
+    GROUP_ALREADY_THERE,
+    RESIDENT_BLOCKED,
+    PhoneRequestDraft,
+)
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestDraft
-from zheka.infra.database.models import Flat
+from zheka.infra.database.models import Flat, Request
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -497,7 +502,7 @@ async def test_group_status_carries_a_late_joiner_through_two_steps(
     ]
 
 
-async def test_group_status_refuses_a_member_ahead_of_the_target(
+async def test_group_status_skips_a_member_ahead_of_the_target(
     session: AsyncSession,
     own: OrgHouseFlatUser,
 ) -> None:
@@ -508,7 +513,25 @@ async def test_group_status_refuses_a_member_ahead_of_the_target(
     for target in (RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS):
         await service.change_status(own.org_id, ahead, target, None, staff)
 
-    with pytest.raises(InvalidState):
+    await service.change_group_status(
+        own.org_id,
+        group_id,
+        RequestStatus.ACCEPTED,
+        None,
+        staff,
+    )
+
+    assert await _logs(session, ahead) == [
+        RequestStatus.NEW,
+        RequestStatus.ACCEPTED,
+        RequestStatus.IN_PROGRESS,
+    ]
+    for member in members[1:]:
+        assert await _logs(session, member.id) == [
+            RequestStatus.NEW,
+            RequestStatus.ACCEPTED,
+        ]
+    with pytest.raises(InvalidState, match=GROUP_ALREADY_THERE):
         await service.change_group_status(
             own.org_id,
             group_id,
@@ -516,9 +539,6 @@ async def test_group_status_refuses_a_member_ahead_of_the_target(
             None,
             staff,
         )
-
-    for member in members[1:]:
-        assert await _logs(session, member.id) == [RequestStatus.NEW]
 
 
 async def _assigned(
@@ -1032,6 +1052,7 @@ async def test_repeat_and_phone_requests_go_to_the_category_executor(
         own.user_id,
         parent_id,
         "Снова течет",
+        [photo_name()],
         RequestChannel.MINIAPP,
     )
 
@@ -1163,3 +1184,37 @@ def test_a_quoted_free_text_is_cut_to_fit_a_max_message(
     assert "&lt;&amp;&gt;😀" in text
     assert "😀…" in text
     assert "…" not in build("Уехал на другой вызов")
+
+
+async def test_a_group_stays_in_the_inbox_by_a_member_who_did_not_cancel(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    members, _ = await _group_of_three(session, own)
+    residents = requests_service(session)
+    service = admin_requests_service(session)
+    grouped = RequestFilters(grouped=True)
+
+    async def cancel(member: Request) -> None:
+        assert member.author_user_id is not None
+        await residents.cancel(
+            member.author_user_id,
+            member.id,
+            CancelReason.MISTAKE,
+            None,
+        )
+
+    await cancel(members[0])
+    rows, total = await service.inbox(own.org_id, grouped, 20, 0)
+
+    assert total == 1
+    assert [(row.request.id, row.request.status) for row in rows] == [
+        (members[1].id, RequestStatus.NEW),
+    ]
+
+    for member in members[1:]:
+        await cancel(member)
+    rows, total = await service.inbox(own.org_id, grouped, 20, 0)
+
+    assert total == 1
+    assert [row.request.id for row in rows] == [members[0].id]

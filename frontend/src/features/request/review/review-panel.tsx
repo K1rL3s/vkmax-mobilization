@@ -1,6 +1,7 @@
 import { Button, Flex, Textarea, Typography } from "@maxhub/max-ui";
 
 import { duration, formatDayTime } from "@/shared/lib/format";
+import { AttachmentPicker } from "@/shared/ui/attachment-picker";
 import { autoClose } from "../domain/timeline";
 import type { RequestCard } from "../domain/types";
 
@@ -10,7 +11,7 @@ import { COMMENT_LIMIT, useReview } from "./use-review";
 import styles from "./review-panel.module.css";
 
 export const ReviewPanel = ({ request }: { request: RequestCard }) => {
-  const form = useReview(request.id);
+  const form = useReview(request);
   const closing = autoClose(request);
 
   return (
@@ -62,6 +63,26 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
           color="secondary"
         >
           {form.comment.length} / {COMMENT_LIMIT}
+        </Typography.Text>
+      </Flex>
+
+      <Flex align="stretch" direction="column" gapY={8}>
+        <AttachmentPicker
+          attachments={form.attachments.attachments}
+          isFull={form.attachments.isFull}
+          isUploading={form.attachments.isUploading}
+          onAdd={form.attachments.add}
+          onRemove={form.attachments.remove}
+        />
+        <Typography.Text
+          variant="description"
+          color="secondary"
+          className={form.attachments.error ? styles.Failed : undefined}
+        >
+          {form.attachments.error ??
+            (request.rejection_needs_photo
+              ? "Приложите фото того, что не так"
+              : "Приложите фото, если есть")}
         </Typography.Text>
       </Flex>
 

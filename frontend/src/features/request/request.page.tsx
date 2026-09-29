@@ -16,12 +16,14 @@ import {
   currentActor,
   isFinished,
   isOnReview,
-  STATUS_LABEL,
   STATUS_TONE,
+  statusLabel,
 } from "./domain/status";
 import { buildTimeline } from "./domain/timeline";
 import { useRequest } from "./model/use-request";
 import { ReviewPanel } from "./review";
+import { Answers } from "./ui/answers";
+import { CancelPanel } from "./ui/cancel-panel";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
 import { LetterPanel } from "./ui/letter-panel";
@@ -95,7 +97,7 @@ const RequestPage = () => {
       </Flex>
 
       <Flex align="center" gap={8}>
-        <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
+        <StatusPill tone={tone}>{statusLabel(request)}</StatusPill>
         {request.group_size > 1 && (
           <StatusPill tone="neutral">
             {request.group_size}{" "}
@@ -175,7 +177,7 @@ const RequestPage = () => {
         <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
-              <h2>Ответы УК</h2>
+              <h2>Переписка</h2>
             </Typography.Text>
             <MessageThread messages={request.messages} />
           </section>
@@ -188,6 +190,8 @@ const RequestPage = () => {
           attachments={request.photos}
         />
       )}
+
+      {isRunning && <CancelPanel request={request} />}
     </Panel>
   );
 };

@@ -3557,6 +3557,85 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/cancel:
+    post:
+      tags:
+      - Заявки
+      summary: Отменить свою заявку
+      description: 'Только автор и только открытая заявка (новая, принятая или в работе): она закрывается с итогом resident_canceled, причина уходит в переписку, сотрудники УК и исполнитель получают сообщение. Заявка на приемке или закрытая - 409, причина other без комментария - 400, чужая - 404, тестовый токен - 403'
+      operationId: cancel_request
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelRequestRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/flats/{flat_id}/meters:
     get:
       tags:
@@ -11537,6 +11616,10 @@ components:
           type: boolean
           title: Can Demo Expire
           description: Автор заявки в демо-УК может перенести ее срок на текущий момент
+        rejection_needs_photo:
+          type: boolean
+          title: Rejection Needs Photo
+          description: Вернуть работу с приемки можно только с фото или видео
         is_staff_author:
           type: boolean
           title: Is Staff Author
@@ -11587,6 +11670,7 @@ components:
       - can_review
       - can_rate
       - can_demo_expire
+      - rejection_needs_photo
       - is_staff_author
       title: AdminRequestCard
     AdminRequestListItem:
@@ -12038,6 +12122,30 @@ components:
       required:
       - starts_at
       title: BookAppointmentRequest
+    CancelReason:
+      type: string
+      enum:
+      - mistake
+      - resolved
+      - fixed_myself
+      - duplicate
+      - other
+      title: CancelReason
+    CancelRequestRequest:
+      properties:
+        reason:
+          $ref: '#/components/schemas/CancelReason'
+        comment:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Comment
+          description: Пояснение жителя; обязательно для причины other
+      type: object
+      required:
+      - reason
+      title: CancelRequestRequest
     CategoryExecutorItem:
       properties:
         category:
@@ -15212,6 +15320,10 @@ components:
           type: boolean
           title: Can Demo Expire
           description: Автор заявки в демо-УК может перенести ее срок на текущий момент
+        rejection_needs_photo:
+          type: boolean
+          title: Rejection Needs Photo
+          description: Вернуть работу с приемки можно только с фото или видео
       type: object
       required:
       - id
@@ -15234,6 +15346,7 @@ components:
       - can_review
       - can_rate
       - can_demo_expire
+      - rejection_needs_photo
       title: RequestCard
     RequestCategory:
       type: string
@@ -15296,6 +15409,7 @@ components:
       - resident_accepted
       - resident_rejected
       - auto_closed
+      - resident_canceled
       title: RequestCompletionReason
     RequestExport:
       properties:

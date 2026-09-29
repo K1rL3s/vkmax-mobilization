@@ -171,6 +171,13 @@ export const requestsConfigs = [
         return badRequest("Опишите, что не так с работой");
       }
 
+      if (
+        !body.photos?.length &&
+        !["meter_error", "charge_dispute"].includes(item.category)
+      ) {
+        return badRequest("Приложите фото: так УК увидит, что не так");
+      }
+
       item.status = "done";
       item.completion_reason = "resident_rejected";
     }
@@ -205,6 +212,27 @@ export const requestsConfigs = [
     }
 
     item.escalated_at = new Date().toISOString();
+
+    return ok(requestCard(item));
+  }),
+  endpoint("post", "/requests/:request_id/cancel", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
+
+    if (!["new", "accepted", "in_progress"].includes(item.status)) {
+      return conflict("Отменить можно, пока работу не сдали на приемку");
+    }
+
+    const body = request.body as Schemas["CancelRequestRequest"];
+    if (body.reason === "other" && !body.comment?.trim()) {
+      return badRequest("Расскажите, почему отменяете заявку");
+    }
+
+    item.status = "done";
+    item.completion_reason = "resident_canceled";
 
     return ok(requestCard(item));
   }),

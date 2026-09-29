@@ -66,7 +66,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 EMPTY_REPLY = "Напишите ответ жителю"
-GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе"
+GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе или дальше"
 NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
 NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнитель"
 RESULT_PHOTO_REQUIRED = "Пришлите фото результата"

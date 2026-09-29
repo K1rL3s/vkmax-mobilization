@@ -5,8 +5,8 @@ import {
   CATEGORY_ICON,
   deadlineLeft,
   isOnReview,
-  STATUS_LABEL,
   STATUS_TONE,
+  statusLabel,
   type RequestCompletionReason,
   type RequestListItem,
 } from "@/features/request";
@@ -27,6 +27,7 @@ const CLOSED_NOTE: Record<RequestCompletionReason, Note> = {
   resident_accepted: { text: "Оцените работу", tone: "action" },
   resident_rejected: { text: "Вы не приняли работу", tone: "muted" },
   auto_closed: { text: "Закрыта автоматически", tone: "muted" },
+  resident_canceled: { text: "Вы отменили заявку", tone: "muted" },
 };
 
 const note = (request: RequestListItem): Note | null => {
@@ -79,7 +80,7 @@ export const RequestRow = ({ request }: { request: RequestListItem }) => {
           >
             №{request.id} · {formatDay(request.created_at)}
           </Typography.Text>
-          <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
+          <StatusPill tone={tone}>{statusLabel(request)}</StatusPill>
         </Flex>
 
         <Typography.Text

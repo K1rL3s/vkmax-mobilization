@@ -16,6 +16,7 @@ export {
   isOnReview,
   STATUS_LABEL,
   STATUS_TONE,
+  statusLabel,
 } from "./domain/status";
 export { useRequestCategories } from "./model/use-request-categories";
 export type {

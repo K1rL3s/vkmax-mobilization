@@ -47,6 +47,10 @@ from zheka.infra.database.tables.users import users_table
 _R = requests_table.c
 _REVIEWED = _R.reviewed_at.is_not(None)
 _ON_TIME = _R.reviewed_at <= _R.deadline_at
+_WORKED = and_(
+    _R.status == RequestStatus.DONE,
+    _R.completion_reason.is_distinct_from(RequestCompletionReason.RESIDENT_CANCELED),
+)
 
 
 def share(part: Any, whole: Any) -> ColumnElement[int]:
@@ -84,7 +88,7 @@ _METRICS: dict[AnalyticsMetric, Callable[[datetime], ColumnElement[int]]] = {
         func.count().filter(
             _R.completion_reason == RequestCompletionReason.AUTO_CLOSED,
         ),
-        func.count().filter(_R.status == RequestStatus.DONE),
+        func.count().filter(_WORKED),
     ),
     AnalyticsMetric.DIGITAL_SHARE: lambda _: share(
         func.count().filter(_R.channel != RequestChannel.PHONE),
@@ -110,7 +114,7 @@ def _created_in(since: datetime, until: datetime) -> ColumnElement[bool]:
 
 def _closed_in(since: datetime, until: datetime) -> ColumnElement[bool]:
     return and_(
-        _R.status == RequestStatus.DONE,
+        _WORKED,
         _R.done_at >= since,
         _R.done_at < until,
     )

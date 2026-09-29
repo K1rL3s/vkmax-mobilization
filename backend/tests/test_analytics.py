@@ -905,3 +905,28 @@ async def test_the_tiles_show_the_median_accept_time_beside_the_average(
     )
     assert tiles[AnalyticsMetric.ACCEPT_TIME] == 27
     assert tiles[AnalyticsMetric.ACCEPT_TIME_MEDIAN] == 11
+
+
+async def test_a_canceled_request_is_no_closed_work(session: AsyncSession) -> None:
+    caller, house_id = await _org(session)
+    executor = await add_user(session, "Исполнитель")
+    session.add(OrgMember(org_id=caller, user_id=executor, role=OrgRole.EXECUTOR))
+    for reason in (
+        RequestCompletionReason.AUTO_CLOSED,
+        RequestCompletionReason.RESIDENT_ACCEPTED,
+        RequestCompletionReason.RESIDENT_CANCELED,
+    ):
+        await _request(
+            session,
+            house_id,
+            status=RequestStatus.DONE,
+            executor_user_id=executor,
+            done_at=NOW - timedelta(hours=1),
+            completion_reason=reason,
+        )
+
+    benchmark = await _service(session).benchmark(caller, NOW)
+    [row] = await _service(session).executors(caller, None, None, NOW)
+
+    assert _metric(benchmark, AnalyticsMetric.AUTO_CLOSED_SHARE).value == 5000
+    assert row.closed == 2

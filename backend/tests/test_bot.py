@@ -138,6 +138,7 @@ from zheka.bot.handlers.requests.handlers import (
 )
 from zheka.bot.handlers.requests.windows import (
     ATTACHMENTS_TEXT,
+    CANCEL_TEXT,
     CATEGORY_TEXT,
     CONFIRM_TEXT,
     CREATED_TEXT,
@@ -147,14 +148,26 @@ from zheka.bot.handlers.requests.windows import (
     NO_HOUSE_TEXT,
     PROBLEM_TEXT,
 )
-from zheka.bot.handlers.review.handlers import repeat_sent
-from zheka.bot.handlers.review.windows import ASK_TEXT, RATED_TEXT, REJECTION_TEXT
+from zheka.bot.handlers.review.handlers import REJECTION_TAKEN, repeat_sent
+from zheka.bot.handlers.review.windows import (
+    ASK_TEXT,
+    OPTIONAL_PHOTO_TEXT,
+    PHOTOS_TEXT,
+    RATED_TEXT,
+    REJECTION_PHOTO_TEXT,
+    REJECTION_TEXT,
+)
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.states import Consent, Menu
 from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks import bot_requests, meters as meter_tasks
-from zheka.broker.tasks.bot_requests import create_bot_request, transcribe_voice
+from zheka.broker.tasks.bot_requests import (
+    NOT_REJECTED_UNEXPECTED,
+    create_bot_request,
+    reject_bot_request,
+    transcribe_voice,
+)
 from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
     LEFT_TEXT,
@@ -245,6 +258,7 @@ from zheka.core.services.polls import ALREADY_VOTED
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.reminders import DEMO_ADDRESS, DEMO_SERIAL
 from zheka.core.services.requests import (
+    CANCEL_TOO_LATE,
     MAX_RATING,
     MIN_RATING,
     REJECT_NOT_ON_REVIEW,
@@ -868,6 +882,9 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
     task_broker: InMemoryBroker,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
     shows: list[Show],
     notices: _RecordingBot,
 ) -> None:
@@ -882,15 +899,36 @@ async def test_a_rejection_on_the_review_card_opens_a_repeat_from_the_bot(
     await client.click(message_manager.last_message(), REJECT)
     await _rendered(message_manager, REJECTION_TEXT)
     await client.send("Кран все еще течет")
+    assert _text(message_manager) == REJECTION_PHOTO_TEXT
+    assert SEND.find_button(message_manager.last_message()) is None
+    await _send_photo(client, None)
+    assert PHOTOS_TEXT.format(photos=1) in _text(message_manager)
+    await client.click(message_manager.last_message(), SEND)
+
+    assert REJECTION_TAKEN in notices.texts
+    assert GREETING in _text(message_manager)
+    kwargs = bot_broker.enqueued(TaskName.REJECT_BOT_REQUEST)[-1]
+    assert kwargs["comment"] == "Кран все еще течет"
+    assert kwargs["photo_urls"] == [RESULT_URL]
+    download = AsyncMock(
+        side_effect=lambda _url, out, **_: out.write(b"\xff\xd8\xff\xe0"),
+    )
+    monkeypatch.setattr(fake_bot, "download", download)
+    await _run(task_broker, reject_bot_request, **kwargs)
 
     parent = await _status(bot_session, request_id)
     assert parent.completion_reason is RequestCompletionReason.RESIDENT_REJECTED
     [repeat] = await _repeats_of(bot_session, request_id)
     assert repeat.channel is RequestChannel.BOT
     assert repeat.description == "Кран все еще течет"
-    assert GREETING in _text(message_manager)
-    assert repeat_sent(repeat.id) in notices.texts
-    assert _opened(notices.buttons[-1]) == [(OPEN_REQUEST, f"/requests/{repeat.id}")]
+    [photo] = await RequestsRepo(bot_session).list_attachments(repeat.id)
+    assert photo.kind is RequestAttachmentKind.ISSUE
+    sent = bot_broker.enqueued(TaskName.SEND_TO_USER)[-1]
+    assert sent["text"] == repeat_sent(repeat.id)
+    assert (sent["app_button"], sent["app_path"]) == (
+        OPEN_REQUEST,
+        f"/requests/{repeat.id}",
+    )
 
 
 ACCEPT_WORK = InlineButtonTextLocator("👍 Принять")
@@ -926,19 +964,33 @@ async def test_a_stale_rejection_prompt_files_no_repeat(
     task_broker: InMemoryBroker,
     message_manager: MockMessageManager,
     bot_session: AsyncSession,
-    notices: _RecordingBot,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    download = AsyncMock(
+        side_effect=lambda _url, out, **_: out.write(b"\xff\xd8\xff\xe0"),
+    )
+    monkeypatch.setattr(fake_bot, "download", download)
     request_id = await _reviewing(bot_session, client, task_broker)
     card = message_manager.last_message()
     await client.click(card, REJECT)
     await _rendered(message_manager, REJECTION_TEXT)
     await client.click(card, ACCEPT_WORK)
 
-    await client.send("Спасибо, все хорошо")
+    await _send_photo(client, "Спасибо, все хорошо")
+    await client.click(message_manager.last_message(), SEND)
+    await _run(
+        task_broker,
+        reject_bot_request,
+        **bot_broker.enqueued(TaskName.REJECT_BOT_REQUEST)[-1],
+    )
 
     assert await _repeats_of(bot_session, request_id) == []
     assert GREETING in _text(message_manager)
-    assert REJECT_NOT_ON_REVIEW in notices.texts
+    sent = bot_broker.enqueued(TaskName.SEND_TO_USER)[-1]
+    assert REJECT_NOT_ON_REVIEW in sent["text"]
+    assert sent["app_path"] == f"/requests/{request_id}"
 
 
 async def test_a_tap_on_a_card_that_is_no_longer_his_shows_the_handover(
@@ -5075,3 +5127,190 @@ async def test_a_voice_skips_speechkit_without_keys_or_quota(
     assert downloaded == []
     assert heard == []
     assert _text(message_manager).startswith(VOICE_FAILED)
+
+
+CANCEL_REQUEST = InlineButtonTextLocator("↩️ Отменить заявку")
+BY_MISTAKE = InlineButtonTextLocator("↩️ Подана по ошибке")
+
+
+async def _sent_request(
+    session: AsyncSession,
+    client: BotClient,
+    message_manager: MockMessageManager,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
+) -> Request:
+    await _resident_of_a_connected_house(session, client, message_manager)
+    await _draft_request(client, message_manager)
+    await _run(
+        task_broker,
+        create_bot_request,
+        **bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1],
+    )
+    user = await _user(session, client)
+    stmt = select(Request).where(requests_table.c.author_user_id == user.id)
+    return (await session.execute(stmt)).scalar_one()
+
+
+async def test_a_sent_request_is_canceled_from_the_same_message(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    notices: _RecordingBot,
+) -> None:
+    request = await _sent_request(
+        bot_session,
+        client,
+        message_manager,
+        task_broker,
+        bot_broker,
+    )
+
+    await client.click(message_manager.last_message(), CANCEL_REQUEST)
+    assert _text(message_manager) == CANCEL_TEXT.format(request_id=request.id)
+    assert "↩️ Другое" not in _button_texts(message_manager.last_message())
+    await client.click(message_manager.last_message(), BY_MISTAKE)
+
+    canceled = await _status(bot_session, request.id)
+    assert canceled.status is RequestStatus.DONE
+    assert canceled.completion_reason is RequestCompletionReason.RESIDENT_CANCELED
+    assert notices.texts == [f"↩️ Заявка №{request.id} отменена"]
+    assert _opened(notices.buttons[-1]) == [(OPEN_REQUEST, f"/requests/{request.id}")]
+    assert GREETING in _text(message_manager)
+
+
+async def test_a_request_under_review_is_not_canceled_from_the_bot(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    answers: _CallbackAnswers,
+) -> None:
+    request_id = (
+        await _sent_request(
+            bot_session,
+            client,
+            message_manager,
+            task_broker,
+            bot_broker,
+        )
+    ).id
+    await client.click(message_manager.last_message(), CANCEL_REQUEST)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(status=RequestStatus.ON_REVIEW)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(message_manager.last_message(), BY_MISTAKE)
+
+    assert answers.notifications == [CANCEL_TOO_LATE]
+    assert (await _status(bot_session, request_id)).status is RequestStatus.ON_REVIEW
+    assert _text(message_manager) == CANCEL_TEXT.format(request_id=request_id)
+
+
+async def test_a_photo_with_a_caption_gives_the_rejection_its_text_and_photo(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+
+    await _send_photo(client, "Кран все еще течет")
+    await client.click(message_manager.last_message(), SEND)
+
+    assert bot_broker.enqueued(TaskName.REJECT_BOT_REQUEST)[-1] == {
+        "user_id": (await _user(bot_session, client)).id,
+        "request_id": request_id,
+        "comment": "Кран все еще течет",
+        "photo_urls": [RESULT_URL],
+    }
+
+
+async def test_a_rejection_of_paperwork_is_sent_without_a_photo(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(category=RequestCategory.CHARGE_DISPUTE)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+
+    await client.send("Перерасчет так и не сделали")
+    assert _text(message_manager) == OPTIONAL_PHOTO_TEXT
+    await client.click(message_manager.last_message(), SEND)
+    await _run(
+        task_broker,
+        reject_bot_request,
+        **bot_broker.enqueued(TaskName.REJECT_BOT_REQUEST)[-1],
+    )
+
+    [repeat] = await _repeats_of(bot_session, request_id)
+    assert repeat.description == "Перерасчет так и не сделали"
+
+
+async def test_an_unexpected_failure_of_a_bot_rejection_still_answers(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+
+    async def broken(*_: Any, **__: Any) -> None:
+        raise RuntimeError(PROBE_DENIED)
+
+    monkeypatch.setattr(RequestsService, "reject", broken)
+    task: Any = reject_bot_request
+    sent = await (
+        task.kicker()
+        .with_broker(task_broker)
+        .kiq(
+            user_id=(await _user(bot_session, client)).id,
+            request_id=request_id,
+            comment="Кран все еще течет",
+            photo_urls=[],
+        )
+    )
+    result = await sent.wait_result(timeout=5)
+
+    assert result.is_err
+    assert notices.texts[-1] == NOT_REJECTED_UNEXPECTED
+
+
+async def test_a_photo_without_a_caption_waits_for_the_rejection_text(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _reviewing(bot_session, client, task_broker)
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+
+    await _send_photo(client, None)
+    assert _text(message_manager).startswith(REJECTION_TEXT)
+    assert PHOTOS_TEXT.format(photos=1) in _text(message_manager)
+    await client.send("Кран все еще течет")
+
+    assert _text(message_manager).startswith(REJECTION_PHOTO_TEXT)
+    assert SEND.find_button(message_manager.last_message()) is not None

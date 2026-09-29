@@ -149,6 +149,16 @@ class ExecutorCardData(BaseDialogData):
 
 class ReviewData(BaseDialogData):
     request_id: int
+    comment: str = ""
+    photos: list[str] = field(default_factory=list)
+
+    def attach_photos(self, body: MessageBody) -> None:
+        self.photos.extend(
+            item.payload.url
+            for item in body.attachments or []
+            if isinstance(item, PhotoAttachment)
+        )
+        del self.photos[MAX_ATTACHMENTS:]
 
 
 class ChatBindingData(BaseDialogData):

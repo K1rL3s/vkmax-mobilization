@@ -59,6 +59,7 @@ class EventType(StrEnum):
     REQUEST_EXPORTED = "request_exported"
     REQUEST_SHARED = "request_shared"
     REQUEST_ESCALATED = "request_escalated"
+    REQUEST_CANCELED = "request_canceled"
 
     FLAT_INVITE_CREATED = "flat_invite_created"
     FLAT_INVITE_ACTIVATED = "flat_invite_activated"

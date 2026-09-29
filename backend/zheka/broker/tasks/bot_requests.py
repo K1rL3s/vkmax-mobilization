@@ -19,16 +19,19 @@ from zheka.bot.handlers.requests.handlers import (
     NOT_CREATED,
     NOT_CREATED_UNEXPECTED,
 )
+from zheka.bot.handlers.review.handlers import repeat_sent
 from zheka.bot.states import NewRequest
 from zheka.bot.voice import VOICE_FAILED
 from zheka.broker.task_names import TaskName
-from zheka.core.enums import RequestCategory, RequestChannel
+from zheka.core.deeplinks import request_app_path
+from zheka.core.enums import NotificationCategory, RequestCategory, RequestChannel
 from zheka.core.errors import InvalidRequest, ZhekaError
-from zheka.core.ids import FlatId, HouseId, UserId
+from zheka.core.ids import FlatId, HouseId, RequestId, UserId
 from zheka.core.models import User
 from zheka.core.services.files import FilesService
+from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.requests import RequestDraft, RequestsService
-from zheka.core.texts import deadline_lines
+from zheka.core.texts import OPEN_REQUEST, deadline_lines
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
 from zheka.infra.yandex import SpeechClient, YandexQuota
@@ -37,6 +40,8 @@ logger = logging.getLogger(__name__)
 
 PHOTO_MIME = "image/jpeg"
 VOICE_RECHECK_SECONDS = 5
+NOT_REJECTED = "😔 Повторную заявку не удалось оформить: {reason}"
+NOT_REJECTED_UNEXPECTED = "😔 Повторную заявку не удалось оформить, попробуйте еще раз"
 
 
 @async_shared_broker.task(task_name=TaskName.TRANSCRIBE_VOICE.value)
@@ -221,3 +226,45 @@ async def _show_outcome(
         stack_id=stack_id,
         notify=False,
     )
+
+
+@async_shared_broker.task(task_name=TaskName.REJECT_BOT_REQUEST.value)
+@inject(patch_module=True)
+async def reject_bot_request(
+    user_id: UserId,
+    request_id: RequestId,
+    comment: str,
+    photo_urls: Sequence[str],
+    bot: FromDishka[Bot],
+    files_service: FromDishka[FilesService],
+    requests_service: FromDishka[RequestsService],
+    notifications_service: FromDishka[NotificationsService],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> int | None:
+    user = await users_repo.get_by_id(user_id)
+    try:
+        photos = await save_photos(bot, files_service, photo_urls)
+        card = await requests_service.reject(
+            user_id,
+            request_id,
+            comment,
+            photos,
+            RequestChannel.BOT,
+        )
+    except ZhekaError as error:
+        notifications_service.notify_user(
+            user_id,
+            NOT_REJECTED.format(reason=escape(str(error))),
+            category=NotificationCategory.REQUESTS,
+            mandatory=True,
+            app_button=OPEN_REQUEST,
+            app_path=request_app_path(request_id),
+        )
+        return None
+    except Exception:
+        if user is not None:
+            await sender.send_message(NOT_REJECTED_UNEXPECTED, user_id=user.max_user_id)
+        raise
+    notifications_service.notify_author(card.request, repeat_sent(card.request.id))
+    return card.request.id

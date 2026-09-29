@@ -297,8 +297,12 @@ class RequestsRepo(BaseAlchemyRepo):
                 )
                 .exists(),
             )
+            first = func.min(requests_table.c.id)
+            live = requests_table.c.completion_reason.is_distinct_from(
+                RequestCompletionReason.RESIDENT_CANCELED,
+            )
             leaders = (
-                select(func.min(requests_table.c.id))
+                select(func.coalesce(first.filter(live), first))
                 .where(requests_table.c.group_id.is_not(None))
                 .group_by(requests_table.c.group_id)
             )

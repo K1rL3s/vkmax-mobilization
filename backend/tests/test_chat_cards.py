@@ -23,6 +23,7 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core import texts
 from zheka.core.enums import (
+    CancelReason,
     ChatCardKind,
     ChatStatus,
     EventType,
@@ -513,3 +514,55 @@ def test_the_poll_card_counts_voters_out_of_flats_in_russian(
     text = texts.poll_card("Шлагбаум?", PollAuthor.CHAIRMAN, [], 0, total, None)
 
     assert f"Проголосовало 0 {words}\n" in text
+
+
+async def test_a_canceled_flat_leaves_the_group_card(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+) -> None:
+    group_id = await _grouped(session, own, publisher)
+    first, *rest = await RequestsRepo(session).list_for_group(group_id)
+    service = requests_service(session, publisher)
+    cards = chat_cards_service(session)
+    assert first.author_user_id is not None
+
+    await service.cancel(first.author_user_id, first.id, CancelReason.MISTAKE, None)
+    view = await cards.render(ChatCardKind.GROUP, group_id)
+
+    assert view is not None
+    assert view.text == texts.group_card(RequestCategory.LEAK, 2, RequestStatus.NEW)
+    assert "сообщили 2 квартиры" in view.text
+
+    for member in rest:
+        assert member.author_user_id is not None
+        await service.cancel(
+            member.author_user_id,
+            member.id,
+            CancelReason.RESOLVED,
+            None,
+        )
+    empty = await cards.render(ChatCardKind.GROUP, group_id)
+
+    assert empty is not None
+    assert empty.text == "↩️ Протечка: жители отменили заявки"
+    assert (empty.me_too, empty.join) == (None, False)
+
+
+async def test_a_canceled_request_card_says_so_without_buttons(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request = await _own_request(session, own)
+
+    await requests_service(session).cancel(
+        own.user_id,
+        request.id,
+        CancelReason.DUPLICATE,
+        None,
+    )
+    view = await chat_cards_service(session).render(ChatCardKind.REQUEST, request.id)
+
+    assert view is not None
+    assert view.text == f"↩️ Заявка №{request.id} отменена автором"
+    assert (view.me_too, view.join) == (None, False)

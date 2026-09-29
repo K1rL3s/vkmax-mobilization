@@ -1,6 +1,6 @@
 import type { StatusPillTone } from "@/shared/ui/status-pill";
 
-import type { RequestStatus } from "./types";
+import type { RequestCompletionReason, RequestStatus } from "./types";
 
 export const STATUS_LABEL: Record<RequestStatus, string> = {
   new: "Новая",
@@ -44,4 +44,18 @@ export const currentActor = (
   return status === "accepted"
     ? `${executor} готовится к выезду`
     : `${executor} выполняет работы`;
+};
+
+export const statusLabel = (
+  {
+    status,
+    completion_reason: reason,
+  }: {
+    status: RequestStatus;
+    completion_reason?: RequestCompletionReason | null;
+  },
+  audience: "resident" | "staff" = "resident",
+): string => {
+  if (reason !== "resident_canceled") return STATUS_LABEL[status];
+  return audience === "resident" ? "Отменена" : "Отменена жителем";
 };

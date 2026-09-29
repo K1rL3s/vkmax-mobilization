@@ -58,6 +58,10 @@ class Request(ZhekaMutableType):
         lead = (self.deadline_at - self.created_at) / WARN_SHARE
         return self.deadline_at - max(WARN_MIN, min(lead, WARN_MAX))
 
+    @property
+    def is_canceled(self) -> bool:
+        return self.completion_reason is RequestCompletionReason.RESIDENT_CANCELED
+
 
 class RequestGroup(ZhekaMutableType):
     id: RequestGroupId = UNSET

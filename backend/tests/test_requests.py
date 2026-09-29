@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+from maxo.utils.webapp import WebAppChat, WebAppInitData, WebAppUser
 from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,9 +23,15 @@ from tests.conftest import (
 
 from zheka.api.dependencies.current_account import CurrentAccount
 from zheka.api.dependencies.current_org import CurrentOrg
-from zheka.api.routes.requests import classify_request_text, export_request
+from zheka.api.dependencies.current_user import API_CHECKER
+from zheka.api.routes.requests import (
+    cancel_request,
+    classify_request_text,
+    export_request,
+)
 from zheka.api.schemas.requests import (
     AdminRequestCard,
+    CancelRequestRequest,
     ClassifyRequestRequest,
     CreateRequestRequest,
     RequestCard,
@@ -33,6 +40,7 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
     CATEGORY_RULES,
+    CancelReason,
     EventType,
     OrgRole,
     RequestActorRole,
@@ -65,6 +73,7 @@ from zheka.core.services.houses import NOT_CONNECTED
 from zheka.core.services.requests import (
     AUTO_CLOSE_AFTER,
     MAX_ATTACHMENTS,
+    REJECTION_PHOTO_REQUIRED,
     RequestDraft,
 )
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
@@ -624,14 +633,17 @@ async def test_repeat_from_review_rejects_the_result_and_opens_a_new_request(
     parent_id = created.request.id
     await _mark_on_review(session, parent_id)
 
+    proof = photo_name()
+
     repeated = await service.repeat(
         own.user_id,
         parent_id,
         "Не устранили протечку под ванной",
-        [],
+        [proof],
         channel=RequestChannel.BOT,
     )
 
+    assert [photo.path for photo in repeated.issue_attachments] == [proof]
     parent = await service.get_card(own.user_id, parent_id)
     assert parent.request.status is RequestStatus.DONE
     assert parent.request.completion_reason is RequestCompletionReason.RESIDENT_REJECTED
@@ -1096,3 +1108,265 @@ async def test_request_accepts_two_videos_but_refuses_a_third_on_create_and_repe
     await session.flush()
     with pytest.raises(InvalidRequest, match="не больше 2 видео"):
         await service.repeat(own.user_id, card.request.id, "Снова течёт", videos)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [RequestStatus.NEW, RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS],
+)
+async def test_the_author_cancels_an_open_request_with_a_reason(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    status: RequestStatus,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = created.request.id
+    created.request.status = status
+    await session.flush()
+
+    card = await service.cancel(
+        own.user_id,
+        request_id,
+        CancelReason.RESOLVED,
+        "  Сосед перекрыл кран  ",
+    )
+
+    request = card.request
+    assert request.status is RequestStatus.DONE
+    assert request.completion_reason is RequestCompletionReason.RESIDENT_CANCELED
+    assert request.done_at is not None
+    assert request.reviewed_at is None
+    last = (await _logs(session, request_id))[-1]
+    assert (last.from_status, last.to_status) == (status, RequestStatus.DONE)
+    assert (last.by_role, last.by_user_id) == (RequestActorRole.RESIDENT, own.user_id)
+    [message] = card.messages
+    assert message.message.text == (
+        "↩️ Отменена: проблема решилась сама. Сосед перекрыл кран"
+    )
+    assert message.message.author_user_id == own.user_id
+    [canceled] = await events_of(session, EventType.REQUEST_CANCELED)
+    assert canceled.payload == {
+        "request_id": request_id,
+        "reason": "resolved",
+        "status": status.value,
+    }
+    [changed] = await events_of(session, EventType.REQUEST_STATUS_CHANGED)
+    assert changed.payload["from"] == status.value
+    assert changed.payload["to"] == RequestStatus.DONE.value
+
+
+@pytest.mark.parametrize("status", [RequestStatus.ON_REVIEW, RequestStatus.DONE])
+async def test_a_request_past_the_work_is_not_canceled(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    status: RequestStatus,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    created.request.status = status
+    await session.flush()
+
+    with pytest.raises(InvalidState, match="на приемку"):
+        await service.cancel(
+            own.user_id,
+            created.request.id,
+            CancelReason.MISTAKE,
+            None,
+        )
+    assert created.request.completion_reason is None
+
+
+async def test_cancel_rereads_a_request_sent_to_review_meanwhile(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = created.request.id
+    await _close_behind_the_session(session, request_id)
+
+    with pytest.raises(InvalidState, match="на приемку"):
+        await service.cancel(own.user_id, request_id, CancelReason.MISTAKE, None)
+
+
+async def test_only_the_author_cancels_a_request(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    neighbour = await _neighbour(session, own.house_id, "77")
+
+    with pytest.raises(EntityNotFound):
+        await service.cancel(neighbour, created.request.id, CancelReason.MISTAKE, None)
+    assert created.request.status is RequestStatus.NEW
+
+
+async def test_a_blocked_author_does_not_cancel(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    await _block(session, own.user_id, own.house_id)
+
+    with pytest.raises(NotEnoughRights):
+        await service.cancel(
+            own.user_id,
+            created.request.id,
+            CancelReason.MISTAKE,
+            None,
+        )
+    assert created.request.status is RequestStatus.NEW
+
+
+@pytest.mark.parametrize("comment", [None, "   "])
+async def test_another_reason_needs_a_comment(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    comment: str | None,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = created.request.id
+
+    with pytest.raises(InvalidRequest, match="почему отменяете"):
+        await service.cancel(own.user_id, request_id, CancelReason.OTHER, comment)
+
+    card = await service.cancel(
+        own.user_id,
+        request_id,
+        CancelReason.OTHER,
+        "Переехал",
+    )
+    assert card.messages[0].message.text == "↩️ Отменена: Переехал"
+
+
+async def test_a_cancel_tells_the_staff_and_the_executor(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    admin = await _member(session, own.org_id, OrgRole.ADMIN)
+    executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
+    service = requests_service(session, publisher)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = created.request.id
+    created.request.executor_user_id = executor
+    await session.flush()
+    await publisher.flush()
+    broker.messages.clear()
+
+    await service.cancel(
+        own.user_id,
+        request_id,
+        CancelReason.FIXED_MYSELF,
+        "Вызвал частного <мастера>",
+    )
+
+    await publisher.flush()
+    [staff] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
+    assert staff["user_ids"] == [admin]
+    assert staff["text"] == (
+        f"↩️ Житель отменил заявку №{request_id} «💧 Протечка»: "
+        "починили сами или вызвали мастера\n💬 Вызвал частного &lt;мастера&gt;"
+    )
+    assert staff["app_path"] == f"/admin/requests/{request_id}"
+    [crew] = broker.enqueued(TaskName.SEND_TO_USER)
+    assert crew["user_id"] == executor
+    assert crew["text"] == staff["text"]
+    assert broker.enqueued(TaskName.SYNC_CHAT_CARD) == [
+        {"kind": "request", "ref_id": request_id, "post": False},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("user", "canceled"),
+    [
+        (API_CHECKER, False),
+        (
+            WebAppInitData(
+                chat=WebAppChat(id=7, type="DIALOG"),
+                user=WebAppUser(id=7, first_name="Житель"),
+                hash="",
+            ),
+            True,
+        ),
+    ],
+    ids=["checker", "resident"],
+)
+async def test_the_checker_cancels_none_of_its_requests(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    user: WebAppInitData,
+    canceled: bool,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+
+    async def cancel() -> RequestCard:
+        return await cancel_request(
+            created.request.id,
+            user,
+            _account(own.user_id),
+            service,
+            FilesService(make_config().files, "test-token"),
+            CancelRequestRequest(reason=CancelReason.MISTAKE),
+        )
+
+    if canceled:
+        card = await cancel()
+        assert card.completion_reason is RequestCompletionReason.RESIDENT_CANCELED
+    else:
+        with pytest.raises(NotEnoughRights):
+            await cancel()
+        assert created.request.status is RequestStatus.NEW
+
+
+async def test_a_rejection_on_review_without_a_photo_changes_nothing(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(own.user_id, own.house_id, _draft())
+    request_id = created.request.id
+    await _mark_on_review(session, request_id)
+
+    with pytest.raises(InvalidRequest, match=REJECTION_PHOTO_REQUIRED):
+        await service.repeat(own.user_id, request_id, "Не устранили протечку", [])
+
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
+    assert request.status is RequestStatus.ON_REVIEW
+    _, total = await service.list_mine(own.user_id, own.house_id, None, 20, 0)
+    assert total == 1
+
+
+@pytest.mark.parametrize(
+    "category",
+    [RequestCategory.METER_ERROR, RequestCategory.CHARGE_DISPUTE],
+)
+async def test_a_rejection_of_paperwork_needs_no_photo(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+) -> None:
+    service = requests_service(session)
+    created = await service.create(
+        own.user_id,
+        own.house_id,
+        _draft(category=category),
+    )
+    await _mark_on_review(session, created.request.id)
+
+    repeated = await service.repeat(
+        own.user_id,
+        created.request.id,
+        "Перерасчет так и не сделали",
+        [],
+    )
+
+    assert repeated.request.parent_request_id == created.request.id
+    assert repeated.issue_attachments == []

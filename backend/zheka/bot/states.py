@@ -31,6 +31,7 @@ class NewRequest(StatesGroup):
     attachments = State("photo")
     confirm = State()
     sent = State()
+    cancel = State()
 
 
 class ExecutorCard(StatesGroup):
@@ -43,6 +44,7 @@ class Review(StatesGroup):
     card = State()
     rating = State()
     rejection = State()
+    rejection_photo = State()
 
 
 class ChatBinding(StatesGroup):

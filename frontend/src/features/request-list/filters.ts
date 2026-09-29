@@ -15,7 +15,7 @@ export const FILTERS: {
   { id: "new", label: "Новые", statuses: ["new", "accepted"] },
   { id: "in_progress", label: "В работе", statuses: ["in_progress"] },
   { id: "on_review", label: "На приёмке", statuses: ["on_review"] },
-  { id: "done", label: "Выполнены", statuses: ["done"] },
+  { id: "done", label: "Закрытые", statuses: ["done"] },
 ];
 
 export const groupRequests = (items: RequestListItem[], filterId: FilterId) => {

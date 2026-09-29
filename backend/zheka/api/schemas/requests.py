@@ -8,6 +8,7 @@ from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FILES_DESCRIPTION, FileRef
 from zheka.core.enums import (
     CATEGORY_RULES,
+    CancelReason,
     CategoryRule,
     RequestCategory,
     RequestChannel,
@@ -168,6 +169,9 @@ class RequestCard(RequestListItem):
     can_demo_expire: bool = Field(
         description="Автор заявки в демо-УК может перенести ее срок на текущий момент",
     )
+    rejection_needs_photo: bool = Field(
+        description="Вернуть работу с приемки можно только с фото или видео",
+    )
 
     @classmethod
     def of(
@@ -208,6 +212,7 @@ class RequestCard(RequestListItem):
             flat_id=request.flat_id,
             auto_close_at=card.auto_close_at,
             can_demo_expire=card.can_demo_expire,
+            rejection_needs_photo=rule.rejection_needs_photo,
         )
 
 
@@ -409,3 +414,11 @@ class ClassifyRequestResponse(BaseSchema):
             category=category,
             zone=None if category is None else CATEGORY_RULES[category].zone,
         )
+
+
+class CancelRequestRequest(BaseSchema):
+    reason: CancelReason
+    comment: FreeText | None = Field(
+        default=None,
+        description="Пояснение жителя; обязательно для причины other",
+    )

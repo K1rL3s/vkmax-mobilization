@@ -434,6 +434,9 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     auto_close_at:
       item.status === "on_review" ? shift(timeline[3].at, 48 * 60) : null,
     can_demo_expire: canDemoExpire(item),
+    rejection_needs_photo: !["meter_error", "charge_dispute"].includes(
+      item.category,
+    ),
   };
 };
 

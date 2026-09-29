@@ -9,12 +9,14 @@ from maxo.utils.deeplink import create_startapp_link
 
 from zheka.api.dependencies import (
     CurrentResidencyDep,
+    CurrentUserDep,
     IdempotencyDep,
     RequireConsentDep,
 )
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.requests import (
+    CancelRequestRequest,
     ClassifyRequestRequest,
     ClassifyRequestResponse,
     CreateRequestRequest,
@@ -29,7 +31,8 @@ from zheka.api.schemas.requests import (
 )
 from zheka.core.deeplinks import house_category_payload
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
-from zheka.core.ids import RequestId
+from zheka.core.errors import NotEnoughRights
+from zheka.core.ids import API_CHECKER_MAX_USER_ID, RequestId
 from zheka.core.models import RequestAttachment
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
@@ -282,5 +285,38 @@ async def escalate_request(
         current_account.user_id,
         request_id,
         datetime.now(UTC),
+    )
+    return _card(card, files_service)
+
+
+@router.post(
+    "/requests/{request_id}/cancel",
+    summary="Отменить свою заявку",
+    description=(
+        "Только автор и только открытая заявка (новая, принятая или в работе): "
+        "она закрывается с итогом resident_canceled, причина уходит в переписку, "
+        "сотрудники УК и исполнитель получают сообщение. Заявка на приемке или "
+        "закрытая - 409, причина other без комментария - 400, чужая - 404, "
+        "тестовый токен - 403"
+    ),
+)
+async def cancel_request(
+    request_id: RequestId,
+    current_user: CurrentUserDep,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+    body: CancelRequestRequest,
+) -> RequestCard:
+    if current_user.user.id == API_CHECKER_MAX_USER_ID:
+        raise NotEnoughRights(
+            "Тестовый токен не отменяет свои заявки: "
+            "на них держатся обязательные проверки API",
+        )
+    card = await requests_service.cancel(
+        current_account.user_id,
+        request_id,
+        body.reason,
+        body.comment,
     )
     return _card(card, files_service)
