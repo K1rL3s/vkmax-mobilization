@@ -74,7 +74,10 @@ class ChairmanService:
         house_id: HouseId,
     ) -> ChairmanHandover | None:
         await self._acting_chairman(user_id, house_id)
-        return await self._handovers.get_open(house_id, datetime.now(UTC))
+        handover = await self._handovers.get_open(house_id, datetime.now(UTC))
+        if handover is None or handover.created_by != user_id:
+            return None
+        return handover
 
     async def create_handover(
         self,

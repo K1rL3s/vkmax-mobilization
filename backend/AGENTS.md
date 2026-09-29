@@ -128,6 +128,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   it only while an active chairman. `ResidentsRepo.revoke_verification`
   records `(user, flat)` in `verification_revocations`: that user never
   verifies the flat again by account or invite, only by УК approval.
+- One chairman per house is the partial unique index
+  `residents(house_id) WHERE is_chairman`. A handover link (`chair_<code>`,
+  48 h, one open per house, a new one revokes the rest) is taken only by a
+  verified unblocked resident of the house while its issuer is still
+  chairman; `ChairmanService.accept` moves the role under `FOR UPDATE` on the
+  link, and the chairman sees only a link they issued.
 - MVP decision, not a gap: an unverified resident books reception (no cap per
   person), reads house polls and announcements, votes without area weight and
   files requests. Charges, meters, flat residents and weighted votes need a

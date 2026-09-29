@@ -264,6 +264,7 @@ from zheka.infra.database.models import (
     Resident,
 )
 from zheka.infra.database.repos.access import AccessRepo
+from zheka.infra.database.repos.chairman import ChairmanRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
@@ -276,6 +277,7 @@ from zheka.infra.database.tables.access import access_targets_table
 from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.chats import chat_cards_table
 from zheka.infra.database.tables.events import events_table
+from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import residents_table
@@ -4635,3 +4637,44 @@ async def test_a_chairman_link_opened_by_a_stranger_says_why(
     await _bot_started(client, chairman_payload(code))
 
     assert NOT_A_NEIGHBOUR in notices.texts
+
+
+async def test_chairman_outcomes_escape_the_name_and_the_address(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    house_id, _, code = await _chairman_offer(bot_session, client, message_manager)
+    handover = await ChairmanRepo(bot_session).get(code)
+    assert handover is not None
+    issuer_id = handover.created_by
+    await bot_session.execute(
+        update(User).where(users_table.c.id == issuer_id).values(name="Ян <Б>"),
+    )
+    await bot_session.execute(
+        update(House).where(houses_table.c.id == house_id).values(street="Р&Д"),
+    )
+    await bot_session.commit()
+
+    await _bot_started(client, chairman_payload(code))
+    await client.click(message_manager.last_message(), DECLINE_CHAIR)
+
+    assert any("Ян &lt;Б&gt; об этом узнает" in (text or "") for text in notices.texts)
+
+    second = secrets.token_hex(4)
+    bot_session.add(
+        ChairmanHandover(
+            code=second,
+            house_id=house_id,
+            created_by=issuer_id,
+            expires_at=datetime.now(UTC) + timedelta(hours=48),
+        ),
+    )
+    await bot_session.commit()
+
+    await _bot_started(client, chairman_payload(second))
+    await client.click(message_manager.last_message(), ACCEPT_CHAIR)
+
+    assert any("Р&amp;Д" in (text or "") for text in notices.texts)
+    assert not any("Р&Д" in (text or "") for text in notices.texts)

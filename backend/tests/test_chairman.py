@@ -369,3 +369,23 @@ async def test_an_org_reassignment_wins_over_a_link_in_flight(
     with pytest.raises(InvalidState):
         await service.accept(neighbour_id, handover.code)
     assert await _chairman_user_id(session, base.house_id) == third_id
+
+
+async def test_a_new_chairman_does_not_see_the_link_of_the_previous_one(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base, chairman_id = await _house_with_chairman(session, make_org_house_flat_user)
+    successor_id = await _neighbour(session, base.house_id)
+    service = chairman_service(session)
+    await service.create_handover(chairman_id, base.house_id)
+
+    successor = await ResidentsRepo(session).get_for_house(successor_id, base.house_id)
+    assert successor is not None
+    await moderation_service(session).set_chairman(
+        base.org_id,
+        successor.id,
+        value=True,
+    )
+
+    assert await service.open_handover(successor_id, base.house_id) is None

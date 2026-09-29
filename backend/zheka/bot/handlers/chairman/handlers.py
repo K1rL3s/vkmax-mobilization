@@ -1,3 +1,4 @@
+from html import escape
 from typing import Any
 
 from dishka import FromDishka
@@ -40,7 +41,7 @@ async def on_accept(
     except ZhekaError as error:
         await back_to_menu(dialog_manager, str(error))
         return
-    await back_to_menu(dialog_manager, ACCEPTED.format(address=offer.address))
+    await back_to_menu(dialog_manager, ACCEPTED.format(address=escape(offer.address)))
 
 
 @inject
@@ -59,4 +60,4 @@ async def on_decline(
     except ZhekaError as error:
         await back_to_menu(dialog_manager, str(error))
         return
-    await back_to_menu(dialog_manager, DECLINED.format(name=offer.from_name))
+    await back_to_menu(dialog_manager, DECLINED.format(name=escape(offer.from_name)))
