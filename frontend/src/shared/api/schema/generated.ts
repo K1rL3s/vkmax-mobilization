@@ -3331,7 +3331,7 @@ export interface components {
      * NotificationCategory
      * @enum {string}
      */
-    NotificationCategory: "requests" | "announcements" | "meters";
+    NotificationCategory: "requests" | "announcements" | "meters" | "digest";
     /**
      * NotificationLevel
      * @enum {string}

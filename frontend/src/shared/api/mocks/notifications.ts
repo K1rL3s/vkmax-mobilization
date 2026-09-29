@@ -7,7 +7,12 @@ type Schemas = components["schemas"];
 const levels: Record<
   Schemas["NotificationCategory"],
   Schemas["NotificationLevel"]
-> = { requests: "silent", announcements: "silent", meters: "silent" };
+> = {
+  requests: "silent",
+  announcements: "silent",
+  meters: "silent",
+  digest: "off",
+};
 
 const settings = (): Schemas["NotificationSettingsResponse"] => ({
   settings: Object.entries(levels).map(([category, level]) => ({
@@ -25,7 +30,7 @@ export const notificationsConfigs = [
       !Array.isArray(items) ||
       !items.every(
         (item: { category?: unknown; level?: unknown }) =>
-          ["requests", "announcements", "meters"].includes(
+          ["requests", "announcements", "meters", "digest"].includes(
             String(item.category),
           ) && ["sound", "silent", "off"].includes(String(item.level)),
       )

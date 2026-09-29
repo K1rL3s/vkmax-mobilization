@@ -1,6 +1,7 @@
 from zheka.broker.tasks import (
     bot_requests,
     chats,
+    digest,
     files,
     idempotency,
     meters,
@@ -14,6 +15,7 @@ from zheka.broker.tasks import (
 __all__ = (
     "bot_requests",
     "chats",
+    "digest",
     "files",
     "idempotency",
     "meters",

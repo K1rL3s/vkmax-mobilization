@@ -14,6 +14,7 @@ SUBMIT_READINGS = "📟 Передать показания"
 MY_METERS = "📟 Мои счетчики"
 VOTE = "🗳 Проголосовать"
 MY_APPOINTMENTS = "📅 Мои записи"
+OPEN_APP = "📱 Открыть приложение"
 CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
 MOMENT = "%H:%M %d.%m"
 NO_NORM = "Срок сервиса, норматива нет"
@@ -421,3 +422,61 @@ def chairman_declined(name: str, address: str) -> str:
     return (
         f"😔 {escape(name)} отказался стать председателем совета дома {escape(address)}"
     )
+
+
+DIGEST_BUTTON = "📊 Сводка за неделю"
+DIGEST_SUBSCRIBE = "🔔 Присылать по воскресеньям"
+DIGEST_EMPTY = "📊 За неделю в доме ничего не произошло"
+DIGEST_SUBSCRIBED = (
+    "🔔 Сводку буду присылать по воскресеньям, выключить можно в настройках уведомлений"
+)
+DIGEST_QUOTE_LIMIT = 60
+
+
+def digest_head(address: str) -> str:
+    return f"📊 Неделя в доме: {escape(address)}"
+
+
+def digest_requests(created: int, closed: int, overdue: int) -> str:
+    parts = []
+    if created:
+        parts.append(f"{created} {_plural(created, 'новая', 'новые', 'новых')}")
+    if closed:
+        parts.append(f"{closed} {_plural(closed, 'закрыта', 'закрыто', 'закрыто')}")
+    if overdue:
+        verb = _plural(overdue, "просрочена", "просрочено", "просрочено")
+        parts.append(f"{verb} {overdue}")
+    return f"🛠 Заявки: {', '.join(parts)}"
+
+
+def digest_categories(rows: Sequence[tuple[RequestCategory, int]]) -> str:
+    named = ", ".join(
+        f"{CATEGORY_RULES[category].label.lower()} ({count})"
+        for category, count in rows
+    )
+    return f"Чаще всего: {named}"
+
+
+def digest_announcements(count: int, last: str) -> str:
+    return f"📢 Объявлений УК: {count}, последнее: «{_quoted(last)}»"
+
+
+def digest_poll(title: str, ends_at: datetime, voted: int) -> str:
+    verb = _plural(voted, "проголосовала", "проголосовали", "проголосовали")
+    voices = (
+        "голосов от квартир пока нет" if voted == 0 else f"{verb} {flats_count(voted)}"
+    )
+    return f"🗳 Опрос «{escape(title)}» до {ends_at:%d.%m}, {voices}"
+
+
+def digest_readings(day_to: int | None) -> str:
+    if day_to is None:
+        return "🔢 Показания принимаются в любой день"
+    return f"🔢 Показания принимаются до {day_to} числа"
+
+
+def _quoted(text: str) -> str:
+    line = " ".join(text.split())
+    if len(line) <= DIGEST_QUOTE_LIMIT:
+        return escape(line)
+    return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"

@@ -34,7 +34,7 @@ from zheka.core.enums import (
     ResidentRole,
 )
 from zheka.core.ids import MaxUserId, RequestGroupId, UserId
-from zheka.core.notifications import DEFAULT_LEVEL
+from zheka.core.notifications import default_level
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.request_status import transition_path
@@ -114,7 +114,10 @@ async def test_levels_fill_missing_categories_with_default(
 
     levels = await make_notifications_service(session).levels(data.user_id)
 
-    assert levels == dict.fromkeys(NotificationCategory, NotificationLevel.SILENT)
+    assert levels == {
+        category: default_level(category) for category in NotificationCategory
+    }
+    assert levels[NotificationCategory.DIGEST] is NotificationLevel.OFF
 
 
 async def test_update_records_event_only_for_a_real_change(
@@ -134,7 +137,9 @@ async def test_update_records_event_only_for_a_real_change(
     )
 
     assert levels[NotificationCategory.REQUESTS] is NotificationLevel.SOUND
-    assert levels[NotificationCategory.METERS] is DEFAULT_LEVEL
+    assert levels[NotificationCategory.METERS] is default_level(
+        NotificationCategory.METERS,
+    )
     stmt = select(Event).where(
         events_table.c.user_id == data.user_id,
         events_table.c.type == EventType.NOTIFICATION_SETTINGS_CHANGED.value,

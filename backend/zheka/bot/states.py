@@ -10,6 +10,7 @@ class Consent(StatesGroup):
 class Menu(StatesGroup):
     main = State()
     emergency = State()
+    digest = State()
 
 
 def entry_state(user: User) -> State:

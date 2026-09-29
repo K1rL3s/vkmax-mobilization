@@ -1,5 +1,5 @@
 from dataclasses import field
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -26,6 +26,7 @@ class House(ZhekaMutableType, Zoned):
     overhaul: Any = field(default_factory=dict)
     documents: Any = field(default_factory=list)
     timezone: str
+    digest_sent_on: date | None = None
 
     @property
     def address(self) -> str:

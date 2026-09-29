@@ -12490,6 +12490,7 @@ components:
       - requests
       - announcements
       - meters
+      - digest
       title: NotificationCategory
     NotificationLevel:
       type: string

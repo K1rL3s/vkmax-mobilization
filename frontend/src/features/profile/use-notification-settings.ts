@@ -3,7 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import type { components } from "@/shared/api/schema/generated";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { queryClient } from "@/shared/api/query-client";
-import { megaphoneIcon, meterIcon, wrenchIcon } from "@/shared/ui/icon";
+import {
+  chartIcon,
+  megaphoneIcon,
+  meterIcon,
+  wrenchIcon,
+} from "@/shared/ui/icon";
 
 type NotificationCategory = components["schemas"]["NotificationCategory"];
 
@@ -19,6 +24,7 @@ export const CATEGORIES: {
   { category: "requests", title: "Заявки", icon: wrenchIcon },
   { category: "announcements", title: "Объявления УК", icon: megaphoneIcon },
   { category: "meters", title: "Счётчики и поверка", icon: meterIcon },
+  { category: "digest", title: "Недельная сводка", icon: chartIcon },
 ];
 
 export const LEVEL_LABEL: Record<NotificationLevel, string> = {

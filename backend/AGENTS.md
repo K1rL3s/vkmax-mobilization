@@ -214,11 +214,13 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   (home); paths come from `core/deeplinks.py`. Notifications take
   `app_button` + `app_path`; `notify_author` always attaches the request's.
 - The menu reads the profile: the last linked house, the staff line and
-  cabinet button.
+  cabinet button. A linked house also opens `Menu.digest`, a window instead of
+  `back_to_menu` because the digest carries its own «🔔 Присылать по
+  воскресеньям» button while the category is off.
 - A dialog swallows every message sent to its window: the fallback router gets
   only updates with no dialog open. Free text (`NewRequestData.from_free_text`:
   15+ chars, not a command, a photo caption counts) opens `NewRequest.category`
-  with it as the description from the menu and its emergency window,
+  with it as the description from the menu, its emergency and digest windows,
   `NewRequest.category` and `NewRequest.sent` (`on_free_text`, consent checked
   first) and the fallback; `on_category` then skips to the photo.
 - A voice counts as free text by MAX's `transcription` (`transcript`, any
@@ -373,6 +375,16 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   stamps keep one send each.
 - `broadcast_access_request` is the one broadcast that opens a window
   (`AccessSlots.pick`, `ShowMode.SEND`).
+- The weekly digest is one text per house, built by `DigestService.build` over
+  the last seven local days (requests, top two categories, announcements,
+  active polls, the open readings window); an empty week is `None` and the
+  readings line joins a digest that already has something to say.
+  `send_weekly_digests` (hourly) acts where the local time is Sunday past 18
+  and `houses.digest_sent_on` is not today, stamps and hands the text to
+  `NotificationsService`. `NotificationCategory.DIGEST` is the one category
+  off by default (`default_level`, read by `NotificationsService.levels` and
+  `NotificationsRepo.recipients`), so nothing goes out until the resident asks
+  for it in `Menu.digest` or the app.
 - `remind_not_submitted` refuses outside the window (`window_open` is only a
   hint), stamps `kind: manual`, skips anyone reminded since the house's local
   midnight.

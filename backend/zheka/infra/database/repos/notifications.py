@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from zheka.base import ZhekaType
 from zheka.core.enums import NotificationCategory, NotificationLevel
 from zheka.core.ids import MaxUserId, UserId
-from zheka.core.notifications import DEFAULT_LEVEL
+from zheka.core.notifications import default_level
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.users import notification_settings_table, users_table
 
@@ -74,7 +74,7 @@ class NotificationsRepo(BaseAlchemyRepo):
         return [
             Recipient(
                 max_user_id=max_user_id,
-                level=DEFAULT_LEVEL if level is None else level,
+                level=default_level(category) if level is None else level,
             )
             for max_user_id, level in result.tuples().all()
         ]

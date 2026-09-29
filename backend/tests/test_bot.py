@@ -193,6 +193,7 @@ from zheka.core.enums import (
     EventType,
     MeterType,
     NotificationCategory,
+    NotificationLevel,
     OrgRole,
     RequestAttachmentKind,
     RequestCategory,
@@ -250,6 +251,10 @@ from zheka.core.services.requests import (
 )
 from zheka.core.texts import (
     CABINET_BUTTON,
+    DIGEST_BUTTON,
+    DIGEST_EMPTY,
+    DIGEST_SUBSCRIBE,
+    DIGEST_SUBSCRIBED,
     ME_TOO,
     OPEN_REQUEST,
     REQUEST_STATUS_LABELS,
@@ -273,6 +278,7 @@ from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
+from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -3188,6 +3194,7 @@ async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
     assert _button_texts(message_manager.last_message()) == [
         "🚨 Авария",
         "📝 Подать заявку",
+        DIGEST_BUTTON,
         "📱 Открыть приложение",
         "🔎 Другой дом",
     ]
@@ -3209,6 +3216,33 @@ async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
         ("📱 Открыть приложение", None),
         (CABINET_BUTTON, "/admin/requests"),
     ]
+
+
+DIGEST = InlineButtonTextLocator(DIGEST_BUTTON)
+SUBSCRIBE_DIGEST = InlineButtonTextLocator(DIGEST_SUBSCRIBE)
+
+
+async def test_the_digest_window_takes_the_sunday_subscription(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    user_id = (await _user(bot_session, client)).id
+    await client.send("/start")
+
+    await client.click(message_manager.last_message(), DIGEST)
+
+    assert _text(message_manager) == DIGEST_EMPTY
+    await client.click(message_manager.last_message(), SUBSCRIBE_DIGEST)
+
+    assert notices.texts == [DIGEST_SUBSCRIBED]
+    bot_session.expire_all()
+    levels = await NotificationsRepo(bot_session).get_levels(user_id)
+    assert levels[NotificationCategory.DIGEST] is NotificationLevel.SILENT
+    await client.click(message_manager.last_message(), DIGEST)
+    assert SUBSCRIBE_DIGEST.find_button(message_manager.last_message()) is None
 
 
 async def test_every_category_is_one_tap_away(

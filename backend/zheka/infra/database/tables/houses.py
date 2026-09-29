@@ -1,6 +1,7 @@
 from sqlalchemy import (
     BigInteger,
     Column,
+    Date,
     ForeignKey,
     Index,
     Integer,
@@ -35,6 +36,7 @@ houses_table = Table(
     Column("overhaul", JSONB, default=dict, nullable=False),
     Column("documents", JSONB, default=list, nullable=False),
     Column("timezone", String, nullable=False),
+    Column("digest_sent_on", Date, nullable=True),
     Index(None, "city", "street"),
 )
 
