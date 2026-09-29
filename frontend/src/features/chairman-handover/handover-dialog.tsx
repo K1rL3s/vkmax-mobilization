@@ -75,7 +75,13 @@ export const HandoverDialog = ({
               <Typography.Text variant="description" color="secondary">
                 Ссылка для нового председателя
               </Typography.Text>
-              <span className={styles.Code}>{live.code}</span>
+              <Typography.Text
+                className={styles.Deeplink}
+                variant="body"
+                color="primary"
+              >
+                {live.deeplink}
+              </Typography.Text>
             </Flex>
 
             <Flex align="center" gap={8} wrap="wrap">
