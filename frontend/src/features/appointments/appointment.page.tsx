@@ -2,7 +2,6 @@ import { Button, CellSimple, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link } from "react-router-dom";
 import { z } from "zod";
 
-import { formatDayTime } from "@/shared/lib/format";
 import { useRouteParams } from "@/shared/lib/router";
 import { Routes } from "@/shared/model/routes";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -63,7 +62,7 @@ const AppointmentPage = () => {
         fill
         icon={clockIcon}
         title="Запись не найдена"
-        description="Похоже, её уже отменили. Часы приёма и ваши записи - в карточке дома"
+        description="Среди ваших записей такой нет. Часы приёма и ваши записи - в карточке дома"
         action={
           <Button asChild size="medium" variant="secondary">
             <Link to={Routes.APPOINTMENTS}>Записаться на приём</Link>
@@ -91,12 +90,7 @@ const AppointmentPage = () => {
               <h1>{schedule.appointmentTitle(appointment.starts_at)}</h1>
             </Typography.Text>
             <Typography.Text variant="description" color="secondary">
-              {[
-                appointment.address,
-                appointment.flat_number && `кв. ${appointment.flat_number}`,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
+              {appointment.address}
             </Typography.Text>
             <StatusPill tone={tone}>{appointmentLabel(state)}</StatusPill>
           </Flex>
@@ -146,15 +140,16 @@ const AppointmentPage = () => {
             separator
             before={<Icon src={clockIcon} className={styles.CellIcon} />}
             overline="Записались"
-            title={formatDayTime(appointment.created_at)}
+            title={`${schedule.slotDate(appointment.created_at)}, ${schedule.slotTime(appointment.created_at)}`}
           />
         </div>
 
         {state === "upcoming" && (
           <Typography.Text variant="description" color="tertiary">
-            Накануне вечером бот напомнит о записи. Чтобы прийти в другое время,
-            отмените эту запись и выберите новый слот - он освободится для
-            других жителей сразу
+            {schedule.bookedAhead(appointment) &&
+              "Бот напоминает о записи накануне вечером. "}
+            Чтобы прийти в другое время, отмените эту запись и выберите новый
+            слот - он освободится для других жителей сразу
           </Typography.Text>
         )}
       </div>

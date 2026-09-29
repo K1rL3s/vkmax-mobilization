@@ -148,6 +148,9 @@ export const createSchedule = (timeZone: string) => {
             : null,
       };
     },
+
+    bookedAhead: (appointment: Appointment) =>
+      dayKey(appointment.created_at) < dayKey(appointment.starts_at),
   };
 };
 

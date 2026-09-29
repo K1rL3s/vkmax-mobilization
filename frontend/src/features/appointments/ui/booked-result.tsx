@@ -99,8 +99,9 @@ export const BookedResult = ({
           color="tertiary"
           className={styles.Note}
         >
-          Накануне вечером бот напомнит о записи. Она уже есть в разделе «Мои
-          записи», там же её можно отменить
+          {schedule.bookedAhead(appointment) &&
+            "Накануне вечером бот напомнит о записи. "}
+          Она уже есть в разделе «Мои записи», там же её можно отменить
         </Typography.Text>
       </div>
 
