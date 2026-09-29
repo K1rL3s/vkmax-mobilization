@@ -3,9 +3,16 @@ from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
-from zheka.core.deeplinks import admin_request_app_path, request_app_path
+from zheka.core.deeplinks import (
+    admin_request_app_path,
+    house_category_payload,
+    house_payload,
+    request_app_path,
+)
 from zheka.core.enums import (
+    CATEGORY_PLACES,
     CATEGORY_RULES,
+    CancelReason,
     ChatCardKind,
     EventType,
     NotificationCategory,
@@ -16,6 +23,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
     ResidentStatus,
 )
@@ -48,6 +56,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.houses import NOT_CONNECTED, is_connected
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
+    PRIVATE_CATEGORIES,
     RESOLVED_PERIOD,
     GroupingRules,
     GroupingService,
@@ -76,6 +85,7 @@ DEMO_GROUP_THRESHOLD = 2
 BLOCKED = "Вы заблокированы в этом доме"
 GROUP_CLOSED = "Группа заявок уже закрыта"
 GROUP_OTHER_CATEGORY = "Группа заявок собрана по другой категории"
+GROUP_PRIVATE = "Заявки о счете одной квартиры не объединяются"
 EMPTY_DESCRIPTION = "Опишите проблему"
 TOO_MANY_ATTACHMENTS = f"К заявке можно приложить не больше {MAX_ATTACHMENTS} вложений"
 RATE_NOT_DONE = "Оценку ставят принятой жителем заявке"
@@ -88,6 +98,12 @@ SHARE_FINISHED = "Заявку на приемке или закрытую со�
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
+CANCEL_TOO_LATE = "Отменить можно, пока работу не сдали на приемку"
+CANCEL_COMMENT_REQUIRED = "Расскажите, почему отменяете заявку"
+REJECTION_PHOTO_REQUIRED = "Приложите фото: так УК увидит, что не так"
+EMPTY_MESSAGE = "Напишите сообщение для УК"
+WRITE_CLOSED = "Заявка закрыта, подайте новую"
+GJI_NOT_OVERDUE = "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек"
 NEIGHBOUR_DESCRIPTION = "Та же проблема: {}"
 
 
@@ -99,6 +115,7 @@ class RequestDraft(ZhekaType):
     group_id: RequestGroupId | None = None
     llm_suggested: bool = False
     llm_accepted: bool = False
+    place: RequestPlace | None = None
 
 
 class RequestMessageView(ZhekaType):
@@ -136,6 +153,24 @@ class SharedRequest(ZhekaType):
     request: Request
     house: House
     posted: bool
+
+    @property
+    def joinable(self) -> bool:
+        return self.request.category not in PRIVATE_CATEGORIES
+
+    @property
+    def share_text(self) -> str:
+        return texts.request_share_text(
+            self.request,
+            self.house,
+            joinable=self.joinable,
+        )
+
+    @property
+    def share_payload(self) -> str:
+        if not self.joinable:
+            return house_payload(self.house.id)
+        return house_category_payload(self.house.id, self.request.category)
 
 
 class RequestsService:
@@ -199,6 +234,11 @@ class RequestsService:
             raise EntityNotFound(FLAT_NOT_FOUND)
         attachments = self._checked_attachments(draft.attachments)
         group_id = await self._checked_group(draft.group_id, house_id, draft.category)
+        chosen = draft.place
+        if group_id is not None:
+            members = await self._requests.list_for_group(group_id)
+            chosen = next((member.place for member in members), chosen)
+        place = placed(draft.category, chosen)
 
         request = await self._requests.create(
             house,
@@ -210,6 +250,7 @@ class RequestsService:
             group_id,
             None,
             is_staff_author=await self._is_staff(house, user_id),
+            place=place,
         )
         await self._add_attachments(request, attachments, user_id)
         await self._open(request, user_id)
@@ -285,6 +326,7 @@ class RequestsService:
             None,
             parent.id,
             is_staff_author=await self._is_staff(house, user_id),
+            place=parent.place,
         )
         await self._add_attachments(request, checked, user_id)
         await self._open(request, user_id)
@@ -535,6 +577,8 @@ class RequestsService:
             raise EntityNotFound(GROUP_NOT_FOUND)
         if group.category is not category:
             raise InvalidRequest(GROUP_OTHER_CATEGORY)
+        if category in PRIVATE_CATEGORIES:
+            raise InvalidRequest(GROUP_PRIVATE)
         if group.status is not RequestGroupStatus.OPEN:
             raise InvalidState(GROUP_CLOSED)
         return group_id
@@ -739,6 +783,139 @@ class RequestsService:
         )
         return await self._built_card(request, house)
 
+    async def cancel(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        reason: CancelReason,
+        comment: str | None,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._active_resident(user_id, request.house_id)
+        await self._requests.lock(request)
+        current = request.status
+        if current not in OPEN_STATUSES:
+            raise InvalidState(CANCEL_TOO_LATE)
+        note = (comment or "").strip()
+        if reason is CancelReason.OTHER and not note:
+            raise InvalidRequest(CANCEL_COMMENT_REQUIRED)
+
+        at = datetime.now(UTC)
+        role = RequestActorRole.RESIDENT.value
+        await self._requests.set_status(
+            request,
+            RequestStatus.DONE,
+            at,
+            completion_reason=RequestCompletionReason.RESIDENT_CANCELED,
+        )
+        await self._requests.add_log(
+            request.id,
+            current,
+            RequestStatus.DONE,
+            user_id,
+            role,
+            at,
+        )
+        await self._requests.add_message(
+            request.id,
+            user_id,
+            role,
+            texts.cancel_note(reason, note),
+        )
+        await self._events.record(
+            EventType.REQUEST_STATUS_CHANGED,
+            user_id=user_id,
+            request_id=request.id,
+            **{"from": current.value, "to": RequestStatus.DONE.value},
+            by_role=role,
+        )
+        await self._events.record(
+            EventType.REQUEST_CANCELED,
+            user_id=user_id,
+            request_id=request.id,
+            reason=reason.value,
+            status=current.value,
+        )
+        house = await self._get_house(request.house_id)
+        await self._notify_crew(
+            request,
+            house,
+            texts.request_canceled(request, reason, note),
+        )
+        self._sync_cards(request)
+        return await self._built_card(request, house)
+
+    def _sync_cards(self, request: Request) -> None:
+        self._notifications.sync_chat_card(ChatCardKind.REQUEST, request.id, post=False)
+        if request.group_id is not None:
+            self._notifications.sync_chat_card(
+                ChatCardKind.GROUP,
+                request.group_id,
+                post=False,
+            )
+
+    async def write(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        text: str,
+        channel: RequestChannel,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._active_resident(user_id, request.house_id)
+        message = stated(text, EMPTY_MESSAGE)
+        await self._requests.lock(request)
+        if request.status is RequestStatus.DONE:
+            raise InvalidState(WRITE_CLOSED)
+
+        answer = request.question_asked_at is not None
+        await self._requests.add_message(
+            request.id,
+            user_id,
+            RequestActorRole.RESIDENT.value,
+            message,
+        )
+        await self._requests.stamp_thread(
+            request,
+            question_asked_at=None,
+            resident_answered_at=datetime.now(UTC),
+        )
+        await self._events.record(
+            EventType.REQUEST_MESSAGE_SENT,
+            user_id=user_id,
+            request_id=request.id,
+            by_role=RequestActorRole.RESIDENT.value,
+            answer=answer,
+            channel=channel.value,
+        )
+        house = await self._get_house(request.house_id)
+        await self._notify_crew(
+            request,
+            house,
+            texts.resident_answered(request, message),
+        )
+        return await self._built_card(request, house)
+
+    async def send_gji_pdf(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        now: datetime,
+    ) -> None:
+        request = await self._own_request(user_id, request_id)
+        if request.status not in OPEN_STATUSES or request.deadline_at > now:
+            raise InvalidState(GJI_NOT_OVERDUE)
+        user = await self._users.get_by_id(user_id)
+        if user is None or not user.in_dialog:
+            raise InvalidState(NO_BOT_DIALOG)
+        await self._events.record(
+            EventType.REQUEST_EXPORTED,
+            user_id=user_id,
+            request_id=request_id,
+            format="gji_pdf",
+        )
+        self._notifications.send_gji_pdf(user_id, request_id)
+
     async def demo_neighbours(
         self,
         user_id: UserId,
@@ -773,6 +950,7 @@ class RequestsService:
                 None,
                 None,
                 is_staff_author=False,
+                place=request.place,
             )
             await self._open(neighbour, resident.user_id)
             await self._requests.mark_deadline(neighbour, now, overdue=True)
@@ -965,6 +1143,7 @@ async def available_neighbours(
         or not org.is_demo
         or request.status not in OPEN_STATUSES
         or request.group_id is not None
+        or request.category in PRIVATE_CATEGORIES
     ):
         return []
     rules = rules_of(await orgs_repo.get_settings(org.id))
@@ -977,3 +1156,13 @@ async def available_neighbours(
         since,
         DEMO_NEIGHBOURS,
     )
+
+
+PLACE_REQUIRED = "Укажите, где проблема: в квартире или в доме"
+
+
+def placed(category: RequestCategory, chosen: RequestPlace | None) -> RequestPlace:
+    place = CATEGORY_PLACES.get(category, chosen)
+    if place is None:
+        raise InvalidRequest(PLACE_REQUIRED)
+    return place

@@ -9,7 +9,7 @@ import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
-import { CATEGORY_ICON, ZONE_LABEL } from "./domain/category";
+import { CATEGORY_ICON, PLACE_LABEL, ZONE_LABEL } from "./domain/category";
 import { deadlineLeft } from "./domain/format";
 import { requestLetter } from "./domain/letters";
 import {
@@ -113,10 +113,15 @@ const RequestPage = () => {
           )}
         </Flex>
 
-        {actor && (
-          <Typography.Text variant="description" color="secondary">
-            Сейчас: {actor}
-          </Typography.Text>
+      <Flex align="center" wrap="wrap" gap={8}>
+        <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
+        <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
+        {request.group_size > 1 && (
+          <StatusPill tone="neutral">
+            {request.group_size}{" "}
+            {plural(request.group_size, ["квартира", "квартиры", "квартир"])} в
+            заявке
+          </StatusPill>
         )}
       </Flex>
 

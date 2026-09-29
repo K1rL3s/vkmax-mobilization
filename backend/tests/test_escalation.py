@@ -24,10 +24,13 @@ from zheka.core.enums import (
     EventType,
     OrgRole,
     RequestCategory,
+    RequestPlace,
     RequestStatus,
 )
 from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
 from zheka.core.ids import MaxChatId, UserId
+from zheka.core.services.requests import RequestDraft
+from zheka.core.texts import REQUEST_PLACE_LINES
 from zheka.infra.database.models import OrgMember, User
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters
@@ -66,6 +69,7 @@ async def test_escalation_reaches_everyone_on_the_request_once(
     assert staff["text"].startswith("⬆️ Житель просит руководство вмешаться")
     assert f"№{request.id}" in staff["text"]
     assert "просрочена на 5 ч" in staff["text"]
+    assert REQUEST_PLACE_LINES[RequestPlace.FLAT] in staff["text"]
     assert staff["mandatory"] is False
     assert staff["app_path"] == f"/admin/requests/{request.id}"
     author, crew = broker.enqueued(TaskName.SEND_TO_USER)
@@ -273,6 +277,79 @@ async def test_a_group_shows_its_earliest_open_escalation(
     )
 
     assert row.escalated_at == now + timedelta(minutes=1)
+
+
+async def test_open_dangerous_requests_follow_the_escalated_ones(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    late = await _complain(session, own.user_id, own.house_id)
+    escalated = await _complain(session, own.user_id, own.house_id)
+    sparks = RequestDraft(
+        category=RequestCategory.ELECTRICITY,
+        description="Искрит щиток на площадке",
+        place=RequestPlace.HOUSE,
+    )
+    service = requests_service(session)
+    dangerous = await service.create(own.user_id, own.house_id, sparks)
+    finished = await service.create(own.user_id, own.house_id, sparks)
+    normative = CATEGORY_RULES[RequestCategory.LEAK].fix_hours
+    await _age(session, late.id, normative + 1)
+    await _age(session, escalated.id, normative + 2)
+    await service.escalate(own.user_id, escalated.id, datetime.now(UTC))
+    finished.request.status = RequestStatus.DONE
+    await session.flush()
+
+    rows, _ = await admin_requests_service(session).inbox(
+        own.org_id,
+        RequestFilters(),
+        20,
+        0,
+    )
+
+    assert [row.request.id for row in rows] == [
+        escalated.id,
+        dangerous.request.id,
+        late.id,
+        finished.request.id,
+    ]
+
+
+async def test_a_group_rises_and_shows_the_danger_of_any_open_member(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    members, group_id = await _group_of_three(session, own)
+    lone = await _complain(
+        session,
+        own.user_id,
+        own.house_id,
+        RequestCategory.ELEVATOR,
+    )
+    socket = RequestDraft(
+        category=RequestCategory.LEAK,
+        description="Вода течет прямо в розетку",
+        place=RequestPlace.FLAT,
+    )
+    dangerous = await requests_service(session).create(
+        own.user_id,
+        own.house_id,
+        socket,
+    )
+    assert dangerous.request.group_id == group_id
+    viewer = _viewer(own, own.user_id, is_demo=False)
+    service = admin_requests_service(session)
+
+    page = await list_org_requests(viewer, service, grouped=True)
+    dangerous.request.status = RequestStatus.DONE
+    await session.flush()
+    done = await list_org_requests(viewer, service, grouped=True)
+
+    assert [(item.id, item.danger) for item in page.items] == [
+        (members[0].id, DangerKind.FLOOD_ELECTRIC),
+        (lone.id, None),
+    ]
+    assert [item.id for item in done.items] == [lone.id, members[0].id]
 
 
 async def test_a_gji_pdf_of_someone_elses_request_is_not_found(

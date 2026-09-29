@@ -30,3 +30,9 @@ Russian product words, used the same way in code, copy and docs.
 - Отключение (`HouseCard.outages`, `core/outages.py`): a utility supply break
   reported by the resource company; demo data for now. Not a УК
   announcement.
+- Личная / общая заявка (`Request.place`, enum `RequestPlace`: `flat` /
+  `house`): the problem is in the author's flat or in the building
+  (entrance, yard, common property). `CATEGORY_PLACES` fixes it for lift,
+  garbage, entrance, yard (общая) and meter_error, charge_dispute (личная);
+  for leak, heating, water_supply, electricity and other the author chooses,
+  nothing preselected. Never changes grouping.

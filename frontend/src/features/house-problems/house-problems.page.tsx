@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import {
   CATEGORY_ICON,
+  PLACE_LABEL,
   type RequestStatus,
   STATUS_TONE,
 } from "@/features/request";
@@ -108,14 +109,19 @@ const HouseProblemsPage = () => {
                     · с {formatTime(problem.since)}{" "}
                     {formatShortDay(problem.since)}
                   </Typography.Text>
-                  {problem.mine && (
-                    <Typography.Text
-                      variant="description"
-                      className={styles.Mine}
-                    >
-                      Вы тоже сообщили
-                    </Typography.Text>
-                  )}
+                  <Flex align="center" wrap="wrap" gap={8}>
+                    <StatusPill tone="neutral">
+                      {PLACE_LABEL[problem.place]}
+                    </StatusPill>
+                    {problem.mine && (
+                      <Typography.Text
+                        variant="description"
+                        className={styles.Mine}
+                      >
+                        Вы тоже сообщили
+                      </Typography.Text>
+                    )}
+                  </Flex>
                 </Flex>
               </Flex>
 
@@ -168,12 +174,17 @@ const HouseProblemsPage = () => {
                 <Typography.Text variant="body-strong" color="primary">
                   {problem.category_label}
                 </Typography.Text>
-                <Typography.Text variant="description" color="secondary">
-                  решена {formatShortDay(problem.done_at)} ·{" "}
-                  {problem.confirmed
-                    ? "житель подтвердил"
-                    : "закрыта автоматически"}
-                </Typography.Text>
+                <Flex align="center" wrap="wrap" gap={8}>
+                  <StatusPill tone="neutral">
+                    {PLACE_LABEL[problem.place]}
+                  </StatusPill>
+                  <Typography.Text variant="description" color="secondary">
+                    решена {formatShortDay(problem.done_at)} ·{" "}
+                    {problem.confirmed
+                      ? "житель подтвердил"
+                      : "закрыта автоматически"}
+                  </Typography.Text>
+                </Flex>
               </Flex>
             </Flex>
           ))}

@@ -37,6 +37,7 @@ type MockRequest = {
     author_name?: string;
     is_internal?: boolean;
   }[];
+  place?: Schemas["RequestPlace"];
 };
 
 const request = (
@@ -105,6 +106,7 @@ const requests: MockRequest[] = [
     id: 142,
     category: "leak",
     description: "Протечка, 2-й подъезд",
+    place: "house",
     status: "in_progress",
     created_at: minutes(-150),
     deadline_at: minutes(90),
@@ -133,6 +135,7 @@ const requests: MockRequest[] = [
     id: 141,
     category: "electricity",
     description: "Снова не горит свет на 5 этаже",
+    place: "house",
     status: "in_progress",
     created_at: days(-1),
     deadline_at: minutes(10 * 60),
@@ -175,6 +178,7 @@ const requests: MockRequest[] = [
     id: 131,
     category: "electricity",
     description: "Не горит свет на 5 этаже",
+    place: "house",
     status: "done",
     created_at: days(-16),
     executor_name: "Электрик Олег Смирнов",
@@ -232,6 +236,7 @@ const requests: MockRequest[] = [
     id: 108,
     category: "other",
     description: "Не работает домофон у первого подъезда",
+    place: "house",
     status: "done",
     created_at: days(-46),
     rating: 5,
@@ -371,6 +376,7 @@ export const requestListItem = (
   escalated_at: item.escalated_at,
   question_asked_at: item.question_asked_at,
   resident_answered_at: item.resident_answered_at,
+  place: FIXED_PLACES[item.category] ?? item.place ?? "flat",
 });
 
 const STEP: {
@@ -466,6 +472,9 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     auto_close_at:
       item.status === "on_review" ? shift(timeline[3].at, 48 * 60) : null,
     can_demo_expire: canDemoExpire(item),
+    rejection_needs_photo: !["meter_error", "charge_dispute"].includes(
+      item.category,
+    ),
     can_demo_neighbours: canDemoNeighbours(item),
   };
 };
@@ -533,6 +542,12 @@ export const createRequest = (
     group_id: body.join_group_id ?? null,
     has_attachments: (body.photos?.length ?? 0) > 0,
     attachment_names: body.photos ?? [],
+    place:
+      requests.find(
+        (item) => body.join_group_id && item.group_id === body.join_group_id,
+      )?.place ??
+      body.place ??
+      undefined,
   });
   requests.push(created);
 
@@ -567,6 +582,7 @@ export const repeatRequest = (
     parent_request_id: item.id,
     has_attachments: attachments.length > 0,
     attachment_names: attachments,
+    place: item.place,
   });
   requests.push(created);
 
@@ -582,6 +598,7 @@ export const requestCategories = (): Schemas["RequestCategoryItem"][] =>
     react_text: rule.react ?? null,
     deadline_basis: rule.basis ?? null,
     pp290_refs: rule.pp290 ?? [],
+    place: FIXED_PLACES[category as Schemas["RequestCategory"]] ?? null,
   }));
 
 export const categoryDeadline = (category: Schemas["RequestCategory"]) =>
@@ -596,7 +613,8 @@ export const canDemoExpire = (item: MockRequest) =>
 export const canDemoNeighbours = (item: MockRequest) =>
   Boolean(findHouse(item.house_id)?.org?.is_demo) &&
   ["new", "accepted", "in_progress"].includes(item.status) &&
-  item.group_id === null;
+  item.group_id === null &&
+  FIXED_PLACES[item.category] !== "flat";
 
 export const houseProblems = (
   houseId: number,
@@ -611,6 +629,7 @@ export const houseProblems = (
       category_label: CATEGORY_RULES[item.category].label,
       done_at: item.created_at,
       confirmed: item.completion_reason === "resident_accepted",
+      place: requestListItem(item).place,
     }));
 
   return {
@@ -622,6 +641,7 @@ export const houseProblems = (
         status: "accepted",
         since: days(-1),
         mine: false,
+        place: "house",
       },
       ...shown
         .filter((item) => item.status !== "done")
@@ -632,9 +652,21 @@ export const houseProblems = (
           status: item.status,
           since: item.created_at,
           mine: true,
+          place: requestListItem(item).place,
         })),
     ],
     resolved,
     resolved_total: resolved.length,
   };
+};
+
+const FIXED_PLACES: Partial<
+  Record<Schemas["RequestCategory"], Schemas["RequestPlace"]>
+> = {
+  elevator: "house",
+  garbage: "house",
+  entrance: "house",
+  yard: "house",
+  meter_error: "flat",
+  charge_dispute: "flat",
 };

@@ -21,7 +21,12 @@ from zheka.api.schemas.requests import (
     ReplyToRequestRequest,
     RequestGroupCard,
 )
-from zheka.core.enums import RequestCategory, RequestChannel, RequestStatus
+from zheka.core.enums import (
+    RequestCategory,
+    RequestChannel,
+    RequestPlace,
+    RequestStatus,
+)
 from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import (
     API_CHECKER_MAX_USER_ID,
@@ -69,6 +74,7 @@ async def list_org_requests(
     resident_answered: bool = False,
     limit: Limit = 20,
     offset: Offset = 0,
+    place: RequestPlace | None = None,
 ) -> Page[AdminRequestListItem]:
     rows, total = await admin_requests_service.inbox(
         current_org.org_id,
@@ -82,6 +88,7 @@ async def list_org_requests(
             grouped=grouped,
             question_asked=question_asked,
             resident_answered=resident_answered,
+            place=place,
         ),
         limit,
         offset,

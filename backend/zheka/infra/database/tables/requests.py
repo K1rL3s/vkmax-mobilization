@@ -20,6 +20,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
 )
 from zheka.infra.database.tables._columns import created_at_column, id_column
@@ -77,6 +78,7 @@ requests_table = Table(
         ),
         nullable=True,
     ),
+    Column("place", pg_enum(RequestPlace, "request_place"), nullable=False),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),

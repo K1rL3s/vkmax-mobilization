@@ -20,6 +20,7 @@ from zheka.core.enums import (
     OrgRole,
     RequestCategory,
     RequestChannel,
+    RequestPlace,
     RequestStatus,
     ResidentStatus,
 )
@@ -27,7 +28,7 @@ from zheka.core.errors import EntityNotFound
 from zheka.core.ids import HouseId, OrgId, UserId
 from zheka.core.models import Request
 from zheka.core.services.requests import RequestDraft
-from zheka.core.texts import COMPLAINT_BUTTON
+from zheka.core.texts import COMPLAINT_BUTTON, REQUEST_PLACE_LINES
 from zheka.infra.database.models import OrgMember
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -50,7 +51,11 @@ async def _file(
     card = await requests_service(session, publisher).create(
         own.user_id,
         own.house_id,
-        RequestDraft(category=category, description="Течет стояк"),
+        RequestDraft(
+            category=category,
+            description="Течет стояк",
+            place=RequestPlace.FLAT,
+        ),
     )
     return card.request
 
@@ -127,6 +132,7 @@ async def test_the_warning_and_the_overdue_notice_go_once_each(
     [_, overdue] = _texts(broker, TaskName.BROADCAST_TO_USERS)
     assert overdue["user_ids"] == [staff]
     assert "просрочена" in overdue["text"]
+    assert REQUEST_PLACE_LINES[RequestPlace.FLAT] in overdue["text"]
     author, chair = _texts(broker, TaskName.SEND_TO_USER)
     assert author["user_id"] == own.user_id
     assert author["mandatory"] is True

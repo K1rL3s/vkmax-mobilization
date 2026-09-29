@@ -122,8 +122,10 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     parent_request_id: null,
     auto_close_at: null,
     can_demo_expire: false,
+    rejection_needs_photo: true,
     can_demo_neighbours: false,
     ...fields,
+    place: category.place ?? fields.place ?? "house",
   };
 };
 
@@ -153,6 +155,7 @@ for (const groupId of new Set(
         is_staff_author: false,
         author_name: `Автор из квартиры ${index + 20}`,
         flat_number: String(index + 20),
+        place: first.place,
       }),
     );
   }
@@ -190,6 +193,7 @@ requests.push(
     category: repeatParent.category,
     category_label: repeatParent.category_label,
     author_name: "Анна Морозова",
+    place: repeatParent.place,
     channel: "miniapp",
     is_staff_author: false,
     description:
@@ -271,6 +275,7 @@ export const adminRequestsConfigs = [
             item.category === request.query.category) &&
           (!request.query.status || item.status === request.query.status) &&
           (!request.query.channel || item.channel === request.query.channel) &&
+          (!request.query.place || item.place === request.query.place) &&
           (!request.query.executor_user_id ||
             item.executor_user_id === number(request.query.executor_user_id)) &&
           (request.query.overdue !== "true" ||
@@ -426,6 +431,7 @@ export const adminRequestsConfigs = [
       is_staff_author: !resident,
       caller_name: body.caller_name?.trim() || null,
       caller_phone: body.caller_phone?.trim() || null,
+      place: body.place ?? undefined,
     });
     requests.push(item);
     return ok(item);

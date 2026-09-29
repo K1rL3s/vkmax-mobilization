@@ -15,6 +15,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
     ResidentStatus,
 )
@@ -68,6 +69,7 @@ class RequestFilters(ZhekaType):
     grouped: bool = False
     question_asked: bool = False
     resident_answered: bool = False
+    place: RequestPlace | None = None
 
 
 def overdue_at(
@@ -95,6 +97,7 @@ class RequestsRepo(BaseAlchemyRepo):
         is_staff_author: bool,
         caller_name: str | None = None,
         caller_phone: str | None = None,
+        place: RequestPlace,
     ) -> Request:
         now = datetime.now(UTC)
         react_deadline_at, deadline_at = CATEGORY_RULES[category].deadlines(
@@ -119,6 +122,7 @@ class RequestsRepo(BaseAlchemyRepo):
             deadline_at=deadline_at,
             react_deadline_at=react_deadline_at,
             danger=None if danger is None else danger.kind,
+            place=place,
         )
         self._session.add(request)
         await self._session.flush()
@@ -296,7 +300,14 @@ class RequestsRepo(BaseAlchemyRepo):
         offset: int,
     ) -> tuple[Sequence[Request], int]:
         stmt = scoped_to_org(select(Request), requests_table.c.house_id, org_id)
-        for name in ("house_id", "category", "status", "channel", "executor_user_id"):
+        for name in (
+            "house_id",
+            "category",
+            "status",
+            "channel",
+            "executor_user_id",
+            "place",
+        ):
             value = getattr(filters, name)
             if value is not None:
                 stmt = stmt.where(requests_table.c[name] == value)
@@ -328,6 +339,10 @@ class RequestsRepo(BaseAlchemyRepo):
                     open_danger(members),
                 )
                 .exists(),
+            )
+            first = func.min(requests_table.c.id)
+            live = requests_table.c.completion_reason.is_distinct_from(
+                RequestCompletionReason.RESIDENT_CANCELED,
             )
             leaders = (
                 select(func.coalesce(first.filter(live), first))
@@ -589,6 +604,34 @@ class RequestsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return {RequestGroupId(group_id): at for group_id, at in result.tuples()}
+
+    async def stamp_thread(
+        self,
+        request: Request,
+        *,
+        question_asked_at: datetime | None,
+        resident_answered_at: datetime | None,
+    ) -> None:
+        request.question_asked_at = question_asked_at
+        request.resident_answered_at = resident_answered_at
+        await self._session.flush()
+
+    async def group_dangers(
+        self,
+        group_ids: Collection[RequestGroupId],
+    ) -> dict[RequestGroupId, DangerKind]:
+        if not group_ids:
+            return {}
+        stmt = (
+            select(requests_table.c.group_id, func.min(requests_table.c.danger))
+            .where(
+                requests_table.c.group_id.in_(group_ids),
+                requests_table.c.danger.is_not(None),
+            )
+            .group_by(requests_table.c.group_id)
+        )
+        result = await self._session.execute(stmt)
+        return {RequestGroupId(group_id): kind for group_id, kind in result.tuples()}
 
     async def list_demo_neighbours(
         self,

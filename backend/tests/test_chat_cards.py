@@ -17,11 +17,13 @@ from tests.conftest import (
     reminders_service,
     requests_service,
 )
+from tests.test_request_grouping import ONE_FLAT_BILL
 from tests.test_requests import _mark_done, _mark_on_review, _member, _neighbour
 
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core import texts
+from zheka.core.deeplinks import house_category_payload, house_payload
 from zheka.core.enums import (
     CancelReason,
     ChatCardKind,
@@ -30,6 +32,7 @@ from zheka.core.enums import (
     OrgRole,
     PollAuthor,
     RequestCategory,
+    RequestPlace,
     RequestStatus,
 )
 from zheka.core.errors import EntityNotFound, InvalidState
@@ -52,7 +55,11 @@ async def _grouped(
         card = await service.create(
             await _neighbour(session, own.house_id, number),
             own.house_id,
-            RequestDraft(category=RequestCategory.LEAK, description="Течет стояк"),
+            RequestDraft(
+                category=RequestCategory.LEAK,
+                description="Течет стояк",
+                place=RequestPlace.FLAT,
+            ),
         )
         group_id = card.request.group_id
     assert group_id is not None
@@ -83,7 +90,11 @@ async def test_a_formed_group_and_each_join_post_the_card(
     await requests_service(session, publisher).create(
         await _neighbour(session, own.house_id, "14"),
         own.house_id,
-        RequestDraft(category=RequestCategory.LEAK, description="И у нас"),
+        RequestDraft(
+            category=RequestCategory.LEAK,
+            description="И у нас",
+            place=RequestPlace.FLAT,
+        ),
     )
     await publisher.flush()
 
@@ -566,3 +577,58 @@ async def test_a_canceled_request_card_says_so_without_buttons(
     assert view is not None
     assert view.text == f"↩️ Заявка №{request.id} отменена автором"
     assert (view.me_too, view.join) == (None, False)
+
+
+@ONE_FLAT_BILL
+async def test_a_bill_request_card_offers_no_me_too(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+) -> None:
+    card = await requests_service(session).create(
+        own.user_id,
+        own.house_id,
+        RequestDraft(category=category, description="Счет за июль"),
+    )
+
+    view = await chat_cards_service(session).render(
+        ChatCardKind.REQUEST,
+        card.request.id,
+    )
+
+    assert view is not None
+    assert (view.me_too, view.join) == (None, True)
+
+
+@ONE_FLAT_BILL
+async def test_a_bill_request_is_shared_without_the_join_call(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+) -> None:
+    service = requests_service(session)
+    card = await service.create(
+        own.user_id,
+        own.house_id,
+        RequestDraft(category=category, description="Счет за июль"),
+    )
+
+    shared = await service.share_to_chat(own.user_id, card.request.id)
+
+    assert shared.share_payload == house_payload(own.house_id)
+    assert shared.share_text.endswith(f"{shared.house.address}.")
+
+
+async def test_a_shared_request_calls_neighbours_to_join(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request = await _own_request(session, own)
+
+    shared = await requests_service(session).share_to_chat(own.user_id, request.id)
+
+    assert shared.share_payload == house_category_payload(
+        own.house_id,
+        request.category,
+    )
+    assert shared.share_text.endswith("присоединяйтесь к заявке")

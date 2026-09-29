@@ -12,6 +12,7 @@ import {
   requestCategorySchema,
   useRequestCategories,
   type RequestCategory,
+  type RequestPlace,
 } from "@/features/request";
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
@@ -63,6 +64,7 @@ export const useNewRequest = () => {
   const [picked, setPicked] = useState<RequestCategory | null>(
     dispute?.category ?? preset,
   );
+  const [place, setPlace] = useState<RequestPlace | null>(null);
   const attachments = useAttachments();
   const idempotency = useIdempotencyKey();
 
@@ -94,6 +96,8 @@ export const useNewRequest = () => {
       )?.category ?? null)
     : null;
   const category = picked ?? suggested;
+  const rule = categories.data?.find((item) => item.category === category);
+  const asksPlace = !dispute && rule !== undefined && !rule.place;
 
   const debouncedCategory = useDebounceValue(category, 400);
 
@@ -175,11 +179,16 @@ export const useNewRequest = () => {
         join_group_id: joinGroupId,
         llm_suggested: suggested !== null,
         llm_accepted: suggested !== null && category === suggested,
+        place: asksPlace ? place : null,
       },
     });
   };
 
   const neighbours = debouncedCategory === category ? similar.data : undefined;
+  const isFilled =
+    description.trim().length > 0 &&
+    category !== null &&
+    !attachments.isUploading;
   const failure = create.error ?? disputeCharge.error;
 
   return {
@@ -206,11 +215,17 @@ export const useNewRequest = () => {
         failure,
         "Заявка не ушла. Проверьте связь и попробуйте ещё раз",
       ),
-    canSubmit:
-      description.trim().length > 0 &&
-      category !== null &&
-      !attachments.isUploading,
-    missing: missingPart(description, category, attachments.isUploading),
+    canSubmit: isFilled && (!asksPlace || place !== null),
+    canJoin: isFilled,
+    missing: missingPart(
+      description,
+      category,
+      asksPlace && place === null,
+      attachments.isUploading,
+    ),
+    asksPlace,
+    place,
+    setPlace,
     submit,
   };
 };
@@ -218,6 +233,7 @@ export const useNewRequest = () => {
 const missingPart = (
   description: string,
   category: RequestCategory | null,
+  isPlaceMissing: boolean,
   isUploading: boolean,
 ): string | null => {
   if (description.trim().length === 0) {
@@ -226,6 +242,10 @@ const missingPart = (
 
   if (category === null) {
     return "Выберите категорию";
+  }
+
+  if (isPlaceMissing) {
+    return "Укажите, где проблема";
   }
 
   return isUploading ? "Дождитесь загрузки вложений" : null;

@@ -724,6 +724,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/cancel": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отменить свою заявку
+     * @description Только автор и только открытая заявка (новая, принятая или в работе): она закрывается с итогом resident_canceled, причина уходит в переписку, сотрудники УК и исполнитель получают сообщение. Заявка на приемке или закрытая - 409, причина other без комментария - 400, чужая - 404, тестовый токен - 403
+     */
+    post: operations["cancel_request"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/requests/{request_id}/messages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Написать в УК по заявке
+     * @description Только автор незакрытой заявки: сообщение уходит сотрудникам УК и исполнителю, снимает вопрос УК и отмечает, что житель ответил. Закрытая заявка - 409, чужая - 404
+     */
+    post: operations["write_to_request"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/pp290": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Минимальный перечень работ УК (ПП РФ № 290)
+     * @description Пункты перечня с разделами, на них ссылаются категории заявок (pp290_refs). Файл отдается как есть, браузер кэширует его на сутки
+     */
+    get: operations["get_pp290"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/requests/{request_id}/gji-pdf": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Жалоба в ГЖИ файлом в чат с ботом
+     * @description Только автор просроченной открытой заявки, чужая - 404. Непросроченная или закрытая заявка и автор, которому бот не может написать (нет чата с ботом или бот остановлен), - 409. Бот присылает PDF с фактами заявки, нормативным сроком, историей статусов и строками для подписей соседей; на демо-УК - с пометкой «ДЕМО»
+     */
+    post: operations["send_gji_pdf"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/requests/{request_id}/demo/neighbours": {
     parameters: {
       query?: never;
@@ -735,7 +815,7 @@ export interface paths {
     put?: never;
     /**
      * Демо: соседи сообщили о том же
-     * @description Только автор открытой заявки без группы в демо-УК, поданной в окне склейки, пока в доме есть модельные жители без такой заявки, иначе 404. До 4 модельных соседей из других квартир подают заявку той же категории без уведомлений сотрудникам, и заявка автора собирается с ними в коллективную с порогом 2 квартиры. Тестовый токен - 403
+     * @description Только автор открытой заявки без группы в демо-УК, поданной в окне склейки, пока в доме есть модельные жители без такой заявки, иначе 404. Заявки о счете квартиры (ошибка в показаниях, спор по начислению) не склеиваются, для них тоже 404. До 4 модельных соседей из других квартир подают заявку той же категории без уведомлений сотрудникам, и заявка автора собирается с ними в коллективную с порогом 2 квартиры. Тестовый токен - 403
      */
     post: operations["add_demo_neighbours"];
     delete?: never;
@@ -1857,6 +1937,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/admin/announcements/{announcement_id}/register/pdf": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Реестр уведомлений файлом в чат с ботом
+     * @description Реестр дома (house_id, по умолчанию первый) PDF-файлом в чат администратора с ботом, unmarked_only оставляет квартиры без отметки. Чужое объявление или дом не из объявления - 404, бот не может написать администратору (нет чата с ботом или бот остановлен) - 409. Только администратору УК; на демо-УК - с пометкой «ДЕМО»
+     */
+    post: operations["send_register_pdf"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/admin/polls": {
     parameters: {
       query?: never;
@@ -2548,6 +2648,8 @@ export interface components {
        * @description Слова из описания, по которым заявка отмечена опасной
        */
       danger_phrase?: string | null;
+      /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
+      place: components["schemas"]["RequestPlace"];
       /** House Id */
       house_id: number;
       /** Address */
@@ -2609,6 +2711,11 @@ export interface components {
        * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
        */
       can_demo_expire: boolean;
+      /**
+       * Rejection Needs Photo
+       * @description Вернуть работу с приемки можно только с фото или видео
+       */
+      rejection_needs_photo: boolean;
       /**
        * Can Demo Neighbours
        * @description Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
@@ -2687,6 +2794,8 @@ export interface components {
        * @description Слова из описания, по которым заявка отмечена опасной
        */
       danger_phrase?: string | null;
+      /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
+      place: components["schemas"]["RequestPlace"];
       /** House Id */
       house_id: number;
       /** Address */
@@ -3389,6 +3498,8 @@ export interface components {
        * @description Житель дома, от чьего имени заявка: он становится ее автором, получает уведомления, принимает и оценивает работу. Квартира - его, имя и телефон звонившего тогда необязательны
        */
       resident_id?: number | null;
+      /** @description Где проблема, если категория допускает и квартиру, и дом; у остальных категорий место задано ими */
+      place?: components["schemas"]["RequestPlace"] | null;
     };
     /** CreatePollRequest */
     CreatePollRequest: {
@@ -3438,6 +3549,8 @@ export interface components {
        * @default false
        */
       llm_accepted: boolean;
+      /** @description Где проблема, если категория допускает и квартиру, и дом; у остальных категорий место задано ими */
+      place?: components["schemas"]["RequestPlace"] | null;
     };
     /**
      * DangerKind
@@ -3772,6 +3885,11 @@ export interface components {
        * @description Текущие и плановые отключения по дому, сейчас демо-данные
        */
       outages: components["schemas"]["OutageItem"][];
+      /**
+       * Services
+       * @description Городские службы и ГЖИ региона дома, сверены с их сайтами
+       */
+      services: components["schemas"]["CityServiceItem"][];
       /** @description Паспорт дома из справочника, у дома от жителя его нет */
       passport?: components["schemas"]["HousePassport"] | null;
     };
@@ -3843,6 +3961,24 @@ export interface components {
        * @description Когда запись дома обновлена в ГИС ЖКХ; нет - данных ГИС нет
        */
       gis_on?: string | null;
+    };
+    /** HouseProblemsResponse */
+    HouseProblemsResponse: {
+      /**
+       * Open
+       * @description Открытые проблемы: группа или заявки без группы одной категории
+       */
+      open: components["schemas"]["OpenProblemItem"][];
+      /**
+       * Resolved
+       * @description Решенные за 30 дней, последние 20
+       */
+      resolved: components["schemas"]["ResolvedProblemItem"][];
+      /**
+       * Resolved Total
+       * @description Сколько решено за 30 дней всего
+       */
+      resolved_total: number;
     };
     /** HouseResidentItem */
     HouseResidentItem: {
@@ -4221,6 +4357,8 @@ export interface components {
        * @description Среди заявок есть ваша или вашей подтвержденной квартиры
        */
       mine: boolean;
+      /** @description Где проблема у первой заявки: flat - в квартире, house - в доме */
+      place: components["schemas"]["RequestPlace"];
     };
     /** OrgCard */
     OrgCard: {
@@ -5083,6 +5221,8 @@ export interface components {
        * @description Слова из описания, по которым заявка отмечена опасной
        */
       danger_phrase?: string | null;
+      /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
+      place: components["schemas"]["RequestPlace"];
       /** House Id */
       house_id: number;
       /** Address */
@@ -5145,6 +5285,11 @@ export interface components {
        */
       can_demo_expire: boolean;
       /**
+       * Rejection Needs Photo
+       * @description Вернуть работу с приемки можно только с фото или видео
+       */
+      rejection_needs_photo: boolean;
+      /**
        * Can Demo Neighbours
        * @description Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
        */
@@ -5193,6 +5338,8 @@ export interface components {
        * @default []
        */
       pp290_refs: string[];
+      /** @description Где проблема у категории; пусто - житель выбирает сам */
+      place?: components["schemas"]["RequestPlace"] | null;
     };
     /**
      * RequestChannel
@@ -5301,6 +5448,8 @@ export interface components {
        * @description Слова из описания, по которым заявка отмечена опасной
        */
       danger_phrase?: string | null;
+      /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
+      place: components["schemas"]["RequestPlace"];
     };
     /** RequestMessageItem */
     RequestMessageItem: {
@@ -5322,6 +5471,11 @@ export interface components {
        */
       is_internal: boolean;
     };
+    /**
+     * RequestPlace
+     * @enum {string}
+     */
+    RequestPlace: "flat" | "house";
     /**
      * RequestStatus
      * @enum {string}
@@ -5392,6 +5546,8 @@ export interface components {
        * @description Житель принял работу; иначе заявка закрылась автоматически
        */
       confirmed: boolean;
+      /** @description Где проблема у первой заявки: flat - в квартире, house - в доме */
+      place: components["schemas"]["RequestPlace"];
     };
     /**
      * ResponsibilityZone
@@ -5464,7 +5620,7 @@ export interface components {
       share_text: string;
       /**
        * Share Link
-       * @description Ссылка «У меня тоже» на форму заявки
+       * @description Ссылка «У меня тоже» на форму заявки, у заявки о счете квартиры - на дом
        */
       share_link: string;
     };
@@ -5722,6 +5878,11 @@ export interface components {
        * @description Окончание, местное время первого дома
        */
       ends_at: string;
+    };
+    /** WriteToRequestRequest */
+    WriteToRequestRequest: {
+      /** Text */
+      text: string;
     };
   };
   responses: never;
@@ -9997,6 +10158,361 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  cancel_request: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CancelRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  write_to_request: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WriteToRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  get_pp290: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Pp290Catalog"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  send_gji_pdf: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OkResponse"];
         };
       };
       /** @description Некорректный запрос */
@@ -15334,6 +15850,7 @@ export interface operations {
         limit?: number;
         /** @description Сдвиг от начала списка */
         offset?: number;
+        place?: components["schemas"]["RequestPlace"] | null;
       };
       header?: {
         "X-Org-Id"?: number | null;
@@ -16531,6 +17048,97 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AnnouncementItem"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  send_register_pdf: {
+    parameters: {
+      query?: {
+        house_id?: number | null;
+        unmarked_only?: boolean;
+      };
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path: {
+        announcement_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OkResponse"];
         };
       };
       /** @description Некорректный запрос */

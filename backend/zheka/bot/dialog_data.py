@@ -9,7 +9,7 @@ from maxo.omit import is_defined
 from maxo.types import AudioAttachment, MessageBody, PhotoAttachment, VideoAttachment
 
 from zheka.base import ZhekaMutableType, ZhekaType
-from zheka.core.enums import EventSource, RequestCategory
+from zheka.core.enums import EventSource, RequestCategory, RequestPlace
 from zheka.core.ids import HouseId
 from zheka.core.services.requests import MAX_ATTACHMENTS, MAX_VIDEOS, TOO_MANY_VIDEOS
 
@@ -93,6 +93,7 @@ class NewRequestData(BaseDialogData):
     error: str | None = None
     voice_pending: bool = False
     voice_failed: bool = False
+    place: RequestPlace | None = None
 
     def attach_attachments(self, body: MessageBody) -> None:
         self.error = None

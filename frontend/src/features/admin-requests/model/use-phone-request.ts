@@ -3,7 +3,11 @@ import { useForm, useWatch } from "react-hook-form";
 import { generatePath, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { useRequestCategories, type RequestCategory } from "@/features/request";
+import {
+  useRequestCategories,
+  type RequestCategory,
+  type RequestPlace,
+} from "@/features/request";
 import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { useClosingConfirmation } from "@/shared/lib/max";
@@ -39,6 +43,7 @@ const phoneSchema = z
       .string()
       .trim()
       .max(requestFormConstraints.callerPhone, "Сократите телефон"),
+    place: z.enum(["flat", "house"] satisfies RequestPlace[]).nullable(),
   })
   .superRefine((draft, context) => {
     if (draft.residentId || draft.flatId) return;
@@ -70,13 +75,18 @@ export const usePhoneRequest = () => {
       residentId: 0,
       callerName: "",
       callerPhone: "",
+      place: null,
     },
   });
   useClosingConfirmation(form.formState.isDirty);
-  const [houseId, flatId, category] = useWatch({
+  const [houseId, flatId, category, place] = useWatch({
     control: form.control,
-    name: ["houseId", "flatId", "category"],
+    name: ["houseId", "flatId", "category", "place"],
   });
+  const asksPlace =
+    categories.data?.some(
+      (item) => item.category === category && !item.place,
+    ) ?? false;
   const flats = useRequestFlats(houseId);
   const residents = useRequestResidents(houseId, flatId);
   const idempotency = useIdempotencyKey();
@@ -123,6 +133,11 @@ export const usePhoneRequest = () => {
         shouldValidate: true,
       });
   };
+  const isPlaceMissing = () => {
+    const missing = asksPlace && !form.getValues("place");
+    if (missing) form.setError("place", { message: "Укажите, где проблема" });
+    return missing;
+  };
   const submit = form.handleSubmit((draft) => {
     if (create.isPending || create.isSuccess) return;
     const residentFlat = residents.selected?.flat_id;
@@ -132,6 +147,7 @@ export const usePhoneRequest = () => {
       });
       return;
     }
+    if (isPlaceMissing()) return;
     create.mutate({
       params: {
         header: {
@@ -147,9 +163,10 @@ export const usePhoneRequest = () => {
         resident_id: draft.residentId || null,
         caller_name: draft.callerName || null,
         caller_phone: draft.callerPhone || null,
+        place: asksPlace ? draft.place : null,
       },
     });
-  });
+  }, isPlaceMissing);
 
   return {
     form,
@@ -177,5 +194,9 @@ export const usePhoneRequest = () => {
       : null,
     retry: () => void categories.refetch(),
     submit,
+    asksPlace,
+    place,
+    selectPlace: (value: RequestPlace) =>
+      form.setValue("place", value, { shouldValidate: true }),
   };
 };

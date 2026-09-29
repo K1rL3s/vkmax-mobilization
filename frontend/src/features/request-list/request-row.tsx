@@ -5,6 +5,7 @@ import {
   CATEGORY_ICON,
   deadlineLeft,
   isOnReview,
+  PLACE_LABEL,
   STATUS_TONE,
   statusLabel,
   type RequestCompletionReason,
@@ -95,11 +96,17 @@ export const RequestRow = ({ request }: { request: RequestListItem }) => {
           {request.description}
         </Typography.Text>
 
-        {line && (
-          <Typography.Text className={styles[line.tone]} variant="description">
-            {line.text}
-          </Typography.Text>
-        )}
+        <Flex align="center" wrap="wrap" gap={8}>
+          <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
+          {line && (
+            <Typography.Text
+              className={styles[line.tone]}
+              variant="description"
+            >
+              {line.text}
+            </Typography.Text>
+          )}
+        </Flex>
       </Flex>
 
       <Chevron />

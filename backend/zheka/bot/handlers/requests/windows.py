@@ -27,12 +27,15 @@ from zheka.bot.handlers.requests.handlers import (
     on_category,
     on_description,
     on_description_attachment,
+    on_description_back,
     on_description_voice,
+    on_place,
     on_send,
     on_start,
 )
 from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
+from zheka.core.enums import RequestPlace
 from zheka.core.texts import DANGER_REQUEST_NOTE, OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
@@ -65,6 +68,9 @@ CANCEL_TEXT = (
     "↩️ Почему отменяете заявку №{request_id}?\n"
     "Другую причину можно указать в приложении"
 )
+PLACE_TEXT = "📍 Где проблема?"
+IN_FLAT = "🏠 В моей квартире"
+IN_HOUSE = "🏢 В доме: подъезд, двор, общее имущество"
 
 request_dialog = Dialog(
     Window(
@@ -117,7 +123,7 @@ request_dialog = Dialog(
         ),
         MessageInput(on_description_voice, content_types=[AttachmentType.AUDIO]),
         TextInput(id="description", on_success=on_description),
-        Row(SwitchTo(BACK, id="to_category", state=NewRequest.category), TO_MENU),
+        Row(Button(BACK, id="to_category", on_click=on_description_back), TO_MENU),
         state=NewRequest.description,
         getter=get_description,
     ),
@@ -179,6 +185,15 @@ request_dialog = Dialog(
         Row(SwitchTo(BACK, id="cancel_back", state=NewRequest.sent), TO_MENU),
         state=NewRequest.cancel,
         getter=get_cancel,
+    ),
+    Window(
+        Const(PLACE_TEXT),
+        Column(
+            Button(Const(IN_FLAT), id=RequestPlace.FLAT.value, on_click=on_place),
+            Button(Const(IN_HOUSE), id=RequestPlace.HOUSE.value, on_click=on_place),
+        ),
+        Row(SwitchTo(BACK, id="place_back", state=NewRequest.category), TO_MENU),
+        state=NewRequest.place,
     ),
     on_start=on_start,
 )

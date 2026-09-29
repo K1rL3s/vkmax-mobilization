@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { EmergencyCard, emergencyContact } from "@/features/emergency";
 import { outageForCategory, outageTitle, useHouseCard } from "@/features/house";
+import type { components } from "@/shared/api/schema/generated";
 import { formatDayTime } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
@@ -18,6 +19,7 @@ import { StatusPill } from "@/shared/ui/status-pill";
 
 import { CategoryChips } from "./category-chips";
 import { CategoryInfo } from "./category-info";
+import { PlaceChoice } from "./place-choice";
 import { SimilarPanel } from "./similar-panel";
 import { DESCRIPTION_LIMIT, useNewRequest } from "./use-new-request";
 
@@ -129,6 +131,18 @@ const NewRequestPage = () => {
           </Flex>
         )}
 
+        {form.asksPlace && (
+          <Flex asChild align="stretch" direction="column" gap={8}>
+            <section>
+              <Typography.Text asChild variant="title" color="primary">
+                <h2>Где проблема?</h2>
+              </Typography.Text>
+
+              <PlaceChoice value={form.place} onChange={form.setPlace} />
+            </section>
+          </Flex>
+        )}
+
         {selected && (
           <CategoryInfo
             category={selected}
@@ -176,7 +190,7 @@ const NewRequestPage = () => {
           form.neighbours.neighbours_count > 0 && (
             <SimilarPanel
               count={form.neighbours.neighbours_count}
-              canJoin={form.neighbours.can_join && form.canSubmit}
+              canJoin={form.neighbours.can_join && form.canJoin}
               isJoining={form.isJoining}
               onJoin={() => form.submit(form.neighbours?.group_id)}
             />

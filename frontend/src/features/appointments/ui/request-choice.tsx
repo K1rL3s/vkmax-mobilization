@@ -1,6 +1,10 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
-import { STATUS_LABEL, type RequestListItem } from "@/features/request";
+import {
+  PLACE_LABEL,
+  STATUS_LABEL,
+  type RequestListItem,
+} from "@/features/request";
 import { cn } from "@/shared/lib/css";
 
 import styles from "./request-choice.module.css";
@@ -21,7 +25,7 @@ export const RequestChoice = ({
     ...requests.map((request) => ({
       id: request.id,
       title: `№${request.id} · ${request.description}`,
-      subtitle: STATUS_LABEL[request.status],
+      subtitle: `${STATUS_LABEL[request.status]} · ${PLACE_LABEL[request.place]}`,
     })),
   ];
 

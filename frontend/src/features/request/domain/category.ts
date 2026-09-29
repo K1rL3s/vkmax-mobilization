@@ -13,7 +13,11 @@ import {
   wrenchIcon,
 } from "@/shared/ui/icon";
 
-import type { RequestCategory, ResponsibilityZone } from "./types";
+import type {
+  RequestCategory,
+  RequestPlace,
+  ResponsibilityZone,
+} from "./types";
 
 export const CATEGORY_ICON: Record<RequestCategory, string> = {
   leak: dropletIcon,
@@ -40,3 +44,8 @@ export const ZONE_LABEL: Record<ResponsibilityZone, string> = {
 };
 
 export const NO_NORM = "Срок сервиса, норматива нет";
+
+export const PLACE_LABEL: Record<RequestPlace, string> = {
+  flat: "Личная",
+  house: "Общая",
+};

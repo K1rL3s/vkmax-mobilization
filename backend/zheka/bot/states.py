@@ -32,6 +32,7 @@ class NewRequest(StatesGroup):
     confirm = State()
     sent = State()
     cancel = State()
+    place = State()
 
 
 class ExecutorCard(StatesGroup):

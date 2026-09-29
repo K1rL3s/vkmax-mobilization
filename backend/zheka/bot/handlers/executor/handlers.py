@@ -20,7 +20,7 @@ from zheka.core.ids import RequestId
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import MAX_ATTACHMENTS
-from zheka.core.texts import REQUEST_STATUS_LABELS
+from zheka.core.texts import REQUEST_PLACE_LINES, REQUEST_STATUS_LABELS
 
 PHOTO_TAKEN = "✅ Фото получил, карточка заявки обновится"
 DECLINE_SENT = "✅ Отказ передан в УК"
@@ -49,6 +49,7 @@ async def get_card(
     place = card.house.address
     if card.flat is not None:
         place = f"{place}, кв. {card.flat.number}"
+    place = f"{place}\n{REQUEST_PLACE_LINES[request.place]}"
     return {
         "request_id": request_id,
         "mine": True,

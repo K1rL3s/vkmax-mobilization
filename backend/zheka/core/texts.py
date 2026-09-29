@@ -10,6 +10,7 @@ from zheka.core.enums import (
     DangerKind,
     PollAuthor,
     RequestCategory,
+    RequestPlace,
     RequestStatus,
 )
 from zheka.core.ids import RequestId
@@ -233,8 +234,9 @@ def request_created(request: Request, house: House) -> str:
         else f"🚨 Опасность: {DANGER_LABELS[request.danger]}\n"
     )
     return (
-        f"{danger}🆕 Заявка {_request(request.id, request.category)}\n"
-        f"🏢 {escape(house.address)}\n{deadline_lines(request, house)}"
+        f"🆕 Заявка {_request(request.id, request.category)}\n"
+        f"🏢 {escape(house.address)}\n{REQUEST_PLACE_LINES[request.place]}\n"
+        f"{deadline_lines(request, house)}"
     )
 
 
@@ -276,7 +278,7 @@ def deadline_warning(request: Request, house: House, now: datetime) -> str:
 def request_overdue_staff(request: Request, house: House) -> str:
     return (
         f"🔴 Заявка {_request(request.id, request.category)} просрочена\n"
-        f"🏢 {escape(house.address)}"
+        f"🏢 {escape(house.address)}\n{REQUEST_PLACE_LINES[request.place]}"
     )
 
 
@@ -333,7 +335,7 @@ def request_escalated(request: Request, house: House, now: datetime) -> str:
     return (
         "⬆️ Житель просит руководство вмешаться: заявка "
         f"{_request(request.id, request.category)} просрочена на {hours} ч\n"
-        f"🏢 {escape(house.address)}"
+        f"🏢 {escape(house.address)}\n{REQUEST_PLACE_LINES[request.place]}"
     )
 
 
@@ -405,12 +407,14 @@ def request_card_grouped(request_id: RequestId, category: RequestCategory) -> st
     )
 
 
-def request_share_text(request: Request, house: House) -> str:
-    return (
+def request_share_text(request: Request, house: House, *, joinable: bool) -> str:
+    text = (
         f"{CATEGORY_RULES[request.category].emoji} Заявка №{request.id} · "
-        f"{CATEGORY_RULES[request.category].label}, {house.address}. "
-        "Если у вас то же самое, присоединяйтесь к заявке"
+        f"{CATEGORY_RULES[request.category].label}, {house.address}."
     )
+    if not joinable:
+        return text
+    return f"{text} Если у вас то же самое, присоединяйтесь к заявке"
 
 
 POLL_HASHTAG = "#опрос"
@@ -543,8 +547,7 @@ def _quoted(text: str) -> str:
     return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"
 
 
-def tenancy_ended(flat_number: str, address: str) -> str:
-    return (
-        f"🚪 Собственник завершил аренду кв. {escape(flat_number)}, "
-        f"{escape(address)}: доступ к квартире закрыт"
-    )
+REQUEST_PLACE_LINES: Mapping[RequestPlace, str] = {
+    RequestPlace.FLAT: "🏠 Личная: в квартире",
+    RequestPlace.HOUSE: "👥 Общая: в доме",
+}

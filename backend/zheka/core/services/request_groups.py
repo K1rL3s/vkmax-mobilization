@@ -4,10 +4,12 @@ from datetime import datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core.enums import (
+    CATEGORY_PLACES,
     ChatCardKind,
     EventType,
     RequestCategory,
     RequestCompletionReason,
+    RequestPlace,
     RequestStatus,
 )
 from zheka.core.ids import FlatId, HouseId, RequestGroupId, UserId
@@ -19,7 +21,9 @@ from zheka.infra.database.repos.requests import RequestsRepo
 DEFAULT_GROUP_THRESHOLD = 3
 DEFAULT_GROUP_WINDOW_HOURS = 24
 PRIVATE_CATEGORIES = frozenset(
-    {RequestCategory.METER_ERROR, RequestCategory.CHARGE_DISPUTE},
+    category
+    for category, place in CATEGORY_PLACES.items()
+    if place is RequestPlace.FLAT
 )
 RESOLVED_PERIOD = timedelta(days=30)
 RESOLVED_SHOWN = 20
@@ -78,6 +82,8 @@ class GroupingService:
         rules: GroupingRules,
         now: datetime,
     ) -> None:
+        if request.category in PRIVATE_CATEGORIES:
+            return
         since = now - timedelta(hours=rules.window_hours)
         house_id = request.house_id
         group = await self._requests.find_open_group(house_id, request.category, since)
@@ -121,6 +127,13 @@ class GroupingService:
         exclude_flat_id: FlatId | None,
         exclude_user_id: UserId,
     ) -> SimilarRequests:
+        if category in PRIVATE_CATEGORIES:
+            return SimilarRequests(
+                category=category,
+                flats_count=0,
+                group_id=None,
+                window_started_at=None,
+            )
         since = now - timedelta(hours=rules.window_hours)
         group = await self._requests.find_open_group(house_id, category, since)
         open_requests = await self._requests.list_open_in_window(
@@ -161,12 +174,14 @@ class OpenProblem(ZhekaType):
     status: RequestStatus
     since: datetime
     mine: bool
+    place: RequestPlace
 
 
 class ResolvedProblem(ZhekaType):
     category: RequestCategory
     done_at: datetime
     confirmed: bool
+    place: RequestPlace
 
 
 class HouseProblems(ZhekaType):
@@ -208,6 +223,7 @@ def problems_of(
                 member.completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED
                 for member in members
             ),
+            place=min(members, key=lambda member: member.id).place,
         )
         for members in finished.values()
     ]
@@ -226,6 +242,7 @@ def problems_of(
                     or (flat_id is not None and member.flat_id == flat_id)
                     for member in members
                 ),
+                place=min(members, key=lambda member: member.id).place,
             )
             for (category, _), members in problems.items()
         ],

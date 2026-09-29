@@ -1,7 +1,11 @@
 import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
-import { useRequestCategories, type RequestCategory } from "@/features/request";
+import {
+  useRequestCategories,
+  type RequestCategory,
+  type RequestPlace,
+} from "@/features/request";
 import { isForbidden, retryUnlessForbidden } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { orgParams } from "@/shared/model/session";
@@ -22,6 +26,10 @@ const filterSchema = z.object({
     .catch("all"),
   category: z.custom<RequestCategory>(isCategory).optional().catch(undefined),
   house: z.coerce.number().int().positive().optional().catch(undefined),
+  place: z
+    .enum(["flat", "house"] satisfies RequestPlace[])
+    .optional()
+    .catch(undefined),
 });
 
 export const useAdminRequestList = () => {
@@ -34,14 +42,19 @@ export const useAdminRequestList = () => {
     {
       params: {
         ...orgParams(),
-        query: { limit: PAGE_SIZE, grouped: true, house_id: filters.house },
+        query: {
+          limit: PAGE_SIZE,
+          grouped: true,
+          house_id: filters.house,
+          place: filters.place,
+        },
       },
     },
     { retry: retryUnlessForbidden },
   );
 
   const updateFilter = (
-    name: "filter" | "category" | "house",
+    name: "filter" | "category" | "house" | "place",
     value: string,
   ) => {
     setSearchParams(
@@ -74,7 +87,10 @@ export const useAdminRequestList = () => {
     loadError: requests.error,
     isSuccess: requests.isSuccess,
     hasFilters:
-      filters.filter !== "all" || !!filters.category || !!filters.house,
+      filters.filter !== "all" ||
+      !!filters.category ||
+      !!filters.house ||
+      !!filters.place,
     houseAddress: requests.data?.items[0]?.address,
     updateFilter,
     clearFilters: () => setSearchParams({}, { replace: true }),

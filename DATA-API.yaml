@@ -152,7 +152,7 @@ checks:
 
   - id: request_create
     name: Подача заявки
-    description: Житель подает заявку о протечке и сразу получает номер и срок
+    description: Житель подает заявку о протечке в квартире и сразу получает номер и срок
     method: POST
     path: /api/requests
     role: resident
@@ -164,10 +164,11 @@ checks:
       body:
         category: leak
         description: Течет кран в ванной, проверка API
+        place: flat
     expected:
       statusCodes: [200]
       contentType: application/json
-      requiredFields: [id, created_at, category, category_label, description, status, channel, has_photos, group_size, house_id, address, org_name, deadline_text, photos, result_photos, messages, timeline, can_review, can_rate]
+      requiredFields: [id, created_at, category, category_label, description, status, channel, has_photos, group_size, house_id, address, org_name, deadline_text, photos, result_photos, messages, timeline, can_review, can_rate, place]
     repeatable: false
 
   - id: request_list
@@ -192,7 +193,7 @@ checks:
         properties:
           items:
             type: array
-            items: {type: object, required: [id, created_at, category, status, group_size]}
+            items: {type: object, required: [id, created_at, category, status, group_size, place]}
     repeatable: true
 
   - id: request_card
@@ -208,7 +209,7 @@ checks:
     expected:
       statusCodes: [200]
       contentType: application/json
-      requiredFields: [id, created_at, category, status, house_id, address, deadline_text, timeline, messages]
+      requiredFields: [id, created_at, category, status, house_id, address, deadline_text, timeline, messages, place]
     repeatable: true
 
   - id: request_card_foreign
@@ -269,7 +270,7 @@ checks:
         properties:
           items:
             type: array
-            items: {type: object, required: [id, status, house_id, address, is_staff_author]}
+            items: {type: object, required: [id, status, house_id, address, is_staff_author, place]}
     repeatable: true
 
   - id: staff_reply

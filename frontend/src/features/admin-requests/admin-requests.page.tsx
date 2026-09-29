@@ -49,6 +49,16 @@ const AdminRequestsPage = () => {
           value={list.filters.filter}
           onChange={(id) => list.updateFilter("filter", id)}
         />
+        <ChipRow
+          label="Где проблема"
+          options={[
+            { id: "all", label: "Личные и общие" },
+            { id: "flat", label: "Личные" },
+            { id: "house", label: "Общие" },
+          ]}
+          value={list.filters.place ?? "all"}
+          onChange={(id) => list.updateFilter("place", id)}
+        />
         {list.categories.length > 0 && (
           <ChipRow
             label="Категория"

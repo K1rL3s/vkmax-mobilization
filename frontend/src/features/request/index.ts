@@ -1,6 +1,7 @@
 export {
   CATEGORY_ICON,
   NO_NORM,
+  PLACE_LABEL,
   requestCategorySchema,
   ZONE_LABEL,
 } from "./domain/category";
@@ -24,5 +25,6 @@ export type {
   RequestCategoryItem,
   RequestCompletionReason,
   RequestListItem,
+  RequestPlace,
   RequestStatus,
 } from "./domain/types";

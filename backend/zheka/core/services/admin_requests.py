@@ -15,6 +15,7 @@ from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
     ResidentStatus,
 )
@@ -54,6 +55,7 @@ from zheka.core.services.requests import (
     RequestRow,
     build_card,
     build_rows,
+    placed,
     stated,
 )
 from zheka.infra.database.repos.houses import HousesRepo
@@ -68,7 +70,7 @@ from zheka.infra.database.repos.users import UsersRepo
 
 EMPTY_REPLY = "Напишите ответ жителю"
 QUESTION_CLOSED = "Заявка закрыта: житель не сможет ответить"
-GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе"
+GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе или дальше"
 NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
 NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнитель"
 RESULT_PHOTO_REQUIRED = "Пришлите фото результата"
@@ -114,6 +116,7 @@ class PhoneRequestDraft(ZhekaType):
     caller_name: str | None = None
     caller_phone: str | None = None
     resident_id: ResidentId | None = None
+    place: RequestPlace | None = None
 
 
 class AdminRequestsService:
@@ -316,6 +319,7 @@ class AdminRequestsService:
                 raise EntityNotFound(FLAT_NOT_FOUND)
 
         author = None if resident is None else resident.user_id
+        place = placed(draft.category, draft.place)
         request = await self._requests.create(
             house,
             flat_id,
@@ -331,6 +335,7 @@ class AdminRequestsService:
             ),
             caller_name=caller_name,
             caller_phone=caller_phone,
+            place=place,
         )
         await self._requests.add_log(
             request.id,

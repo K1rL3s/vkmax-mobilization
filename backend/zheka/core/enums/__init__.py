@@ -20,6 +20,7 @@ from zheka.core.enums.profile import TextSize
 from zheka.core.enums.proposals import ProposalStatus
 from zheka.core.enums.requests import (
     CANCEL_REASONS,
+    CATEGORY_PLACES,
     CATEGORY_RULES,
     CancelReason,
     CategoryRule,
@@ -30,6 +31,7 @@ from zheka.core.enums.requests import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
     ResponsibilityZone,
 )
@@ -37,6 +39,7 @@ from zheka.core.enums.residents import ResidentRole, ResidentStatus, Verificatio
 
 __all__ = (
     "CANCEL_REASONS",
+    "CATEGORY_PLACES",
     "CATEGORY_RULES",
     "SERVICE_LABELS",
     "SERVICE_OF_METER",
@@ -49,6 +52,7 @@ __all__ = (
     "ChatCardKind",
     "ChatStatus",
     "CityServiceKind",
+    "DangerKind",
     "EventSource",
     "EventType",
     "HouseState",
@@ -69,6 +73,7 @@ __all__ = (
     "RequestChannel",
     "RequestCompletionReason",
     "RequestGroupStatus",
+    "RequestPlace",
     "RequestStatus",
     "ResidentRole",
     "ResidentStatus",

@@ -18,10 +18,12 @@ from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.requests import (
     MIN_CLASSIFY_TEXT,
+    CancelRequestRequest,
     ClassifyRequestRequest,
     ClassifyRequestResponse,
     CreateRequestRequest,
     HouseProblemsResponse,
+    Pp290Catalog,
     RateRequestRequest,
     RepeatRequestRequest,
     RequestCard,
@@ -32,19 +34,19 @@ from zheka.api.schemas.requests import (
     SimilarRequestsResponse,
     WriteToRequestRequest,
 )
-from zheka.core.deeplinks import house_category_payload
 from zheka.core.enums import (
     CATEGORY_RULES,
     RequestCategory,
     RequestChannel,
     RequestStatus,
 )
-from zheka.core.ids import RequestId
+from zheka.core.errors import NotEnoughRights
+from zheka.core.ids import API_CHECKER_MAX_USER_ID, RequestId
 from zheka.core.models import RequestAttachment
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
-from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER, request_share_text
+from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
 from zheka.infra.yandex import Classification, YandexQuota
 
 router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
@@ -245,14 +247,10 @@ async def share_request_to_chat(
     bot: FromDishka[Bot],
 ) -> SharedRequestResponse:
     shared = await requests_service.share_to_chat(current_account.user_id, request_id)
-    request = shared.request
     return SharedRequestResponse(
         posted=shared.posted,
-        share_text=request_share_text(request, shared.house),
-        share_link=create_startapp_link(
-            bot,
-            house_category_payload(request.house_id, request.category),
-        ),
+        share_text=shared.share_text,
+        share_link=create_startapp_link(bot, shared.share_payload),
     )
 
 
@@ -325,14 +323,124 @@ async def escalate_request(
 
 
 @router.post(
+    "/requests/{request_id}/cancel",
+    summary="Отменить свою заявку",
+    description=(
+        "Только автор и только открытая заявка (новая, принятая или в работе): "
+        "она закрывается с итогом resident_canceled, причина уходит в переписку, "
+        "сотрудники УК и исполнитель получают сообщение. Заявка на приемке или "
+        "закрытая - 409, причина other без комментария - 400, чужая - 404, "
+        "тестовый токен - 403"
+    ),
+)
+async def cancel_request(
+    request_id: RequestId,
+    current_user: CurrentUserDep,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+    body: CancelRequestRequest,
+) -> RequestCard:
+    if current_user.user.id == API_CHECKER_MAX_USER_ID:
+        raise NotEnoughRights(
+            "Тестовый токен не отменяет свои заявки: "
+            "на них держатся обязательные проверки API",
+        )
+    card = await requests_service.cancel(
+        current_account.user_id,
+        request_id,
+        body.reason,
+        body.comment,
+    )
+    return _card(card, files_service)
+
+
+@router.post(
+    "/requests/{request_id}/messages",
+    summary="Написать в УК по заявке",
+    description=(
+        "Только автор незакрытой заявки: сообщение уходит сотрудникам УК и "
+        "исполнителю, снимает вопрос УК и отмечает, что житель ответил. "
+        "Закрытая заявка - 409, чужая - 404"
+    ),
+)
+async def write_to_request(
+    request_id: RequestId,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+    idempotency: IdempotencyDep,
+    body: WriteToRequestRequest,
+) -> RequestCard:
+    saved = await idempotency.replay(RequestCard)
+    if saved is not None:
+        return saved
+    card = await requests_service.write(
+        current_account.user_id,
+        request_id,
+        body.text,
+        RequestChannel.MINIAPP,
+    )
+    response = _card(card, files_service)
+    await idempotency.save(response)
+    return response
+
+
+PP290 = files("zheka.core").joinpath("pp290.json").read_bytes()
+
+
+@router.get(
+    "/pp290",
+    summary="Минимальный перечень работ УК (ПП РФ № 290)",
+    description=(
+        "Пункты перечня с разделами, на них ссылаются категории заявок "
+        "(pp290_refs). Файл отдается как есть, браузер кэширует его на сутки"
+    ),
+    response_model=Pp290Catalog,
+)
+async def get_pp290(current_account: RequireConsentDep) -> Response:  # noqa: ARG001
+    return Response(
+        PP290,
+        media_type="application/json",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
+@router.post(
+    "/requests/{request_id}/gji-pdf",
+    summary="Жалоба в ГЖИ файлом в чат с ботом",
+    description=(
+        "Только автор просроченной открытой заявки, чужая - 404. Непросроченная "
+        "или закрытая заявка и автор, которому бот не может написать (нет чата "
+        "с ботом или бот остановлен), - 409. Бот присылает PDF с фактами "
+        "заявки, нормативным сроком, историей статусов и строками для подписей "
+        "соседей; на демо-УК - с пометкой «ДЕМО»"
+    ),
+)
+async def send_gji_pdf(
+    request_id: RequestId,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+) -> OkResponse:
+    await requests_service.send_gji_pdf(
+        current_account.user_id,
+        request_id,
+        datetime.now(UTC),
+    )
+    return OkResponse()
+
+
+@router.post(
     "/requests/{request_id}/demo/neighbours",
     summary="Демо: соседи сообщили о том же",
     description=(
         "Только автор открытой заявки без группы в демо-УК, поданной в окне "
         "склейки, пока в доме есть модельные жители без такой заявки, иначе "
-        "404. До 4 модельных соседей из других квартир подают заявку той же "
-        "категории без уведомлений сотрудникам, и заявка автора собирается с "
-        "ними в коллективную с порогом 2 квартиры. Тестовый токен - 403"
+        "404. Заявки о счете квартиры (ошибка в показаниях, спор по "
+        "начислению) не склеиваются, для них тоже 404. До 4 модельных соседей "
+        "из других квартир подают заявку той же категории без уведомлений "
+        "сотрудникам, и заявка автора собирается с ними в коллективную с "
+        "порогом 2 квартиры. Тестовый токен - 403"
     ),
 )
 async def add_demo_neighbours(

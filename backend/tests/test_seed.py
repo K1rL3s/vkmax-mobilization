@@ -13,7 +13,7 @@ import pytest_asyncio
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
-from sqlalchemy import Connection, Row, func, insert, select, update
+from sqlalchemy import Connection, Row, String, cast, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from tests.conftest import alembic_config, make_config, requests_service
@@ -23,10 +23,15 @@ from tests.test_houses import _make_service as houses_service
 
 from zheka.api.schemas.houses import HouseCard
 from zheka.core.charges import parse_lines
+from zheka.core.danger import detect_danger
 from zheka.core.enums import (
+    CATEGORY_PLACES,
+    DangerKind,
+    NoticeStatus,
     OrgRole,
     PollStatus,
     RequestCategory,
+    RequestPlace,
     RequestStatus,
     ResidentRole,
 )
@@ -717,6 +722,238 @@ def _map_state(rows: Sequence[Row[Any]], now: datetime) -> str:
     return "calm"
 
 
+async def test_a_seeded_sparking_socket_is_marked_dangerous(db: AsyncSession) -> None:
+    stmt = select(requests_table.c.description, requests_table.c.danger).distinct()
+
+    marks = dict((await db.execute(stmt)).tuples().all())
+
+    assert marks["Искрит розетка в щитке на этаже"] == DangerKind.ELECTRIC
+    assert marks["Течет стояк в санузле"] is None
+
+
+async def test_every_seeded_request_is_marked_by_its_own_words(
+    db: AsyncSession,
+) -> None:
+    stmt = select(requests_table.c.description, requests_table.c.danger).distinct()
+
+    marks = set((await db.execute(stmt)).tuples().all())
+
+    assert marks == {
+        (description, None if found is None else found.kind)
+        for description, _ in marks
+        for found in [detect_danger(description)]
+    }
+
+
+async def test_a_demo_flat_sits_in_the_first_entrance(db: AsyncSession) -> None:
+    _, residency = await _demo(db).settle(await _checker(db), len(PROFILES))
+
+    assert residency.flat is not None
+    assert residency.flat.entrance == 1
+
+
+async def test_every_seeded_announcement_has_a_register_matching_its_counts(
+    db: AsyncSession,
+) -> None:
+    deliveries = notice_deliveries_table.c
+    stmt = (
+        select(
+            announcements_table.c.org_id,
+            announcements_table.c.recipients_count,
+            announcements_table.c.delivered_direct,
+            func.count(deliveries.user_id),
+            func.count().filter(deliveries.status == NoticeStatus.DELIVERED),
+            func.array_agg(func.distinct(cast(deliveries.status, String))),
+        )
+        .join(
+            notice_deliveries_table,
+            deliveries.announcement_id == announcements_table.c.id,
+        )
+        .group_by(announcements_table.c.id)
+    )
+    rows = (await db.execute(stmt)).tuples().all()
+    announcements = select(func.count()).select_from(announcements_table)
+
+    assert len(rows) == (await db.execute(announcements)).scalar_one()
+    assert all(
+        (recipients, direct) == (total, delivered)
+        for _org, recipients, direct, total, delivered, _statuses in rows
+    )
+    demo = await _demo_org(db)
+    assert any(
+        set(statuses) == set(NoticeStatus) - {NoticeStatus.PENDING}
+        for org_id, *_counts, statuses in rows
+        if org_id == demo
+    )
+
+
+async def test_the_first_house_of_every_demo_org_has_water_works_under_way(
+    db: AsyncSession,
+) -> None:
+    for profile in (*PROFILES, *BACKGROUND_PROFILES):
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        [first, *_others] = await HousesRepo(db).list_for_org(org.id)
+        stmt = select(announcements_table).where(
+            announcements_table.c.org_id == org.id,
+            announcements_table.c.works_until.is_not(None),
+        )
+        [works] = (await db.execute(stmt)).all()
+        assert works.house_ids == [first.id]
+        assert works.works_category is RequestCategory.WATER_SUPPLY
+        assert works.documents == [{"name": WORKS_ORDER, "title": WORKS_ORDER_TITLE}]
+        for hours in MAP_HOURS:
+            assert works.works_from <= NOW + timedelta(hours=hours) < works.works_until
+    assert (FILES / WORKS_ORDER).read_bytes().startswith(b"%PDF-")
+
+
+async def test_a_reviewer_gathers_model_neighbours_in_the_demo_house(
+    db: AsyncSession,
+) -> None:
+    user_id = await _positive_user(db)
+    _org, residency = await _demo(db).settle(user_id, 1)
+    service = requests_service(db)
+    card = await service.create(
+        user_id,
+        residency.house.id,
+        RequestDraft(
+            category=RequestCategory.ELEVATOR,
+            description="Лифт стоит",
+            flat_id=residency.resident.flat_id,
+        ),
+    )
+    assert card.request.group_id is None
+    assert card.can_demo_neighbours
+
+    grouped = await service.demo_neighbours(
+        user_id,
+        card.request.id,
+        datetime.now(UTC),
+    )
+
+    assert grouped.group_size >= 1 + DEMO_NEIGHBOURS
+
+
+async def test_a_directory_house_card_names_its_passport_sources(
+    db: AsyncSession,
+) -> None:
+    with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
+        row = next(
+            row
+            for row in csv.DictReader(file)
+            if row["gis_on"] and row["entrances_estimated"] == "1"
+        )
+    stmt = select(houses_table.c.id).where(
+        houses_table.c.city == row["city"],
+        houses_table.c.street == row["street"],
+        houses_table.c.building == row["building"],
+    )
+    house_id = HouseId((await db.execute(stmt)).scalar_one())
+
+    card = HouseCard.of(
+        await houses_service(db).house_card(house_id, UserId(0), NOW),
+        [],
+    )
+
+    assert card.cadastral_no == row["cadastral_no"]
+    assert card.passport is not None
+    assert card.passport.reforma_on == date(2026, 9, 1)
+    assert card.passport.gis_on == date.fromisoformat(row["gis_on"])
+    assert card.passport.entrances_estimated
+
+
+async def test_the_passport_migration_fills_every_directory_house_as_the_seed(
+    seeded: AsyncConnection,
+) -> None:
+    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
+        "5c1e8a7d3f20",
+    )
+    assert migration is not None
+
+    def rerun(connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.module.downgrade()
+            connection.execute(update(houses_table).values(cadastral_no=None))
+            migration.module.upgrade()
+
+    first = (
+        select(houses_table)
+        .where(~houses_table.c.added_by_resident)
+        .order_by(houses_table.c.id)
+        .limit(1)
+    )
+    stmt = select(
+        houses_table.c.added_by_resident,
+        houses_table.c.cadastral_no,
+        houses_table.c.passport,
+    ).order_by(houses_table.c.id)
+    savepoint = await seeded.begin_nested()
+    house = (await seeded.execute(first)).one()
+    await seeded.execute(
+        insert(houses_table).values(
+            region=house.region,
+            city=house.city,
+            street=house.street,
+            building=house.building,
+            timezone=house.timezone,
+            chat_binding_code="passport",
+            added_by_resident=True,
+        ),
+    )
+    seeded_houses = (await seeded.execute(stmt)).tuples().all()
+    await seeded.run_sync(rerun)
+    migrated = (await seeded.execute(stmt)).tuples().all()
+    await savepoint.rollback()
+
+    assert all(passport for resident, _, passport in migrated if not resident)
+    assert migrated == seeded_houses
+
+
+async def test_the_contacts_migration_fills_every_registry_org_as_the_seed(
+    seeded: AsyncConnection,
+) -> None:
+    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
+        "3f9d6b2e8a41",
+    )
+    assert migration is not None
+    unregistered = organizations_table.c.registered_at.is_(None)
+
+    def rerun(connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            connection.execute(
+                update(organizations_table)
+                .where(unregistered)
+                .values(email=None, site=None),
+            )
+            migration.module.upgrade()
+
+    stmt = select(
+        unregistered,
+        organizations_table.c.email,
+        organizations_table.c.site,
+    ).order_by(organizations_table.c.id)
+    savepoint = await seeded.begin_nested()
+    registered = (
+        select(organizations_table.c.id)
+        .where(unregistered, organizations_table.c.email.is_not(None))
+        .order_by(organizations_table.c.id)
+        .limit(1)
+        .scalar_subquery()
+    )
+    await seeded.execute(
+        update(organizations_table)
+        .where(organizations_table.c.id == registered)
+        .values(registered_at=func.now(), email="priem@uk.ru", site=None),
+    )
+    seeded_orgs = (await seeded.execute(stmt)).tuples().all()
+    await seeded.run_sync(rerun)
+    migrated = (await seeded.execute(stmt)).tuples().all()
+    await savepoint.rollback()
+
+    assert any(email for free, email, _ in migrated if free)
+    assert migrated == seeded_orgs
+
+
 async def test_a_reviewer_flat_comes_with_one_tenant_to_end(db: AsyncSession) -> None:
     user_id = await _positive_user(db)
     demo = _demo(db)
@@ -742,3 +979,50 @@ async def test_a_reviewer_flat_comes_with_one_tenant_to_end(db: AsyncSession) ->
     assert [resident.role for resident in await residents.list_for_flat(flat_id)] == [
         ResidentRole.OWNER,
     ]
+
+
+async def test_seeded_requests_say_where_the_problem_is(db: AsyncSession) -> None:
+    parents = requests_table.alias()
+    stmt = select(
+        requests_table.c.category,
+        requests_table.c.description,
+        requests_table.c.place,
+        parents.c.place,
+    ).outerjoin(parents, parents.c.id == requests_table.c.parent_request_id)
+    rows = (await db.execute(stmt)).tuples().all()
+
+    assert rows
+    for category, _, place, _ in rows:
+        assert place is CATEGORY_PLACES.get(category, place), category
+    places = {
+        description: place for _, description, place, parent in rows if parent is None
+    }
+    assert places["Не горит свет на лестничной площадке"] is RequestPlace.HOUSE
+    assert places["Холодные батареи в комнате"] is RequestPlace.FLAT
+    assert all(place is parent for *_, place, parent in rows if parent is not None)
+
+
+async def test_the_place_migration_gives_seeded_requests_their_seeded_place(
+    seeded: AsyncConnection,
+) -> None:
+    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
+        "7b3e5c9a1d24",
+    )
+    assert migration is not None
+
+    def rerun(connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.module.downgrade()
+            migration.module.upgrade()
+
+    stmt = select(requests_table.c.id, requests_table.c.place).order_by(
+        requests_table.c.id,
+    )
+    seeded_places = (await seeded.execute(stmt)).tuples().all()
+    savepoint = await seeded.begin_nested()
+    await seeded.run_sync(rerun)
+    migrated = (await seeded.execute(stmt)).tuples().all()
+    await savepoint.rollback()
+
+    assert {place for _, place in seeded_places} == set(RequestPlace)
+    assert migrated == seeded_places

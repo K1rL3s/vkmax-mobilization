@@ -8,7 +8,10 @@ from zheka.core.enums import ChatCardKind, PollStatus, RequestCategory, RequestS
 from zheka.core.ids import HouseId, PollId, RequestGroupId, RequestId
 from zheka.core.services.polls import PollsService
 from zheka.core.services.quorum import area_percent_of
-from zheka.core.services.request_groups import complaint_sources
+from zheka.core.services.request_groups import (
+    PRIVATE_CATEGORIES,
+    complaint_sources,
+)
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 
@@ -106,7 +109,7 @@ class ChatCardsService:
         return ChatCardView(
             house_id=house.id,
             text=texts.request_card(request, house),
-            me_too=request.category,
+            me_too=None if request.category in PRIVATE_CATEGORIES else request.category,
             join=True,
         )
 

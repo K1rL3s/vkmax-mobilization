@@ -198,9 +198,17 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   level) to the `notice_deliveries` addressees and, with CHAT, the house
   chats; reaching `works_until` sends nothing.
 - `UploadQuota` (`infra/quota.py`, like `YandexQuota`) caps `POST /api/files`
-  and `POST /api/admin/files` together per user per api worker (`UPLOAD_CALLS` an hour, then 429): the host nginx
-  hides client IPs, so no per-IP limit. Free text in request bodies is
-  `FreeText` (4000 chars).
+  and `POST /api/admin/files` together per user per api worker
+  (`UPLOAD_CALLS` an hour, then 429): the host nginx
+  hides client IPs, so no per-IP limit. `VerifyQuota` caps
+  `POST /api/flats/{id}/verify` the same way (`VERIFY_CALLS` an hour, every
+  attempt counts), so a resident cannot brute-force an account number. Free
+  text in request bodies is `FreeText` (4000 chars).
+- `FilesService.save_download` names a file by its first 12 bytes (JPEG,
+  PNG, WEBP, HEIC brands, other `ftyp` as MP4 or MOV), not by the client
+  Content-Type: that only picks the size cap and refuses early. Unknown
+  content or a photo sent as video and back is deleted with 400. A polyglot
+  behind a valid header still passes: no decoding, no Pillow.
 - A poll ballot's rows carry `choice_index` 0..n-1: unique `(poll, user,
   choice_index)` and `(poll, flat, choice_index) WHERE counted_by_area` make a
   racing second ballot insert nothing (`add_vote` -> `ALREADY_VOTED`).
@@ -287,7 +295,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   15+ chars, not a command, a photo caption counts) opens `NewRequest.category`
   with it as the description from the menu, its emergency and digest windows,
   `NewRequest.category` and `NewRequest.sent` (`on_free_text`, consent checked
-  first) and the fallback; `on_category` then skips to the photo.
+  first) and the fallback; `on_category` then asks the place when the
+  category has none (`NewRequest.place`) and skips to the photo.
 - A danger phrase (`detect_danger`, `core/danger.py`: text or transcript, any
   length) goes first there: short -> `Menu.emergency`, long ->
   `NewRequest.category`, whose getter itself puts `danger_warning` (the
@@ -374,6 +383,22 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   drops back. Grouped, any member's active escalation or open danger lifts
   the group; `AdminRequestRow.escalated_at` carries the earliest escalation,
   `AdminRequestRow.danger` a member's mark.
+- `RequestsService.cancel`: the author of an open request (`OPEN_STATUSES`),
+  with a `CancelReason`; `other` also needs a comment. A cancel is a
+  completion reason, not a status: `DONE` + `resident_canceled`, no
+  `reviewed_at`, so every "not `DONE` = open" query holds as is. What counts
+  `DONE` as work done skips it (`_WORKED` in `repos/analytics.py`: auto-closed
+  share, "closed" of an executor and of the digest); a new metric over `DONE`
+  must too. The reason is the author's message in the conversation, staff and
+  the executor hear via `_notify_crew`; the request stays in its group, whose
+  card counts flats and status without canceled members and whose cabinet
+  row (`list_for_org`, `grouped`) is its first member not canceled.
+- A rejection on review (`repeat` from `ON_REVIEW`, `reject`) needs a comment
+  and an attachment unless `CategoryRule.rejection_needs_photo` is off (meter
+  error, charge dispute); `RequestCard` carries the flag. The bot's review
+  dialog collects the text, then photos, and `reject_bot_request` downloads
+  them and rejects; its outcome, a refusal of a stale draft included, reaches
+  the author as a notification.
 - `requests.danger` is written only by `RequestsRepo.create` from
   `detect_danger(description)` (app, bot, repeat, phone, dispute; the seed
   sets it itself), never from the client; the staff text then opens with
@@ -387,6 +412,22 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   clears that; DONE clears both. A question never moves status or deadline.
 - A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
+- `PRIVATE_CATEGORIES` (`request_groups.py`: the `flat` entries of
+  `CATEGORY_PLACES`, `meter_error` and `charge_dispute`, one flat's bill)
+  never group: `GroupingService.attach` leaves such a request single on every
+  road in (app, bot, charge dispute, phone) and `similar` counts no neighbours
+  for it, so the form shows no «соседи уже сообщили» and the house chat gets
+  no group card for a bill. `create` refuses its `join_group_id`
+  (`GROUP_PRIVATE`: groups formed before the rule stay), and its shared chat
+  card has no «У меня тоже».
+- `Request.place`: `flat` («Личная», in the author's flat) or `house`
+  («Общая», common property). `CATEGORY_PLACES` fixes it for lift, garbage,
+  entrance, yard (`house`) and the two bill categories (`flat`) and wins over
+  any choice; for the rest the author chooses (bot `NewRequest.place`, app
+  form, staff phone form) and `placed` refuses a request without one. A join
+  takes the place of the group's first request, a repeat its parent's. Place
+  never changes grouping; the cabinet filters by `place`, a group row by its
+  first request's.
 - A phone request with `resident_id` is wholly that resident's (author, flat,
   notifications, review, rating); without one it has no author.
 - LLM hint (`YandexClassifier`) is optional: no call without `YANDEX_API_KEY`
@@ -442,10 +483,16 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   a single-answer poll votes by `VotePayload` buttons (chat router,
   `PollsService.vote_in_chat`, `POLL_VOTED.source`), a multi-answer one opens
   the app. The 48-hour chat reminder replies to the card.
+- Announcements, poll reminders and cards in the chat end with their search
+  tag line (`texts` `ANNOUNCEMENT_HASHTAG`, `POLL_HASHTAG`, `CARD_HASHTAG`;
+  the chat welcome lists them); the direct copy of an announcement, the pin
+  list, member greetings and replies have none, and collapsed done or grouped
+  cards drop theirs.
 - The resident's house board (`GET /api/requests/house-problems`,
   `problems_of` in `request_groups.py`) shows no more than a group card:
   category, flats by `complaint_sources`, the earliest status, the first
-  moment and `mine` (own request or own verified flat: an unverified one is
+  moment, the place of the first request (lowest id, the cabinet's rule) and
+  `mine` (own request or own verified flat: an unverified one is
   picked freely and would tell which flat reported what); never flats, names or
   descriptions, never `meter_error` or `charge_dispute` (one flat's bill),
   never a `HouseCard` field. An open row is a group or the ungrouped open and
@@ -619,7 +666,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   reviewer can verify into it.
 - «Демо: соседи сообщили» (`RequestsService.demo_neighbours`): the author of
   an open ungrouped request in a demo org, filed within the org's grouping
-  window, gets up to `DEMO_NEIGHBOURS` model residents of the house (seeded:
+  window and not of `PRIVATE_CATEGORIES` (they never group), gets up to
+  `DEMO_NEIGHBOURS` model residents of the house (seeded:
   `DEMO_TENANT_MAX_ID_BASE < max_user_id < 0`, so neither the API checker nor
   the tenant `settle` puts in a reviewer's flat; active, one per flat, no open
   or on-review request of the category in the window by flat or author)
@@ -632,10 +680,14 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   or any check failing -> 404
   and `can_demo_neighbours` false. Every open request of the category in the
   window joins, other reviewers' too (the first house is shared).
-- Demo orgs are shared by strangers: block and revoke-verification refuse a
-  real user (positive `max_user_id`) other than the actor, a DIRECT
-  announcement reaches only its author, and staff see a phone only if it is
-  their own.
+- Demo orgs are shared by strangers: block, revoke-verification and
+  displacing a chairman refuse a real user (positive `max_user_id`) other
+  than the actor, a DIRECT announcement reaches only its author, and staff
+  see a phone only if it is their own. Org settings, category executors,
+  reception windows and member removal sit behind `LiveAdminOrgDep` (403
+  `DEMO_LOCKED` in a demo org), and there only its author revokes an invite or
+  finishes planned works.
+  Changing a demo org's setup takes SQL or a reseed.
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
   reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed
   on the deploy closest to judging. `scripts/fetch_seed_data.py` rewrites

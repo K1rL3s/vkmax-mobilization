@@ -9,6 +9,7 @@ from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FILES_DESCRIPTION, FileRef
 from zheka.core.danger import detect_danger
 from zheka.core.enums import (
+    CATEGORY_PLACES,
     CATEGORY_RULES,
     CancelReason,
     CategoryRule,
@@ -17,6 +18,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
     ResponsibilityZone,
 )
@@ -34,6 +36,7 @@ from zheka.core.services.admin_requests import (
     ExecutorView,
     RequestGroupCardData,
 )
+from zheka.core.services.announcements import ActiveWorks
 from zheka.core.services.request_groups import (
     HouseProblems,
     OpenProblem,
@@ -51,10 +54,16 @@ from zheka.core.services.requests import (
 UNKNOWN_AUTHOR = "Пользователь"
 DEADLINE_TEXT = "Срок устранения, например «3 суток»"
 DEADLINE_BASIS = "Норма права под сроком; пусто - срок сервиса, норматива нет"
+MIN_CLASSIFY_TEXT = 15
 PP290_REFS = (
     "Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; "
     "тексты пунктов отдает GET /pp290"
 )
+PLACE_CHOICE = (
+    "Где проблема, если категория допускает и квартиру, и дом; "
+    "у остальных категорий место задано ими"
+)
+PROBLEM_PLACE = "Где проблема у первой заявки: flat - в квартире, house - в доме"
 
 
 class RequestCategoryItem(BaseSchema):
@@ -68,6 +77,10 @@ class RequestCategoryItem(BaseSchema):
     )
     deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
     pp290_refs: tuple[str, ...] = Field(default=(), description=PP290_REFS)
+    place: RequestPlace | None = Field(
+        default=None,
+        description="Где проблема у категории; пусто - житель выбирает сам",
+    )
 
     @classmethod
     def of(cls, category: RequestCategory, rule: CategoryRule) -> Self:
@@ -79,6 +92,7 @@ class RequestCategoryItem(BaseSchema):
             react_text=rule.react_text,
             deadline_basis=rule.basis,
             pp290_refs=rule.pp290_refs,
+            place=CATEGORY_PLACES.get(category),
         )
 
 
@@ -118,6 +132,9 @@ class RequestListItem(BaseSchema):
         default=None,
         description="Слова из описания, по которым заявка отмечена опасной",
     )
+    place: RequestPlace = Field(
+        description="Где проблема: flat - в квартире (личная), house - в доме (общая)",
+    )
 
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
@@ -145,6 +162,7 @@ class RequestListItem(BaseSchema):
             resident_answered_at=request.resident_answered_at,
             danger=request.danger,
             danger_phrase=None if found is None else found.phrase,
+            place=request.place,
         )
 
 
@@ -205,6 +223,9 @@ class RequestCard(RequestListItem):
     can_demo_expire: bool = Field(
         description="Автор заявки в демо-УК может перенести ее срок на текущий момент",
     )
+    rejection_needs_photo: bool = Field(
+        description="Вернуть работу с приемки можно только с фото или видео",
+    )
     can_demo_neighbours: bool = Field(
         description=(
             "Автор открытой заявки в демо-УК может добавить к ней модельных "
@@ -252,6 +273,7 @@ class RequestCard(RequestListItem):
             flat_id=request.flat_id,
             auto_close_at=card.auto_close_at,
             can_demo_expire=card.can_demo_expire,
+            rejection_needs_photo=rule.rejection_needs_photo,
             can_demo_neighbours=card.can_demo_neighbours,
         )
 
@@ -264,6 +286,7 @@ class CreateRequestRequest(BaseSchema):
     join_group_id: RequestGroupId | None = None
     llm_suggested: bool = False
     llm_accepted: bool = False
+    place: RequestPlace | None = Field(default=None, description=PLACE_CHOICE)
 
 
 class SimilarRequestsResponse(BaseSchema):
@@ -312,7 +335,11 @@ class SharedRequestResponse(BaseSchema):
         description="Карточка ушла в привязанный чат дома; иначе поделиться вручную",
     )
     share_text: str = Field(description="Текст для нативного шеринга MAX")
-    share_link: str = Field(description="Ссылка «У меня тоже» на форму заявки")
+    share_link: str = Field(
+        description=(
+            "Ссылка «У меня тоже» на форму заявки, у заявки о счете квартиры - на дом"
+        ),
+    )
 
 
 class AdminRequestListItem(RequestListItem):
@@ -407,6 +434,7 @@ class CreatePhoneRequestRequest(BaseSchema):
             "его, имя и телефон звонившего тогда необязательны"
         ),
     )
+    place: RequestPlace | None = Field(default=None, description=PLACE_CHOICE)
 
 
 class RequestGroupCard(BaseSchema):
@@ -480,6 +508,32 @@ class ClassifyRequestResponse(BaseSchema):
         )
 
 
+class CancelRequestRequest(BaseSchema):
+    reason: CancelReason
+    comment: FreeText | None = Field(
+        default=None,
+        description="Пояснение жителя; обязательно для причины other",
+    )
+
+
+class WriteToRequestRequest(BaseSchema):
+    text: FreeText
+
+
+class Pp290Item(BaseSchema):
+    ref: str = Field(description="Пункт и абзац, например «п. 22, абз. 2»")
+    section: str = Field(description="Заголовок пункта")
+    text: str
+
+
+class Pp290Catalog(BaseSchema):
+    source: str
+    edition: str = Field(description="Редакция постановления")
+    checked_at: date = Field(description="Когда пункты сверены с текстом")
+    note: str = Field(description="Как собран перечень и что из него исключено")
+    items: list[Pp290Item]
+
+
 class OpenProblemItem(BaseSchema):
     category: RequestCategory
     category_label: str
@@ -493,6 +547,7 @@ class OpenProblemItem(BaseSchema):
     mine: bool = Field(
         description="Среди заявок есть ваша или вашей подтвержденной квартиры",
     )
+    place: RequestPlace = Field(description=PROBLEM_PLACE)
 
     @classmethod
     def of(cls, problem: OpenProblem) -> Self:
@@ -503,6 +558,7 @@ class OpenProblemItem(BaseSchema):
             status=problem.status,
             since=problem.since,
             mine=problem.mine,
+            place=problem.place,
         )
 
 
@@ -513,6 +569,7 @@ class ResolvedProblemItem(BaseSchema):
     confirmed: bool = Field(
         description="Житель принял работу; иначе заявка закрылась автоматически",
     )
+    place: RequestPlace = Field(description=PROBLEM_PLACE)
 
     @classmethod
     def of(cls, problem: ResolvedProblem) -> Self:
@@ -521,6 +578,7 @@ class ResolvedProblemItem(BaseSchema):
             category_label=CATEGORY_RULES[problem.category].label,
             done_at=problem.done_at,
             confirmed=problem.confirmed,
+            place=problem.place,
         )
 
 

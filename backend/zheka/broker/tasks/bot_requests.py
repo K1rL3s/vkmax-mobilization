@@ -24,7 +24,12 @@ from zheka.bot.states import NewRequest
 from zheka.bot.voice import VOICE_FAILED
 from zheka.broker.task_names import TaskName
 from zheka.core.deeplinks import request_app_path
-from zheka.core.enums import NotificationCategory, RequestCategory, RequestChannel
+from zheka.core.enums import (
+    NotificationCategory,
+    RequestCategory,
+    RequestChannel,
+    RequestPlace,
+)
 from zheka.core.errors import InvalidRequest, ZhekaError
 from zheka.core.ids import FlatId, HouseId, RequestId, UserId
 from zheka.core.models import User
@@ -128,6 +133,7 @@ async def create_bot_request(
     users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
     video_tokens: Sequence[str] = (),
+    place: str | None = None,
 ) -> int | None:
     user = await users_repo.get_by_id(user_id)
     try:
@@ -141,6 +147,7 @@ async def create_bot_request(
                 description=description,
                 flat_id=flat_id,
                 attachments=attachments,
+                place=None if place is None else RequestPlace(place),
             ),
             RequestChannel(channel),
         )

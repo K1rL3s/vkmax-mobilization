@@ -21,9 +21,10 @@ from zheka.api.app import app_factory
 from zheka.base import ZhekaType
 from zheka.config import FilesConfig
 from zheka.core.consent import CONSENT_VERSION
-from zheka.core.enums import OrgRole, RequestCategory
+from zheka.core.enums import OrgRole, RequestCategory, RequestPlace
 from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
 from zheka.core.services.files import FilesService
+from zheka.core.services.requests import PLACE_REQUIRED
 from zheka.core.services.retention import KEY_TTL, RetentionService
 from zheka.infra.database.models import (
     Flat,
@@ -125,6 +126,7 @@ def _draft(**extra: object) -> dict[str, object]:
     return {
         "category": RequestCategory.LEAK.value,
         "description": "Течет стояк в санузле, вода уходит в подвал",
+        "place": RequestPlace.FLAT.value,
         **extra,
     }
 
@@ -283,3 +285,41 @@ async def test_the_same_key_sends_one_answer_to_a_question_from_the_cabinet(
     ]
     assert card.json()["question_asked_at"] is None
     assert card.json()["resident_answered_at"] is not None
+
+
+async def test_the_app_files_a_place_and_the_cabinet_filters_by_it(
+    cabinet: Cabinet,
+) -> None:
+    common = await _create(cabinet, uuid4(), place=RequestPlace.HOUSE.value)
+    unplaced = await _create(cabinet, uuid4(), place=None)
+    listed = {
+        place: await cabinet.client.get(
+            "/api/admin/requests",
+            headers=cabinet.headers,
+            params={"place": place.value},
+        )
+        for place in RequestPlace
+    }
+
+    assert common.status_code == 200, common.text
+    assert common.json()["place"] == RequestPlace.HOUSE.value
+    assert unplaced.status_code == 400
+    assert unplaced.json()["error"]["detail"] == PLACE_REQUIRED
+    assert [item["id"] for item in listed[RequestPlace.HOUSE].json()["items"]] == [
+        common.json()["id"],
+    ]
+    assert listed[RequestPlace.FLAT].json()["items"] == []
+
+
+async def test_my_requests_say_where_each_problem_is(cabinet: Cabinet) -> None:
+    created = {
+        place: await _create(cabinet, uuid4(), place=place.value)
+        for place in RequestPlace
+    }
+
+    mine = await cabinet.client.get("/api/requests", headers=cabinet.headers)
+
+    assert mine.status_code == 200, mine.text
+    assert {item["id"]: item["place"] for item in mine.json()["items"]} == {
+        response.json()["id"]: place.value for place, response in created.items()
+    }

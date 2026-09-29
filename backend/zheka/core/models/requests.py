@@ -8,6 +8,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
 )
 from zheka.core.ids import (
@@ -56,6 +57,7 @@ class Request(ZhekaMutableType):
     question_asked_at: datetime | None = None
     resident_answered_at: datetime | None = None
     danger: DangerKind | None = None
+    place: RequestPlace = RequestPlace.FLAT
 
     @property
     def warn_at(self) -> datetime:

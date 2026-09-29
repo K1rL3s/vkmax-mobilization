@@ -36,7 +36,7 @@ from zheka.core.enums import (
     ResidentRole,
     ResidentStatus,
 )
-from zheka.core.errors import EntityNotFound
+from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import (
     API_CHECKER_MAX_USER_ID,
     DEMO_TENANT_MAX_ID_BASE,
@@ -505,5 +505,64 @@ async def test_a_reviewers_demo_tenant_is_never_a_neighbour(
         max_user_id=DEMO_TENANT_MAX_ID_BASE - reviewer,
     )
     request = await _file(session, own.user_id, own.house_id)
+
+    await _refused(session, own.user_id, request)
+
+
+@pytest.mark.parametrize(
+    ("user", "gathered"),
+    [
+        (API_CHECKER, False),
+        (
+            WebAppInitData(
+                chat=WebAppChat(id=7, type="DIALOG"),
+                user=WebAppUser(id=7, first_name="Житель"),
+                hash="",
+            ),
+            True,
+        ),
+    ],
+    ids=["checker", "resident"],
+)
+async def test_the_checker_gathers_no_neighbours_for_its_requests(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    user: WebAppInitData,
+    gathered: bool,
+) -> None:
+    await _demo(session, own.org_id)
+    await _model(session, own.house_id, "10")
+    request = await _file(session, own.user_id, own.house_id)
+
+    async def gather() -> RequestCard:
+        return await add_demo_neighbours(
+            request.id,
+            user,
+            CurrentAccount(user_id=own.user_id, consent_at=datetime.now(UTC)),
+            requests_service(session),
+            FilesService(make_config().files, "test-token"),
+        )
+
+    if gathered:
+        card = await gather()
+        assert card.group_size == 2
+    else:
+        with pytest.raises(NotEnoughRights):
+            await gather()
+        assert request.group_id is None
+
+
+@pytest.mark.parametrize(
+    "category",
+    [RequestCategory.METER_ERROR, RequestCategory.CHARGE_DISPUTE],
+)
+async def test_a_bill_request_gathers_no_demo_neighbours(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+) -> None:
+    await _demo(session, own.org_id)
+    await _model(session, own.house_id, "10")
+    request = await _file(session, own.user_id, own.house_id, category)
 
     await _refused(session, own.user_id, request)

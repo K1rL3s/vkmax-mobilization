@@ -87,6 +87,26 @@ const AdminRequestPhonePage = () => {
               />
               <FieldError message={errors.category?.message} />
 
+              {model.asksPlace && (
+                <>
+                  <Typography.Text variant="description" color="secondary">
+                    Где проблема
+                  </Typography.Text>
+                  <ChipRow
+                    wrap
+                    label="Где проблема"
+                    options={[
+                      { id: "flat", label: "В квартире" },
+                      { id: "house", label: "В доме" },
+                    ]}
+                    value={model.place ?? ""}
+                    disabled={model.isSubmitting}
+                    onChange={(value) => value && model.selectPlace(value)}
+                  />
+                  <FieldError message={errors.place?.message} />
+                </>
+              )}
+
               <Flex asChild align="stretch" direction="column" gap={4}>
                 <label>
                   <Typography.Text variant="description" color="secondary">

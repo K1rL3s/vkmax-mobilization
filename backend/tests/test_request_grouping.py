@@ -1,10 +1,12 @@
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import Fixture, OrgHouseFlatUser, events_of, requests_service
 from tests.test_requests import (
+    _add_group,
     _age,
     _complain,
     _group_of_three,
@@ -19,6 +21,7 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
 )
+from zheka.core.errors import InvalidRequest
 from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.core.models import Request
 from zheka.core.services.request_groups import (
@@ -26,6 +29,7 @@ from zheka.core.services.request_groups import (
     DEFAULT_GROUP_WINDOW_HOURS,
     complaint_sources,
 )
+from zheka.core.services.requests import RequestDraft
 from zheka.infra.database.models import RequestGroup
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.tables.requests import request_groups_table
@@ -187,3 +191,61 @@ def test_complaint_sources_count_complainants_and_not_requests() -> None:
     ]
 
     assert complaint_sources(requests) == {("flat", 7), ("user", 42), ("flat", 8)}
+
+
+ONE_FLAT_BILL = pytest.mark.parametrize(
+    "category",
+    [RequestCategory.METER_ERROR, RequestCategory.CHARGE_DISPUTE],
+)
+
+
+@ONE_FLAT_BILL
+async def test_bill_complaints_of_three_flats_form_no_group(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+) -> None:
+    complaints = [
+        await _complain(
+            session,
+            await _neighbour(session, own.house_id, number),
+            own.house_id,
+            category,
+        )
+        for number in ("11", "12", "13")
+    ]
+
+    assert await _groups(session, own.house_id) == []
+    assert [complaint.group_id for complaint in complaints] == [None] * 3
+
+
+@ONE_FLAT_BILL
+async def test_similar_counts_no_neighbours_for_a_bill_complaint(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+) -> None:
+    second = await _neighbour(session, own.house_id, "2")
+    await _complain(session, second, own.house_id, category)
+    service = requests_service(session)
+
+    similar = await service.similar(own.user_id, own.house_id, category)
+
+    assert similar.flats_count == 0
+    assert similar.window_started_at is None
+
+
+@ONE_FLAT_BILL
+async def test_a_bill_complaint_cannot_join_an_open_group_of_its_category(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+) -> None:
+    group_id = await _add_group(session, own.house_id, category)
+
+    with pytest.raises(InvalidRequest):
+        await requests_service(session).create(
+            own.user_id,
+            own.house_id,
+            RequestDraft(category=category, description="Счет", group_id=group_id),
+        )

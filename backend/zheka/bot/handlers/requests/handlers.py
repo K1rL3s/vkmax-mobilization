@@ -18,11 +18,21 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.danger import detect_danger
 from zheka.core.deeplinks import request_app_path
-from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestChannel
+from zheka.core.enums import (
+    CANCEL_REASONS,
+    CATEGORY_PLACES,
+    CATEGORY_RULES,
+    CancelReason,
+    RequestCategory,
+    RequestChannel,
+    RequestPlace,
+)
+from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, RequestId
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.profile import ProfileService
-from zheka.core.texts import MOMENT
+from zheka.core.services.requests import RequestsService
+from zheka.core.texts import MOMENT, OPEN_REQUEST, danger_warning
 
 SENT_TEXT = "⏳ Принял, оформляю"
 NOT_CREATED = "😔 Заявку не удалось оформить: {reason}"
@@ -119,7 +129,12 @@ async def on_category(
 ) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
         data.category = RequestCategory(category)
+        data.place = CATEGORY_PLACES.get(data.category)
+        asks = data.place is None
         described = bool(data.description)
+    if asks:
+        await dialog_manager.switch_to(NewRequest.place)
+        return
     await dialog_manager.switch_to(
         NewRequest.attachments if described else NewRequest.description,
     )
@@ -194,6 +209,7 @@ async def on_send(
         video_tokens=data.videos,
         channel=RequestChannel.BOT.value,
         stack_id=dialog_manager.current_stack().id,
+        place=data.place,
     )
     await dialog_manager.switch_to(NewRequest.sent)
 
@@ -216,6 +232,47 @@ async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
     NewRequestData.load_start(dialog_manager).dump(dialog_manager)
 
 
+async def get_cancel(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
+    return {
+        "request_id": NewRequestData.load_start(dialog_manager).request_id,
+        "reasons": [
+            {"id": reason.value, "label": f"↩️ {CANCEL_REASONS[reason]}"}
+            for reason in CancelReason
+            if reason is not CancelReason.OTHER
+        ],
+    }
+
+
+@inject
+async def on_cancel_reason(
+    callback: MessageCallback,
+    _select: Any,
+    dialog_manager: DialogManager,
+    reason: str,
+    requests_service: FromDishka[RequestsService],
+) -> None:
+    request_id = NewRequestData.load_start(dialog_manager).request_id
+    if request_id is None:
+        await dialog_manager.switch_to(NewRequest.sent)
+        return
+    try:
+        await requests_service.cancel(
+            dialog_user_id(dialog_manager),
+            RequestId(request_id),
+            CancelReason(reason),
+            None,
+        )
+    except ZhekaError as error:
+        await refused(callback, error)
+        return
+    await back_to_menu(
+        dialog_manager,
+        f"↩️ Заявка №{request_id} отменена",
+        OPEN_REQUEST,
+        request_app_path(RequestId(request_id)),
+    )
+
+
 @inject
 async def get_description(
     dialog_manager: DialogManager,
@@ -236,3 +293,26 @@ async def get_description(
         **await get_draft(dialog_manager),
         "works_until": None if works is None else f"{works.ends_at:{MOMENT}}",
     }
+
+
+async def on_place(
+    _callback: MessageCallback,
+    button: Button,
+    dialog_manager: DialogManager,
+) -> None:
+    with NewRequestData.proxy(dialog_manager) as data:
+        data.place = RequestPlace(str(button.widget_id))
+        described = bool(data.description)
+    await dialog_manager.switch_to(
+        NewRequest.attachments if described else NewRequest.description,
+    )
+
+
+async def on_description_back(
+    _callback: MessageCallback,
+    _button: Button,
+    dialog_manager: DialogManager,
+) -> None:
+    category = NewRequestData.load(dialog_manager).category
+    asked = category is not None and category not in CATEGORY_PLACES
+    await dialog_manager.switch_to(NewRequest.place if asked else NewRequest.category)

@@ -76,6 +76,7 @@ class CategoryRule(ZhekaType):
     fix_working_days: int | None = None
     react_minutes: int | None = None
     basis: str | None = None
+    rejection_needs_photo: bool = True
     pp290_refs: tuple[str, ...] = ()
 
     @property
@@ -216,6 +217,23 @@ def _amount(count: int, forms: tuple[str, str, str]) -> str:
     return f"{count} {form}"
 
 
+class CancelReason(StrEnum):
+    MISTAKE = "mistake"
+    RESOLVED = "resolved"
+    FIXED_MYSELF = "fixed_myself"
+    DUPLICATE = "duplicate"
+    OTHER = "other"
+
+
+CANCEL_REASONS: Mapping[CancelReason, str] = {
+    CancelReason.MISTAKE: "Подана по ошибке",
+    CancelReason.RESOLVED: "Проблема решилась сама",
+    CancelReason.FIXED_MYSELF: "Починили сами или вызвали мастера",
+    CancelReason.DUPLICATE: "Уже есть другая заявка",
+    CancelReason.OTHER: "Другое",
+}
+
+
 class DangerKind(StrEnum):
     GAS = "gas"
     FIRE = "fire"
@@ -223,3 +241,18 @@ class DangerKind(StrEnum):
     TRAPPED = "trapped"
     FLOOD_ELECTRIC = "flood_electric"
     LLM = "llm"
+
+
+class RequestPlace(StrEnum):
+    FLAT = "flat"
+    HOUSE = "house"
+
+
+CATEGORY_PLACES: Mapping[RequestCategory, RequestPlace] = {
+    RequestCategory.ELEVATOR: RequestPlace.HOUSE,
+    RequestCategory.GARBAGE: RequestPlace.HOUSE,
+    RequestCategory.ENTRANCE: RequestPlace.HOUSE,
+    RequestCategory.YARD: RequestPlace.HOUSE,
+    RequestCategory.METER_ERROR: RequestPlace.FLAT,
+    RequestCategory.CHARGE_DISPUTE: RequestPlace.FLAT,
+}

@@ -47,6 +47,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
     ResidentRole,
     ResidentStatus,
@@ -101,7 +102,7 @@ def _phone_draft(
         house_id=own.house_id,
         category=RequestCategory.LEAK,
         description=description,
-        **fields,  # type: ignore[arg-type]
+        **{"place": RequestPlace.FLAT, **fields},  # type: ignore[arg-type]
     )
 
 
@@ -1013,7 +1014,11 @@ async def test_a_new_request_goes_straight_to_the_category_executor(
     leak = await service.create(
         own.user_id,
         own.house_id,
-        RequestDraft(category=RequestCategory.LEAK, description="Течет"),
+        RequestDraft(
+            category=RequestCategory.LEAK,
+            description="Течет",
+            place=RequestPlace.FLAT,
+        ),
     )
 
     assert lift.request.executor_user_id == executor
@@ -1186,6 +1191,40 @@ def test_a_quoted_free_text_is_cut_to_fit_a_max_message(
     assert "&lt;&amp;&gt;😀" in text
     assert "😀…" in text
     assert "…" not in build("Уехал на другой вызов")
+
+
+async def test_a_group_stays_in_the_inbox_by_a_member_who_did_not_cancel(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    members, _ = await _group_of_three(session, own)
+    residents = requests_service(session)
+    service = admin_requests_service(session)
+    grouped = RequestFilters(grouped=True)
+
+    async def cancel(member: Request) -> None:
+        assert member.author_user_id is not None
+        await residents.cancel(
+            member.author_user_id,
+            member.id,
+            CancelReason.MISTAKE,
+            None,
+        )
+
+    await cancel(members[0])
+    rows, total = await service.inbox(own.org_id, grouped, 20, 0)
+
+    assert total == 1
+    assert [(row.request.id, row.request.status) for row in rows] == [
+        (members[1].id, RequestStatus.NEW),
+    ]
+
+    for member in members[1:]:
+        await cancel(member)
+    rows, total = await service.inbox(own.org_id, grouped, 20, 0)
+
+    assert total == 1
+    assert [row.request.id for row in rows] == [members[0].id]
 
 
 async def test_a_question_waits_for_the_author_and_opens_the_question_card(

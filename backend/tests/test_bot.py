@@ -150,8 +150,11 @@ from zheka.bot.handlers.requests.windows import (
     CREATED_TEXT,
     DESCRIPTION_ATTACHMENTS_TEXT,
     DESCRIPTION_TEXT,
+    IN_FLAT,
+    IN_HOUSE,
     NOT_CONNECTED_TEXT,
     NO_HOUSE_TEXT,
+    PLACE_TEXT,
     PROBLEM_TEXT,
     WORKS_TEXT,
 )
@@ -224,6 +227,7 @@ from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
+    RequestPlace,
     RequestStatus,
     ResidentRole,
     ResidentStatus,
@@ -286,7 +290,7 @@ from zheka.core.texts import (
     ME_TOO,
     NO_EMERGENCY_PHONE_TEXT,
     OPEN_REQUEST,
-    ORG_PHONE_TEXT,
+    REQUEST_PLACE_LINES,
     REQUEST_STATUS_LABELS,
     VOTE,
     VOTE_IN_APP,
@@ -703,6 +707,7 @@ async def _draft_request(client: BotClient, message_manager: MockMessageManager)
     await client.click(message_manager.last_message(), NEW_REQUEST)
     address = _text(message_manager)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     await client.send("Течет кран на кухне")
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), SEND)
@@ -2945,6 +2950,7 @@ async def test_back_and_menu_walk_the_request_draft(
     assert "🛠 Что случилось?" in _text(message_manager)
 
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     await client.send("Течет кран на кухне")
     await client.click(message_manager.last_message(), BACK_BUTTON)
     assert DESCRIPTION_TEXT in _text(message_manager)
@@ -3050,6 +3056,7 @@ async def test_the_request_draft_escapes_the_address_and_the_description(
     await client.click(message_manager.last_message(), NEW_REQUEST)
     assert CATEGORY_TEXT.format(address=escape(address)) in _text(message_manager)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     await client.send(description)
     await client.click(message_manager.last_message(), NEXT)
 
@@ -3364,6 +3371,7 @@ async def test_a_photo_at_the_description_step_is_kept_and_its_caption_describes
     await _resident_of_a_connected_house(bot_session, client, message_manager)
     await client.click(message_manager.last_message(), NEW_REQUEST)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
 
     await _send_photo(client, None)
     assert _text(message_manager) == (
@@ -3616,6 +3624,7 @@ async def test_a_free_text_quotes_the_problem_and_skips_the_description(
         description=PROBLEM,
     )
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), SEND)
@@ -3641,6 +3650,7 @@ async def test_a_photo_with_a_caption_starts_a_request_with_the_photo(
         description=PROBLEM,
     )
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=1)
 
 
@@ -3664,6 +3674,7 @@ async def test_a_long_problem_is_quoted_short_and_escaped_but_sent_whole(
         description=f"{escape(problem[:200])}…",
     )
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), SEND)
     enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
@@ -3774,6 +3785,7 @@ async def test_a_free_text_after_a_sent_request_starts_a_new_one(
     )
     await client.send(PROBLEM)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), SEND)
     assert SENT_TEXT in _text(message_manager)
@@ -4305,6 +4317,7 @@ async def _on_description(
     await client.send("/start")
     await client.click(message_manager.last_message(), NEW_REQUEST)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     assert DESCRIPTION_TEXT in _text(message_manager)
 
 
@@ -4995,6 +5008,7 @@ async def test_video_from_both_draft_windows_reaches_the_created_request(
     await _resident_of_a_connected_house(bot_session, client, message_manager)
     await client.click(message_manager.last_message(), NEW_REQUEST)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
     video = VideoAttachment(
         payload=MediaAttachmentPayload(token=str(1), url=RESULT_URL),
     )
@@ -5152,6 +5166,613 @@ async def test_a_voice_skips_speechkit_without_keys_or_quota(
     assert _text(message_manager).startswith(VOICE_FAILED)
 
 
+CANCEL_REQUEST = InlineButtonTextLocator("↩️ Отменить заявку")
+BY_MISTAKE = InlineButtonTextLocator("↩️ Подана по ошибке")
+
+
+async def _sent_request(
+    session: AsyncSession,
+    client: BotClient,
+    message_manager: MockMessageManager,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
+) -> Request:
+    await _resident_of_a_connected_house(session, client, message_manager)
+    await _draft_request(client, message_manager)
+    await _run(
+        task_broker,
+        create_bot_request,
+        **bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1],
+    )
+    user = await _user(session, client)
+    stmt = select(Request).where(requests_table.c.author_user_id == user.id)
+    return (await session.execute(stmt)).scalar_one()
+
+
+async def test_a_sent_request_is_canceled_from_the_same_message(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    notices: _RecordingBot,
+) -> None:
+    request = await _sent_request(
+        bot_session,
+        client,
+        message_manager,
+        task_broker,
+        bot_broker,
+    )
+
+    await client.click(message_manager.last_message(), CANCEL_REQUEST)
+    assert _text(message_manager) == CANCEL_TEXT.format(request_id=request.id)
+    assert "↩️ Другое" not in _button_texts(message_manager.last_message())
+    await client.click(message_manager.last_message(), BY_MISTAKE)
+
+    canceled = await _status(bot_session, request.id)
+    assert canceled.status is RequestStatus.DONE
+    assert canceled.completion_reason is RequestCompletionReason.RESIDENT_CANCELED
+    assert notices.texts == [f"↩️ Заявка №{request.id} отменена"]
+    assert _opened(notices.buttons[-1]) == [(OPEN_REQUEST, f"/requests/{request.id}")]
+    assert GREETING in _text(message_manager)
+
+
+async def test_a_request_under_review_is_not_canceled_from_the_bot(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    answers: _CallbackAnswers,
+) -> None:
+    request_id = (
+        await _sent_request(
+            bot_session,
+            client,
+            message_manager,
+            task_broker,
+            bot_broker,
+        )
+    ).id
+    await client.click(message_manager.last_message(), CANCEL_REQUEST)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(status=RequestStatus.ON_REVIEW)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(message_manager.last_message(), BY_MISTAKE)
+
+    assert answers.notifications == [CANCEL_TOO_LATE]
+    assert (await _status(bot_session, request_id)).status is RequestStatus.ON_REVIEW
+    assert _text(message_manager) == CANCEL_TEXT.format(request_id=request_id)
+
+
+async def test_a_photo_with_a_caption_gives_the_rejection_its_text_and_photo(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+
+    await _send_photo(client, "Кран все еще течет")
+    await client.click(message_manager.last_message(), SEND)
+
+    assert bot_broker.enqueued(TaskName.REJECT_BOT_REQUEST)[-1] == {
+        "user_id": (await _user(bot_session, client)).id,
+        "request_id": request_id,
+        "comment": "Кран все еще течет",
+        "photo_urls": [RESULT_URL],
+    }
+
+
+async def test_a_rejection_of_paperwork_is_sent_without_a_photo(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(category=RequestCategory.CHARGE_DISPUTE)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+
+    await client.send("Перерасчет так и не сделали")
+    assert _text(message_manager) == OPTIONAL_PHOTO_TEXT
+    await client.click(message_manager.last_message(), SEND)
+    await _run(
+        task_broker,
+        reject_bot_request,
+        **bot_broker.enqueued(TaskName.REJECT_BOT_REQUEST)[-1],
+    )
+
+    [repeat] = await _repeats_of(bot_session, request_id)
+    assert repeat.description == "Перерасчет так и не сделали"
+
+
+async def test_an_unexpected_failure_of_a_bot_rejection_still_answers(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = await _reviewing(bot_session, client, task_broker)
+
+    async def broken(*_: Any, **__: Any) -> None:
+        raise RuntimeError(PROBE_DENIED)
+
+    monkeypatch.setattr(RequestsService, "reject", broken)
+    task: Any = reject_bot_request
+    sent = await (
+        task.kicker()
+        .with_broker(task_broker)
+        .kiq(
+            user_id=(await _user(bot_session, client)).id,
+            request_id=request_id,
+            comment="Кран все еще течет",
+            photo_urls=[],
+        )
+    )
+    result = await sent.wait_result(timeout=5)
+
+    assert result.is_err
+    assert notices.texts[-1] == NOT_REJECTED_UNEXPECTED
+
+
+async def test_a_photo_without_a_caption_waits_for_the_rejection_text(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _reviewing(bot_session, client, task_broker)
+    await client.click(message_manager.last_message(), REJECT)
+    await _rendered(message_manager, REJECTION_TEXT)
+
+    await _send_photo(client, None)
+    assert _text(message_manager).startswith(REJECTION_TEXT)
+    assert PHOTOS_TEXT.format(photos=1) in _text(message_manager)
+    await client.send("Кран все еще течет")
+
+    assert _text(message_manager).startswith(REJECTION_PHOTO_TEXT)
+    assert SEND.find_button(message_manager.last_message()) is not None
+
+
+async def test_the_author_answers_a_question_of_the_management_in_the_bot(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    request_id = await _questioned(
+        bot_session,
+        client,
+        "Под вами 45 или 47 квартира?",
+        RequestStatus.ACCEPTED,
+    )
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(question_asked_at=datetime.now(UTC))
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await _run(task_broker, send_question_card, request_id=request_id)
+    card = _text(message_manager)
+    assert card.startswith(f"❓ УК уточняет по заявке №{request_id} · Протечка")
+    assert "Под вами 45 или 47 квартира?" in card
+    await client.click(message_manager.last_message(), InlineButtonTextLocator(ANSWER))
+    await _rendered(message_manager, ANSWER_TEXT)
+    await client.send("47")
+
+    request = await _status(bot_session, request_id)
+    assert request.question_asked_at is None
+    assert request.resident_answered_at is not None
+    messages = await RequestsRepo(bot_session).list_messages(request_id)
+    assert (messages[-1].author_role, messages[-1].text) == ("resident", "47")
+    assert ANSWER_SENT in notices.texts
+    assert _opened(notices.buttons[-1]) == [(OPEN_REQUEST, f"/requests/{request_id}")]
+    assert GREETING in _text(message_manager)
+
+
+async def _questioned(
+    session: AsyncSession,
+    client: BotClient,
+    question: str,
+    status: RequestStatus,
+) -> RequestId:
+    author = await _started(session, client)
+    _, house_id = await _org_house(session)
+    session.add(Resident(user_id=author, house_id=house_id, role=ResidentRole.OWNER))
+    request_id = await _request(session, house_id, status, author=author)
+    session.add(
+        RequestMessage(
+            request_id=request_id,
+            author_user_id=author,
+            author_role="staff",
+            text=question,
+        ),
+    )
+    await session.commit()
+    return request_id
+
+
+async def test_a_long_question_is_cut_to_fit_a_max_message(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _questioned(
+        bot_session,
+        client,
+        f"<&>{'😀' * 2500}",
+        RequestStatus.ACCEPTED,
+    )
+
+    await _run(task_broker, send_question_card, request_id=request_id)
+
+    card = _text(message_manager)
+    assert len(card.encode("utf-16-le")) // 2 <= texts.MESSAGE_LIMIT
+    assert "&lt;&amp;&gt;😀" in card
+    assert card.endswith("😀…")
+
+
+async def test_the_question_card_of_a_closed_request_offers_no_answer(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _questioned(
+        bot_session,
+        client,
+        "Когда вы будете дома?",
+        RequestStatus.DONE,
+    )
+
+    await _run(task_broker, send_question_card, request_id=request_id)
+
+    assert "Когда вы будете дома?" in _text(message_manager)
+    assert _button_texts(message_manager.last_message()) == [OPEN_REQUEST]
+
+
+async def test_a_short_danger_phrase_opens_the_emergency_screen_not_the_menu(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    phone = "+7 (000) 111-22-33"
+    house_id, _ = await _bot_house(
+        bot_session,
+        org_id=await _org(bot_session, emergency_phone=phone),
+    )
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    await client.send("Пахнет газом")
+
+    assert _text(message_manager) == "\n\n".join(
+        [
+            EMERGENCY_TEXT,
+            EMERGENCY_PHONE_TEXT.format(emergency_phone=phone),
+            CALL_NOTE_TEXT,
+        ],
+    )
+
+
+async def test_a_short_danger_phrase_with_no_window_open_opens_the_emergency_screen(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    users = UsersRepo(bot_session)
+    user = await users.upsert_by_max_id(MaxUserId(client.user.id), "Житель", None)
+    await users.set_consent(user.id, CONSENT_VERSION)
+    await bot_session.commit()
+
+    await client.send("Искрит щиток")
+
+    assert _text(message_manager) == (
+        f"{EMERGENCY_TEXT}\n\n{NO_EMERGENCY_PHONE_TEXT}\n\n{CALL_NOTE_TEXT}"
+    )
+
+
+async def test_a_danger_phrase_puts_the_warning_above_the_categories(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _consented(client, message_manager)
+    phone = "+7 (000) 111-22-33"
+    house_id, address = await _bot_house(
+        bot_session,
+        org_id=await _org(bot_session, emergency_phone=phone),
+    )
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    problem = "Пахнет газом в третьем подъезде у лифта"
+
+    await client.send(problem)
+
+    assert _text(message_manager) == (
+        f"{DANGER_TEXTS[DangerKind.GAS]}\n🛠 Аварийная служба дома: {phone}\n"
+        f"{DANGER_REQUEST_NOTE}\n\n"
+        f"{PROBLEM_TEXT.format(address=address, description=problem)}"
+    )
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["description"] == problem
+
+
+@pytest.mark.parametrize(
+    "problem",
+    ["В доме напротив горит мусорка", "Газом не пахнет, просто холодно"],
+)
+async def test_a_calm_problem_gets_no_warning(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    problem: str,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+
+    await client.send(problem)
+
+    assert _text(message_manager) == PROBLEM_TEXT.format(
+        address=address,
+        description=problem,
+    )
+
+
+async def test_a_danger_phrase_for_a_house_without_a_connected_org_names_its_phone(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    org_id = await _org(bot_session, registered_at=None, phone="+7 (000) 555-00-00")
+    house_id, address = await _bot_house(bot_session, org_id=org_id)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    await client.send("Застряли в лифте между третьим и четвертым")
+
+    assert _text(message_manager) == (
+        f"{DANGER_TEXTS[DangerKind.TRAPPED]}\n{NO_EMERGENCY_PHONE_TEXT}\n"
+        f"{ORG_PHONE_TEXT.format(org_phone='+7 (000) 555-00-00')}\n\n"
+        f"{NOT_CONNECTED_TEXT.format(address=address)}"
+    )
+
+
+async def test_a_danger_phrase_without_consent_gets_the_safety_lines_first(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    notices: _RecordingBot,
+) -> None:
+    await client.send("Пахнет газом")
+
+    assert notices.texts[-1] == danger_warning(DangerKind.GAS, None)
+    assert CONSENT_TEXT in _text(message_manager)
+
+
+async def test_a_danger_phrase_in_the_menu_without_consent_gets_the_safety_lines(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    user = await _user(bot_session, client)
+    user.consent_at = None
+    await bot_session.commit()
+
+    await client.send("Дым из подвала")
+
+    assert notices.texts[-1] == danger_warning(DangerKind.FIRE, None)
+    assert CONSENT_TEXT in _text(message_manager)
+
+
+async def test_the_gji_pdf_task_sends_the_complaint_file_to_its_author(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    house_id = await _staff(bot_session, client)
+    author = (await _user(bot_session, client)).id
+    request_id = await _request(
+        bot_session,
+        house_id,
+        RequestStatus.ACCEPTED,
+        author=author,
+    )
+    send_file = AsyncMock()
+    monkeypatch.setattr(MaxSender, "send_file", send_file)
+
+    await _run(task_broker, send_gji_pdf, user_id=author, request_id=request_id)
+
+    send_file.assert_awaited_once()
+    user, file, text = send_file.call_args.args
+    assert user.id == author
+    assert file.file_name == f"zhaloba-{request_id}.pdf"
+    assert (await file.read()).startswith(b"%PDF")
+    assert text == (
+        f"📄 Жалоба по заявке №{request_id} для ГЖИ\n"
+        "✍️ Впишите ФИО и адрес, распечатайте и подпишите"
+    )
+
+
+async def test_the_broadcast_marks_every_addressee_in_the_register(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    fake_bot: FakeBot,
+    notices: _RecordingBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    house_id = await _staff(bot_session, client)
+    ids = {"author": (await _user(bot_session, client)).id}
+    refused = _max_id()
+    for kind in ("neighbour", "refused", "muted", "stopped"):
+        user = User(
+            max_user_id=refused if kind == "refused" else _max_id(),
+            max_chat_id=MaxChatId(secrets.randbits(40)),
+            name="Сосед",
+            bot_stopped_at=datetime.now(UTC) if kind == "stopped" else None,
+        )
+        bot_session.add(user)
+        await bot_session.flush()
+        ids[kind] = user.id
+    await NotificationsRepo(bot_session).set_level(
+        ids["muted"],
+        NotificationCategory.ANNOUNCEMENTS,
+        NotificationLevel.OFF,
+    )
+    announcement_id = await _announcement(bot_session, house_id, ids["author"])
+    bot_session.add_all(
+        NoticeDelivery(
+            announcement_id=announcement_id,
+            user_id=user_id,
+            house_id=house_id,
+        )
+        for user_id in ids.values()
+    )
+    await bot_session.commit()
+
+    async def send_message(**kwargs: Any) -> Any:
+        if kwargs["user_id"] == refused:
+            return await _forbidden()
+        return await notices.send_message(**kwargs)
+
+    monkeypatch.setattr(fake_bot, "send_message", send_message)
+    await _run(
+        task_broker,
+        broadcast_to_users,
+        user_ids=list(ids.values()),
+        text="Отключат воду",
+        category=NotificationCategory.ANNOUNCEMENTS.value,
+        mandatory=False,
+        announcement_id=announcement_id,
+    )
+
+    stmt = select(
+        notice_deliveries_table.c.user_id,
+        notice_deliveries_table.c.status,
+        notice_deliveries_table.c.at,
+    ).where(notice_deliveries_table.c.announcement_id == announcement_id)
+    rows = (await bot_session.execute(stmt)).all()
+    assert {row.user_id: row.status for row in rows} == {
+        ids["author"]: NoticeStatus.DELIVERED,
+        ids["neighbour"]: NoticeStatus.DELIVERED,
+        ids["refused"]: NoticeStatus.FAILED,
+        ids["muted"]: NoticeStatus.MUTED,
+        ids["stopped"]: NoticeStatus.BOT_STOPPED,
+    }
+    assert all(row.at is not None for row in rows)
+    assert await _delivered(bot_session, announcement_id) == (2, None)
+
+
+async def test_the_description_window_warns_about_planned_works_of_the_category(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    assert house.org_id is not None
+    until = datetime.now(UTC) + timedelta(hours=2)
+    warning = WORKS_TEXT.format(works_until=f"{house.local(until):%H:%M %d.%m}")
+    bot_session.add(
+        Announcement(
+            org_id=house.org_id,
+            house_ids=[house_id],
+            text="Опрессовка",
+            channels=["direct"],
+            created_by=(await _user(bot_session, client)).id,
+            works_category=RequestCategory.WATER_SUPPLY,
+            works_from=datetime.now(UTC) - timedelta(hours=1),
+            works_until=until,
+        ),
+    )
+    await bot_session.commit()
+    water = CATEGORY_RULES[RequestCategory.WATER_SUPPLY].caption
+
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), InlineButtonTextLocator(water))
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+
+    assert _text(message_manager) == f"{warning}\n\n{DESCRIPTION_TEXT}"
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    assert _text(message_manager) == DESCRIPTION_TEXT
+
+
+async def test_a_silent_broadcast_never_rings(
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    user = User(
+        max_user_id=_max_id(),
+        max_chat_id=MaxChatId(secrets.randbits(40)),
+        name="Сосед",
+    )
+    bot_session.add(user)
+    await bot_session.flush()
+    user_id = user.id
+    await NotificationsRepo(bot_session).set_level(
+        user_id,
+        NotificationCategory.ANNOUNCEMENTS,
+        NotificationLevel.SOUND,
+    )
+    await bot_session.commit()
+
+    for silent in (False, True):
+        await _run(
+            task_broker,
+            broadcast_to_users,
+            user_ids=[user_id],
+            text="✅ Работы завершены: Водоснабжение",
+            category=NotificationCategory.ANNOUNCEMENTS.value,
+            mandatory=False,
+            silent=silent,
+        )
+
+    assert notices.notifies == [True, False]
+
+
 TOO_MANY = MaxBotTooManyRequestsError(code="too.many.requests", error="", message="")
 
 
@@ -5200,3 +5821,225 @@ async def test_a_message_is_retried_once_after_429(
     assert result is sent
     assert bot.send_message.await_count == 2
     assert _sender_levels(caplog) == [logging.WARNING]
+
+
+@pytest.mark.parametrize("is_demo", [False, True])
+async def test_the_register_pdf_task_sends_the_register_file_to_the_admin(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    is_demo: bool,
+) -> None:
+    house_id = await _staff(bot_session, client)
+    admin = (await _user(bot_session, client)).id
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    org_id = house.org_id
+    assert org_id is not None
+    org = await OrgsRepo(bot_session).get(org_id)
+    assert org is not None
+    org.is_demo = is_demo
+    announcement_id = await _announcement(bot_session, house_id, admin)
+    stmt = select(announcements_table.c.created_at).where(
+        announcements_table.c.id == announcement_id,
+    )
+    created_at = (await bot_session.execute(stmt)).scalar_one()
+    await bot_session.refresh(house)
+    send_file = AsyncMock()
+    monkeypatch.setattr(MaxSender, "send_file", send_file)
+    drawn: list[str] = []
+    monkeypatch.setattr(PdfDocument, "text", lambda *args: drawn.append(args[-1]))
+
+    await _run(
+        task_broker,
+        send_register_pdf,
+        user_id=admin,
+        org_id=org_id,
+        announcement_id=announcement_id,
+        house_id=house_id,
+        unmarked_only=False,
+    )
+
+    send_file.assert_awaited_once()
+    user, file, text = send_file.call_args.args
+    assert user.id == admin
+    assert file.file_name == f"reestr-{announcement_id}.pdf"
+    assert (await file.read()).startswith(b"%PDF")
+    assert text == (
+        "📄 Реестр уведомлений по объявлению от "
+        f"{house.local(created_at):%d.%m.%Y}\n"
+        f"🏠 {house.address}"
+    )
+    assert set(drawn) == ({"ДЕМО"} if is_demo else set())
+
+
+IN_FLAT_BUTTON = InlineButtonTextLocator(IN_FLAT)
+IN_HOUSE_BUTTON = InlineButtonTextLocator(IN_HOUSE)
+LIFT = InlineButtonTextLocator(CATEGORY_RULES[RequestCategory.ELEVATOR].caption)
+
+
+async def _created_place(session: AsyncSession, client: BotClient) -> RequestPlace:
+    user = await _user(session, client)
+    stmt = select(Request).where(requests_table.c.author_user_id == user.id)
+    return (await session.execute(stmt)).scalar_one().place
+
+
+async def test_a_leak_asks_where_the_problem_is_before_the_description(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+
+    assert _text(message_manager) == PLACE_TEXT
+    assert _button_texts(message_manager.last_message()) == [
+        IN_FLAT,
+        IN_HOUSE,
+        "⬅️ Назад",
+        "🏠 Меню",
+    ]
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
+    assert DESCRIPTION_TEXT in _text(message_manager)
+    await client.send("Течет с крыши в подъезде")
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["place"] == RequestPlace.HOUSE
+    await _run(task_broker, create_bot_request, **enqueued)
+    assert await _created_place(bot_session, client) is RequestPlace.HOUSE
+
+
+async def test_a_lift_request_does_not_ask_where_the_problem_is(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), LIFT)
+
+    assert DESCRIPTION_TEXT in _text(message_manager)
+    await client.send("Лифт стоит между этажами")
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+
+    await _run(
+        task_broker,
+        create_bot_request,
+        **bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1],
+    )
+    assert await _created_place(bot_session, client) is RequestPlace.HOUSE
+
+
+async def test_a_free_text_draft_asks_where_then_goes_to_the_attachments(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.send("/start")
+    await client.send("Течет кран на кухне уже второй час")
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+
+    assert _text(message_manager) == PLACE_TEXT
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["place"] == RequestPlace.FLAT
+
+
+@pytest.mark.usefixtures("instant_retries")
+async def test_a_late_voice_transcript_keeps_the_chosen_place(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    _reread(fake_bot, monkeypatch, [VOICE])
+    draft = NewRequestData(category=RequestCategory.LEAK, place=RequestPlace.HOUSE)
+
+    await _run(
+        task_broker,
+        transcribe_voice,
+        user_id=(await _user(bot_session, client)).id,
+        mid="voice-1",
+        draft=draft.to_data(),
+        in_draft=True,
+    )
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["place"] == RequestPlace.HOUSE
+
+
+async def test_the_executor_card_says_where_the_problem_is(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id = await _executor_on(bot_session, client, RequestStatus.ACCEPTED)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(place=RequestPlace.HOUSE)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await _run(task_broker, send_executor_card, request_id=request_id)
+
+    assert REQUEST_PLACE_LINES[RequestPlace.HOUSE] in _text(message_manager)
+
+
+async def test_back_from_the_description_returns_to_the_place_asked_for_the_category(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
+
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert _text(message_manager) == PLACE_TEXT
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    await client.click(message_manager.last_message(), LIFT)
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert "🛠 Что случилось?" in _text(message_manager)
+
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator(CATEGORY_RULES[RequestCategory.HEATING].caption),
+    )
+    assert _text(message_manager) == PLACE_TEXT
+    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    await client.send("Холодные батареи в комнате")
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["category"] == RequestCategory.HEATING
+    assert enqueued["place"] == RequestPlace.FLAT

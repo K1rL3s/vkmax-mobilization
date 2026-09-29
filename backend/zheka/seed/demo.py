@@ -14,6 +14,7 @@ from zheka.base import ZhekaType
 from zheka.core.charges import previous_period
 from zheka.core.danger import detect_danger
 from zheka.core.enums import (
+    CATEGORY_PLACES,
     CATEGORY_RULES,
     AnnouncementChannel,
     AppointmentStatus,
@@ -27,6 +28,7 @@ from zheka.core.enums import (
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
+    RequestPlace,
     RequestStatus,
     ResidentRole,
     ServiceType,
@@ -1097,6 +1099,7 @@ class Seeder:
             repeat.request.parent_request_id = request.id
             repeat.request.description = f"Повторно: {request.description}"
             repeat.request.danger = request.danger
+            repeat.request.place = request.place
             repeats.append(repeat)
         self._session.add_all(plan.request for plan in repeats)
         await self._session.flush()
@@ -1299,6 +1302,12 @@ class Seeder:
             category=category,
             description=description,
             danger=None if danger is None else danger.kind,
+            place=CATEGORY_PLACES.get(
+                category,
+                RequestPlace.HOUSE
+                if description in COMMON_DESCRIPTIONS
+                else RequestPlace.FLAT,
+            ),
             status=steps[-1].status,
             completion_reason=reason if is_done else None,
             channel=(
@@ -1569,3 +1578,13 @@ class Seeder:
         )
         works.documents = [{"name": WORKS_ORDER, "title": WORKS_ORDER_TITLE}]
         await self._session.flush()
+
+
+COMMON_DESCRIPTIONS = frozenset(
+    {
+        "Шумит стояк отопления",
+        "Не горит свет на лестничной площадке",
+        "Искрит розетка в щитке на этаже",
+        "Не работает домофон",
+    },
+)
