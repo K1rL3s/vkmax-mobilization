@@ -166,7 +166,7 @@ export const usePhoneRequest = () => {
     },
     categories: categories.data ?? [],
     isPending: categories.isPending,
-    isError: categories.isError,
+    isError: categories.isLoadingError,
     loadError: categories.error,
     isSubmitting: create.isPending || create.isSuccess,
     error: create.isError

@@ -30,7 +30,7 @@ export const useMyAppointments = () => {
     items,
     isOwn: (slot: ReceptionSlot) => ownTimes.has(Date.parse(slot.starts_at)),
     isPending: list.isPending,
-    isError: list.isError,
+    isError: list.isLoadingError,
     loadError: list.error,
     retry: () => void list.refetch(),
   };

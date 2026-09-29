@@ -15,7 +15,7 @@ const AdminAnnouncementNewPage = () => {
     return <LoadingState fill title="Загружаем дома" />;
   }
 
-  if (houses.isError) {
+  if (houses.isLoadingError) {
     return (
       <ErrorState
         error={houses.error}

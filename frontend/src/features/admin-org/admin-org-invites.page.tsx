@@ -70,7 +70,7 @@ const AdminOrgInvitesPage = () => {
       />
     );
 
-  if (invites.isError)
+  if (invites.isLoadingError)
     return (
       <ErrorState
         error={invites.error}

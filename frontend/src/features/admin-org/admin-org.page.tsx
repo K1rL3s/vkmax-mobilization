@@ -37,7 +37,8 @@ const AdminOrgPage = () => {
   const settings = useOrgSettings();
 
   const readOnly = isForbidden(card.error);
-  const isReady = settings.isSuccess && (card.isSuccess || readOnly);
+  const isReady =
+    settings.data !== undefined && (card.data !== undefined || readOnly);
 
   useEffect(() => {
     if (isReady && hash)

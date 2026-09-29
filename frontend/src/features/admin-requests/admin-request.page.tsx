@@ -53,7 +53,7 @@ const AdminRequestPage = () => {
     );
   if (isForbidden(query.error)) return <NoOrgAccess />;
   if (query.isPending) return <LoadingState fill title="Загружаем заявку…" />;
-  if (query.isError)
+  if (query.isLoadingError)
     return (
       <ErrorState
         error={query.error}

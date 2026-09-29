@@ -28,7 +28,7 @@ export const useFlatReadings = () => {
     meters: meters.data ?? [],
     periods: periods.data ?? [],
     isPending: enabled && (meters.isPending || periods.isPending),
-    isError: meters.isError || periods.isError,
+    isError: meters.isLoadingError || periods.isLoadingError,
     loadError: meters.error ?? periods.error,
     refetch: () => {
       void meters.refetch();

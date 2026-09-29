@@ -59,6 +59,10 @@ Knows every feature; nothing imports it.
   every in-app screen redirects to `Routes.OUTSIDE_MAX` when `isInsideMax` is
   false; the stub route sits outside it. `session-loader.ts` and
   `deeplink-loader.ts` route a launch to its start screen or run a deeplink.
+- `main.tsx` points react-query's `focusManager` at both `visibilitychange`
+  (the v5 default) and window `focus`, since MAX's WebView may send only one
+  of them when the user comes back from a chat: queries refetch on return,
+  so a step done outside the app shows up without a manual check button.
 - `app.tsx` renders `ScrollRestoration`: a pushed screen opens at the top and
   back restores the old position, so a page never scrolls itself on mount.
 - `app.tsx` alone imports `globals.css`, the only global stylesheet: max-ui
@@ -169,3 +173,6 @@ Knows every feature; nothing imports it.
   schema and `maxLength`; every text field has one, long text uses the kit's
   `Textarea`, and a submit button is never `position: sticky` (the mobile
   keyboard renders it translucent).
+- A page with a form shows its error screen on `isLoadingError`, never
+  `isError`: a failed background refetch keeps `data`, and swapping the page
+  for `ErrorState` unmounts the form with what the user typed.

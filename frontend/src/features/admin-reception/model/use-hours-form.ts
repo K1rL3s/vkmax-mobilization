@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -53,22 +53,23 @@ export const useHoursForm = (windows: ReceptionWindow[]) => {
     resolver: zodResolver(daySchema),
     mode: "onChange",
     values: draftOfDay(windows, weekday),
+    resetOptions: { keepDirtyValues: true },
   });
-
-  const { reset } = form;
-
-  useEffect(() => {
-    reset(draftOfDay(windows, weekday));
-  }, [reset, windows, weekday]);
 
   const draft = useWatch({ control: form.control }) as DayDraft;
   const spans = dayError(draft);
 
   const submit = form.handleSubmit((values) =>
-    save.mutate({
-      params: orgParams(),
-      body: { windows: gridWithDay(windows, weekday, values) },
-    }),
+    save.mutate(
+      {
+        params: orgParams(),
+        body: { windows: gridWithDay(windows, weekday, values) },
+      },
+      {
+        onSuccess: (saved) =>
+          form.reset(draftOfDay(saved, weekday), { keepDirtyValues: false }),
+      },
+    ),
   );
 
   return {
@@ -76,6 +77,7 @@ export const useHoursForm = (windows: ReceptionWindow[]) => {
     selectDay: (next: number) => {
       save.reset();
       setWeekday(next);
+      form.reset(draftOfDay(windows, next), { keepDirtyValues: false });
     },
     register: form.register,
     errors: form.formState.errors,

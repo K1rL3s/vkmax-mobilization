@@ -66,8 +66,8 @@ export const useBooking = () => {
     org: house.data?.org ?? null,
     schedule,
     isPending: queries.some((query) => query.isPending),
-    isError: queries.some((query) => query.isError),
-    loadError: queries.find((query) => query.isError)?.error,
+    isError: queries.some((query) => query.isLoadingError),
+    loadError: queries.find((query) => query.isLoadingError)?.error,
     retry: () => {
       for (const query of queries) {
         if (query.isError) {

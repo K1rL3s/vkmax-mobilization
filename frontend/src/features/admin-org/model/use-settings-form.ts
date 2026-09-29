@@ -94,6 +94,7 @@ export const useSettingsForm = (settings: OrgSettings, lock: SettingsLock) => {
     resolver: zodResolver(settingsSchema),
     mode: "onChange",
     values: draftOf(settings),
+    resetOptions: { keepDirtyValues: true },
     disabled: readOnly,
   });
 
@@ -120,7 +121,10 @@ export const useSettingsForm = (settings: OrgSettings, lock: SettingsLock) => {
           site: draft.site || null,
         },
       },
-      { onSuccess: (saved) => form.reset(draftOf(saved)) },
+      {
+        onSuccess: (saved) =>
+          form.reset(draftOf(saved), { keepDirtyValues: false }),
+      },
     );
   });
 

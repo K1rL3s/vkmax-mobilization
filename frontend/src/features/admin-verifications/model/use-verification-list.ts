@@ -79,7 +79,7 @@ export const useVerificationRequest = (id: number | null) => {
 
   return {
     isPending: requests.isPending,
-    isError: requests.isError,
+    isError: requests.isLoadingError,
     loadError: requests.error,
     retry: () => void requests.refetch(),
     request: requests.data?.items.find((item) => item.id === id) ?? null,

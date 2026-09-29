@@ -58,7 +58,7 @@ export const useAdminPollForm = () => {
   return {
     houses: houses.data?.items ?? [],
     isHousesPending: houses.isPending,
-    isHousesError: houses.isError,
+    isHousesError: houses.isLoadingError,
     housesError: houses.error,
     retryHouses: () => void houses.refetch(),
     register: form.register,

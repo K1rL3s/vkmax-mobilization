@@ -32,7 +32,7 @@ export const useRequest = () => {
       categories.data?.find(({ category }) => category === request?.category)
         ?.zone ?? null,
     isPending: params !== null && card.isPending,
-    isError: params === null || card.isError,
+    isError: params === null || card.isLoadingError,
     loadError: card.error,
     retry: () => void card.refetch(),
   };

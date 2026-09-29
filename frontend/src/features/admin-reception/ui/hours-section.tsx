@@ -242,7 +242,7 @@ export const HoursSection = () => {
         </div>
       ) : windows.isPending ? (
         <LoadingState title="Загружаем часы приёма" />
-      ) : windows.isError ? (
+      ) : windows.isLoadingError ? (
         <ErrorState
           error={windows.error}
           description="Не получилось загрузить часы приёма"

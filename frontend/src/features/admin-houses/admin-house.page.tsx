@@ -131,7 +131,7 @@ const AdminHousePage = () => {
     );
   }
 
-  if (card.isError) {
+  if (card.isLoadingError) {
     return (
       <ErrorState error={card.error} fill onRetry={() => void card.refetch()} />
     );
