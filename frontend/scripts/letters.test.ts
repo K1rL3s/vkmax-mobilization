@@ -73,7 +73,7 @@ test("leak act carries the request and the management company", () => {
     /заявка №142 от 28\.09\.2026, 14:10, через «Жэка Коммуналкин» в MAX/,
   );
   assert.match(text, /\[перечень повреждений/);
-  assert.match(text, /ПП № 354\), п\. 105-106/);
+  assert.match(text, /ПП № 354\), п\. 152\./);
 });
 
 test("leak act keeps unknown org and flat in brackets", () => {
@@ -93,7 +93,7 @@ test("recalc period ends when the request went on review", () => {
   assertClean(text);
   assert.match(text, /с 28\.09\.2026 14:10 по 29\.09\.2026 09:30/);
   assert.match(text, /Кому: ООО «УК Уютный дом»/);
-  assert.match(text, /разд\. X и приложение 1/);
+  assert.match(text, /разд\. IX, X и приложение 1/);
 });
 
 test("recalc for a utility runs to the present and goes to the supplier", () => {

@@ -41,7 +41,7 @@ export const CategoryInfo = ({
         <Flex align="stretch" direction="column" gapY={2}>
           {category.react_text && (
             <Typography.Text variant="body-strong" color="primary">
-              Принять - {category.react_text}
+              Локализовать аварию - {category.react_text}
             </Typography.Text>
           )}
           <Typography.Text variant="body-strong" color="primary">

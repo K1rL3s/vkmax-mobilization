@@ -7,7 +7,7 @@ import {
   Tappable,
   Typography,
 } from "@maxhub/max-ui";
-import { generatePath, Link, useNavigate } from "react-router-dom";
+import { generatePath, Link, Navigate, useNavigate } from "react-router-dom";
 
 import { EmergencyCard } from "@/features/emergency";
 import { residencyState } from "@/features/flat-confirmation";
@@ -253,6 +253,10 @@ const HomePage = () => {
   const problems = useHouseProblems().data;
 
   const card = useHouseCard(residency?.house_id);
+
+  if (!residency) {
+    return <Navigate to={Routes.WELCOME} replace />;
+  }
 
   if (card.isPending) {
     return <LoadingState fill title="Загружаем ваш дом" />;

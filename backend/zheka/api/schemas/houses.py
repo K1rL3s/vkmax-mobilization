@@ -173,10 +173,6 @@ class OrgPublicStats(BaseSchema):
         default=None,
         description="Среднее время до принятия заявки в минутах",
     )
-    accept_time_median: int | None = Field(
-        default=None,
-        description="Медиана времени до принятия заявки в минутах",
-    )
     rating: int | None = Field(
         default=None,
         description="Средняя оценка жителей в сотых долях балла",

@@ -933,8 +933,10 @@ async def test_a_new_and_a_repeat_request_notify_the_staff_but_not_executors(
     assert first["text"] == (
         f"🆕 Заявка №{created.request.id} «💧 Протечка»\n🏢 {house.address}\n"
         "🏠 Личная: в квартире\n"
-        f"⏱ Принять до {house.local(react):%H:%M %d.%m}\n"
-        f"⏰ Срок: до {deadline:%H:%M %d.%m}\n📜 ПП РФ № 416, п. 13"
+        f"⏱ Локализовать аварию до {house.local(react):%H:%M %d.%m}\n"
+        f"⏰ Срок: до {deadline:%H:%M %d.%m}\n"
+        "📜 ПП РФ № 416, п. 13: локализовать аварию - за 30 минут с регистрации "
+        "заявки, устранить - не более 3 суток с даты аварии"
     )
 
 
@@ -1022,20 +1024,51 @@ def test_a_leak_is_accepted_in_half_an_hour_and_fixed_in_three_days() -> None:
     assert (rule.react_text, rule.deadline_text, rule.basis) == (
         "30 минут",
         "3 суток",
-        "ПП РФ № 416, п. 13",
+        (
+            "ПП РФ № 416, п. 13: локализовать аварию - за 30 минут с регистрации "
+            "заявки, устранить - не более 3 суток с даты аварии"
+        ),
     )
 
 
 @pytest.mark.parametrize(
     ("category", "text", "basis"),
     [
-        (RequestCategory.WATER_SUPPLY, "4 часа", "ПП РФ № 354, прил. 1, п. 1, 4"),
-        (RequestCategory.HEATING, "16 часов", "ПП РФ № 354, прил. 1, п. 14"),
-        (RequestCategory.ELECTRICITY, "24 часа", "ПП РФ № 354, прил. 1, п. 9"),
+        (
+            RequestCategory.WATER_SUPPLY,
+            "4 часа",
+            (
+                "ПП РФ № 354, прил. 1, п. 1, 4: допустимый перерыв - 4 часа подряд "
+                "и 8 часов за месяц"
+            ),
+        ),
+        (
+            RequestCategory.HEATING,
+            "16 часов",
+            (
+                "ПП РФ № 354, прил. 1, п. 14: допустимый перерыв - 16 часов подряд, "
+                "если в квартире не ниже +12 °C, и 24 часа за месяц"
+            ),
+        ),
+        (
+            RequestCategory.ELECTRICITY,
+            "24 часа",
+            (
+                "ПП РФ № 354, прил. 1, п. 9: допустимый перерыв - 24 часа при одном "
+                "источнике питания, 2 часа при двух"
+            ),
+        ),
         (RequestCategory.ELEVATOR, "24 часа", None),
         (RequestCategory.YARD, "3 суток", None),
         (RequestCategory.ENTRANCE, "3 суток", None),
-        (RequestCategory.METER_ERROR, "10 рабочих дней", "ПП РФ № 354, п. 31 «е(2)»"),
+        (
+            RequestCategory.METER_ERROR,
+            "10 рабочих дней",
+            (
+                "ПП РФ № 354, п. 31 «е(2)»: проверить счетчик - не позднее 10 "
+                "рабочих дней со дня заявления"
+            ),
+        ),
         (RequestCategory.OTHER, "10 рабочих дней", "ПП РФ № 416, п. 36"),
     ],
 )
@@ -1069,7 +1102,7 @@ async def test_a_card_carries_the_stored_deadline_and_its_basis(
         created + timedelta(days=3),
         created + timedelta(minutes=30),
     )
-    assert leak_card.deadline_basis == "ПП РФ № 416, п. 13"
+    assert leak_card.deadline_basis == CATEGORY_RULES[RequestCategory.LEAK].basis
     assert yard_card.deadline_at == yard.request.created_at + timedelta(hours=72)
     assert (yard_card.react_deadline_at, yard_card.deadline_basis) == (None, None)
 

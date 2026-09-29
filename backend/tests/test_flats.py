@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import (
@@ -14,7 +15,13 @@ from tests.conftest import (
 
 from zheka.api.dependencies.current_residency import CurrentResidency
 from zheka.api.routes.flats import verify_flat
-from zheka.api.schemas.flats import FlatCard, VerifyFlatByQrRequest, VerifyFlatRequest
+from zheka.api.schemas.flats import (
+    ACCOUNT_NO_MAX_LENGTH,
+    FlatCard,
+    FlatVerificationRequest,
+    VerifyFlatByQrRequest,
+    VerifyFlatRequest,
+)
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
@@ -1018,3 +1025,13 @@ async def test_a_tenant_blocked_by_the_org_is_not_released_by_the_owner(
     with pytest.raises(InvalidState, match=TENANT_BLOCKED):
         await service.end_tenancy(own.user_id, own.flat_id, tenant.id)
     assert await ResidentsRepo(session).get(tenant.id) is not None
+
+
+@pytest.mark.parametrize("schema", [VerifyFlatRequest, FlatVerificationRequest])
+def test_an_account_number_is_capped_in_length(
+    schema: type[VerifyFlatRequest | FlatVerificationRequest],
+) -> None:
+    schema(account_no="1" * ACCOUNT_NO_MAX_LENGTH)
+
+    with pytest.raises(ValidationError):
+        schema(account_no="1" * (ACCOUNT_NO_MAX_LENGTH + 1))

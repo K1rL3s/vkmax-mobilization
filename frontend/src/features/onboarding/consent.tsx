@@ -55,7 +55,6 @@ export const Consent = ({
           <Checkbox
             className={styles.Consent}
             checked={consent.checked}
-            disabled={consent.accepted}
             onChange={consent.setChecked}
           >
             <Typography.Text variant="description" color="primary">

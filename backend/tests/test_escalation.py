@@ -480,11 +480,16 @@ async def test_a_gji_pdf_says_demo_on_every_page_only_for_a_demo_org(
         own.user_id,
         request.id,
     )
-    drawn: list[str] = []
-    monkeypatch.setattr(PdfDocument, "text", lambda *args: drawn.append(args[-1]))
+    drawn: set[tuple[int, str]] = set()
+    monkeypatch.setattr(
+        PdfDocument,
+        "text",
+        lambda pdf, *args: drawn.add((pdf.page, args[-1])),
+    )
 
     complaint = GjiComplaint(card, request.deadline_at + timedelta(hours=1))
     complaint.render()
 
     assert complaint.pages_count > 1
-    assert drawn == (["ДЕМО"] * complaint.pages_count if is_demo else [])
+    pages = range(1, complaint.pages_count + 1)
+    assert drawn == ({(page, "ДЕМО") for page in pages} if is_demo else set())

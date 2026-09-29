@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 TIMEOUT_SECONDS = 3.0
 _RECOGNIZE_URL = "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText"
-_MODEL = "meter"
+_MODEL = "page"
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
 _MIME_TYPES = {".jpg": "JPEG", ".png": "PNG"}
 

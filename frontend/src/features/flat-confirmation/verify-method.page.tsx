@@ -5,6 +5,7 @@ import { Routes } from "@/shared/model/routes";
 import { Icon, qrIcon } from "@/shared/ui/icon";
 import { ErrorState } from "@/shared/ui/state";
 
+import { ACCOUNT_NO_MAX_LENGTH } from "./domain/verify-method";
 import { useVerifyMethod } from "./model/use-verify-method";
 
 import styles from "./verify-method.module.css";
@@ -39,6 +40,7 @@ const VerifyMethodPage = () => {
         <Input
           placeholder="Лицевой счёт"
           inputMode="numeric"
+          maxLength={ACCOUNT_NO_MAX_LENGTH}
           value={form.accountNo}
           onChange={(event) => form.setAccountNo(event.target.value)}
         />

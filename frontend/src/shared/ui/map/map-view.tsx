@@ -108,6 +108,24 @@ const TONE_RANK: ExpressionSpecification = [
   0,
 ];
 
+const CLUSTER_COLOR = [
+  "match",
+  ["get", "rank"],
+  6,
+  TONE_COLORS.red,
+  5,
+  TONE_COLORS.orange,
+  4,
+  TONE_COLORS.yellow,
+  3,
+  TONE_COLORS.blue,
+  2,
+  TONE_COLORS.brand,
+  1,
+  TONE_COLORS.green,
+  TONE_COLORS.muted,
+] as unknown as ExpressionSpecification;
+
 const NOT_CLUSTER: ExpressionSpecification = ["!", ["has", "point_count"]];
 
 const visibility = (visible: boolean) => (visible ? "visible" : "none");
@@ -210,7 +228,10 @@ export const MapViewComponent = ({
       data: collection(points),
       cluster: settings.cluster,
       clusterRadius: 40,
-      clusterProperties: { weight: ["+", ["get", "weight"]] },
+      clusterProperties: {
+        weight: ["+", ["get", "weight"]],
+        rank: ["max", TONE_RANK],
+      },
     });
     target.addLayer({
       id: "heat",
@@ -229,10 +250,11 @@ export const MapViewComponent = ({
       source: "houses",
       filter: ["has", "point_count"],
       paint: {
-        "circle-color": TONE_COLORS.brand,
+        "circle-color": CLUSTER_COLOR,
         "circle-radius": ["step", ["get", "point_count"], 14, 10, 18, 50, 22],
         "circle-stroke-width": 5,
-        "circle-stroke-color": "rgba(0, 119, 255, 0.3)",
+        "circle-stroke-color": CLUSTER_COLOR,
+        "circle-stroke-opacity": 0.3,
       },
     });
     target.addLayer({

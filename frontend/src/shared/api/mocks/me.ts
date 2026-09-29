@@ -1,5 +1,11 @@
 import { badRequest, endpoint, ok } from "./reply";
-import { acceptConsent, activateDemoAccess, me, user } from "./state";
+import {
+  acceptConsent,
+  activateDemoAccess,
+  forgetUser,
+  me,
+  user,
+} from "./state";
 
 export const meConfigs = [
   endpoint("get", "/me", () => ok(me())),
@@ -50,4 +56,9 @@ export const meConfigs = [
       : badRequest("Неизвестный тип события");
   }),
   endpoint("post", "/demo/activate", () => ok(activateDemoAccess())),
+  endpoint("delete", "/me", () => {
+    forgetUser();
+
+    return { status: 204, body: null };
+  }),
 ];

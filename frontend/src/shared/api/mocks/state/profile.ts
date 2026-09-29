@@ -225,3 +225,15 @@ export const me = (): Schemas["MeResponse"] => ({
 export const joinOrg = (membership: Schemas["OrgMembership"]): void => {
   orgs.push(membership);
 };
+
+export const forgetUser = (): void => {
+  Object.assign(user, {
+    consent_at: null,
+    consent_version: null,
+    phone: null,
+    text_size: "normal",
+  });
+  residencyList.length = 0;
+  orgs.length = 0;
+  verifications.length = 0;
+};

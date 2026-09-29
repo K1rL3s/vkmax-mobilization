@@ -362,7 +362,7 @@ const OrgStats = ({
       <CellSimple
         before={<Icon src={clockIcon} className={styles.CellIcon} />}
         overline="Время до принятия заявки"
-        title={`в среднем ${minutes(stats.accept_time)}, медиана ${minutes(stats.accept_time_median)}`}
+        title={`в среднем ${minutes(stats.accept_time)}`}
       />
       <CellSimple
         separator

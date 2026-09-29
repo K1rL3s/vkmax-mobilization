@@ -16,7 +16,9 @@ const { resolveBasemap, restyleOf, styleOf } = (await import(basemapsUrl)) as {
     scheme: "light" | "dark",
   ) => { id: string; kind: string };
   styleOf: (basemap: unknown) => unknown;
-  restyleOf: (basemap: unknown) => (
+  restyleOf: (
+    basemap: unknown,
+  ) => (
     previous: undefined,
     next: { layers: { id: string; paint?: object }[] },
   ) => { layers: { id: string; paint?: object }[] };

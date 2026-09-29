@@ -22,6 +22,8 @@ from zheka.core.services.flats import (
     VerificationRequestView,
 )
 
+ACCOUNT_NO_MAX_LENGTH = 12
+
 
 class FlatCard(BaseSchema):
     id: FlatId
@@ -72,7 +74,7 @@ class FlatCard(BaseSchema):
 class VerifyFlatRequest(BaseSchema):
     model_config = ConfigDict(extra="forbid")
 
-    account_no: str
+    account_no: str = Field(max_length=ACCOUNT_NO_MAX_LENGTH)
 
 
 class VerifyFlatResponse(BaseSchema):
@@ -82,7 +84,7 @@ class VerifyFlatResponse(BaseSchema):
 
 
 class FlatVerificationRequest(BaseSchema):
-    account_no: str
+    account_no: str = Field(max_length=ACCOUNT_NO_MAX_LENGTH)
     comment: FreeText | None = None
 
 

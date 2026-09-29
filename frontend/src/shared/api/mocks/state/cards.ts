@@ -53,7 +53,7 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
         starts_at: new Date(Date.now() - 3_600_000).toISOString(),
         ends_at: new Date(Date.now() + 6 * 3_600_000).toISOString(),
         recalc_hint:
-          "Перерыв в ГВС дольше 4 ч подряд или 8 ч за месяц, не считая ежегодной профилактики до 14 суток: плата за месяц снижается на 0,15% за каждый час сверх нормы (ПП 354, прил. 1, п. 4). Это оценка, не юридическая консультация",
+          "Перерыв в ГВС дольше 4 ч подряд или 8 ч за месяц, не считая ежегодной профилактики, срок которой задают санитарные правила: плата за месяц снижается на 0,15% за каждый час сверх нормы (ПП 354, прил. 1, п. 4). Это оценка, не юридическая консультация",
         is_demo: true,
       },
     ],
@@ -112,7 +112,6 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
           on_time: 23,
           on_time_share: 6053,
           accept_time: 43,
-          accept_time_median: 25,
           rating: 450,
           ratings_count: 22,
         }

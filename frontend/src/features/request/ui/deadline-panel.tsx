@@ -63,7 +63,7 @@ export const DeadlinePanel = ({ request }: { request: DeadlineSource }) => {
 
       {request.status === "new" && request.react_deadline_at && (
         <Typography.Text variant="description" color="secondary">
-          Принять до {formatDayTime(request.react_deadline_at)}
+          Локализовать аварию до {formatDayTime(request.react_deadline_at)}
         </Typography.Text>
       )}
       <Typography.Text variant="description" color="secondary">
@@ -77,9 +77,8 @@ export const DeadlinePanel = ({ request }: { request: DeadlineSource }) => {
         </Typography.Text>
       )}
       {request.pp290_refs.length > 0 && <Pp290Refs refs={request.pp290_refs} />}
-      {request.can_demo_expire && <DemoExpireButton requestId={request.id} />}
-      {request.can_demo_neighbours && (
-        <DemoNeighboursButton requestId={request.id} />
+      {(request.can_demo_expire || request.can_demo_neighbours) && (
+        <DemoActions request={request} />
       )}
     </div>
   );
@@ -95,9 +94,8 @@ const DemoExpireButton = ({ requestId }: { requestId: number }) => {
   return (
     <>
       <Button
-        size="medium"
+        size="small"
         variant="secondary"
-        stretched
         loading={expire.isPending}
         onClick={() =>
           expire.mutate({
@@ -187,9 +185,8 @@ const DemoNeighboursButton = ({ requestId }: { requestId: number }) => {
   return (
     <>
       <Button
-        size="medium"
+        size="small"
         variant="secondary"
-        stretched
         loading={neighbours.isPending}
         onClick={() =>
           neighbours.mutate({
@@ -210,3 +207,22 @@ const DemoNeighboursButton = ({ requestId }: { requestId: number }) => {
     </>
   );
 };
+
+const DemoActions = ({ request }: { request: DeadlineSource }) => (
+  <details className={styles.Works}>
+    <Typography.Text asChild variant="description" color="secondary">
+      <summary className={cn(styles.WorksTitle, styles.demo)}>
+        <span className={styles.Chevron}>
+          <Chevron />
+        </span>
+        Демо для проверки
+      </summary>
+    </Typography.Text>
+    <Flex className={styles.DemoButtons} wrap="wrap" gap={8}>
+      {request.can_demo_expire && <DemoExpireButton requestId={request.id} />}
+      {request.can_demo_neighbours && (
+        <DemoNeighboursButton requestId={request.id} />
+      )}
+    </Flex>
+  </details>
+);

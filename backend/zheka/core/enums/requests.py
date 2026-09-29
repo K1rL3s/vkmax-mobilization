@@ -122,7 +122,10 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=72,
         react_minutes=30,
-        basis="ПП РФ № 416, п. 13",
+        basis=(
+            "ПП РФ № 416, п. 13: локализовать аварию - за 30 минут с регистрации "
+            "заявки, устранить - не более 3 суток с даты аварии"
+        ),
         pp290_refs=("п. 18", "п. 28"),
     ),
     RequestCategory.ELEVATOR: CategoryRule(
@@ -144,7 +147,10 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         emoji="🔥",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=16,
-        basis="ПП РФ № 354, прил. 1, п. 14",
+        basis=(
+            "ПП РФ № 354, прил. 1, п. 14: допустимый перерыв - 16 часов подряд, "
+            "если в квартире не ниже +12 °C, и 24 часа за месяц"
+        ),
         pp290_refs=("п. 17", "п. 19", "п. 28"),
     ),
     RequestCategory.WATER_SUPPLY: CategoryRule(
@@ -152,7 +158,10 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         emoji="🚰",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=4,
-        basis="ПП РФ № 354, прил. 1, п. 1, 4",
+        basis=(
+            "ПП РФ № 354, прил. 1, п. 1, 4: допустимый перерыв - 4 часа подряд "
+            "и 8 часов за месяц"
+        ),
         pp290_refs=("п. 18", "п. 28"),
     ),
     RequestCategory.ELECTRICITY: CategoryRule(
@@ -160,7 +169,10 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         emoji="💡",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=24,
-        basis="ПП РФ № 354, прил. 1, п. 9",
+        basis=(
+            "ПП РФ № 354, прил. 1, п. 9: допустимый перерыв - 24 часа при одном "
+            "источнике питания, 2 часа при двух"
+        ),
         pp290_refs=("п. 20", "п. 28"),
     ),
     RequestCategory.ENTRANCE: CategoryRule(
@@ -182,7 +194,10 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         emoji="📟",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_working_days=10,
-        basis="ПП РФ № 354, п. 31 «е(2)»",
+        basis=(
+            "ПП РФ № 354, п. 31 «е(2)»: проверить счетчик - не позднее 10 "
+            "рабочих дней со дня заявления"
+        ),
         rejection_needs_photo=False,
     ),
     RequestCategory.CHARGE_DISPUTE: CategoryRule(

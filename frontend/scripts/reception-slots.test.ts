@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 const { slotLabels } = (await import(
-  new URL("../src/features/admin-reception/domain/day.ts", import.meta.url)
-    .href
+  new URL("../src/features/admin-reception/domain/day.ts", import.meta.url).href
 )) as {
   slotLabels: (spans: [string, string][], minutes: number) => string[];
 };

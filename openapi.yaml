@@ -12557,13 +12557,13 @@ components:
         deadline_text:
           type: string
           title: Deadline Text
-          description: Срок устранения, например «3 суток»
+          description: Срок устранения от подачи заявки, например «3 суток»
         deadline_basis:
           anyOf:
           - type: string
           - type: 'null'
           title: Deadline Basis
-          description: Норма права под сроком; пусто - срок сервиса, норматива нет
+          description: Норма, на которой основан срок, и что она задает; пусто - срок назначил сервис
         pp290_refs:
           items:
             type: string
@@ -12577,7 +12577,7 @@ components:
             format: date-time
           - type: 'null'
           title: React Deadline At
-          description: Срок реакции (принять заявку); пусто - не нормирован
+          description: Срок локализации аварии (ПП РФ № 416, п. 13); пусто - нет
         photos:
           items:
             $ref: '#/components/schemas/FileRef'
@@ -14470,6 +14470,7 @@ components:
       properties:
         account_no:
           type: string
+          maxLength: 12
           title: Account No
         comment:
           anyOf:
@@ -15718,12 +15719,6 @@ components:
           - type: 'null'
           title: Accept Time
           description: Среднее время до принятия заявки в минутах
-        accept_time_median:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Accept Time Median
-          description: Медиана времени до принятия заявки в минутах
         rating:
           anyOf:
           - type: integer
@@ -16846,13 +16841,13 @@ components:
         deadline_text:
           type: string
           title: Deadline Text
-          description: Срок устранения, например «3 суток»
+          description: Срок устранения от подачи заявки, например «3 суток»
         deadline_basis:
           anyOf:
           - type: string
           - type: 'null'
           title: Deadline Basis
-          description: Норма права под сроком; пусто - срок сервиса, норматива нет
+          description: Норма, на которой основан срок, и что она задает; пусто - срок назначил сервис
         pp290_refs:
           items:
             type: string
@@ -16866,7 +16861,7 @@ components:
             format: date-time
           - type: 'null'
           title: React Deadline At
-          description: Срок реакции (принять заявку); пусто - не нормирован
+          description: Срок локализации аварии (ПП РФ № 416, п. 13); пусто - нет
         photos:
           items:
             $ref: '#/components/schemas/FileRef'
@@ -16982,19 +16977,19 @@ components:
         deadline_text:
           type: string
           title: Deadline Text
-          description: Срок устранения, например «3 суток»
+          description: Срок устранения от подачи заявки, например «3 суток»
         react_text:
           anyOf:
           - type: string
           - type: 'null'
           title: React Text
-          description: Срок реакции, например «30 минут»; пусто - не нормирован
+          description: Срок локализации аварии, например «30 минут»; пусто - нет
         deadline_basis:
           anyOf:
           - type: string
           - type: 'null'
           title: Deadline Basis
-          description: Норма права под сроком; пусто - срок сервиса, норматива нет
+          description: Норма, на которой основан срок, и что она задает; пусто - срок назначил сервис
         pp290_refs:
           items:
             type: string
@@ -17846,6 +17841,7 @@ components:
       properties:
         account_no:
           type: string
+          maxLength: 12
           title: Account No
       additionalProperties: false
       type: object

@@ -27,8 +27,7 @@ export const useConsent = (onContinue: () => Promise<void>) => {
   };
 
   return {
-    checked: isConsentGiven || checked,
-    accepted: isConsentGiven,
+    checked,
     setChecked,
     start,
     isPending: consent.isPending,

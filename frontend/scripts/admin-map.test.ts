@@ -15,19 +15,20 @@ type SignedHouse = {
   appointments_today: number;
 };
 
-const { metersTone, residentsTone, parseRange, houseSignature } =
-  (await import(filtersUrl)) as {
-    metersTone: (percent: number | null | undefined) => string;
-    residentsTone: (
-      residents: number | null | undefined,
-      flats: number | null | undefined,
-    ) => string;
-    parseRange: (
-      value: string | null | undefined,
-      scale: number,
-    ) => [number | undefined, number | undefined];
-    houseSignature: (house: SignedHouse) => string;
-  };
+const { metersTone, residentsTone, parseRange, houseSignature } = (await import(
+  filtersUrl
+)) as {
+  metersTone: (percent: number | null | undefined) => string;
+  residentsTone: (
+    residents: number | null | undefined,
+    flats: number | null | undefined,
+  ) => string;
+  parseRange: (
+    value: string | null | undefined,
+    scale: number,
+  ) => [number | undefined, number | undefined];
+  houseSignature: (house: SignedHouse) => string;
+};
 
 test("meters tone switches at 50% and 80%", () => {
   assert.equal(metersTone(null), "muted");

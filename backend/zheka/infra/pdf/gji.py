@@ -112,8 +112,8 @@ class GjiComplaint(PdfDocument):
             )
         deadline = self._moment(request.deadline_at)
         self.paragraph(
-            f"Нормативный срок выполнения - {rule.deadline_text} ({rule.basis}), "
-            f"он истек {deadline}."
+            f"Срок выполнения заявки этой категории - {rule.deadline_text} с "
+            f"подачи, он истек {deadline}. Срок основан на норме: {rule.basis}."
             if rule.basis
             else f"Срок выполнения заявки этой категории, который сервис назначил "
             f"при подаче, - {rule.deadline_text}, он истек {deadline}.",

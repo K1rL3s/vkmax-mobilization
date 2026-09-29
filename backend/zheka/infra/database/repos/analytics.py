@@ -185,7 +185,6 @@ class PublicStats(ZhekaType):
     on_time: int
     on_time_share: int | None
     accept_time: int | None
-    accept_time_median: int | None
     rating: int | None
     ratings_count: int
 
@@ -541,7 +540,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
                 func.count().filter(_ON_TIME),
                 _METRICS[AnalyticsMetric.ON_TIME_SHARE](now),
                 _METRICS[AnalyticsMetric.ACCEPT_TIME](now),
-                _METRICS[AnalyticsMetric.ACCEPT_TIME_MEDIAN](now),
                 _METRICS[AnalyticsMetric.RATING](now),
                 func.count(_R.rating),
             ).where(_created_in(since, now)),
@@ -554,7 +552,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
             on_time,
             on_time_share,
             accept_time,
-            accept_time_median,
             rating,
             ratings_count,
         ) = result.tuples().one()
@@ -563,7 +560,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
             on_time=on_time,
             on_time_share=on_time_share,
             accept_time=accept_time,
-            accept_time_median=accept_time_median,
             rating=rating,
             ratings_count=ratings_count,
         )
@@ -583,7 +579,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
                 func.count().filter(_ON_TIME),
                 _METRICS[AnalyticsMetric.ON_TIME_SHARE](now),
                 _METRICS[AnalyticsMetric.ACCEPT_TIME](now),
-                _METRICS[AnalyticsMetric.ACCEPT_TIME_MEDIAN](now),
                 _METRICS[AnalyticsMetric.RATING](now),
                 func.count(_R.rating),
             )
@@ -600,7 +595,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
                 on_time=on_time,
                 on_time_share=on_time_share,
                 accept_time=accept_time,
-                accept_time_median=accept_time_median,
                 rating=rating,
                 ratings_count=ratings_count,
             )
@@ -610,7 +604,6 @@ class AnalyticsRepo(BaseAlchemyRepo):
                 on_time,
                 on_time_share,
                 accept_time,
-                accept_time_median,
                 rating,
                 ratings_count,
             ) in result.tuples().all()

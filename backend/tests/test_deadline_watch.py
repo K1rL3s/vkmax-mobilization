@@ -416,7 +416,13 @@ async def test_the_demo_button_keeps_a_missing_react_deadline(
 @pytest.mark.parametrize(
     ("category", "basis"),
     [
-        (RequestCategory.LEAK, "📜 ПП РФ № 416, п. 13"),
+        (
+            RequestCategory.LEAK,
+            (
+                "📜 ПП РФ № 416, п. 13: локализовать аварию - за 30 минут с "
+                "регистрации заявки, устранить - не более 3 суток с даты аварии"
+            ),
+        ),
         (RequestCategory.ELEVATOR, None),
     ],
     ids=["norm", "no-norm"],

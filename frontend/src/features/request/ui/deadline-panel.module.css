@@ -77,3 +77,11 @@
   margin-bottom: 0;
   padding-left: 20px;
 }
+
+.WorksTitle.demo {
+  color: var(--text-secondary);
+}
+
+.DemoButtons {
+  align-items: flex-start;
+}

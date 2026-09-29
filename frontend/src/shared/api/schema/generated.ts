@@ -2658,12 +2658,12 @@ export interface components {
       org_name: string | null;
       /**
        * Deadline Text
-       * @description Срок устранения, например «3 суток»
+       * @description Срок устранения от подачи заявки, например «3 суток»
        */
       deadline_text: string;
       /**
        * Deadline Basis
-       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       * @description Норма, на которой основан срок, и что она задает; пусто - срок назначил сервис
        */
       deadline_basis?: string | null;
       /**
@@ -2674,7 +2674,7 @@ export interface components {
       pp290_refs: string[];
       /**
        * React Deadline At
-       * @description Срок реакции (принять заявку); пусто - не нормирован
+       * @description Срок локализации аварии (ПП РФ № 416, п. 13); пусто - нет
        */
       react_deadline_at?: string | null;
       /**
@@ -4525,11 +4525,6 @@ export interface components {
        */
       accept_time?: number | null;
       /**
-       * Accept Time Median
-       * @description Медиана времени до принятия заявки в минутах
-       */
-      accept_time_median?: number | null;
-      /**
        * Rating
        * @description Средняя оценка жителей в сотых долях балла
        */
@@ -5231,12 +5226,12 @@ export interface components {
       org_name: string | null;
       /**
        * Deadline Text
-       * @description Срок устранения, например «3 суток»
+       * @description Срок устранения от подачи заявки, например «3 суток»
        */
       deadline_text: string;
       /**
        * Deadline Basis
-       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       * @description Норма, на которой основан срок, и что она задает; пусто - срок назначил сервис
        */
       deadline_basis?: string | null;
       /**
@@ -5247,7 +5242,7 @@ export interface components {
       pp290_refs: string[];
       /**
        * React Deadline At
-       * @description Срок реакции (принять заявку); пусто - не нормирован
+       * @description Срок локализации аварии (ПП РФ № 416, п. 13); пусто - нет
        */
       react_deadline_at?: string | null;
       /**
@@ -5319,17 +5314,17 @@ export interface components {
       zone: components["schemas"]["ResponsibilityZone"];
       /**
        * Deadline Text
-       * @description Срок устранения, например «3 суток»
+       * @description Срок устранения от подачи заявки, например «3 суток»
        */
       deadline_text: string;
       /**
        * React Text
-       * @description Срок реакции, например «30 минут»; пусто - не нормирован
+       * @description Срок локализации аварии, например «30 минут»; пусто - нет
        */
       react_text?: string | null;
       /**
        * Deadline Basis
-       * @description Норма права под сроком; пусто - срок сервиса, норматива нет
+       * @description Норма, на которой основан срок, и что она задает; пусто - срок назначил сервис
        */
       deadline_basis?: string | null;
       /**

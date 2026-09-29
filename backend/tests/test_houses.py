@@ -682,7 +682,6 @@ async def test_the_house_card_shows_org_stats_from_ten_closed_requests(
         "on_time": 8,
         "on_time_share": 8000,
         "accept_time": 25,
-        "accept_time_median": 10,
         "rating": 400,
         "ratings_count": 4,
     }

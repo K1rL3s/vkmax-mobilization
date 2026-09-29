@@ -52,8 +52,10 @@ from zheka.core.services.requests import (
 )
 
 UNKNOWN_AUTHOR = "Пользователь"
-DEADLINE_TEXT = "Срок устранения, например «3 суток»"
-DEADLINE_BASIS = "Норма права под сроком; пусто - срок сервиса, норматива нет"
+DEADLINE_TEXT = "Срок устранения от подачи заявки, например «3 суток»"
+DEADLINE_BASIS = (
+    "Норма, на которой основан срок, и что она задает; пусто - срок назначил сервис"
+)
 MIN_CLASSIFY_TEXT = 15
 PP290_REFS = (
     "Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; "
@@ -73,7 +75,7 @@ class RequestCategoryItem(BaseSchema):
     deadline_text: str = Field(description=DEADLINE_TEXT)
     react_text: str | None = Field(
         default=None,
-        description="Срок реакции, например «30 минут»; пусто - не нормирован",
+        description="Срок локализации аварии, например «30 минут»; пусто - нет",
     )
     deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
     pp290_refs: tuple[str, ...] = Field(default=(), description=PP290_REFS)
@@ -203,7 +205,7 @@ class RequestCard(RequestListItem):
     pp290_refs: tuple[str, ...] = Field(default=(), description=PP290_REFS)
     react_deadline_at: datetime | None = Field(
         default=None,
-        description="Срок реакции (принять заявку); пусто - не нормирован",
+        description="Срок локализации аварии (ПП РФ № 416, п. 13); пусто - нет",
     )
     photos: list[FileRef] = Field(description="Вложения проблемы: фото или видео")
     result_photos: list[FileRef] = Field(

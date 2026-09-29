@@ -1,5 +1,5 @@
 import { Button, Flex, Typography } from "@maxhub/max-ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { components } from "@/shared/api/schema/generated";
 import { authParams, rqClient } from "@/shared/api/instance";
@@ -62,12 +62,21 @@ const Point = ({ point, items }: { point: string; items: Item[] }) => {
 
 export const Pp290Section = () => {
   const [open, setOpen] = useState(false);
+  const section = useRef<HTMLElement>(null);
   const query = rqClient.useQuery(
     "get",
     "/api/pp290",
     { params: authParams() },
     { enabled: open, staleTime: Infinity },
   );
+
+  const collapse = () => {
+    if (section.current && section.current.getBoundingClientRect().top < 0) {
+      section.current.scrollIntoView();
+    }
+
+    setOpen(false);
+  };
 
   const content = () => {
     if (!open) {
@@ -103,13 +112,16 @@ export const Pp290Section = () => {
         <Typography.Text variant="description" color="secondary">
           ПП РФ № 290 {query.data.edition}
         </Typography.Text>
+        <Button size="large" variant="secondary" stretched onClick={collapse}>
+          Свернуть перечень
+        </Button>
       </>
     );
   };
 
   return (
     <Flex asChild align="stretch" direction="column" gap={8}>
-      <section>
+      <section ref={section}>
         <Typography.Text asChild variant="title" color="primary">
           <h2>Что УК обязана делать</h2>
         </Typography.Text>
