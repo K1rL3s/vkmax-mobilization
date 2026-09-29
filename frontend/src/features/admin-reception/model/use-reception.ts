@@ -1,4 +1,6 @@
 import { keepPreviousData } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
+import { z } from "zod";
 
 import { rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
@@ -27,10 +29,38 @@ export const useSaveReceptionWindows = () =>
       ),
   });
 
-export const useOrgAppointments = (onDate: string) =>
-  rqClient.useQuery(
+const houseFilterSchema = z.coerce
+  .number()
+  .int()
+  .positive()
+  .optional()
+  .catch(undefined);
+
+export const useOrgAppointments = (onDate: string) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const houseId = houseFilterSchema.parse(
+    searchParams.get("house") ?? undefined,
+  );
+  const appointments = rqClient.useQuery(
     "get",
     "/api/admin/appointments",
-    { params: { ...orgParams(), query: { on_date: onDate } } },
+    {
+      params: { ...orgParams(), query: { on_date: onDate, house_id: houseId } },
+    },
     { placeholderData: keepPreviousData },
   );
+  const houses = rqClient.useQuery(
+    "get",
+    "/api/admin/houses",
+    { params: { ...orgParams(), query: { limit: 100 } } },
+    { enabled: houseId !== undefined },
+  );
+
+  return {
+    appointments,
+    houseId,
+    houseAddress: houses.data?.items.find((house) => house.id === houseId)
+      ?.address,
+    clearHouse: () => setSearchParams({}, { replace: true }),
+  };
+};

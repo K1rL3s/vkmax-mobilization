@@ -899,6 +899,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+    post:
+      tags:
+      - Дома
+      summary: Добавить дом по точке на карте
+      operationId: add_house
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddHouseRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseListItem'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/houses/nearby:
     get:
       tags:
@@ -958,6 +1029,88 @@ paths:
                 items:
                   $ref: '#/components/schemas/HouseListItem'
                 title: Response Search Houses Nearby
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/at:
+    get:
+      tags:
+      - Дома
+      summary: Дом или адрес в точке карты
+      operationId: house_at_point
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: Lat
+      - name: lon
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: Lon
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseAtPointResponse'
         '400':
           description: Некорректный запрос
           content:
@@ -1578,6 +1731,180 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/map/houses:
+    get:
+      tags:
+      - Карта
+      summary: Дома в рамке карты
+      operationId: map_houses
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: west
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: West
+      - name: south
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: South
+      - name: east
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 180
+          minimum: -180
+          title: East
+      - name: north
+        in: query
+        required: true
+        schema:
+          type: number
+          maximum: 90
+          minimum: -90
+          title: North
+      - name: kinds
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/MapHouseKind'
+          - type: 'null'
+          title: Kinds
+      - name: org_ids
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              type: integer
+          - type: 'null'
+          title: Org Ids
+      - name: waiting
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Waiting
+      - name: on_time_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 10000
+            minimum: 0
+          - type: 'null'
+          title: On Time From
+      - name: on_time_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 10000
+            minimum: 0
+          - type: 'null'
+          title: On Time To
+      - name: rating_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 500
+            minimum: 0
+          - type: 'null'
+          title: Rating From
+      - name: rating_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 500
+            minimum: 0
+          - type: 'null'
+          title: Rating To
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 5000
+          minimum: 1
+          default: 5000
+          title: Limit
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MapHousesResponse'
         '400':
           description: Некорректный запрос
           content:
@@ -7354,6 +7681,144 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/map/houses:
+    get:
+      tags:
+      - 'Админка: карта'
+      summary: Дома организации на карте
+      operationId: admin_map_houses
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: states
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: array
+            items:
+              $ref: '#/components/schemas/HouseState'
+          - type: 'null'
+          title: States
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/RequestCategory'
+          - type: 'null'
+          title: Category
+      - name: period
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/MapPeriod'
+          default: month
+      - name: urgent
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Urgent
+      - name: poll
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Poll
+      - name: reception_today
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Reception Today
+      - name: meters_below
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 100
+            minimum: 0
+          - type: 'null'
+          description: Порог доли квартир, подавших показания, в целых процентах
+          title: Meters Below
+        description: Порог доли квартир, подавших показания, в целых процентах
+      - name: pending
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Pending
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMapResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/admin/requests:
     get:
       tags:
@@ -9970,6 +10435,23 @@ components:
       - flat_id
       - flat_number
       title: AccessTargetCell
+    AddHouseRequest:
+      properties:
+        lat:
+          type: number
+          maximum: 90.0
+          minimum: -90.0
+          title: Lat
+        lon:
+          type: number
+          maximum: 180.0
+          minimum: -180.0
+          title: Lon
+      type: object
+      required:
+      - lat
+      - lon
+      title: AddHouseRequest
     AddMeterRequest:
       properties:
         type:
@@ -10113,8 +10595,11 @@ components:
           type: integer
           title: Flats Count
         residents_count:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Residents Count
+          description: Только для администратора
         open_requests:
           type: integer
           title: Open Requests
@@ -10131,6 +10616,180 @@ components:
       - open_requests
       - chat_bound
       title: AdminHouseListItem
+    AdminMapHouse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        lat:
+          type: number
+          title: Lat
+        lon:
+          type: number
+          title: Lon
+        address:
+          type: string
+          title: Address
+        building:
+          type: string
+          title: Building
+        state:
+          $ref: '#/components/schemas/HouseState'
+          description: 'Худшее состояние заявок: авария, эскалация, просрочка, открытые, спокойно'
+        open:
+          type: integer
+          title: Open
+          description: Незакрытые заявки
+        overdue:
+          type: integer
+          title: Overdue
+          description: Просроченные заявки
+        escalated:
+          type: integer
+          title: Escalated
+          description: Просроченные заявки с эскалацией жителя
+        grouped:
+          type: integer
+          title: Grouped
+          description: Незакрытые заявки в групповых
+        emergency:
+          type: integer
+          title: Emergency
+          description: Незакрытые заявки о протечке, кроме тех, что на приемке
+        period_requests:
+          type: integer
+          title: Period Requests
+          description: Заявки, созданные за период
+        rating:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rating
+          description: Средняя оценка заявок за период в сотых долях балла
+        urgent_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Urgent Id
+        urgent_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Urgent Text
+        urgent_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Urgent At
+        poll_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Poll Id
+        poll_title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Poll Title
+        poll_ends_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Poll Ends At
+        poll_turnout:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Poll Turnout
+          description: Доля проголосовавших квартир в сотых долях процента, 50% это 5000
+        appointments_today:
+          type: integer
+          title: Appointments Today
+          description: Записи на прием на сегодня
+        meters_percent:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Meters Percent
+          description: Доля квартир со счетчиками, подавших показания за период, в сотых долях процента
+        meters_submitted:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Meters Submitted
+        meters_flats:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Meters Flats
+          description: Квартиры со счетчиками
+        flats_count:
+          type: integer
+          title: Flats Count
+          description: Все квартиры дома
+        residents_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Residents Count
+          description: Только для администратора
+        verified_residents:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Verified Residents
+          description: Только для администратора
+        pending_verifications:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pending Verifications
+          description: Только для администратора
+        chat_bound:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Chat Bound
+          description: Только для администратора
+      type: object
+      required:
+      - id
+      - lat
+      - lon
+      - address
+      - building
+      - state
+      - open
+      - overdue
+      - escalated
+      - grouped
+      - emergency
+      - period_requests
+      - appointments_today
+      - flats_count
+      title: AdminMapHouse
+    AdminMapResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AdminMapHouse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        without_coords:
+          type: integer
+          title: Without Coords
+          description: Дома под фильтрами без координат
+      type: object
+      required:
+      - items
+      - total
+      - without_coords
+      title: AdminMapResponse
     AdminPollListItem:
       properties:
         id:
@@ -11868,6 +12527,7 @@ components:
         is_taken:
           type: boolean
           title: Is Taken
+          description: В квартире уже есть житель; видят только жители дома
           default: false
       type: object
       required:
@@ -11937,6 +12597,24 @@ components:
       required:
       - ok
       title: HealthcheckResponse
+    HouseAtPointResponse:
+      properties:
+        house:
+          anyOf:
+          - $ref: '#/components/schemas/HouseListItem'
+          - type: 'null'
+        address:
+          anyOf:
+          - $ref: '#/components/schemas/PointAddress'
+          - type: 'null'
+          description: Адрес здания в точке, если дома нет в справочнике
+        geocoder_failed:
+          type: boolean
+          title: Geocoder Failed
+          description: Сервис адресов не ответил, стоит повторить позже
+          default: false
+      type: object
+      title: HouseAtPointResponse
     HouseCard:
       properties:
         id:
@@ -12083,6 +12761,16 @@ components:
           - type: integer
           - type: 'null'
           title: Distance M
+        lat:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lat
+        lon:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lon
       type: object
       required:
       - id
@@ -12164,6 +12852,15 @@ components:
       - verified
       - is_chairman
       title: HouseResidentItem
+    HouseState:
+      type: string
+      enum:
+      - emergency
+      - escalated
+      - overdue
+      - open
+      - calm
+      title: HouseState
     LinkHouseRequest:
       properties:
         flat_id:
@@ -12194,6 +12891,123 @@ components:
           default: miniapp
       type: object
       title: LinkHouseRequest
+    MapHouse:
+      properties:
+        id:
+          type: integer
+          title: Id
+        lat:
+          type: number
+          title: Lat
+        lon:
+          type: number
+          title: Lon
+        building:
+          type: string
+          title: Building
+        address:
+          type: string
+          title: Address
+        kind:
+          $ref: '#/components/schemas/MapHouseKind'
+        is_demo:
+          type: boolean
+          title: Is Demo
+        demand_count:
+          type: integer
+          title: Demand Count
+        org_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Org Id
+        org_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Org Name
+        on_time_share:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: On Time Share
+          description: Доля заявок УК в срок за 90 дней, в сотых долях процента
+        rating:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rating
+          description: Средняя оценка УК за 90 дней, в сотых долях балла
+      type: object
+      required:
+      - id
+      - lat
+      - lon
+      - building
+      - address
+      - kind
+      - is_demo
+      - demand_count
+      title: MapHouse
+    MapHouseKind:
+      type: string
+      enum:
+      - connected
+      - unconnected
+      - added
+      title: MapHouseKind
+    MapHousesResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/MapHouse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+          description: Сколько домов подходит под фильтры в рамке
+        orgs:
+          items:
+            $ref: '#/components/schemas/MapOrg'
+          type: array
+          title: Orgs
+          description: Подключенные УК в рамке, без фильтра по УК
+      type: object
+      required:
+      - items
+      - total
+      - orgs
+      title: MapHousesResponse
+    MapOrg:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        is_demo:
+          type: boolean
+          title: Is Demo
+        houses:
+          type: integer
+          title: Houses
+      type: object
+      required:
+      - id
+      - name
+      - is_demo
+      - houses
+      title: MapOrg
+    MapPeriod:
+      type: string
+      enum:
+      - week
+      - month
+      - quarter
+      - half
+      title: MapPeriod
     MeResponse:
       properties:
         user_id:
@@ -13071,6 +13885,31 @@ components:
       - charge_id
       - paid_at
       title: PayChargeResponse
+    PointAddress:
+      properties:
+        region:
+          type: string
+          title: Region
+        city:
+          type: string
+          title: City
+        street:
+          type: string
+          title: Street
+        building:
+          type: string
+          title: Building
+        address:
+          type: string
+          title: Address
+      type: object
+      required:
+      - region
+      - city
+      - street
+      - building
+      - address
+      title: PointAddress
     PollCard:
       properties:
         id:
@@ -14635,6 +15474,8 @@ tags:
   description: Карточка УК, настройки, сотрудники, приглашения
 - name: 'Админка: дома'
   description: Дома организации, жители, подтверждения квартир
+- name: 'Админка: карта'
+  description: 'Дома организации на карте: заявки, объявления, опросы, прием'
 - name: 'Админка: заявки'
   description: Входящие заявки, статусы, исполнители, группы
 - name: 'Админка: счетчики'

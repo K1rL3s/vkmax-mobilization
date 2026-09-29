@@ -1,4 +1,4 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from datetime import date, datetime
 from typing import Any
 
@@ -532,6 +532,54 @@ class AnalyticsRepo(BaseAlchemyRepo):
             rating=rating,
             ratings_count=ratings_count,
         )
+
+    async def public_stats_by_org(
+        self,
+        org_ids: Collection[OrgId],
+        since: datetime,
+        now: datetime,
+    ) -> dict[OrgId, PublicStats]:
+        if not org_ids:
+            return {}
+        stmt = (
+            select(
+                houses_table.c.org_id,
+                func.count().filter(_REVIEWED),
+                func.count().filter(_ON_TIME),
+                _METRICS[AnalyticsMetric.ON_TIME_SHARE](now),
+                _METRICS[AnalyticsMetric.ACCEPT_TIME](now),
+                _METRICS[AnalyticsMetric.ACCEPT_TIME_MEDIAN](now),
+                _METRICS[AnalyticsMetric.RATING](now),
+                func.count(_R.rating),
+            )
+            .select_from(
+                requests_table.join(houses_table, houses_table.c.id == _R.house_id),
+            )
+            .where(houses_table.c.org_id.in_(org_ids), _created_in(since, now))
+            .group_by(houses_table.c.org_id)
+        )
+        result = await self._session.execute(stmt)
+        return {
+            OrgId(org_id): PublicStats(
+                closed=closed,
+                on_time=on_time,
+                on_time_share=on_time_share,
+                accept_time=accept_time,
+                accept_time_median=accept_time_median,
+                rating=rating,
+                ratings_count=ratings_count,
+            )
+            for (
+                org_id,
+                closed,
+                on_time,
+                on_time_share,
+                accept_time,
+                accept_time_median,
+                rating,
+                ratings_count,
+            ) in result.tuples().all()
+        }
 
 
 def _peers(

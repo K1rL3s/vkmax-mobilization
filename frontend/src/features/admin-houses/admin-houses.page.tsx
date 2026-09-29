@@ -10,12 +10,13 @@ import {
 } from "@maxhub/max-ui";
 import { useDebounceValue } from "@siberiacancode/reactuse";
 import { keepPreviousData } from "@tanstack/react-query";
-import { generatePath, useNavigate } from "react-router-dom";
+import { generatePath, Link, useNavigate } from "react-router-dom";
 
 import { errorDetail, isForbidden } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { nextOffset } from "@/shared/api/next-offset";
 import type { components } from "@/shared/api/schema/generated";
+import { cn } from "@/shared/lib/css";
 import { plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { orgParams, useSession } from "@/shared/model/session";
@@ -25,12 +26,48 @@ import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
+import { useAdminMap } from "./model/use-admin-map";
+import { HousesMap } from "./ui/houses-map";
+
 import styles from "./admin-houses.module.css";
 
 type House = components["schemas"]["AdminHouseListItem"];
 
-const HouseRow = ({ house }: { house: House }) => {
+const HouseRow = ({ house, isAdmin }: { house: House; isAdmin: boolean }) => {
   const navigate = useNavigate();
+
+  const requests =
+    house.open_requests > 0 ? (
+      <StatusPill tone="themed">
+        {house.open_requests}{" "}
+        {plural(house.open_requests, ["заявка", "заявки", "заявок"])} в работе
+      </StatusPill>
+    ) : (
+      <StatusPill tone="neutral">Заявок в работе нет</StatusPill>
+    );
+
+  if (!isAdmin) {
+    return (
+      <div className={styles.Row}>
+        <IconTile icon={homeIcon} tone="neutral" />
+
+        <Flex
+          className={styles.Grow}
+          align="stretch"
+          direction="column"
+          gapY={4}
+        >
+          <Typography.Text variant="body-strong" color="primary">
+            {house.address}
+          </Typography.Text>
+
+          <Flex align="center" gap={6} wrap="wrap">
+            {requests}
+          </Flex>
+        </Flex>
+      </div>
+    );
+  }
 
   return (
     <Tappable
@@ -50,21 +87,13 @@ const HouseRow = ({ house }: { house: House }) => {
 
         <Typography.Text variant="description" color="secondary">
           {house.flats_count}{" "}
-          {plural(house.flats_count, ["квартира", "квартиры", "квартир"])} ·{" "}
-          {house.residents_count}{" "}
-          {plural(house.residents_count, ["житель", "жителя", "жителей"])}
+          {plural(house.flats_count, ["квартира", "квартиры", "квартир"])}
+          {house.residents_count != null &&
+            ` · ${house.residents_count} ${plural(house.residents_count, ["житель", "жителя", "жителей"])}`}
         </Typography.Text>
 
         <Flex align="center" gap={6} wrap="wrap">
-          {house.open_requests > 0 ? (
-            <StatusPill tone="themed">
-              {house.open_requests}{" "}
-              {plural(house.open_requests, ["заявка", "заявки", "заявок"])} в
-              работе
-            </StatusPill>
-          ) : (
-            <StatusPill tone="neutral">Заявок в работе нет</StatusPill>
-          )}
+          {requests}
 
           {house.chat_bound ? (
             <StatusPill tone="positive">Чат привязан</StatusPill>
@@ -79,9 +108,8 @@ const HouseRow = ({ house }: { house: House }) => {
   );
 };
 
-const AdminHousesPage = () => {
+const HouseList = ({ isAdmin }: { isAdmin: boolean }) => {
   const navigate = useNavigate();
-  const { currentOrg } = useSession();
   const [query, setQuery] = useState("");
   const search = useDebounceValue(query.trim(), 300);
 
@@ -167,7 +195,7 @@ const AdminHousesPage = () => {
     return (
       <>
         {items.map((house) => (
-          <HouseRow key={house.id} house={house} />
+          <HouseRow key={house.id} house={house} isAdmin={isAdmin} />
         ))}
 
         {houses.hasNextPage && (
@@ -185,24 +213,16 @@ const AdminHousesPage = () => {
   };
 
   return (
-    <Panel className={styles.Page} mode="secondary">
-      <Flex align="stretch" direction="column" gapY={4}>
-        <Typography.Text asChild variant="title" color="primary">
-          <h1>Дома</h1>
-        </Typography.Text>
-
-        {currentOrg && (
-          <Typography.Text variant="description" color="secondary">
-            {currentOrg.name}
-          </Typography.Text>
-        )}
-      </Flex>
-
+    <>
       <div className={styles.Panel}>
         <CellSimple
           before={<Icon src={usersIcon} className={styles.CellIcon} />}
           title="Организация и сотрудники"
-          subtitle="Реквизиты, настройки, приглашения сотрудников"
+          subtitle={
+            isAdmin
+              ? "Реквизиты, настройки, приглашения сотрудников"
+              : "Настройки организации для просмотра"
+          }
           showChevron
           onClick={() => void navigate(Routes.ADMIN_ORG)}
         />
@@ -220,6 +240,74 @@ const AdminHousesPage = () => {
       )}
 
       {content()}
+    </>
+  );
+};
+
+const AdminHousesPage = () => {
+  const { currentOrg } = useSession();
+  const map = useAdminMap();
+  const view = map.filters.view;
+
+  return (
+    <Panel
+      className={cn(styles.Page, view === "map" && styles.mapped)}
+      mode="secondary"
+    >
+      <div className={styles.Header}>
+        <Flex
+          className={styles.Grow}
+          align="stretch"
+          direction="column"
+          gapY={4}
+        >
+          <Typography.Text asChild variant="title" color="primary">
+            <h1>Дома</h1>
+          </Typography.Text>
+
+          {currentOrg && (
+            <Link
+              to={Routes.ADMIN_ORG}
+              className={styles.Org}
+              aria-label={`${currentOrg.name}: организация и сотрудники`}
+            >
+              <Typography.Text variant="description" color="secondary">
+                {currentOrg.name}
+              </Typography.Text>
+              <Chevron />
+            </Link>
+          )}
+        </Flex>
+
+        <div className={styles.Views} role="radiogroup" aria-label="Вид">
+          {(
+            [
+              { id: "map", label: "Карта" },
+              { id: "list", label: "Список" },
+            ] as const
+          ).map((option) => (
+            <Button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={view === option.id}
+              size="small"
+              variant={view === option.id ? "primary" : "secondary"}
+              onClick={() =>
+                map.update({ view: option.id === "map" ? null : "list" })
+              }
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {view === "map" ? (
+        <HousesMap map={map} />
+      ) : (
+        <HouseList isAdmin={map.isAdmin} />
+      )}
     </Panel>
   );
 };

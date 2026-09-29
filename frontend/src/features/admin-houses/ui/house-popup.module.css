@@ -1,0 +1,64 @@
+.HousePopup {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: var(--map-bottom);
+  display: flex;
+  flex-direction: column;
+  max-height: 52%;
+  box-sizing: border-box;
+  padding: 12px 12px 4px 16px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 24%);
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.Head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.Title {
+  margin: 0;
+}
+
+.State {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.Dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.Rows {
+  overflow-y: auto;
+  margin-right: -12px;
+  padding-right: 12px;
+}
+
+.Row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 0;
+  border-top: 1px solid var(--divider-primary);
+  color: inherit;
+  text-decoration: none;
+}

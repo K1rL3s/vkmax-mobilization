@@ -15,6 +15,7 @@ from zheka.di.core.services import ServicesProvider
 from zheka.di.database.repos import ReposProvider
 from zheka.di.database.session import DbProvider
 from zheka.di.max_bot import MaxBotProvider
+from zheka.di.nominatim import NominatimProvider
 from zheka.di.yandex import YandexProvider
 
 
@@ -40,6 +41,7 @@ def make_container(
         MaxBotProvider(),
         BrokerProvider(),
         YandexProvider(),
+        NominatimProvider(),
         *extra_providers,
         context=context,
         validation_settings=STRICT_VALIDATION,

@@ -15,6 +15,7 @@ from zheka.core.enums import (
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import ChairmanHandover, Flat
+from zheka.core.services.house_point import HouseAtPoint
 from zheka.core.services.houses import (
     AdminHouseCardData,
     AdminHouseRow,
@@ -64,6 +65,8 @@ class HouseListItem(BaseSchema):
     is_connected: bool
     org_name: str | None = None
     distance_m: int | None = None
+    lat: float | None = None
+    lon: float | None = None
 
     @classmethod
     def of(cls, found: HouseFound) -> Self:
@@ -77,6 +80,8 @@ class HouseListItem(BaseSchema):
             is_connected=found.is_connected,
             org_name=None if found.org is None else found.org.name,
             distance_m=found.distance_m,
+            lat=None if house.lat is None else float(house.lat),
+            lon=None if house.lon is None else float(house.lon),
         )
 
 
@@ -244,7 +249,10 @@ class FlatListItem(BaseSchema):
         default=None,
         description="Площадь в сотых долях квадратного метра",
     )
-    is_taken: bool = False
+    is_taken: bool = Field(
+        default=False,
+        description="В квартире уже есть житель; видят только жители дома",
+    )
 
     @classmethod
     def of(cls, flat: Flat, is_taken: bool) -> Self:
@@ -276,18 +284,18 @@ class AdminHouseListItem(BaseSchema):
     address: str
     entrances: int
     flats_count: int
-    residents_count: int
+    residents_count: int | None = Field(description="Только для администратора")
     open_requests: int
     chat_bound: bool
 
     @classmethod
-    def of(cls, row: AdminHouseRow) -> Self:
+    def of(cls, row: AdminHouseRow, can_manage: bool) -> Self:
         return cls(
             id=row.house.id,
             address=row.house.address,
             entrances=row.house.entrances,
             flats_count=row.flats_count,
-            residents_count=row.residents_count,
+            residents_count=row.residents_count if can_manage else None,
             open_requests=row.open_requests,
             chat_bound=row.chat_bound,
         )
@@ -437,3 +445,47 @@ class ChairmanHandoverItem(BaseSchema):
             expires_at=handover.expires_at,
             deeplink=deeplink,
         )
+
+
+class PointAddress(BaseSchema):
+    region: str
+    city: str
+    street: str
+    building: str
+    address: str
+
+
+class HouseAtPointResponse(BaseSchema):
+    house: HouseListItem | None = None
+    address: PointAddress | None = Field(
+        default=None,
+        description="Адрес здания в точке, если дома нет в справочнике",
+    )
+    geocoder_failed: bool = Field(
+        default=False,
+        description="Сервис адресов не ответил, стоит повторить позже",
+    )
+
+    @classmethod
+    def of(cls, found: HouseAtPoint) -> Self:
+        address = found.address
+        return cls(
+            house=None if found.house is None else HouseListItem.of(found.house),
+            address=(
+                None
+                if address is None
+                else PointAddress(
+                    region=address.region,
+                    city=address.city,
+                    street=address.street,
+                    building=address.building,
+                    address=address.address,
+                )
+            ),
+            geocoder_failed=found.geocoder_failed,
+        )
+
+
+class AddHouseRequest(BaseSchema):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)

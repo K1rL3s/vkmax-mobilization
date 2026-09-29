@@ -11,10 +11,12 @@ from zheka.api.dependencies import RequireConsentDep, ResidencyForHouseDep
 from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.houses import (
+    AddHouseRequest,
     ChairmanHandoverItem,
     CityItem,
     DemandSignalResponse,
     FlatListItem,
+    HouseAtPointResponse,
     HouseCard,
     HouseListItem,
     LinkHouseRequest,
@@ -24,6 +26,7 @@ from zheka.core.deeplinks import chairman_payload
 from zheka.core.ids import HouseId, ResidentId
 from zheka.core.services.chairman import ChairmanService
 from zheka.core.services.files import FilesService
+from zheka.core.services.house_point import HousePointService
 from zheka.core.services.houses import HousesService
 
 router = APIRouter(tags=["Дома"], route_class=DishkaRoute)
@@ -93,6 +96,17 @@ async def search_houses_nearby(
     return [HouseListItem.of(item) for item in found]
 
 
+@router.get("/houses/at", summary="Дом или адрес в точке карты")
+async def house_at_point(
+    current_account: RequireConsentDep,
+    point_service: FromDishka[HousePointService],
+    lat: Annotated[float, Query(ge=-90, le=90)],
+    lon: Annotated[float, Query(ge=-180, le=180)],
+) -> HouseAtPointResponse:
+    found = await point_service.at(current_account.user_id, lat, lon)
+    return HouseAtPointResponse.of(found)
+
+
 @router.get("/houses/{house_id}", summary="Карточка дома")
 async def get_house_card(
     house_id: HouseId,
@@ -151,7 +165,7 @@ async def create_demand_signal(
 @router.get("/houses/{house_id}/flats", summary="Квартиры дома")
 async def list_house_flats(
     house_id: HouseId,
-    residency: ResidencyForHouseDep,
+    current_account: RequireConsentDep,
     houses_service: FromDishka[HousesService],
     q: str | None = None,
     entrance: int | None = None,
@@ -159,7 +173,7 @@ async def list_house_flats(
     offset: Offset = 0,
 ) -> Page[FlatListItem]:
     flats, total, taken = await houses_service.flats(
-        residency.user_id,
+        current_account.user_id,
         house_id,
         q,
         entrance,
@@ -219,3 +233,13 @@ async def revoke_chairman_handover(
 ) -> OkResponse:
     await chairman_service.revoke_handover(residency.user_id, house_id)
     return OkResponse()
+
+
+@router.post("/houses", summary="Добавить дом по точке на карте")
+async def add_house(
+    current_account: RequireConsentDep,
+    point_service: FromDishka[HousePointService],
+    body: AddHouseRequest,
+) -> HouseListItem:
+    found = await point_service.add(current_account.user_id, body.lat, body.lon)
+    return HouseListItem.of(found)

@@ -30,7 +30,7 @@ async def seed_demo(
     mid: str | None = None,
     chat_id: int | None = None,
 ) -> bool:
-    seeded = await seed(session, demo, Path(files.dir), datetime.now(UTC).date())
+    seeded = await seed(session, demo, Path(files.dir), datetime.now(UTC))
     text = SEEDED if seeded else ALREADY_SEEDED
     edited = (
         mid is not None

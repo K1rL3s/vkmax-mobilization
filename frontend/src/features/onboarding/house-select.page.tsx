@@ -1,5 +1,8 @@
 import { Button, Typography } from "@maxhub/max-ui";
+import { useSearchParams } from "react-router-dom";
+import { z } from "zod";
 
+import { PublicHouseMap } from "@/features/house-map";
 import { errorMessage } from "@/shared/api/errors";
 import { Autocomplete } from "@/shared/ui/autocomplete";
 import { searchOutlineIcon } from "@/shared/ui/icon";
@@ -9,11 +12,63 @@ import { useHouseSelect } from "./model/use-house-select";
 
 import styles from "./house-select.module.css";
 
+const viewSchema = z.enum(["list", "map"]).catch("list");
+
 const HouseSelectPage = () => {
   const form = useHouseSelect();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = viewSchema.parse(searchParams.get("view") ?? undefined);
+
+  const switchTo = (next: "list" | "map") =>
+    setSearchParams(
+      (previous) => {
+        const params = new URLSearchParams(previous);
+        if (next === "map") params.set("view", "map");
+        else params.delete("view");
+        return params;
+      },
+      { replace: true },
+    );
+
+  const views = (
+    <div className={styles.Views}>
+      {(
+        [
+          ["list", "Списком"],
+          ["map", "На карте"],
+        ] as const
+      ).map(([id, label]) => (
+        <Button
+          key={id}
+          size="small"
+          variant={view === id ? "primary" : "secondary"}
+          aria-pressed={view === id}
+          onClick={() => switchTo(id)}
+        >
+          {label}
+        </Button>
+      ))}
+    </div>
+  );
+
+  if (view === "map") {
+    return (
+      <div className={styles.Page}>
+        {views}
+        <PublicHouseMap
+          onPick={(house) => {
+            form.pickHouse(house);
+            switchTo("list");
+          }}
+          onUnavailable={() => switchTo("list")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.Page}>
+      {views}
       <div className={styles.Form}>
         <Autocomplete
           placeholder="Улица и номер дома"

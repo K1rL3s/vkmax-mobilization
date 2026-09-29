@@ -156,7 +156,8 @@ export interface paths {
     /** Поиск дома по адресу */
     get: operations["search_houses"];
     put?: never;
-    post?: never;
+    /** Добавить дом по точке на карте */
+    post: operations["add_house"];
     delete?: never;
     options?: never;
     head?: never;
@@ -172,6 +173,23 @@ export interface paths {
     };
     /** Дома рядом по геопозиции */
     get: operations["search_houses_nearby"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/houses/at": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Дом или адрес в точке карты */
+    get: operations["house_at_point"];
     put?: never;
     post?: never;
     delete?: never;
@@ -279,6 +297,23 @@ export interface paths {
     post: operations["create_chairman_handover"];
     /** Отозвать ссылку на передачу роли председателя */
     delete: operations["revoke_chairman_handover"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/map/houses": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Дома в рамке карты */
+    get: operations["map_houses"];
+    put?: never;
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1402,6 +1437,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/admin/map/houses": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Дома организации на карте */
+    get: operations["admin_map_houses"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/admin/requests": {
     parameters: {
       query?: never;
@@ -1914,6 +1966,13 @@ export interface components {
       /** Responded At */
       responded_at?: string | null;
     };
+    /** AddHouseRequest */
+    AddHouseRequest: {
+      /** Lat */
+      lat: number;
+      /** Lon */
+      lon: number;
+    };
     /** AddMeterRequest */
     AddMeterRequest: {
       type: components["schemas"]["MeterType"];
@@ -1987,12 +2046,136 @@ export interface components {
       entrances: number;
       /** Flats Count */
       flats_count: number;
-      /** Residents Count */
-      residents_count: number;
+      /**
+       * Residents Count
+       * @description Только для администратора
+       */
+      residents_count: number | null;
       /** Open Requests */
       open_requests: number;
       /** Chat Bound */
       chat_bound: boolean;
+    };
+    /** AdminMapHouse */
+    AdminMapHouse: {
+      /** Id */
+      id: number;
+      /** Lat */
+      lat: number;
+      /** Lon */
+      lon: number;
+      /** Address */
+      address: string;
+      /** Building */
+      building: string;
+      /** @description Худшее состояние заявок: авария, эскалация, просрочка, открытые, спокойно */
+      state: components["schemas"]["HouseState"];
+      /**
+       * Open
+       * @description Незакрытые заявки
+       */
+      open: number;
+      /**
+       * Overdue
+       * @description Просроченные заявки
+       */
+      overdue: number;
+      /**
+       * Escalated
+       * @description Просроченные заявки с эскалацией жителя
+       */
+      escalated: number;
+      /**
+       * Grouped
+       * @description Незакрытые заявки в групповых
+       */
+      grouped: number;
+      /**
+       * Emergency
+       * @description Незакрытые заявки о протечке, кроме тех, что на приемке
+       */
+      emergency: number;
+      /**
+       * Period Requests
+       * @description Заявки, созданные за период
+       */
+      period_requests: number;
+      /**
+       * Rating
+       * @description Средняя оценка заявок за период в сотых долях балла
+       */
+      rating?: number | null;
+      /** Urgent Id */
+      urgent_id?: number | null;
+      /** Urgent Text */
+      urgent_text?: string | null;
+      /** Urgent At */
+      urgent_at?: string | null;
+      /** Poll Id */
+      poll_id?: number | null;
+      /** Poll Title */
+      poll_title?: string | null;
+      /** Poll Ends At */
+      poll_ends_at?: string | null;
+      /**
+       * Poll Turnout
+       * @description Доля проголосовавших квартир в сотых долях процента, 50% это 5000
+       */
+      poll_turnout?: number | null;
+      /**
+       * Appointments Today
+       * @description Записи на прием на сегодня
+       */
+      appointments_today: number;
+      /**
+       * Meters Percent
+       * @description Доля квартир со счетчиками, подавших показания за период, в сотых долях процента
+       */
+      meters_percent?: number | null;
+      /** Meters Submitted */
+      meters_submitted?: number | null;
+      /**
+       * Meters Flats
+       * @description Квартиры со счетчиками
+       */
+      meters_flats?: number | null;
+      /**
+       * Flats Count
+       * @description Все квартиры дома
+       */
+      flats_count: number;
+      /**
+       * Residents Count
+       * @description Только для администратора
+       */
+      residents_count?: number | null;
+      /**
+       * Verified Residents
+       * @description Только для администратора
+       */
+      verified_residents?: number | null;
+      /**
+       * Pending Verifications
+       * @description Только для администратора
+       */
+      pending_verifications?: number | null;
+      /**
+       * Chat Bound
+       * @description Только для администратора
+       */
+      chat_bound?: boolean | null;
+    };
+    /** AdminMapResponse */
+    AdminMapResponse: {
+      /** Items */
+      items: components["schemas"]["AdminMapHouse"][];
+      /** Total */
+      total: number;
+      /**
+       * Without Coords
+       * @description Дома под фильтрами без координат
+       */
+      without_coords: number;
     };
     /** AdminPollListItem */
     AdminPollListItem: {
@@ -3032,6 +3215,7 @@ export interface components {
       area?: number | null;
       /**
        * Is Taken
+       * @description В квартире уже есть житель; видят только жители дома
        * @default false
        */
       is_taken: boolean;
@@ -3066,6 +3250,18 @@ export interface components {
     HealthcheckResponse: {
       /** Ok */
       ok: boolean;
+    };
+    /** HouseAtPointResponse */
+    HouseAtPointResponse: {
+      house?: components["schemas"]["HouseListItem"] | null;
+      /** @description Адрес здания в точке, если дома нет в справочнике */
+      address?: components["schemas"]["PointAddress"] | null;
+      /**
+       * Geocoder Failed
+       * @description Сервис адресов не ответил, стоит повторить позже
+       * @default false
+       */
+      geocoder_failed: boolean;
     };
     /** HouseCard */
     HouseCard: {
@@ -3142,6 +3338,10 @@ export interface components {
       org_name?: string | null;
       /** Distance M */
       distance_m?: number | null;
+      /** Lat */
+      lat?: number | null;
+      /** Lon */
+      lon?: number | null;
     };
     /** HouseOverhaul */
     HouseOverhaul: {
@@ -3178,6 +3378,11 @@ export interface components {
       /** Phone */
       phone?: string | null;
     };
+    /**
+     * HouseState
+     * @enum {string}
+     */
+    HouseState: "emergency" | "escalated" | "overdue" | "open" | "calm";
     /** LinkHouseRequest */
     LinkHouseRequest: {
       /** Flat Id */
@@ -3193,6 +3398,74 @@ export interface components {
       /** @default miniapp */
       source: components["schemas"]["EventSource"];
     };
+    /** MapHouse */
+    MapHouse: {
+      /** Id */
+      id: number;
+      /** Lat */
+      lat: number;
+      /** Lon */
+      lon: number;
+      /** Building */
+      building: string;
+      /** Address */
+      address: string;
+      kind: components["schemas"]["MapHouseKind"];
+      /** Is Demo */
+      is_demo: boolean;
+      /** Demand Count */
+      demand_count: number;
+      /** Org Id */
+      org_id?: number | null;
+      /** Org Name */
+      org_name?: string | null;
+      /**
+       * On Time Share
+       * @description Доля заявок УК в срок за 90 дней, в сотых долях процента
+       */
+      on_time_share?: number | null;
+      /**
+       * Rating
+       * @description Средняя оценка УК за 90 дней, в сотых долях балла
+       */
+      rating?: number | null;
+    };
+    /**
+     * MapHouseKind
+     * @enum {string}
+     */
+    MapHouseKind: "connected" | "unconnected" | "added";
+    /** MapHousesResponse */
+    MapHousesResponse: {
+      /** Items */
+      items: components["schemas"]["MapHouse"][];
+      /**
+       * Total
+       * @description Сколько домов подходит под фильтры в рамке
+       */
+      total: number;
+      /**
+       * Orgs
+       * @description Подключенные УК в рамке, без фильтра по УК
+       */
+      orgs: components["schemas"]["MapOrg"][];
+    };
+    /** MapOrg */
+    MapOrg: {
+      /** Id */
+      id: number;
+      /** Name */
+      name: string;
+      /** Is Demo */
+      is_demo: boolean;
+      /** Houses */
+      houses: number;
+    };
+    /**
+     * MapPeriod
+     * @enum {string}
+     */
+    MapPeriod: "week" | "month" | "quarter" | "half";
     /** MeResponse */
     MeResponse: {
       /** User Id */
@@ -3692,6 +3965,19 @@ export interface components {
        * @default true
        */
       is_demo: boolean;
+    };
+    /** PointAddress */
+    PointAddress: {
+      /** Region */
+      region: string;
+      /** City */
+      city: string;
+      /** Street */
+      street: string;
+      /** Building */
+      building: string;
+      /** Address */
+      address: string;
     };
     /** PollCard */
     PollCard: {
@@ -5678,6 +5964,95 @@ export interface operations {
       };
     };
   };
+  add_house: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AddHouseRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HouseListItem"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
   search_houses_nearby: {
     parameters: {
       query: {
@@ -5702,6 +6077,94 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HouseListItem"][];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  house_at_point: {
+    parameters: {
+      query: {
+        lat: number;
+        lon: number;
+      };
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HouseAtPointResponse"];
         };
       };
       /** @description Некорректный запрос */
@@ -6410,6 +6873,104 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OkResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  map_houses: {
+    parameters: {
+      query: {
+        west: number;
+        south: number;
+        east: number;
+        north: number;
+        kinds?: components["schemas"]["MapHouseKind"][] | null;
+        org_ids?: number[] | null;
+        waiting?: boolean;
+        on_time_from?: number | null;
+        on_time_to?: number | null;
+        rating_from?: number | null;
+        rating_to?: number | null;
+        limit?: number;
+      };
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MapHousesResponse"];
         };
       };
       /** @description Некорректный запрос */
@@ -12886,6 +13447,102 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["VerificationRequestItem"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  admin_map_houses: {
+    parameters: {
+      query?: {
+        states?: components["schemas"]["HouseState"][] | null;
+        category?: components["schemas"]["RequestCategory"] | null;
+        period?: components["schemas"]["MapPeriod"];
+        urgent?: boolean;
+        poll?: boolean;
+        reception_today?: boolean;
+        /** @description Порог доли квартир, подавших показания, в целых процентах */
+        meters_below?: number | null;
+        pending?: boolean;
+      };
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminMapResponse"];
         };
       };
       /** @description Некорректный запрос */

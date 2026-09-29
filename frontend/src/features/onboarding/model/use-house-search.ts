@@ -38,6 +38,10 @@ export const useHouseSearch = () => {
       return;
     }
 
+    pick(selected);
+  };
+
+  const pick = (selected: House) => {
     setHouse(selected);
     setQuery(selected.address);
     setDebouncedQuery(selected.address);
@@ -47,6 +51,7 @@ export const useHouseSearch = () => {
     query,
     change,
     select,
+    pick,
     house,
     found,
     status: autocompleteStatus(isSearching, houses.isPending, houses.isError),

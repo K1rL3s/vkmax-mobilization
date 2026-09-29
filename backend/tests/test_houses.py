@@ -41,7 +41,7 @@ from zheka.core.errors import (
 from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService, ResidencyView
-from zheka.infra.database.models import Chat, Flat, House, Request
+from zheka.infra.database.models import Chat, Flat, House, Request, Resident
 from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
@@ -388,7 +388,7 @@ async def test_admin_house_surface(
 
     rows, total = await houses_service.org_houses(own.org_id, None, 50, 0)
     assert total == 1
-    item = AdminHouseListItem.of(rows[0])
+    item = AdminHouseListItem.of(rows[0], can_manage=True)
     assert (item.id, item.flats_count, item.residents_count) == (own.house_id, 2, 1)
     assert (item.open_requests, item.chat_bound) == (1, False)
 
@@ -418,14 +418,25 @@ async def test_admin_house_surface(
         await houses_service.admin_card(own.org_id, other.house_id)
 
 
-async def test_flats_are_listed_to_a_resident_and_hidden_from_a_stranger(
+async def test_flats_are_listed_to_anyone_and_taken_only_to_a_resident(
     session: AsyncSession,
     make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
 ) -> None:
     own = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
     stranger = await make_org_house_flat_user()
+    blocked = await make_org_house_flat_user()
     free_flat = Flat(house_id=own.house_id, number="2")
-    session.add(free_flat)
+    session.add_all(
+        [
+            free_flat,
+            Resident(
+                user_id=blocked.user_id,
+                house_id=own.house_id,
+                role=ResidentRole.TENANT,
+                status=ResidentStatus.BLOCKED,
+            ),
+        ],
+    )
     await session.flush()
     service = _make_service(session)
 
@@ -441,8 +452,20 @@ async def test_flats_are_listed_to_a_resident_and_hidden_from_a_stranger(
     assert total == 2
     assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
     assert taken == {own.flat_id}
+    for outsider in (stranger, blocked):
+        flats, total, taken = await service.flats(
+            outsider.user_id,
+            own.house_id,
+            None,
+            None,
+            50,
+            0,
+        )
+        assert total == 2
+        assert {flat.id for flat in flats} == {own.flat_id, free_flat.id}
+        assert taken == set()
     with pytest.raises(EntityNotFound):
-        await service.flats(stranger.user_id, own.house_id, None, None, 50, 0)
+        await service.flats(stranger.user_id, HouseId(0), None, None, 50, 0)
 
 
 async def test_a_chat_the_bot_was_removed_from_is_not_bound(
@@ -696,3 +719,45 @@ def test_object_qrs_open_the_request_form_per_entrance_and_object(
     ]
     assert qrs[0].deeplink == create_startapp_link(fake_bot, "obj_7_1_elevator")
     assert all("startapp=obj_7_" in qr.deeplink for qr in qrs)
+
+
+async def test_a_search_finds_a_house_by_any_displayed_form_of_its_address(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    wanted = await _add_house(
+        session,
+        fixture.org_id,
+        city="Москва",
+        street="Волгоградский проспект",
+        building="105 к.2",
+    )
+    await _add_house(
+        session,
+        fixture.org_id,
+        city="Москва",
+        street="Волгоградский проспект",
+        building="105",
+    )
+    house = await HousesRepo(session).get(wanted)
+    assert house is not None
+    service = _make_service(session)
+
+    for query in (
+        house.address,
+        house.street_address,
+        "Волгоградский проспект,105 к.2",
+        "москва,волгоградский проспект , 105 к.2",
+    ):
+        found, total = await service.search(
+            fixture.user_id,
+            None,
+            None,
+            None,
+            query,
+            20,
+            0,
+        )
+        assert [item.house.id for item in found] == [wanted], query
+        assert total == 1

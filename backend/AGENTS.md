@@ -386,6 +386,36 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   (platform for a region; region and platform for a city) must be 0 or >= 3.
   Peers share the caller's `is_demo`.
 
+## Map
+
+- `GET /api/map/houses` (any consented user; the staff map's platform layer
+  too) returns only what `HouseCard` shows: address, org name and `is_demo`,
+  the public stats of a connected org (`PUBLIC_STATS_PERIOD`, none under
+  `PUBLIC_STATS_MIN_CLOSED` closed) and the demand count (0 once
+  connected). It loads every house in the box and filters in Python: fine
+  for the directory's 2000 houses, not for a country.
+- A map tap (`GET /houses/at`, `POST /houses`) takes the house nearest
+  within `MATCH_RADIUS_M` (houses at one point: the lowest id, and the
+  address match walks its candidates the same way), else asks
+  `NominatimClient`: one request a second for the whole app (Redis
+  `SET nominatim:slot NX PX 1000`, waited for at most 1.5 s, then
+  `geocoder_failed`), answers cached in Redis for 30 days per point rounded
+  to 5 digits, failures never cached. The request keeps its db
+  connection and the account upsert's `users` row through the call (about
+  4.5 s at worst). `HouseLookupQuota` (60) and `HouseAddQuota` (5, new houses
+  only) count per user per api worker an hour. `POST /houses` rechecks the
+  address under `pg_advisory_xact_lock(ADD_HOUSE_LOCK)`; advisory keys:
+  `SEED_LOCK = 1`, `ADD_HOUSE_LOCK = 2`.
+- `GET /api/admin/map/houses` reads only the caller's org (`list_for_org`,
+  `scoped_to_org`, announcements by `org_id`). EMPLOYEE gets `null`
+  `residents_count`, `verified_residents`, `pending_verifications` and
+  `chat_bound`, and `pending` filters nothing; `flats_count` goes to every
+  staff role (an access request picks a flat). `GET /api/admin/houses` is
+  open to EMPLOYEE with `residents_count` null.
+- `GET /api/houses/{id}/flats` needs only consent (a newcomer and a staff
+  phone request pick a flat before any residency, as the bot's flat list
+  does); `is_taken` goes only to an active resident of that house.
+
 ## Seed and demo
 
 - Real where public, fictional where it would be a claim. Registry orgs are
@@ -393,24 +423,42 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   reformagkh card names unambiguously; registered orgs are fictional
   «Демо-УК ...» (`is_demo`, checksum-failing INNs). No invented licence or
   cadastral numbers; images are generated. Fictional orgs take only unmanaged
-  houses in the flat range, earliest in `houses.csv` first: demo house
-  Ленинский проспект 61/1 leads Москва (`test_no_real_manager_is_replaced`).
+  houses in the flat range (`test_no_real_manager_is_replaced`), each a
+  compact territory: the i-th org of a city takes the i-th slice of the free
+  houses by `(lat, lon)`, centres on its densest house (the one whose
+  `houses`-th nearest free neighbour is closest) and takes the nearest ones.
+  5 enterable orgs (`PROFILES`, 12 houses) and 12 background ones
+  (`BACKGROUND_PROFILES`, 8-15 houses, no deeplink) share 3 cities.
 - Seeded users: negative `max_user_id`, no `max_chat_id`.
-- The seed is one transaction, offline, takes `today`, seeds `random.Random`
-  per entity; after `pg_advisory_xact_lock(SEED_LOCK)` an existing `DEMO_INN`
-  org makes it return `False`. History rows are written directly, not via
-  services; no request is left `ON_REVIEW` (the scheduler would auto-close
-  and message the author). `/seed` (unadvertised, open) answers «⏳» and queues
+- The seed is one transaction, offline, takes `now` (history ends at its UTC
+  midnight: a later hour ties the benchmark ranks; deadline stamps and the
+  pinned urgent notice follow `now`), seeds `random.Random` per entity;
+  after `pg_advisory_xact_lock(SEED_LOCK)` an existing `DEMO_INN` org makes
+  it return `False`. History rows are written directly, not via services; no
+  request is left `ON_REVIEW` (the scheduler would auto-close and message
+  the author). `/seed` (unadvertised, open) answers «⏳» and queues
   `seed_demo` with that message's id and chat: the task edits it into the
-  result, and only when there is nothing to edit does it fall back to a message
-  after commit; `seed()` gets no publisher.
+  result, and only when there is nothing to edit does it fall back to a
+  message after commit; `seed()` gets no publisher.
   `/demo` (unadvertised) queues one real text of every reminder kind to the
   caller alone, mandatory, from the caller's demo flat or stubs
   (`RemindersService.demo`); it stamps nothing.
-- All five demo orgs have history in Москва (region = city), so both benchmark
-  cuts survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: five distinct ranks per
-  metric). They group requests from `REVIEWERS_GROUP_THRESHOLD` flats, not 3:
-  reviewers share an org's first house and file the same category.
+- Each city has 5-6 demo orgs (region = city), so both benchmark cuts
+  survive `MIN_ORGS_FOR_CUT` (`test_seed.py`: the enterable five rank
+  distinct per metric). They group requests from `REVIEWERS_GROUP_THRESHOLD`
+  flats, not 3: reviewers share an org's first house (`list_for_org` order,
+  which `Seeder` reads back) and file the same category.
+- Every enterable org shows each staff map state for 72 h after the seed
+  (`test_seed.py` seeds at 20:30 UTC and checks six instants): the `overdue`
+  knob puts one open overdue request on each of its first houses, the next
+  five follow `MAP_STATES` (history ends `CLOSED_BEFORE` early, so all of it
+  is closed) with one fixed `STATE_CATEGORIES` request: a fresh LEAK, a
+  GARBAGE one escalated after its deadline (as `escalate` would), an overdue
+  ELECTRICITY one, a fresh OTHER one (10 working days), and nothing. The
+  emergency house gets an urgent announcement from the hour before the seed
+  (the map counts 3 days), the open house an active poll. The shared
+  announcements are one row per org naming all its houses; the poll results
+  note goes only to the demo house.
 - Demo deeplinks are only `demo_{admin,staff,resident,executor}_N`, N 1-4 (5
   is the API checker's), granting only that role in demo org N:
   `DemoService.join` sets exactly ADMIN, EMPLOYEE or EXECUTOR (lowering too);

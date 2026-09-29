@@ -40,12 +40,12 @@ CHECKER_RESERVED = (
 CHARGED_MONTHS = 6
 VERIFICATION_SOON = timedelta(days=7)
 
-_MONTHLY: dict[MeterType, dict[TariffZone, int]] = {
+MONTHLY_USAGE: dict[MeterType, dict[TariffZone, int]] = {
     MeterType.COLD_WATER: {TariffZone.SINGLE: 7_000},
     MeterType.HOT_WATER: {TariffZone.SINGLE: 4_500},
     MeterType.ELECTRICITY: {TariffZone.DAY: 160_000, TariffZone.NIGHT: 70_000},
 }
-_SERIAL_CODES = {
+SERIAL_CODES = {
     MeterType.COLD_WATER: "ХВ",
     MeterType.HOT_WATER: "ГВ",
     MeterType.ELECTRICITY: "ЭЭ",
@@ -115,13 +115,13 @@ class DemoService:
         periods = months[:-1]
 
         usage: dict[MeterType, list[dict[TariffZone, int]]] = {}
-        for meter_type, monthly in _MONTHLY.items():
+        for meter_type, monthly in MONTHLY_USAGE.items():
             soon = verification_soon and meter_type is MeterType.HOT_WATER
             meter = await self._meters.add(
                 flat.id,
                 meter_type,
                 len(monthly),
-                f"ДЕМО-{_SERIAL_CODES[meter_type]}-{flat.id:06d}",
+                f"ДЕМО-{SERIAL_CODES[meter_type]}-{flat.id:06d}",
                 (
                     today + VERIFICATION_SOON
                     if soon

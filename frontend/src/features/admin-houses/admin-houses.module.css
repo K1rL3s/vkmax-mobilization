@@ -5,6 +5,10 @@
   gap: 12px;
   padding: 16px 16px 24px;
 
+  &.mapped {
+    padding-bottom: 0;
+  }
+
   h1 {
     margin: 0;
   }
@@ -31,5 +35,37 @@
 
   .CellIcon {
     color: var(--icon-primary);
+  }
+}
+
+.Header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.Views {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+
+  > button {
+    height: 44px;
+  }
+}
+
+.Org {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  color: inherit;
+  text-decoration: none;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -12px 0;
   }
 }

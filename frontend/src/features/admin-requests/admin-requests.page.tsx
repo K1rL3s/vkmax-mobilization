@@ -1,7 +1,9 @@
-import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
+import { Button, Flex, IconButton, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
+import { FilterChip } from "@/shared/ui/filter-chip";
+import { geoPinIcon, Icon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { FILTERS } from "./domain/request-filters";
@@ -20,15 +22,32 @@ const AdminRequestsPage = () => {
   return (
     <Panel className={styles.Page} mode="secondary">
       <Flex align="stretch" direction="column" gap={12}>
-        <Typography.Text asChild variant="title" color="primary">
-          <h1>Заявки</h1>
-        </Typography.Text>
+        <Flex align="center" justify="space-between" gap={12}>
+          <Typography.Text asChild variant="title" color="primary">
+            <h1>Заявки</h1>
+          </Typography.Text>
+          <IconButton
+            asChild
+            className={styles.MapLink}
+            size="small"
+            variant="secondary"
+          >
+            <Link to={Routes.ADMIN_HOUSES} aria-label="Дома на карте">
+              <Icon src={geoPinIcon} size={24} />
+            </Link>
+          </IconButton>
+        </Flex>
         <Button asChild stretched>
           <Link to={Routes.ADMIN_REQUEST_PHONE}>Заявка по звонку</Link>
         </Button>
       </Flex>
 
       <Flex align="stretch" direction="column" gap={8}>
+        {list.filters.house && (
+          <FilterChip onRemove={() => list.updateFilter("house", "all")}>
+            Дом: {list.houseAddress ?? "выбран на карте"}
+          </FilterChip>
+        )}
         <ChipRow
           label="Заявки"
           options={FILTERS}

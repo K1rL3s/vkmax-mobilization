@@ -31,3 +31,21 @@ class UploadQuota(Quota):
     __slots__ = ()
 
     calls = UPLOAD_CALLS
+
+
+HOUSE_ADD_CALLS = 5
+
+
+class HouseAddQuota(Quota):
+    __slots__ = ()
+
+    calls = HOUSE_ADD_CALLS
+
+
+HOUSE_LOOKUP_CALLS = 60
+
+
+class HouseLookupQuota(Quota):
+    __slots__ = ()
+
+    calls = HOUSE_LOOKUP_CALLS

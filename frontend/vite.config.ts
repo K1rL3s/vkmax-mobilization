@@ -26,6 +26,22 @@ export default defineConfig(({ mode }) => {
           target: env.DEV_API_TARGET ?? "http://localhost",
           changeOrigin: true,
         },
+        "/tiles/ofm": {
+          target: "https://tiles.openfreemap.org",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/tiles\/ofm/, ""),
+        },
+        "/tiles/osm": {
+          target: "https://tile.openstreetmap.org",
+          changeOrigin: true,
+          headers: { "User-Agent": "zheka-kommunalkin/1.0 (dev)" },
+          rewrite: (path) => path.replace(/^\/tiles\/osm/, ""),
+        },
+        "/tiles/topo": {
+          target: "https://a.tile.opentopomap.org",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/tiles\/topo/, ""),
+        },
       },
     },
   };

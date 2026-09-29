@@ -180,6 +180,10 @@ const router = createBrowserRouter([
                 path: Routes.APPOINTMENTS,
                 lazy: () => import("@/features/appointments/appointments.page"),
               },
+              {
+                path: Routes.HOUSE_MAP,
+                lazy: () => import("@/features/house-map/house-map.page"),
+              },
             ],
           },
           {

@@ -1,6 +1,7 @@
 import csv
 import secrets
 from decimal import Decimal
+from math import cos, inf, radians
 from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,21 @@ class DirectoryHouse(ZhekaType):
     living_flats: int
     living_area: int
     overhaul_rate: int
+
+    def distance(self, other: "DirectoryHouse") -> float:
+        here, there = self.house, other.house
+        if (
+            here.lat is None
+            or here.lon is None
+            or there.lat is None
+            or there.lon is None
+        ):
+            return inf
+        scale = cos(radians(float(here.lat)))
+        return (
+            float(there.lat - here.lat) ** 2
+            + (float(there.lon - here.lon) * scale) ** 2
+        )
 
 
 async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:

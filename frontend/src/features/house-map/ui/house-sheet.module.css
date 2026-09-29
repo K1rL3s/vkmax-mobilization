@@ -1,0 +1,34 @@
+.Sheet {
+  position: relative;
+  align-self: stretch;
+  padding: 16px;
+  border-radius: 20px;
+  background-color: var(--background-card);
+  box-shadow: 0 4px 24px rgb(0 0 0 / 18%);
+
+  .Title {
+    margin: 0;
+    padding-right: 40px;
+  }
+
+  .Line {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    padding-right: 40px;
+  }
+
+  .Error {
+    color: var(--text-negative);
+  }
+
+  .Stack {
+    margin: 0 -12px;
+  }
+}
+
+.Close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}

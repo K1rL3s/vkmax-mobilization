@@ -177,6 +177,7 @@ skips = ["B311"]
 [tool.slotscheck]
 strict-imports = true
 exclude-modules = "^zheka\\.api\\.asgi$"
+exclude-classes = "^zheka\\.bot\\.cards:VotePayload$"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,9 +1,11 @@
 import csv
 import secrets
 import tempfile
-from collections.abc import AsyncGenerator
-from datetime import UTC, date, datetime, time
+from collections.abc import AsyncGenerator, Sequence
+from datetime import UTC, datetime, timedelta
+from math import cos, radians
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -11,7 +13,7 @@ import pytest_asyncio
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
-from sqlalchemy import Connection, func, select, update
+from sqlalchemy import Connection, Row, func, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from tests.conftest import alembic_config, make_config
@@ -19,7 +21,7 @@ from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
 
 from zheka.core.charges import parse_lines
-from zheka.core.enums import OrgRole, RequestStatus
+from zheka.core.enums import OrgRole, PollStatus, RequestCategory, RequestStatus
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import API_CHECKER_MAX_USER_ID, FlatId, MaxUserId, OrgId, UserId
 from zheka.core.services.demo import (
@@ -46,22 +48,40 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.base import metadata
 from zheka.infra.database.tables.charges import charges_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
+from zheka.infra.database.tables.meters import meters_table, readings_table
 from zheka.infra.database.tables.organizations import (
     org_members_table,
     organizations_table,
 )
+from zheka.infra.database.tables.polls import polls_table
 from zheka.infra.database.tables.requests import request_photos_table, requests_table
-from zheka.infra.database.tables.residents import residents_table
+from zheka.infra.database.tables.residents import (
+    flat_verification_requests_table,
+    residents_table,
+)
 from zheka.infra.database.tables.users import users_table
-from zheka.seed.demo import PROFILES, RESULT_PHOTOS, seed
+from zheka.seed.demo import (
+    ANNOUNCEMENTS,
+    BACKGROUND_PROFILES,
+    MAP_STATES,
+    POLL_RESULTS,
+    PROFILES,
+    RESULT_PHOTOS,
+    seed,
+)
 from zheka.seed.directory import DATA_DIR
 
-TODAY = date(2026, 9, 21)
-NOW = datetime.combine(TODAY, time(), UTC)
+NOW = datetime(2026, 9, 21, 20, 30, tzinfo=UTC)
+TODAY = NOW.date()
 FILES = Path(tempfile.gettempdir()) / "zheka-test-seed-files"
+MAP_HOURS = (0, 6, 12, 24, 48, 71)
+URGENT_ACTIVE = timedelta(days=3)
+KM_PER_DEGREE = 111.2
+TERRITORY_KM = 1.5
 
 
 def _demo(session: AsyncSession) -> DemoService:
@@ -83,7 +103,7 @@ async def seeded(engine: AsyncEngine) -> AsyncGenerator[AsyncConnection]:
             bind=conn,
             join_transaction_mode="create_savepoint",
         ) as session:
-            assert await seed(session, _demo(session), FILES, TODAY)
+            assert await seed(session, _demo(session), FILES, NOW)
             await session.commit()
         yield conn
         await transaction.rollback()
@@ -115,7 +135,7 @@ async def _demo_org(session: AsyncSession) -> OrgId:
 async def test_a_second_seed_changes_nothing(db: AsyncSession) -> None:
     before = await _counts(db)
 
-    assert not await seed(db, _demo(db), FILES, TODAY)
+    assert not await seed(db, _demo(db), FILES, NOW)
 
     assert await _counts(db) == before
     assert before["requests"] > 0
@@ -148,7 +168,8 @@ async def test_the_five_organizations_rank_without_a_tie(db: AsyncSession) -> No
         ranks.append({metric.key: metric.rank for metric in benchmark.metrics})
 
     for key in ranks[0]:
-        assert sorted(rank[key] or 0 for rank in ranks) == [1, 2, 3, 4, 5], key
+        assert None not in {rank[key] for rank in ranks}, key
+        assert len({rank[key] for rank in ranks}) == len(PROFILES), key
 
 
 async def test_every_seeded_user_is_unreachable(db: AsyncSession) -> None:
@@ -163,7 +184,7 @@ async def test_every_seeded_user_is_unreachable(db: AsyncSession) -> None:
 
 def test_every_fictional_inn_fails_the_checksum() -> None:
     weights = (2, 4, 10, 3, 5, 9, 4, 6, 8)
-    for profile in PROFILES:
+    for profile in (*PROFILES, *BACKGROUND_PROFILES):
         digits = [int(char) for char in profile.inn]
         checksum = sum(w * d for w, d in zip(weights, digits, strict=False)) % 11 % 10
         assert checksum != digits[9], profile.inn
@@ -339,7 +360,7 @@ async def test_no_real_manager_is_replaced(db: AsyncSession) -> None:
     stmt = (
         select(houses_table.c.city, houses_table.c.street, houses_table.c.building)
         .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
-        .where(organizations_table.c.inn.in_([profile.inn for profile in PROFILES]))
+        .where(organizations_table.c.is_demo)
     )
     taken = set((await db.execute(stmt)).tuples().all())
 
@@ -500,3 +521,173 @@ async def test_every_demo_organization_shows_its_own_stats(db: AsyncSession) -> 
         seen.add((stats.on_time_share, stats.accept_time, stats.rating))
 
     assert len(seen) == len(PROFILES)
+
+
+async def test_every_enterable_demo_org_has_twelve_houses_in_one_city(
+    db: AsyncSession,
+) -> None:
+    for profile in PROFILES:
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        houses = await HousesRepo(db).list_for_org(org.id)
+        assert len(houses) == 12
+        assert {house.city for house in houses} == {profile.city}
+        assert all(house.lat is not None and house.lon is not None for house in houses)
+
+
+async def test_each_city_has_at_least_five_demo_orgs(db: AsyncSession) -> None:
+    rows = await db.execute(
+        select(houses_table.c.city, func.count(func.distinct(houses_table.c.org_id)))
+        .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
+        .where(organizations_table.c.is_demo)
+        .group_by(houses_table.c.city),
+    )
+    counts = dict(rows.tuples().all())
+    assert counts.keys() == {"Москва", "Санкт-Петербург", "Казань"}
+    assert all(count >= 5 for count in counts.values())
+
+
+async def test_every_enterable_demo_org_shows_every_map_state(db: AsyncSession) -> None:
+    for profile in PROFILES:
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        houses = await HousesRepo(db).list_for_org(org.id)
+        stmt = select(
+            requests_table.c.house_id,
+            requests_table.c.status,
+            requests_table.c.category,
+            requests_table.c.deadline_at,
+            requests_table.c.escalated_at,
+        ).where(requests_table.c.house_id.in_([house.id for house in houses]))
+        rows = (await db.execute(stmt)).all()
+        for hours in MAP_HOURS:
+            now = NOW + timedelta(hours=hours)
+            states = {
+                _map_state([row for row in rows if row.house_id == house.id], now)
+                for house in houses
+            }
+            assert states == set(MAP_STATES), (profile.name, hours)
+
+
+async def test_every_enterable_demo_org_has_a_fresh_urgent_notice_and_a_poll(
+    db: AsyncSession,
+) -> None:
+    for profile in PROFILES:
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        urgent = select(announcements_table.c.created_at).where(
+            announcements_table.c.org_id == org.id,
+            announcements_table.c.urgent,
+        )
+        polls = select(polls_table.c.ends_at).where(
+            polls_table.c.org_id == org.id,
+            polls_table.c.status == PollStatus.ACTIVE,
+        )
+        created = (await db.execute(urgent)).scalars().all()
+        ends = (await db.execute(polls)).scalars().all()
+        for hours in MAP_HOURS:
+            now = NOW + timedelta(hours=hours)
+            assert any(now - URGENT_ACTIVE <= at <= now for at in created), (
+                profile.name,
+                hours,
+            )
+            assert any(at > now for at in ends), (profile.name, hours)
+
+
+async def test_an_announcement_reaches_only_the_houses_it_is_about(
+    db: AsyncSession,
+) -> None:
+    orgs = select(organizations_table.c.id).where(organizations_table.c.is_demo)
+    for org_id in (await db.execute(orgs)).scalars().all():
+        houses = {house.id for house in await HousesRepo(db).list_for_org(org_id)}
+        stmt = select(
+            announcements_table.c.text,
+            announcements_table.c.house_ids,
+        ).where(announcements_table.c.org_id == org_id)
+        rows = (await db.execute(stmt)).all()
+        texts = {text for _age, text, _urgent in ANNOUNCEMENTS}
+        shared = [row for row in rows if row.text in texts]
+        assert len(shared) == len(ANNOUNCEMENTS)
+        assert all(set(row.house_ids) == houses for row in shared)
+
+    stmt = select(announcements_table.c.house_ids).where(
+        announcements_table.c.text == POLL_RESULTS[1],
+    )
+    noted = (await db.execute(stmt)).scalars().all()
+    closed = select(polls_table.c.house_id).where(
+        polls_table.c.status == PollStatus.CLOSED,
+    )
+    assert noted
+    assert set().union(*noted) <= set((await db.execute(closed)).scalars().all())
+
+
+async def test_every_demo_organization_is_a_compact_territory(
+    db: AsyncSession,
+) -> None:
+    stmt = (
+        select(houses_table.c.org_id, houses_table.c.lat, houses_table.c.lon)
+        .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
+        .where(organizations_table.c.is_demo)
+    )
+    points: dict[OrgId, list[tuple[float, float]]] = {}
+    for org_id, lat, lon in (await db.execute(stmt)).tuples():
+        points.setdefault(org_id, []).append((float(lat), float(lon)))
+
+    assert len(points) == len(PROFILES) + len(BACKGROUND_PROFILES)
+    for territory in points.values():
+        lats = [lat for lat, _lon in territory]
+        lons = [lon for _lat, lon in territory]
+        scale = cos(radians(lats[0]))
+        assert (max(lats) - min(lats)) * KM_PER_DEGREE < TERRITORY_KM
+        assert (max(lons) - min(lons)) * KM_PER_DEGREE * scale < TERRITORY_KM
+
+
+async def test_a_pending_verification_states_a_mistyped_account(
+    db: AsyncSession,
+) -> None:
+    stmt = select(
+        flat_verification_requests_table.c.account_no,
+        flats_table.c.account_no,
+    ).join(flats_table, flats_table.c.id == flat_verification_requests_table.c.flat_id)
+    rows = (await db.execute(stmt)).tuples().all()
+
+    assert rows
+    assert all(stated != real for stated, real in rows)
+
+
+async def test_every_demo_house_has_readings_this_month(db: AsyncSession) -> None:
+    submitted = (
+        select(flats_table.c.house_id)
+        .join(meters_table, meters_table.c.flat_id == flats_table.c.id)
+        .join(readings_table, readings_table.c.meter_id == meters_table.c.id)
+        .where(readings_table.c.period == current_period(TODAY))
+    )
+    stmt = (
+        select(func.count())
+        .select_from(houses_table)
+        .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
+        .where(
+            organizations_table.c.is_demo,
+            houses_table.c.id.not_in(submitted),
+        )
+    )
+
+    assert (await db.execute(stmt)).scalar_one() == 0
+
+
+def _map_state(rows: Sequence[Row[Any]], now: datetime) -> str:
+    active = [
+        row
+        for row in rows
+        if row.status not in {RequestStatus.DONE, RequestStatus.ON_REVIEW}
+    ]
+    overdue = [row for row in active if row.deadline_at < now]
+    if any(row.category is RequestCategory.LEAK for row in active):
+        return "emergency"
+    if any(row.escalated_at is not None for row in overdue):
+        return "escalated"
+    if overdue:
+        return "overdue"
+    if any(row.status is not RequestStatus.DONE for row in rows):
+        return "open"
+    return "calm"

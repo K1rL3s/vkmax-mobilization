@@ -67,6 +67,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - zheka-tiles:/var/cache/nginx/tiles
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://127.0.0.1/api/healthcheck" ]
       interval: 10s
@@ -131,3 +132,4 @@ services:
 volumes:
   zheka-postgres:
   zheka-redis:
+  zheka-tiles:

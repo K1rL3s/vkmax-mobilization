@@ -4,12 +4,24 @@
   flex-direction: column;
   background-color: var(--background-card);
 
+  .Views {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px 6px;
+
+    button {
+      height: 44px;
+      border-block: 2px solid transparent;
+      background-clip: padding-box;
+    }
+  }
+
   .Form {
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: 14px;
-    padding: 16px;
+    padding: 8px 16px 16px;
   }
 
   .Footer {

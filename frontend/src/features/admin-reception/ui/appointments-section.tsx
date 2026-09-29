@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Flex, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
@@ -7,6 +7,7 @@ import { formatTime } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { Chevron } from "@/shared/ui/chevron";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
+import { FilterChip } from "@/shared/ui/filter-chip";
 import { StatusPill } from "@/shared/ui/status-pill";
 
 import { dayKey, dayTitle, shiftDay } from "../domain/day";
@@ -72,10 +73,17 @@ const Row = ({ item }: { item: Appointment }) => {
 
 export const AppointmentsSection = () => {
   const [day, setDay] = useState(() => dayKey(new Date()));
-  const appointments = useOrgAppointments(day);
+  const { appointments, houseId, houseAddress, clearHouse } =
+    useOrgAppointments(day);
+  const section = useRef<HTMLElement>(null);
+  const filtered = houseId !== undefined;
+
+  useEffect(() => {
+    if (filtered) section.current?.scrollIntoView();
+  }, [filtered]);
 
   return (
-    <section className={styles.Section}>
+    <section ref={section} className={styles.Section}>
       <Flex align="center" gap={8}>
         <Typography.Text
           asChild
@@ -109,6 +117,12 @@ export const AppointmentsSection = () => {
         {dayTitle(day)}
       </Typography.Text>
 
+      {filtered && (
+        <FilterChip onRemove={clearHouse}>
+          Дом: {houseAddress ?? "выбран на карте"}
+        </FilterChip>
+      )}
+
       {appointments.isPending ? (
         <LoadingState title="Загружаем записи" />
       ) : appointments.isError ? (
@@ -119,7 +133,11 @@ export const AppointmentsSection = () => {
         />
       ) : appointments.data.length === 0 ? (
         <EmptyState
-          title="В этот день никто не записан"
+          title={
+            filtered
+              ? "Из этого дома в этот день никто не записан"
+              : "В этот день никто не записан"
+          }
           description="Жители записываются сами из своего кабинета - в кабинете УК записать человека нельзя. Проверьте соседние дни стрелками выше."
         />
       ) : (

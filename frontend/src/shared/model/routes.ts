@@ -21,6 +21,7 @@ export const Routes = {
   CHARGES: "/charges",
   CHARGE: "/charges/:chargeId",
   HOUSE_CARD: "/house",
+  HOUSE_MAP: "/house/map",
   APPOINTMENTS: "/appointments",
   APPOINTMENT: "/appointments/:appointmentId",
   ANNOUNCEMENTS: "/announcements",
