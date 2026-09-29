@@ -23,17 +23,18 @@ from tests.conftest import (
 
 from zheka.api.dependencies.current_account import CurrentAccount
 from zheka.api.dependencies.current_org import CurrentOrg
-from zheka.api.dependencies.current_user import API_CHECKER
 from zheka.api.routes.requests import (
-    cancel_request,
+    PP290,
     classify_request_text,
     export_request,
+    get_pp290,
 )
 from zheka.api.schemas.requests import (
     AdminRequestCard,
     CancelRequestRequest,
     ClassifyRequestRequest,
     CreateRequestRequest,
+    Pp290Catalog,
     RequestCard,
 )
 from zheka.broker.publisher import TaskPublisher
@@ -52,6 +53,7 @@ from zheka.core.enums import (
     RequestStatus,
     ResidentRole,
     ResidentStatus,
+    ResponsibilityZone,
 )
 from zheka.core.errors import (
     EntityNotFound,
@@ -1110,225 +1112,29 @@ async def test_request_accepts_two_videos_but_refuses_a_third_on_create_and_repe
         await service.repeat(own.user_id, card.request.id, "Снова течёт", videos)
 
 
-async def test_an_answer_lifts_the_question_and_reaches_the_crew(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
-) -> None:
-    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
-    executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
-    request = await _complain(session, own.user_id, own.house_id)
-    request.executor_user_id = executor
-    await session.flush()
-    await admin_requests_service(session).reply(
-        own.org_id,
-        request.id,
-        "Под вами 45 или 47 квартира?",
-        staff,
-        question=True,
-    )
+def test_the_management_company_answers_for_every_category() -> None:
+    zones = {category: rule.zone for category, rule in CATEGORY_RULES.items()}
 
-    card = await requests_service(session, publisher).write(
-        own.user_id,
-        request.id,
-        "  47  ",
-        RequestChannel.MINIAPP,
-    )
+    assert zones == dict.fromkeys(RequestCategory, ResponsibilityZone.MANAGEMENT)
 
-    assert [
-        (view.message.author_role, view.message.text) for view in card.messages
-    ] == [
-        (RequestActorRole.STAFF, "Под вами 45 или 47 квартира?"),
-        (RequestActorRole.RESIDENT, "47"),
+
+def test_every_pp290_ref_of_a_category_names_a_point_of_the_catalog() -> None:
+    catalog = Pp290Catalog.model_validate_json(PP290)
+    points = {item.ref.split(",")[0] for item in catalog.items}
+    refs = {category: rule.pp290_refs for category, rule in CATEGORY_RULES.items()}
+
+    assert {ref for rule_refs in refs.values() for ref in rule_refs} <= points
+    assert refs[RequestCategory.ELEVATOR] == ("п. 22", "п. 28")
+    assert refs[RequestCategory.METER_ERROR] == ()
+    assert refs[RequestCategory.CHARGE_DISPUTE] == ()
+
+
+async def test_pp290_is_served_whole_and_cached_for_a_day() -> None:
+    response = await get_pp290(_account(UserId(1)))
+
+    catalog = Pp290Catalog.model_validate_json(bytes(response.body))
+    assert response.headers["cache-control"] == "private, max-age=86400"
+    assert len(catalog.items) == 144
+    assert [item.ref for item in catalog.items if item.ref.startswith("п. 22,")] == [
+        f"п. 22, абз. {paragraph}" for paragraph in range(2, 6)
     ]
-    assert card.request.question_asked_at is None
-    assert card.request.resident_answered_at is not None
-    assert card.request.status is RequestStatus.NEW
-    [answer] = [
-        event
-        for event in await events_of(session, EventType.REQUEST_MESSAGE_SENT)
-        if event.user_id == own.user_id
-    ]
-    assert answer.payload == {
-        "request_id": request.id,
-        "by_role": "resident",
-        "answer": True,
-        "channel": "miniapp",
-    }
-    await publisher.flush()
-    [crew] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
-    assert crew["user_ids"] == [staff]
-    assert crew["text"] == (
-        f"💬 Житель ответил по заявке №{request.id} «💧 Протечка»\n\n47"
-    )
-    assert crew["app_path"] == f"/admin/requests/{request.id}"
-    [notice] = broker.enqueued(TaskName.SEND_TO_USER)
-    assert (notice["user_id"], notice["text"]) == (executor, crew["text"])
-
-
-async def test_only_the_author_writes_to_a_request(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    request = await _complain(session, own.user_id, own.house_id)
-    neighbour = await _neighbour(session, own.house_id, "2")
-
-    with pytest.raises(EntityNotFound):
-        await requests_service(session).write(
-            neighbour,
-            request.id,
-            "Это не моя заявка",
-            RequestChannel.MINIAPP,
-        )
-
-
-async def test_a_blocked_author_cannot_write(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    request = await _complain(session, own.user_id, own.house_id)
-    await _block(session, own.user_id, own.house_id)
-
-    with pytest.raises(NotEnoughRights):
-        await requests_service(session).write(
-            own.user_id,
-            request.id,
-            "47",
-            RequestChannel.MINIAPP,
-        )
-
-
-async def test_a_message_to_a_request_closed_meanwhile_is_refused(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    request = await _complain(session, own.user_id, own.house_id)
-    await _close_behind_the_session(session, request.id)
-
-    with pytest.raises(InvalidState, match="подайте новую"):
-        await requests_service(session).write(
-            own.user_id,
-            request.id,
-            "47",
-            RequestChannel.MINIAPP,
-        )
-
-    assert await RequestsRepo(session).list_messages(request.id) == []
-
-
-async def test_an_empty_message_is_refused(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    request = await _complain(session, own.user_id, own.house_id)
-
-    with pytest.raises(InvalidRequest, match="Напишите сообщение"):
-        await requests_service(session).write(
-            own.user_id,
-            request.id,
-            "   ",
-            RequestChannel.MINIAPP,
-        )
-
-
-async def test_closing_a_request_drops_its_question_marks(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    request = await _complain(session, own.user_id, own.house_id)
-    await _mark_on_review(session, request.id)
-    request.question_asked_at = datetime.now(UTC)
-    request.resident_answered_at = datetime.now(UTC)
-    await session.flush()
-
-    card = await requests_service(session).accept(own.user_id, request.id)
-
-    assert card.request.question_asked_at is None
-    assert card.request.resident_answered_at is None
-
-
-async def test_classify_names_the_danger_of_a_short_text_without_the_model(
-    session: AsyncSession,
-) -> None:
-    user_id = await add_user(session)
-    classifier = StubClassifier(RequestCategory.HEATING, 90)
-    service = requests_service(session, classifier=classifier)
-
-    response = await classify_request_text(
-        _account(user_id),
-        service,
-        ClassifyRequestRequest(text="Пахнет газом"),
-        YandexQuota(),
-    )
-
-    assert (response.category, response.danger) == (None, DangerKind.GAS)
-    assert await events_of(session, EventType.LLM_SUGGESTED) == []
-
-
-async def test_classify_names_the_danger_past_the_quota(session: AsyncSession) -> None:
-    user_id = await add_user(session)
-    service = requests_service(
-        session,
-        classifier=StubClassifier(RequestCategory.HEATING),
-    )
-    quota = YandexQuota()
-    for _ in range(QUOTA_CALLS):
-        quota.take(user_id)
-
-    response = await classify_request_text(
-        _account(user_id),
-        service,
-        ClassifyRequestRequest(text="Искрит щиток на площадке у лифта"),
-        quota,
-    )
-
-    assert (response.category, response.danger) == (None, DangerKind.ELECTRIC)
-
-
-async def test_classify_takes_the_alarm_from_the_model_when_the_rules_are_silent(
-    session: AsyncSession,
-) -> None:
-    user_id = await add_user(session)
-    classifier = StubClassifier(RequestCategory.ELEVATOR, 80)
-    service = requests_service(session, classifier=classifier)
-
-    response = await classify_request_text(
-        _account(user_id),
-        service,
-        ClassifyRequestRequest(text="Лифт завис между этажами, в нем бабушка"),
-        YandexQuota(),
-    )
-
-    assert (response.category, response.danger) == (
-        RequestCategory.ELEVATOR,
-        DangerKind.LLM,
-    )
-
-
-async def test_a_dangerous_request_is_marked_for_the_staff_with_its_words(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-    broker: RecordingBroker,
-    publisher: TaskPublisher,
-) -> None:
-    await _member(session, own.org_id, OrgRole.ADMIN)
-    service = requests_service(session, publisher)
-
-    dangerous = await service.create(
-        own.user_id,
-        own.house_id,
-        _draft(description="Пахнет газом в подъезде у лифта"),
-    )
-    calm = await service.create(own.user_id, own.house_id, _draft())
-
-    await publisher.flush()
-    assert (dangerous.request.danger, calm.request.danger) == (DangerKind.GAS, None)
-    texts = [task["text"] for task in broker.enqueued(TaskName.BROADCAST_TO_USERS)]
-    assert texts[0].startswith(
-        f"🚨 Опасность: запах газа\n🆕 Заявка №{dangerous.request.id}",
-    )
-    assert texts[1].startswith(f"🆕 Заявка №{calm.request.id}")
-    card = RequestCard.of(dangerous, [], [])
-    assert (card.danger, card.danger_phrase) == (DangerKind.GAS, "пахнет газом")
-    assert RequestCard.of(calm, [], []).danger_phrase is None

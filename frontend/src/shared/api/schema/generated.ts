@@ -653,7 +653,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/requests/{request_id}/messages": {
+  "/api/pp290": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Минимальный перечень работ УК (ПП РФ № 290)
+     * @description Пункты перечня с разделами, на них ссылаются категории заявок (pp290_refs). Файл отдается как есть, браузер кэширует его на сутки
+     */
+    get: operations["get_pp290"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/requests/{request_id}/gji-pdf": {
     parameters: {
       query?: never;
       header?: never;
@@ -663,10 +683,10 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Написать в УК по заявке
-     * @description Только автор незакрытой заявки: сообщение уходит сотрудникам УК и исполнителю, снимает вопрос УК и отмечает, что житель ответил. Закрытая заявка - 409, чужая - 404
+     * Жалоба в ГЖИ файлом в чат с ботом
+     * @description Только автор просроченной открытой заявки, чужая - 404. Непросроченная или закрытая заявка и автор, которому бот не может написать (нет чата с ботом или бот остановлен), - 409. Бот присылает PDF с фактами заявки, нормативным сроком, историей статусов и строками для подписей соседей; на демо-УК - с пометкой «ДЕМО»
      */
-    post: operations["write_to_request"];
+    post: operations["send_gji_pdf"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2434,6 +2454,12 @@ export interface components {
        */
       deadline_basis?: string | null;
       /**
+       * Pp290 Refs
+       * @description Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; тексты пунктов отдает GET /pp290
+       * @default []
+       */
+      pp290_refs: string[];
+      /**
        * React Deadline At
        * @description Срок реакции (принять заявку); пусто - не нормирован
        */
@@ -3014,6 +3040,29 @@ export interface components {
       /** City */
       city: string;
     };
+    /** CityServiceItem */
+    CityServiceItem: {
+      kind: components["schemas"]["CityServiceKind"];
+      /** Name */
+      name: string;
+      /** Phone */
+      phone: string;
+      /** Hours */
+      hours?: string | null;
+      /**
+       * Site
+       * @description Сайт со схемой
+       */
+      site?: string | null;
+      /** Note */
+      note?: string | null;
+    };
+    /**
+     * CityServiceKind
+     * @enum {string}
+     */
+    CityServiceKind:
+      "edds" | "water" | "heat" | "energy" | "gas" | "waste" | "gzhi";
     /** ClassifyRequestRequest */
     ClassifyRequestRequest: {
       /**
@@ -3527,6 +3576,11 @@ export interface components {
        * @description Текущие и плановые отключения по дому, сейчас демо-данные
        */
       outages: components["schemas"]["OutageItem"][];
+      /**
+       * Services
+       * @description Городские службы и ГЖИ региона дома, сверены с их сайтами
+       */
+      services: components["schemas"]["CityServiceItem"][];
     };
     /** HouseListItem */
     HouseListItem: {
@@ -4359,6 +4413,44 @@ export interface components {
      * @enum {string}
      */
     PollStatus: "active" | "closed";
+    /** Pp290Catalog */
+    Pp290Catalog: {
+      /** Source */
+      source: string;
+      /**
+       * Edition
+       * @description Редакция постановления
+       */
+      edition: string;
+      /**
+       * Checked At
+       * Format: date
+       * @description Когда пункты сверены с текстом
+       */
+      checked_at: string;
+      /**
+       * Note
+       * @description Как собран перечень и что из него исключено
+       */
+      note: string;
+      /** Items */
+      items: components["schemas"]["Pp290Item"][];
+    };
+    /** Pp290Item */
+    Pp290Item: {
+      /**
+       * Ref
+       * @description Пункт и абзац, например «п. 22, абз. 2»
+       */
+      ref: string;
+      /**
+       * Section
+       * @description Заголовок пункта
+       */
+      section: string;
+      /** Text */
+      text: string;
+    };
     /** ProposalItem */
     ProposalItem: {
       /** Id */
@@ -4665,6 +4757,12 @@ export interface components {
        */
       deadline_basis?: string | null;
       /**
+       * Pp290 Refs
+       * @description Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; тексты пунктов отдает GET /pp290
+       * @default []
+       */
+      pp290_refs: string[];
+      /**
        * React Deadline At
        * @description Срок реакции (принять заявку); пусто - не нормирован
        */
@@ -4746,6 +4844,12 @@ export interface components {
        * @description Норма права под сроком; пусто - срок сервиса, норматива нет
        */
       deadline_basis?: string | null;
+      /**
+       * Pp290 Refs
+       * @description Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; тексты пунктов отдает GET /pp290
+       * @default []
+       */
+      pp290_refs: string[];
     };
     /**
      * RequestChannel
@@ -9202,23 +9306,16 @@ export interface operations {
       };
     };
   };
-  write_to_request: {
+  get_pp290: {
     parameters: {
       query?: never;
       header?: {
         WebAppData?: string | null;
-        "Idempotency-Key"?: string | null;
       };
-      path: {
-        request_id: number;
-      };
+      path?: never;
       cookie?: never;
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["WriteToRequestRequest"];
-      };
-    };
+    requestBody?: never;
     responses: {
       /** @description Successful Response */
       200: {
@@ -9226,7 +9323,94 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["RequestCard"];
+          "application/json": components["schemas"]["Pp290Catalog"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  send_gji_pdf: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OkResponse"];
         };
       };
       /** @description Некорректный запрос */

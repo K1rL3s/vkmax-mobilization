@@ -1,9 +1,10 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from importlib.resources import files
 
 from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from maxo import Bot
 from maxo.utils.deeplink import create_startapp_link
 
@@ -13,13 +14,14 @@ from zheka.api.dependencies import (
     IdempotencyDep,
     RequireConsentDep,
 )
-from zheka.api.schemas.base import Limit, Offset, Page
+from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.requests import (
     MIN_CLASSIFY_TEXT,
     ClassifyRequestRequest,
     ClassifyRequestResponse,
     CreateRequestRequest,
+    Pp290Catalog,
     RateRequestRequest,
     RepeatRequestRequest,
     RequestCard,
@@ -302,32 +304,45 @@ async def escalate_request(
     return _card(card, files_service)
 
 
-@router.post(
-    "/requests/{request_id}/messages",
-    summary="Написать в УК по заявке",
+PP290 = files("zheka.core").joinpath("pp290.json").read_bytes()
+
+
+@router.get(
+    "/pp290",
+    summary="Минимальный перечень работ УК (ПП РФ № 290)",
     description=(
-        "Только автор незакрытой заявки: сообщение уходит сотрудникам УК и "
-        "исполнителю, снимает вопрос УК и отмечает, что житель ответил. "
-        "Закрытая заявка - 409, чужая - 404"
+        "Пункты перечня с разделами, на них ссылаются категории заявок "
+        "(pp290_refs). Файл отдается как есть, браузер кэширует его на сутки"
+    ),
+    response_model=Pp290Catalog,
+)
+async def get_pp290(current_account: RequireConsentDep) -> Response:  # noqa: ARG001
+    return Response(
+        PP290,
+        media_type="application/json",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
+
+
+@router.post(
+    "/requests/{request_id}/gji-pdf",
+    summary="Жалоба в ГЖИ файлом в чат с ботом",
+    description=(
+        "Только автор просроченной открытой заявки, чужая - 404. Непросроченная "
+        "или закрытая заявка и автор, которому бот не может написать (нет чата "
+        "с ботом или бот остановлен), - 409. Бот присылает PDF с фактами "
+        "заявки, нормативным сроком, историей статусов и строками для подписей "
+        "соседей; на демо-УК - с пометкой «ДЕМО»"
     ),
 )
-async def write_to_request(
+async def send_gji_pdf(
     request_id: RequestId,
     current_account: RequireConsentDep,
     requests_service: FromDishka[RequestsService],
-    files_service: FromDishka[FilesService],
-    idempotency: IdempotencyDep,
-    body: WriteToRequestRequest,
-) -> RequestCard:
-    saved = await idempotency.replay(RequestCard)
-    if saved is not None:
-        return saved
-    card = await requests_service.write(
+) -> OkResponse:
+    await requests_service.send_gji_pdf(
         current_account.user_id,
         request_id,
-        body.text,
-        RequestChannel.MINIAPP,
+        datetime.now(UTC),
     )
-    response = _card(card, files_service)
-    await idempotency.save(response)
-    return response
+    return OkResponse()

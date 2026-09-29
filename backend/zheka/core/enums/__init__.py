@@ -3,6 +3,7 @@ from zheka.core.enums.analytics import AnalyticsMetric, MetricUnit
 from zheka.core.enums.announcements import AnnouncementChannel
 from zheka.core.enums.appointments import AppointmentStatus
 from zheka.core.enums.chats import ChatBinder, ChatCardKind, ChatStatus, UnpinMethod
+from zheka.core.enums.city_services import CityServiceKind
 from zheka.core.enums.events import EventSource, EventType
 from zheka.core.enums.map import MapHouseKind
 from zheka.core.enums.meters import (
@@ -46,7 +47,7 @@ __all__ = (
     "ChatBinder",
     "ChatCardKind",
     "ChatStatus",
-    "DangerKind",
+    "CityServiceKind",
     "EventSource",
     "EventType",
     "HouseState",

@@ -2,9 +2,9 @@ import { Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link } from "react-router-dom";
 
 import { useHouseCard } from "@/features/house";
-import { formatDay, formatTime, plural } from "@/shared/lib/format";
+import { formatDay, formatTime, plural, telHref } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
-import { buildingIcon, Icon, userIcon } from "@/shared/ui/icon";
+import { buildingIcon, Icon, phoneIcon, userIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
@@ -53,7 +53,10 @@ const RequestPage = () => {
   const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
   const actor = currentActor(request);
   const letter = house.data && requestLetter(request, house.data, zone);
-  const canWrite = !isFinished(request.status);
+  const water =
+    request.category === "water_supply"
+      ? house.data?.services.find((service) => service.kind === "water")
+      : undefined;
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -145,6 +148,22 @@ const RequestPage = () => {
             {request.org_name ?? "Управляющая компания"} приняла заявку и
             передала её ответственной организации.
           </Typography.Text>
+        )}
+
+        {water && (
+          <a href={telHref(water.phone)} className={styles.Call}>
+            <Flex align="center" gap={12}>
+              <Icon src={phoneIcon} className={styles.RowIcon} />
+              <Flex align="stretch" direction="column" gapY={2}>
+                <Typography.Text variant="description" color="secondary">
+                  Если без воды и соседние дома, звоните в {water.name}
+                </Typography.Text>
+                <Typography.Text variant="body-strong" color="primary">
+                  {water.phone}
+                </Typography.Text>
+              </Flex>
+            </Flex>
+          </a>
         )}
 
         {request.executor_name && (

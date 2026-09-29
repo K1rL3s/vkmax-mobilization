@@ -345,44 +345,4 @@ export const requestsConfigs = [
 
     return ok({ ok: true } satisfies Schemas["OkResponse"]);
   }),
-  endpoint("post", "/requests/:request_id/demo/neighbours", (request) => {
-    const item = findRequest(Number(request.params.request_id));
-
-    if (!item || !canDemoNeighbours(item)) {
-      return notFound("Заявка не найдена");
-    }
-
-    item.group_id = item.id;
-    item.group_size = 5;
-
-    return ok(requestCard(item));
-  }),
-  endpoint("post", "/requests/:request_id/messages", (request) => {
-    const item = findRequest(Number(request.params.request_id));
-
-    if (!item) {
-      return notFound("Заявка не найдена");
-    }
-
-    if (item.status === "done") {
-      return conflict("Заявка закрыта, подайте новую");
-    }
-
-    const text =
-      typeof request.body.text === "string" ? request.body.text.trim() : "";
-    if (!text) {
-      return badRequest("Напишите сообщение для УК");
-    }
-
-    item.messages.push({
-      after_minutes: (Date.now() - Date.parse(item.created_at)) / 60_000,
-      author_role: "resident",
-      author_name: user.name,
-      text,
-    });
-    item.question_asked_at = null;
-    item.resident_answered_at = new Date().toISOString();
-
-    return ok(requestCard(item));
-  }),
 ];

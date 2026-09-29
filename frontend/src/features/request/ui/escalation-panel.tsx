@@ -4,9 +4,11 @@ import { useCopy } from "@siberiacancode/reactuse";
 import { useHouseCard } from "@/features/house";
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
-import { formatShortDay, formatTime } from "@/shared/lib/format";
+import { formatShortDay, formatTime, telHref } from "@/shared/lib/format";
+import { Chevron } from "@/shared/ui/chevron";
 
 import { gjiAppeal } from "../domain/gji";
+import { complaintRecipients } from "../domain/recipients";
 import type { RequestCard } from "../domain/types";
 import { refetchRequests } from "../model/use-repeat-request";
 
@@ -20,8 +22,13 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
     "/api/requests/{request_id}/escalate",
     { onSuccess: refetchRequests },
   );
+  const pdf = rqClient.useMutation(
+    "post",
+    "/api/requests/{request_id}/gji-pdf",
+  );
 
   const text = house.data ? gjiAppeal(request, house.data) : null;
+  const gzhi = house.data?.services.find((service) => service.kind === "gzhi");
 
   return (
     <div className={styles.Panel}>
@@ -59,17 +66,68 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
         </Typography.Text>
       )}
 
+      <Flex align="stretch" direction="column" gapY={2}>
+        <Typography.Text variant="title" color="primary">
+          2. Жалоба в ГЖИ
+        </Typography.Text>
+        <Typography.Text variant="description" color="secondary">
+          Бот пришлёт PDF: факты заявки, срок и его основание, история статусов
+          и строки для подписей соседей. Впишите ФИО и адрес, распечатайте и
+          подпишите
+        </Typography.Text>
+      </Flex>
+
+      <Button
+        size="large"
+        stretched
+        loading={pdf.isPending}
+        disabled={pdf.isSuccess}
+        onClick={() =>
+          pdf.mutate({
+            params: { ...authParams(), path: { request_id: request.id } },
+          })
+        }
+      >
+        {pdf.isSuccess
+          ? "Отправили в чат с ботом"
+          : "Получить PDF в чат с ботом"}
+      </Button>
+      {pdf.error && (
+        <Typography.Text variant="description" className={styles.Failed}>
+          {errorMessage(
+            pdf.error,
+            "Не получилось отправить. Проверьте связь и попробуйте ещё раз",
+          )}
+        </Typography.Text>
+      )}
+
       {text && (
         <>
-          <Flex align="stretch" direction="column" gapY={2}>
-            <Typography.Text variant="title" color="primary">
-              2. Жалоба в ГЖИ
-            </Typography.Text>
+          <Typography.Text variant="description" color="secondary">
+            Или скопируйте текст и отправьте в жилищную инспекцию сами
+          </Typography.Text>
+
+          {gzhi && (
             <Typography.Text variant="description" color="secondary">
-              Мы подготовили текст с данными заявки. Скопируйте и отправьте в
-              жилищную инспекцию, если посчитаете нужным
+              {gzhi.name}:{" "}
+              <a className={styles.Link} href={telHref(gzhi.phone)}>
+                {gzhi.phone}
+              </a>
+              {gzhi.site && (
+                <>
+                  ,{" "}
+                  <a
+                    className={styles.Link}
+                    href={gzhi.site}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    сайт инспекции
+                  </a>
+                </>
+              )}
             </Typography.Text>
-          </Flex>
+          )}
 
           <Typography.Text asChild variant="description" color="primary">
             <pre className={styles.Appeal}>{text}</pre>
@@ -85,6 +143,48 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
           </Button>
         </>
       )}
+
+      <details className={styles.More}>
+        <summary className={styles.MoreTitle}>
+          <Typography.Text
+            className={styles.Grow}
+            variant="title"
+            color="primary"
+          >
+            3. Куда ещё
+          </Typography.Text>
+          <span className={styles.Chevron}>
+            <Chevron />
+          </span>
+        </summary>
+        <ul className={styles.Recipients}>
+          {complaintRecipients(request.category).map((recipient) => (
+            <li key={`${recipient.who} ${recipient.when}`}>
+              <Typography.Text variant="body-strong" color="primary">
+                {recipient.who} - {recipient.when}
+              </Typography.Text>
+              <Typography.Text variant="description" color="secondary">
+                {recipient.how}
+              </Typography.Text>
+              {recipient.topics.length > 0 && (
+                <Typography.Text variant="description" color="secondary">
+                  {recipient.topics.length > 1 ? "Темы" : "Тема"} в ГИС ЖКХ:{" "}
+                  {recipient.topics
+                    .map(([code, name]) => `${code} «${name}»`)
+                    .join(", ")}
+                </Typography.Text>
+              )}
+            </li>
+          ))}
+        </ul>
+        <Typography.Text
+          className={styles.Source}
+          variant="description"
+          color="secondary"
+        >
+          Темы по справочнику НСИ 220 ГИС ЖКХ, сверено 29.09.2026
+        </Typography.Text>
+      </details>
     </div>
   );
 };

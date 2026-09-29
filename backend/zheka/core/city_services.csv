@@ -1,0 +1,20 @@
+region,city,kind,name,phone,hours,site,note,source_url
+Москва,Москва,edds,Единая городская диспетчерская служба,+7 (495) 539-53-53,,,,https://www.moek.ru/contacts/
+Москва,Москва,water,АО «Мосводоканал»,+7 (499) 763-34-34,,https://www.mosvodokanal.ru,Единая информационная справочная служба,https://www.mosvodokanal.ru/contacts/
+Москва,Москва,heat,ПАО «МОЭК»,+7 (495) 539-59-59,Круглосуточно,https://www.moek.ru,"Аварии отопления и горячей воды. Теплоснабжающих организаций в городе несколько, ваша указана в квитанции",https://www.moek.ru/contacts/hotline/
+Москва,Москва,energy,АО «Мосэнергосбыт»,+7 (499) 550-95-50,Ежедневно 8:30-20:30,https://www.mosenergosbyt.ru,Ваш поставщик указан в квитанции за свет,https://www.mosenergosbyt.ru/common/contacts/
+Москва,,gzhi,Государственная жилищная инспекция города Москвы,+7 (495) 681-77-80,,https://www.mos.ru/mgi/,,https://uzao.mos.ru/nash-okrug/phones-operational-services-and-hotlines/phones-operational-services-and-hotlines.php
+Санкт-Петербург,Санкт-Петербург,edds,Центр по приему обращений граждан по вопросам ЖКХ,004,,,,https://www.gov.spb.ru/helper/phones/
+Санкт-Петербург,Санкт-Петербург,water,ГУП «Водоканал Санкт-Петербурга»,+7 (812) 305-09-09,Круглосуточно,https://www.vodokanal.spb.ru,,https://www.vodokanal.spb.ru/
+Санкт-Петербург,Санкт-Петербург,heat,ГУП «ТЭК СПб»,+7 (812) 601-93-93,,,"Теплоснабжающих организаций в городе несколько, ваша указана в квитанции",https://www.gov.spb.ru/helper/phones/
+Санкт-Петербург,Санкт-Петербург,energy,АО «Петербургская сбытовая компания»,+7 (812) 303-69-69,,https://pesc.ru,Ваш поставщик указан в квитанции за свет,https://pesc.ru/
+Санкт-Петербург,Санкт-Петербург,gas,ГРО «ПетербургГаз»,104,,https://peterburggaz.ru,При запахе газа - сразу 104,https://peterburggaz.ru/contacts/
+Санкт-Петербург,Санкт-Петербург,waste,АО «Невский экологический оператор»,+7 (812) 303-80-90,"Пн-сб 8:00-20:30, вс 10:00-17:00",,Если не вывозят контейнеры по графику,https://www.gov.spb.ru/gov/otrasl/ecology/reforma-v-sfere-obrasheniya-s-tverdymi-kommunalnymi-othodami-voprosy-i/
+Санкт-Петербург,,gzhi,Государственная жилищная инспекция Санкт-Петербурга,+7 (812) 576-07-01,,https://www.gov.spb.ru/gov/otrasl/inspekcija/,,https://www.gov.spb.ru/gov/otrasl/inspekcija/
+Республика Татарстан,Казань,edds,Единая дежурно-диспетчерская служба Казани,+7 (843) 236-41-23,,,Короткий номер 063,https://kzn.ru/
+Республика Татарстан,Казань,water,МУП «Водоканал»,+7 (843) 231-62-60,,https://www.kznvodokanal.ru,Аварийно-диспетчерская служба,https://www.kznvodokanal.ru/
+Республика Татарстан,Казань,heat,АО «Татэнерго»,8 (800) 234-82-43,,https://www.tatenergo.ru,"Теплоснабжающих организаций в городе несколько, ваша указана в квитанции",https://www.tatenergo.ru/contacts/
+Республика Татарстан,Казань,energy,АО «Татэнергосбыт»,8 (800) 200-25-26,"Пн-пт 8:00-19:00, сб 8:00-17:00",https://tatenergosbyt.ru,Ваш поставщик указан в квитанции за свет,https://tatenergosbyt.ru/
+Республика Татарстан,Казань,gas,ЭПУ «Казаньгоргаз» ООО «Газпром трансгаз Казань»,+7 (843) 292-58-85,,https://kazan-tr.gazprom.ru,При запахе газа - сразу 104,https://kazan-tr.gazprom.ru/about/branch/ehpu-kazangorgaz/
+Республика Татарстан,Казань,waste,Региональный оператор по обращению с отходами,+7 (843) 260-02-40,,,Если не вывозят контейнеры по графику,https://kzn.ru/
+Республика Татарстан,,gzhi,Государственная жилищная инспекция Республики Татарстан,+7 (843) 222-02-77,,https://gji.tatarstan.ru,,https://gji.tatarstan.ru/

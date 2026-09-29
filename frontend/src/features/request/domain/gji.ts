@@ -47,6 +47,9 @@ export const gjiAppeal = (request: RequestCard, house: HouseCard) => {
       (overdue ? ` Просрочка на момент обращения - ${overdue}.` : "") +
       ` Заявка находится в статусе «${STATUS_LABEL[request.status]}», работы не завершены.`,
     "",
+    request.pp290_refs.length > 0 &&
+      `Работы входят в минимальный перечень (ПП РФ № 290, ${request.pp290_refs.join(", ")}).`,
+    request.pp290_refs.length > 0 && "",
     "Прошу провести проверку по изложенным фактам и обязать управляющую организацию устранить нарушение.",
     "",
     `Дата: ${docDate.format(now)}`,

@@ -522,61 +522,8 @@ def _quoted(text: str) -> str:
     return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"
 
 
-def resident_answered(request: Request, text: str) -> str:
-    head = f"💬 Житель ответил по заявке {_request(request.id, request.category)}\n\n"
-    return f"{head}{_fitted(text, head)}"
-
-
-def question_card(request_id: RequestId, category: RequestCategory, text: str) -> str:
-    head = (
-        f"❓ УК уточняет по заявке №{request_id} · {CATEGORY_RULES[category].label}\n\n"
+def gji_pdf_sent(request_id: RequestId) -> str:
+    return (
+        f"📄 Жалоба по заявке №{request_id} для ГЖИ\n"
+        "✍️ Впишите ФИО и адрес, распечатайте и подпишите"
     )
-    return f"{head}{_fitted(text, head)}"
-
-
-NO_EMERGENCY_PHONE_TEXT = (
-    "🛠 Номер аварийной службы есть в квитанции и на доске объявлений в подъезде"
-)
-ORG_PHONE_TEXT = "🏢 Телефон УК: {org_phone}"
-DANGER_REQUEST_NOTE = "📝 Заявку можно оформить ниже, но сначала позвоните"
-DANGER_TEXTS: Mapping[DangerKind, str] = {
-    DangerKind.GAS: (
-        "🔥 Похоже, пахнет газом: не включайте свет и приборы, выйдите из квартиры "
-        "и звоните 104 или 112"
-    ),
-    DangerKind.FIRE: (
-        "🚨 Похоже на дым или пожар: звоните 112, уходите по лестнице, не на лифте"
-    ),
-    DangerKind.ELECTRIC: (
-        "⚡ Похоже, искрит проводка: не трогайте ее, отключите автомат в щитке, "
-        "если это безопасно, при дыме звоните 112"
-    ),
-    DangerKind.TRAPPED: (
-        "🛗 Похоже, в лифте застряли люди: нажмите кнопку связи в кабине и звоните "
-        "в аварийную службу, при угрозе здоровью - 112"
-    ),
-    DangerKind.FLOOD_ELECTRIC: (
-        "💧 Вода попала на проводку: не подходите к щиту и розеткам, звоните "
-        "в аварийную службу, при искрах - 112"
-    ),
-    DangerKind.LLM: "🚨 Похоже на аварию: при угрозе жизни и здоровью звоните 112",
-}
-DANGER_LABELS: Mapping[DangerKind, str] = {
-    DangerKind.GAS: "запах газа",
-    DangerKind.FIRE: "дым или огонь",
-    DangerKind.ELECTRIC: "искрит проводка",
-    DangerKind.TRAPPED: "застряли в лифте",
-    DangerKind.FLOOD_ELECTRIC: "вода на проводке",
-    DangerKind.LLM: "похоже на аварию",
-}
-
-
-def danger_warning(kind: DangerKind, org: Organization | None) -> str:
-    lines = [DANGER_TEXTS[kind]]
-    if org is not None and org.emergency_phone:
-        lines.append(f"🛠 Аварийная служба дома: {escape(org.emergency_phone)}")
-    else:
-        lines.append(NO_EMERGENCY_PHONE_TEXT)
-        if org is not None and org.phone.strip():
-            lines.append(ORG_PHONE_TEXT.format(org_phone=escape(org.phone.strip())))
-    return "\n".join(lines)

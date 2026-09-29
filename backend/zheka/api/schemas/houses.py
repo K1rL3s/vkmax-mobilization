@@ -7,6 +7,7 @@ from zheka.api.dependencies import CurrentOrg
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FileRef
 from zheka.core.enums import (
+    CityServiceKind,
     EventSource,
     RequestCategory,
     ResidentRole,
@@ -167,6 +168,15 @@ class OutageItem(BaseSchema):
     is_demo: bool = Field(description="Отключение выдумано для демонстрации")
 
 
+class CityServiceItem(BaseSchema):
+    kind: CityServiceKind
+    name: str
+    phone: str
+    hours: str | None = None
+    site: str | None = Field(default=None, description="Сайт со схемой")
+    note: str | None = None
+
+
 class HouseCard(BaseSchema):
     id: HouseId
     address: str
@@ -199,6 +209,9 @@ class HouseCard(BaseSchema):
     )
     outages: list[OutageItem] = Field(
         description="Текущие и плановые отключения по дому, сейчас демо-данные",
+    )
+    services: list[CityServiceItem] = Field(
+        description="Городские службы и ГЖИ региона дома, сверены с их сайтами",
     )
 
     @classmethod
@@ -239,6 +252,7 @@ class HouseCard(BaseSchema):
                 else OrgPublicStats.model_validate(card.org_stats)
             ),
             outages=[OutageItem.model_validate(item) for item in card.outages],
+            services=[CityServiceItem.model_validate(item) for item in card.services],
         )
 
 

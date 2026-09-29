@@ -57,6 +57,55 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
         is_demo: true,
       },
     ],
+    services: [
+      {
+        kind: "edds",
+        name: "Единая дежурно-диспетчерская служба Казани",
+        phone: "+7 (843) 236-41-23",
+        note: "Короткий номер 063",
+      },
+      {
+        kind: "water",
+        name: "МУП «Водоканал»",
+        phone: "+7 (843) 231-62-60",
+        site: "https://www.kznvodokanal.ru",
+        note: "Аварийно-диспетчерская служба",
+      },
+      {
+        kind: "heat",
+        name: "АО «Татэнерго»",
+        phone: "8 (800) 234-82-43",
+        site: "https://www.tatenergo.ru",
+        note: "Теплоснабжающих организаций в городе несколько, ваша указана в квитанции",
+      },
+      {
+        kind: "energy",
+        name: "АО «Татэнергосбыт»",
+        phone: "8 (800) 200-25-26",
+        hours: "Пн-пт 8:00-19:00, сб 8:00-17:00",
+        site: "https://tatenergosbyt.ru",
+        note: "Ваш поставщик указан в квитанции за свет",
+      },
+      {
+        kind: "gas",
+        name: "ЭПУ «Казаньгоргаз» ООО «Газпром трансгаз Казань»",
+        phone: "+7 (843) 292-58-85",
+        site: "https://kazan-tr.gazprom.ru",
+        note: "При запахе газа - сразу 104",
+      },
+      {
+        kind: "waste",
+        name: "Региональный оператор по обращению с отходами",
+        phone: "+7 (843) 260-02-40",
+        note: "Если не вывозят контейнеры по графику",
+      },
+      {
+        kind: "gzhi",
+        name: "Государственная жилищная инспекция Республики Татарстан",
+        phone: "+7 (843) 222-02-77",
+        site: "https://gji.tatarstan.ru",
+      },
+    ],
     org_stats: house.is_connected
       ? {
           closed: 38,

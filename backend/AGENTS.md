@@ -301,6 +301,19 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `fix_working_days` counts from the next local day to its end by
   `core/workdays.py`, a static calendar: add each year's transfer decree
   there (the 2026.09.29 migration backfill has its own copy).
+- `CategoryRule.pp290_refs` name points (`п. 22`) of `core/pp290.json`, the
+  ПП 290 minimal works list (KokInside's parse, checked against
+  КонсультантПлюс); `GET /pp290` serves the file as is and a test fails on a
+  ref that names no point. Billing categories cite none.
+- PDFs subclass `infra/pdf/PdfDocument` (fpdf2, A4, DejaVu fonts with their
+  license in `infra/pdf/fonts/`, a footer note and, with `demo=True`, a «ДЕМО»
+  watermark on every page); render them in a task, send with
+  `MaxSender.send_file` (skips a user not `User.in_dialog`, as `send_video`
+  does). `POST /requests/{id}/gji-pdf` takes only the author's open overdue
+  request (else 409, foreign 404) while the bot can write to them
+  (`in_dialog`, else 409, so the app never says «sent» for a file that
+  stays), records `REQUEST_EXPORTED` with `format: gji_pdf` and queues
+  `send_gji_pdf`, which renders `GjiComplaint` from the author's card.
 - `watch_request_deadlines` (every 5 min) warns staff and executor at
   `Request.warn_at`, then reports the overdue request to them, the author and
   the chairman, once each by `deadline_warned_at` / `overdue_notified_at` (the
@@ -414,6 +427,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   (up to 14 days), which п. 4 leaves to the sanitary rules. While outages are
   fiction the request form only names the outage, never «заявку можно не
   подавать».
+- `HouseCard.services` come from `core/city_services.csv`, read once per
+  process (`directory()`, no table, so no reseed), filtered by the house's
+  `region` and `city`; a blank `city` is region-wide (ГЖИ). Every row names
+  the official page its phone was checked on (`source_url`, not in the
+  API); a number no official page confirms stays out.
 
 ## Readings, reminders, analytics
 

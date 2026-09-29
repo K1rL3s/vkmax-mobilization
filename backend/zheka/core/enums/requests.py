@@ -76,7 +76,7 @@ class CategoryRule(ZhekaType):
     fix_working_days: int | None = None
     react_minutes: int | None = None
     basis: str | None = None
-    rejection_needs_photo: bool = True
+    pp290_refs: tuple[str, ...] = ()
 
     @property
     def caption(self) -> str:
@@ -122,18 +122,21 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         fix_hours=72,
         react_minutes=30,
         basis="ПП РФ № 416, п. 13",
+        pp290_refs=("п. 18", "п. 28"),
     ),
     RequestCategory.ELEVATOR: CategoryRule(
         label="Лифт",
         emoji="🛗",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=24,
+        pp290_refs=("п. 22", "п. 28"),
     ),
     RequestCategory.GARBAGE: CategoryRule(
         label="Мусор",
         emoji="🗑",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=24,
+        pp290_refs=("п. 14", "п. 26(1)", "п. 28"),
     ),
     RequestCategory.HEATING: CategoryRule(
         label="Отопление",
@@ -141,13 +144,15 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=16,
         basis="ПП РФ № 354, прил. 1, п. 14",
+        pp290_refs=("п. 17", "п. 19", "п. 28"),
     ),
     RequestCategory.WATER_SUPPLY: CategoryRule(
         label="Водоснабжение",
         emoji="🚰",
-        zone=ResponsibilityZone.UTILITY,
+        zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=4,
         basis="ПП РФ № 354, прил. 1, п. 1, 4",
+        pp290_refs=("п. 18", "п. 28"),
     ),
     RequestCategory.ELECTRICITY: CategoryRule(
         label="Электричество",
@@ -155,18 +160,21 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=24,
         basis="ПП РФ № 354, прил. 1, п. 9",
+        pp290_refs=("п. 20", "п. 28"),
     ),
     RequestCategory.ENTRANCE: CategoryRule(
         label="Подъезд",
         emoji="🚪",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=72,
+        pp290_refs=("п. 13", "п. 23", "п. 28"),
     ),
     RequestCategory.YARD: CategoryRule(
         label="Двор и территория",
         emoji="🌳",
         zone=ResponsibilityZone.MANAGEMENT,
         fix_hours=72,
+        pp290_refs=("п. 24", "п. 25", "п. 28"),
     ),
     RequestCategory.METER_ERROR: CategoryRule(
         label="Ошибка в показаниях",
@@ -193,6 +201,7 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
         zone=ResponsibilityZone.MANAGEMENT,
         fix_working_days=10,
         basis="ПП РФ № 416, п. 36",
+        pp290_refs=("п. 28",),
     ),
 }
 

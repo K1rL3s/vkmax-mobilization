@@ -83,8 +83,10 @@ SHARE_FINISHED = "Заявку на приемке или закрытую со�
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
-EMPTY_MESSAGE = "Напишите сообщение для УК"
-WRITE_CLOSED = "Заявка закрыта, подайте новую"
+GJI_NOT_OVERDUE = "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек"
+GJI_NO_DIALOG = (
+    "Бот не может вам написать: откройте чат с ботом, запустите его и повторите"
+)
 
 
 class RequestDraft(ZhekaType):
@@ -734,47 +736,25 @@ class RequestsService:
         )
         return await self._built_card(request, house)
 
-    async def write(
+    async def send_gji_pdf(
         self,
         user_id: UserId,
         request_id: RequestId,
-        text: str,
-        channel: RequestChannel,
-    ) -> RequestCardData:
+        now: datetime,
+    ) -> None:
         request = await self._own_request(user_id, request_id)
-        await self._active_resident(user_id, request.house_id)
-        message = stated(text, EMPTY_MESSAGE)
-        await self._requests.lock(request)
-        if request.status is RequestStatus.DONE:
-            raise InvalidState(WRITE_CLOSED)
-
-        answer = request.question_asked_at is not None
-        await self._requests.add_message(
-            request.id,
-            user_id,
-            RequestActorRole.RESIDENT.value,
-            message,
-        )
-        await self._requests.stamp_thread(
-            request,
-            question_asked_at=None,
-            resident_answered_at=datetime.now(UTC),
-        )
+        if request.status not in OPEN_STATUSES or request.deadline_at > now:
+            raise InvalidState(GJI_NOT_OVERDUE)
+        user = await self._users.get_by_id(user_id)
+        if user is None or not user.in_dialog:
+            raise InvalidState(GJI_NO_DIALOG)
         await self._events.record(
-            EventType.REQUEST_MESSAGE_SENT,
+            EventType.REQUEST_EXPORTED,
             user_id=user_id,
-            request_id=request.id,
-            by_role=RequestActorRole.RESIDENT.value,
-            answer=answer,
-            channel=channel.value,
+            request_id=request_id,
+            format="gji_pdf",
         )
-        house = await self._get_house(request.house_id)
-        await self._notify_crew(
-            request,
-            house,
-            texts.resident_answered(request, message),
-        )
-        return await self._built_card(request, house)
+        self._notifications.send_gji_pdf(user_id, request_id)
 
 
 async def build_rows(

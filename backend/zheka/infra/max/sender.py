@@ -23,7 +23,7 @@ from maxo.types.inline_keyboard_attachment_request import (
     InlineKeyboardAttachmentRequest,
 )
 from maxo.types.send_message_result import SendMessageResult
-from maxo.utils.upload_media import FSInputFile
+from maxo.utils.upload_media import FSInputFile, InputFile
 
 from zheka.core.ids import MaxChatId, MaxUserId
 from zheka.core.models import User
@@ -96,24 +96,11 @@ class MaxSender:
         return result
 
     async def send_video(self, path: Path, user: User, request_id: int) -> None:
-        if (
-            user.max_user_id < 0
-            or user.max_chat_id is None
-            or user.bot_stopped_at is not None
-        ):
-            return
-        with _undelivered():
-            async with BOT_RATE_LIMIT, _chat_rate_limit(user.max_user_id):
-                attachments = await AttachmentsFacade(self._bot).build_attachments(
-                    base=[],
-                    files=[FSInputFile(path, UploadType.VIDEO)],
-                )
-                await self._bot.send_message(
-                    user_id=user.max_user_id,
-                    text=f"🎬 Видео к заявке №{request_id}",
-                    attachments=list(attachments),
-                    notify=False,
-                )
+        await self.send_file(
+            user,
+            FSInputFile(path, UploadType.VIDEO),
+            f"🎬 Видео к заявке №{request_id}",
+        )
 
     async def start_dialog(
         self,
@@ -203,6 +190,22 @@ class MaxSender:
                 message = result.message if is_defined(result.message) else None
                 pinned = message is not None and message.body.mid == mid
         return pinned
+
+    async def send_file(self, user: User, file: InputFile, text: str) -> None:
+        if not user.in_dialog:
+            return
+        with _undelivered():
+            async with BOT_RATE_LIMIT, _chat_rate_limit(user.max_user_id):
+                attachments = await AttachmentsFacade(self._bot).build_attachments(
+                    base=[],
+                    files=[file],
+                )
+                await self._bot.send_message(
+                    user_id=user.max_user_id,
+                    text=text,
+                    attachments=list(attachments),
+                    notify=False,
+                )
 
 
 async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:

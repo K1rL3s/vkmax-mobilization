@@ -3557,13 +3557,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
-  /api/requests/{request_id}/messages:
+  /api/pp290:
+    get:
+      tags:
+      - Заявки
+      summary: Минимальный перечень работ УК (ПП РФ № 290)
+      description: Пункты перечня с разделами, на них ссылаются категории заявок (pp290_refs). Файл отдается как есть, браузер кэширует его на сутки
+      operationId: get_pp290
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pp290Catalog'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/gji-pdf:
     post:
       tags:
       - Заявки
-      summary: Написать в УК по заявке
-      description: 'Только автор незакрытой заявки: сообщение уходит сотрудникам УК и исполнителю, снимает вопрос УК и отмечает, что житель ответил. Закрытая заявка - 409, чужая - 404'
-      operationId: write_to_request
+      summary: Жалоба в ГЖИ файлом в чат с ботом
+      description: Только автор просроченной открытой заявки, чужая - 404. Непросроченная или закрытая заявка и автор, которому бот не может написать (нет чата с ботом или бот остановлен), - 409. Бот присылает PDF с фактами заявки, нормативным сроком, историей статусов и строками для подписей соседей; на демо-УК - с пометкой «ДЕМО»
+      operationId: send_gji_pdf
       security:
       - ApiTestToken: []
       parameters:
@@ -3581,28 +3648,13 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
-      - name: Idempotency-Key
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-            format: uuid
-          - type: 'null'
-          title: Idempotency-Key
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WriteToRequestRequest'
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RequestCard'
+                $ref: '#/components/schemas/OkResponse'
         '400':
           description: Некорректный запрос
           content:
@@ -11603,6 +11655,13 @@ components:
           - type: 'null'
           title: Deadline Basis
           description: Норма права под сроком; пусто - срок сервиса, норматива нет
+        pp290_refs:
+          items:
+            type: string
+          type: array
+          title: Pp290 Refs
+          description: Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; тексты пунктов отдает GET /pp290
+          default: []
         react_deadline_at:
           anyOf:
           - type: string
@@ -12585,6 +12644,49 @@ components:
       - region
       - city
       title: CityItem
+    CityServiceItem:
+      properties:
+        kind:
+          $ref: '#/components/schemas/CityServiceKind'
+        name:
+          type: string
+          title: Name
+        phone:
+          type: string
+          title: Phone
+        hours:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hours
+        site:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Site
+          description: Сайт со схемой
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      required:
+      - kind
+      - name
+      - phone
+      title: CityServiceItem
+    CityServiceKind:
+      type: string
+      enum:
+      - edds
+      - water
+      - heat
+      - energy
+      - gas
+      - waste
+      - gzhi
+      title: CityServiceKind
     ClassifyRequestRequest:
       properties:
         text:
@@ -13451,6 +13553,12 @@ components:
           type: array
           title: Outages
           description: Текущие и плановые отключения по дому, сейчас демо-данные
+        services:
+          items:
+            $ref: '#/components/schemas/CityServiceItem'
+          type: array
+          title: Services
+          description: Городские службы и ГЖИ региона дома, сверены с их сайтами
       type: object
       required:
       - id
@@ -13466,6 +13574,7 @@ components:
       - demand_sent
       - documents
       - outages
+      - services
       title: HouseCard
     HouseListItem:
       properties:
@@ -14917,6 +15026,56 @@ components:
       - active
       - closed
       title: PollStatus
+    Pp290Catalog:
+      properties:
+        source:
+          type: string
+          title: Source
+        edition:
+          type: string
+          title: Edition
+          description: Редакция постановления
+        checked_at:
+          type: string
+          format: date
+          title: Checked At
+          description: Когда пункты сверены с текстом
+        note:
+          type: string
+          title: Note
+          description: Как собран перечень и что из него исключено
+        items:
+          items:
+            $ref: '#/components/schemas/Pp290Item'
+          type: array
+          title: Items
+      type: object
+      required:
+      - source
+      - edition
+      - checked_at
+      - note
+      - items
+      title: Pp290Catalog
+    Pp290Item:
+      properties:
+        ref:
+          type: string
+          title: Ref
+          description: Пункт и абзац, например «п. 22, абз. 2»
+        section:
+          type: string
+          title: Section
+          description: Заголовок пункта
+        text:
+          type: string
+          title: Text
+      type: object
+      required:
+      - ref
+      - section
+      - text
+      title: Pp290Item
     ProposalItem:
       properties:
         id:
@@ -15378,6 +15537,13 @@ components:
           - type: 'null'
           title: Deadline Basis
           description: Норма права под сроком; пусто - срок сервиса, норматива нет
+        pp290_refs:
+          items:
+            type: string
+          type: array
+          title: Pp290 Refs
+          description: Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; тексты пунктов отдает GET /pp290
+          default: []
         react_deadline_at:
           anyOf:
           - type: string
@@ -15507,6 +15673,13 @@ components:
           - type: 'null'
           title: Deadline Basis
           description: Норма права под сроком; пусто - срок сервиса, норматива нет
+        pp290_refs:
+          items:
+            type: string
+          type: array
+          title: Pp290 Refs
+          description: Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; тексты пунктов отдает GET /pp290
+          default: []
       type: object
       required:
       - category

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Self
 
 from pydantic import Field
@@ -45,7 +45,10 @@ from zheka.core.services.requests import (
 UNKNOWN_AUTHOR = "Пользователь"
 DEADLINE_TEXT = "Срок устранения, например «3 суток»"
 DEADLINE_BASIS = "Норма права под сроком; пусто - срок сервиса, норматива нет"
-MIN_CLASSIFY_TEXT = 15
+PP290_REFS = (
+    "Пункты минимального перечня работ УК (ПП РФ № 290), например «п. 22»; "
+    "тексты пунктов отдает GET /pp290"
+)
 
 
 class RequestCategoryItem(BaseSchema):
@@ -58,6 +61,7 @@ class RequestCategoryItem(BaseSchema):
         description="Срок реакции, например «30 минут»; пусто - не нормирован",
     )
     deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
+    pp290_refs: tuple[str, ...] = Field(default=(), description=PP290_REFS)
 
     @classmethod
     def of(cls, category: RequestCategory, rule: CategoryRule) -> Self:
@@ -68,6 +72,7 @@ class RequestCategoryItem(BaseSchema):
             deadline_text=rule.deadline_text,
             react_text=rule.react_text,
             deadline_basis=rule.basis,
+            pp290_refs=rule.pp290_refs,
         )
 
 
@@ -171,6 +176,7 @@ class RequestCard(RequestListItem):
     org_name: str | None
     deadline_text: str = Field(description=DEADLINE_TEXT)
     deadline_basis: str | None = Field(default=None, description=DEADLINE_BASIS)
+    pp290_refs: tuple[str, ...] = Field(default=(), description=PP290_REFS)
     react_deadline_at: datetime | None = Field(
         default=None,
         description="Срок реакции (принять заявку); пусто - не нормирован",
@@ -222,6 +228,7 @@ class RequestCard(RequestListItem):
             org_name=None if card.org is None else card.org.name,
             deadline_text=rule.deadline_text,
             deadline_basis=rule.basis,
+            pp290_refs=rule.pp290_refs,
             react_deadline_at=request.react_deadline_at,
             photos=attachments,
             result_photos=result_attachments,
@@ -456,5 +463,15 @@ class ClassifyRequestResponse(BaseSchema):
         )
 
 
-class WriteToRequestRequest(BaseSchema):
-    text: FreeText
+class Pp290Item(BaseSchema):
+    ref: str = Field(description="Пункт и абзац, например «п. 22, абз. 2»")
+    section: str = Field(description="Заголовок пункта")
+    text: str
+
+
+class Pp290Catalog(BaseSchema):
+    source: str
+    edition: str = Field(description="Редакция постановления")
+    checked_at: date = Field(description="Когда пункты сверены с текстом")
+    note: str = Field(description="Как собран перечень и что из него исключено")
+    items: list[Pp290Item]

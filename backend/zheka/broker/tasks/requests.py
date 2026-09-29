@@ -6,12 +6,14 @@ from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.dialogs import Data, ShowMode
 from maxo.fsm import State
+from maxo.utils.upload_media import BufferedInputFile
 from taskiq import async_shared_broker
 
 from zheka.bot.dialog_data import ExecutorCardData, QuestionData, ReviewData
 from zheka.bot.states import ExecutorCard, Question, Review
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.bot_requests import save_photos
+from zheka.core import texts
 from zheka.core.enums import NotificationCategory, RequestStatus
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import RequestId, UserId
@@ -22,6 +24,7 @@ from zheka.core.services.requests import RequestsService
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
+from zheka.infra.pdf import GjiComplaint
 
 logger = logging.getLogger(__name__)
 
@@ -185,4 +188,27 @@ async def send_question_card(
         f"question-{request_id}",
         QuestionData(request_id=request_id).to_data(),
         ShowMode.SEND,
+    )
+
+
+@async_shared_broker.task(task_name=TaskName.SEND_GJI_PDF.value)
+@inject(patch_module=True)
+async def send_gji_pdf(
+    user_id: UserId,
+    request_id: RequestId,
+    requests_service: FromDishka[RequestsService],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> None:
+    user = await users_repo.get_by_id(user_id)
+    if user is None:
+        return
+    card = await requests_service.get_card(user_id, request_id)
+    await sender.send_file(
+        user,
+        BufferedInputFile.file(
+            GjiComplaint(card, datetime.now(UTC)).render(),
+            f"zhaloba-{request_id}.pdf",
+        ),
+        texts.gji_pdf_sent(request_id),
     )

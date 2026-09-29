@@ -247,6 +247,7 @@ const CATEGORY_RULES: Record<
     text: string;
     react?: string;
     basis?: string;
+    pp290?: string[];
   }
 > = {
   leak: {
@@ -256,22 +257,37 @@ const CATEGORY_RULES: Record<
     text: "3 суток",
     react: "30 минут",
     basis: "ПП РФ № 416, п. 13",
+    pp290: ["п. 18", "п. 28"],
   },
-  elevator: { label: "Лифт", zone: "management", hours: 24, text: "24 часа" },
-  garbage: { label: "Мусор", zone: "management", hours: 24, text: "24 часа" },
+  elevator: {
+    label: "Лифт",
+    zone: "management",
+    hours: 24,
+    text: "24 часа",
+    pp290: ["п. 22", "п. 28"],
+  },
+  garbage: {
+    label: "Мусор",
+    zone: "management",
+    hours: 24,
+    text: "24 часа",
+    pp290: ["п. 14", "п. 26(1)", "п. 28"],
+  },
   heating: {
     label: "Отопление",
     zone: "management",
     hours: 16,
     text: "16 часов",
     basis: "ПП РФ № 354, прил. 1, п. 14",
+    pp290: ["п. 17", "п. 19", "п. 28"],
   },
   water_supply: {
     label: "Водоснабжение",
-    zone: "utility",
+    zone: "management",
     hours: 4,
     text: "4 часа",
     basis: "ПП РФ № 354, прил. 1, п. 1, 4",
+    pp290: ["п. 18", "п. 28"],
   },
   electricity: {
     label: "Электричество",
@@ -279,18 +295,21 @@ const CATEGORY_RULES: Record<
     hours: 24,
     text: "24 часа",
     basis: "ПП РФ № 354, прил. 1, п. 9",
+    pp290: ["п. 20", "п. 28"],
   },
   entrance: {
     label: "Подъезд",
     zone: "management",
     hours: 72,
     text: "3 суток",
+    pp290: ["п. 13", "п. 23", "п. 28"],
   },
   yard: {
     label: "Двор и территория",
     zone: "management",
     hours: 72,
     text: "3 суток",
+    pp290: ["п. 24", "п. 25", "п. 28"],
   },
   meter_error: {
     label: "Ошибка в показаниях",
@@ -313,6 +332,7 @@ const CATEGORY_RULES: Record<
     hours: 336,
     text: "10 рабочих дней",
     basis: "ПП РФ № 416, п. 36",
+    pp290: ["п. 28"],
   },
 };
 
@@ -427,6 +447,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     org_name: findHouse(item.house_id)?.org?.name ?? null,
     deadline_text: CATEGORY_RULES[item.category].text,
     deadline_basis: CATEGORY_RULES[item.category].basis ?? null,
+    pp290_refs: CATEGORY_RULES[item.category].pp290 ?? [],
     react_deadline_at: !CATEGORY_RULES[item.category].react
       ? null
       : item.deadline_at && item.deadline_at < react
@@ -554,6 +575,7 @@ export const requestCategories = (): Schemas["RequestCategoryItem"][] =>
     deadline_text: rule.text,
     react_text: rule.react ?? null,
     deadline_basis: rule.basis ?? null,
+    pp290_refs: rule.pp290 ?? [],
   }));
 
 export const categoryDeadline = (category: Schemas["RequestCategory"]) =>

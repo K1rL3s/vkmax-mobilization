@@ -19,6 +19,14 @@ class User(ZhekaMutableType):
     phone: str | None = None
     phone_verified_at: datetime | None = None
 
+    @property
+    def in_dialog(self) -> bool:
+        return (
+            self.max_user_id >= 0
+            and self.max_chat_id is not None
+            and self.bot_stopped_at is None
+        )
+
 
 class NotificationSetting(ZhekaMutableType):
     id: NotificationSettingId = UNSET

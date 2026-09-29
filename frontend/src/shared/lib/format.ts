@@ -84,3 +84,5 @@ const shortDayFormat = new Intl.DateTimeFormat("ru-RU", {
 
 export const formatShortDay = (iso: string) =>
   shortDayFormat.format(new Date(iso));
+
+export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;

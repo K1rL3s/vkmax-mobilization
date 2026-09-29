@@ -27,9 +27,12 @@ from zheka.core.enums import (
     RequestStatus,
 )
 from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
-from zheka.core.services.requests import RequestDraft
-from zheka.infra.database.models import OrgMember
+from zheka.core.ids import MaxChatId, UserId
+from zheka.infra.database.models import OrgMember, User
+from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters
+from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.pdf import GjiComplaint, PdfDocument
 
 
 async def test_escalation_reaches_everyone_on_the_request_once(
@@ -272,72 +275,139 @@ async def test_a_group_shows_its_earliest_open_escalation(
     assert row.escalated_at == now + timedelta(minutes=1)
 
 
-async def test_open_dangerous_requests_follow_the_escalated_ones(
+async def test_a_gji_pdf_of_someone_elses_request_is_not_found(
     session: AsyncSession,
     own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
 ) -> None:
-    late = await _complain(session, own.user_id, own.house_id)
-    escalated = await _complain(session, own.user_id, own.house_id)
-    sparks = RequestDraft(
-        category=RequestCategory.ELECTRICITY,
-        description="Искрит щиток на площадке",
-    )
-    service = requests_service(session)
-    dangerous = await service.create(own.user_id, own.house_id, sparks)
-    finished = await service.create(own.user_id, own.house_id, sparks)
-    normative = CATEGORY_RULES[RequestCategory.LEAK].fix_hours
-    await _age(session, late.id, normative + 1)
-    await _age(session, escalated.id, normative + 2)
-    await service.escalate(own.user_id, escalated.id, datetime.now(UTC))
-    finished.request.status = RequestStatus.DONE
-    await session.flush()
+    neighbour = await add_user(session)
+    await add_resident(session, neighbour, own.house_id, None)
+    await _open_dialog(session, neighbour)
+    request = await _complain(session, own.user_id, own.house_id)
 
-    rows, _ = await admin_requests_service(session).inbox(
-        own.org_id,
-        RequestFilters(),
-        20,
-        0,
-    )
+    with pytest.raises(EntityNotFound):
+        await requests_service(session, publisher).send_gji_pdf(
+            neighbour,
+            request.id,
+            request.deadline_at + timedelta(hours=1),
+        )
 
-    assert [row.request.id for row in rows] == [
-        escalated.id,
-        dangerous.request.id,
-        late.id,
-        finished.request.id,
-    ]
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_GJI_PDF) == []
+    assert await events_of(session, EventType.REQUEST_EXPORTED) == []
 
 
-async def test_a_group_rises_and_shows_the_danger_of_any_open_member(
+@pytest.mark.parametrize(
+    ("status", "late"),
+    [
+        (RequestStatus.IN_PROGRESS, timedelta(minutes=-1)),
+        (RequestStatus.ON_REVIEW, timedelta(hours=1)),
+        (RequestStatus.DONE, timedelta(hours=1)),
+    ],
+)
+async def test_a_gji_pdf_is_refused_before_the_deadline_or_after_the_work(
     session: AsyncSession,
     own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    status: RequestStatus,
+    late: timedelta,
 ) -> None:
-    members, group_id = await _group_of_three(session, own)
-    lone = await _complain(
-        session,
-        own.user_id,
-        own.house_id,
-        RequestCategory.ELEVATOR,
-    )
-    socket = RequestDraft(
-        category=RequestCategory.LEAK,
-        description="Вода течет прямо в розетку",
-    )
-    dangerous = await requests_service(session).create(
-        own.user_id,
-        own.house_id,
-        socket,
-    )
-    assert dangerous.request.group_id == group_id
-    viewer = _viewer(own, own.user_id, is_demo=False)
-    service = admin_requests_service(session)
-
-    page = await list_org_requests(viewer, service, grouped=True)
-    dangerous.request.status = RequestStatus.DONE
+    await _open_dialog(session, own.user_id)
+    request = await _complain(session, own.user_id, own.house_id)
+    request.status = status
     await session.flush()
-    done = await list_org_requests(viewer, service, grouped=True)
 
-    assert [(item.id, item.danger) for item in page.items] == [
-        (members[0].id, DangerKind.FLOOD_ELECTRIC),
-        (lone.id, None),
+    with pytest.raises(InvalidState):
+        await requests_service(session, publisher).send_gji_pdf(
+            own.user_id,
+            request.id,
+            request.deadline_at + late,
+        )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_GJI_PDF) == []
+
+
+async def test_a_gji_pdf_of_an_overdue_request_goes_to_its_author(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    await _open_dialog(session, own.user_id)
+    request = await _complain(session, own.user_id, own.house_id)
+
+    await requests_service(session, publisher).send_gji_pdf(
+        own.user_id,
+        request.id,
+        request.deadline_at + timedelta(minutes=1),
+    )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_GJI_PDF) == [
+        {"user_id": own.user_id, "request_id": request.id},
     ]
-    assert [item.id for item in done.items] == [lone.id, members[0].id]
+    [event] = await events_of(session, EventType.REQUEST_EXPORTED)
+    assert event.payload == {"request_id": request.id, "format": "gji_pdf"}
+
+
+@pytest.mark.parametrize("stopped", [False, True])
+async def test_a_gji_pdf_is_refused_when_the_bot_cannot_write_to_the_author(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    stopped: bool,
+) -> None:
+    if stopped:
+        user = await _open_dialog(session, own.user_id)
+        user.bot_stopped_at = datetime.now(UTC)
+        await session.flush()
+    request = await _complain(session, own.user_id, own.house_id)
+
+    with pytest.raises(InvalidState, match="Бот не может вам написать"):
+        await requests_service(session, publisher).send_gji_pdf(
+            own.user_id,
+            request.id,
+            request.deadline_at + timedelta(minutes=1),
+        )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_GJI_PDF) == []
+
+
+async def _open_dialog(session: AsyncSession, user_id: UserId) -> User:
+    user = await UsersRepo(session).get_by_id(user_id)
+    assert user is not None
+    user.max_chat_id = MaxChatId(user.max_user_id)
+    await session.flush()
+    return user
+
+
+@pytest.mark.parametrize("is_demo", [False, True])
+async def test_a_gji_pdf_says_demo_on_every_page_only_for_a_demo_org(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+    monkeypatch: pytest.MonkeyPatch,
+    is_demo: bool,
+) -> None:
+    org = await OrgsRepo(session).get(own.org_id)
+    assert org is not None
+    org.is_demo = is_demo
+    await session.flush()
+    request = await _complain(session, own.user_id, own.house_id)
+    card = await requests_service(session, publisher).get_card(
+        own.user_id,
+        request.id,
+    )
+    drawn: list[str] = []
+    monkeypatch.setattr(PdfDocument, "text", lambda *args: drawn.append(args[-1]))
+
+    complaint = GjiComplaint(card, request.deadline_at + timedelta(hours=1))
+    complaint.render()
+
+    assert complaint.pages_count > 1
+    assert drawn == (["ДЕМО"] * complaint.pages_count if is_demo else [])

@@ -70,4 +70,59 @@
     flex-shrink: 0;
     color: var(--icon-secondary);
   }
+
+  .Point {
+    display: flex;
+    padding: 12px 16px;
+  }
+
+  details.Point {
+    display: block;
+    padding: 0;
+  }
+
+  .Point + .Point {
+    border-top: 1px solid var(--divider-primary);
+  }
+
+  .PointTitle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    list-style: none;
+    cursor: pointer;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:focus-visible {
+      border-radius: 16px;
+      outline: 2px solid var(--button-primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .Chevron {
+    display: flex;
+    transform: rotate(90deg);
+    transition: transform 0.2s;
+  }
+
+  .Point[open] .Chevron {
+    transform: rotate(-90deg);
+  }
+
+  .Works {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0 16px 12px 32px;
+  }
+
+  .Lines {
+    white-space: pre-line;
+  }
 }

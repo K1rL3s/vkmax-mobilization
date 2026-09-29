@@ -16,15 +16,19 @@ import {
   formatArea,
   formatPercent,
   plural,
+  telHref,
 } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 import {
   alertIcon,
   buildingIcon,
+  bulbIcon,
   checkIcon,
   clockIcon,
   documentIcon,
+  dropletIcon,
+  flameIcon,
   geoPinIcon,
   globeIcon,
   Icon,
@@ -32,10 +36,12 @@ import {
   mailIcon,
   phoneIcon,
   starIcon,
+  trashIcon,
   wrenchIcon,
 } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
+import { Pp290Section } from "./pp290-section";
 import { TariffsSection } from "./tariffs-section";
 
 import styles from "./house-card.module.css";
@@ -386,6 +392,14 @@ const HouseCardPage = () => {
         <Org house={house} />
       </Section>
 
+      {house.services.length > 0 && (
+        <Section title="Куда звонить">
+          <Services services={house.services} />
+        </Section>
+      )}
+
+      <Pp290Section />
+
       <TariffsSection houseId={house.id} isConnected={house.is_connected} />
 
       <Section title="Капремонт">
@@ -410,3 +424,48 @@ export const Component = HouseCardPage;
 
 const minutes = (value: number | null | undefined) =>
   value == null ? "-" : duration(value * 60_000);
+
+const SERVICE_KIND: Record<
+  HouseCard["services"][number]["kind"],
+  { label: string; icon: string }
+> = {
+  edds: { label: "Городская диспетчерская", icon: phoneIcon },
+  water: { label: "Водоснабжение", icon: dropletIcon },
+  heat: { label: "Отопление и горячая вода", icon: flameIcon },
+  energy: { label: "Электроэнергия", icon: bulbIcon },
+  gas: { label: "Газ", icon: alertIcon },
+  waste: { label: "Вывоз мусора", icon: trashIcon },
+  gzhi: { label: "Жилищная инспекция", icon: documentIcon },
+};
+
+const Services = ({ services }: { services: HouseCard["services"] }) => (
+  <Flex direction="column" align="stretch" gapY={8}>
+    <div className={styles.Panel}>
+      {services.map((service, index) => (
+        <CellSimple
+          key={service.kind}
+          separator={index > 0}
+          before={
+            <Icon
+              src={SERVICE_KIND[service.kind].icon}
+              className={styles.CellIcon}
+            />
+          }
+          overline={SERVICE_KIND[service.kind].label}
+          title={service.phone}
+          subtitle={[service.name, service.hours, service.note]
+            .filter(Boolean)
+            .join("\n")}
+          innerClassNames={{ subtitle: styles.Lines }}
+          showChevron
+          asChild
+        >
+          <a href={telHref(service.phone)} />
+        </CellSimple>
+      ))}
+    </div>
+    <Typography.Text variant="description" color="secondary">
+      Контакты сверены 29.09.2026. Если номер не отвечает, смотрите квитанцию
+    </Typography.Text>
+  </Flex>
+);

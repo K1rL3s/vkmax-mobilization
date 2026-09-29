@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
+from zheka.core.city_services import CityService, city_services
 from zheka.core.enums import (
     EventSource,
     EventType,
@@ -76,6 +77,7 @@ class HouseCardData(ZhekaType):
     is_chat_bound: bool
     org_stats: PublicStats | None
     outages: Sequence[OutageView] = ()
+    services: Sequence[CityService] = ()
 
 
 class HouseResidentView(ZhekaType):
@@ -235,6 +237,7 @@ class HousesService:
             is_chat_bound=await self._houses.is_chat_bound(house_id),
             org_stats=org_stats,
             outages=demo_outages(house, now),
+            services=city_services(house.region, house.city),
         )
 
     async def link(

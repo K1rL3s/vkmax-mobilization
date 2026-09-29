@@ -33,6 +33,7 @@ dependencies = [
     "redis==8.1.0",
     "python-multipart==0.0.31",
     "aiohttp==3.14.3",
+    "fpdf2==2.8.8",
 ]
 
 [dependency-groups]
