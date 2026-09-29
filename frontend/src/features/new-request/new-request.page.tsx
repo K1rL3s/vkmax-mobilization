@@ -8,6 +8,7 @@ import { useSession } from "@/shared/model/session";
 import { Chevron } from "@/shared/ui/chevron";
 import { alertIcon, Icon } from "@/shared/ui/icon";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import { DESCRIPTION_LIMIT, useNewRequest } from "./model/use-new-request";
 import { PHOTO_LIMIT } from "./model/use-photos";
@@ -114,10 +115,15 @@ const NewRequestPage = () => {
         )}
 
         {outage && (
-          <Typography.Text variant="description" color="secondary">
-            По дому {outageTitle(outage).toLowerCase()}, заявку можно не
-            подавать
-          </Typography.Text>
+          <Flex direction="column" align="flex-start" gap={6}>
+            <Typography.Text variant="description" color="secondary">
+              По дому {outageTitle(outage).toLowerCase()}, заявку можно не
+              подавать
+            </Typography.Text>
+            {outage.is_demo && (
+              <StatusPill tone="themed">демо-данные</StatusPill>
+            )}
+          </Flex>
         )}
 
         {!form.isDispute &&
