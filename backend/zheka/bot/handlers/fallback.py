@@ -48,6 +48,8 @@ async def no_state_handler(
         await _transcribe(update, publisher, user)
         return
     if user.consent_at is None or draft is None:
+        if user.consent_at is not None:
+            await update.answer_text(NOT_UNDERSTOOD, notify=False)
         await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)
         return
     await dialog_manager.start(
@@ -82,6 +84,8 @@ async def on_free_text(
             mode=StartMode.RESET_STACK,
             data=draft.to_data(),
         )
+    else:
+        await update.answer_text(NOT_UNDERSTOOD, notify=False)
 
 
 async def _transcribe(
@@ -97,3 +101,6 @@ async def _transcribe(
         in_draft=False,
     )
     await update.answer_text(VOICE_PENDING, notify=False)
+
+
+NOT_UNDERSTOOD = "🤔 Не понял сообщение, вот что я умею"

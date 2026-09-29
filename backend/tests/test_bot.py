@@ -108,6 +108,7 @@ from zheka.bot.handlers.executor.windows import (
     NOT_YOURS_TEXT,
     RESULT_PHOTO_TEXT,
 )
+from zheka.bot.handlers.fallback import NOT_UNDERSTOOD
 from zheka.bot.handlers.forget.handlers import FORGOTTEN_TEXT
 from zheka.bot.handlers.menu.windows import (
     CALL_NOTE_TEXT,
@@ -200,6 +201,7 @@ from zheka.broker.tasks.requests import (
     attach_result_photo,
     send_executor_card,
     send_gji_pdf,
+    send_question_card,
     send_review_card,
 )
 from zheka.core import texts
@@ -290,6 +292,7 @@ from zheka.core.texts import (
     ME_TOO,
     NO_EMERGENCY_PHONE_TEXT,
     OPEN_REQUEST,
+    ORG_PHONE_TEXT,
     REQUEST_PLACE_LINES,
     REQUEST_STATUS_LABELS,
     VOTE,
@@ -5875,7 +5878,11 @@ async def test_the_register_pdf_task_sends_the_register_file_to_the_admin(
 
 
 IN_FLAT_BUTTON = InlineButtonTextLocator(IN_FLAT)
+
+
 IN_HOUSE_BUTTON = InlineButtonTextLocator(IN_HOUSE)
+
+
 LIFT = InlineButtonTextLocator(CATEGORY_RULES[RequestCategory.ELEVATOR].caption)
 
 
@@ -6043,3 +6050,52 @@ async def test_back_from_the_description_returns_to_the_place_asked_for_the_cate
     enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
     assert enqueued["category"] == RequestCategory.HEATING
     assert enqueued["place"] == RequestPlace.FLAT
+
+
+async def test_an_unrecognized_text_with_no_window_open_gets_a_hint_and_the_menu(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    users = UsersRepo(bot_session)
+    user = await users.upsert_by_max_id(MaxUserId(client.user.id), "Житель", None)
+    await users.set_consent(user.id, CONSENT_VERSION)
+    await bot_session.commit()
+    house_id, address = await _bot_house(bot_session, org_id=await _org(bot_session))
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    await client.send("Привет")
+
+    assert notices.texts[-1] == NOT_UNDERSTOOD
+    assert _text(message_manager) == HOUSE_MENU_TEXT.format(address=address)
+
+
+async def test_an_unrecognized_text_in_the_menu_gets_a_hint(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    _, address = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await client.send("/start")
+
+    await client.send("Спасибо")
+
+    assert notices.texts[-1] == NOT_UNDERSTOOD
+    assert _text(message_manager) == HOUSE_MENU_TEXT.format(address=address)
+
+
+async def test_a_text_without_consent_gets_no_hint(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    notices: _RecordingBot,
+) -> None:
+    await client.send("Привет")
+
+    assert NOT_UNDERSTOOD not in notices.texts
+    assert CONSENT_TEXT in _text(message_manager)
