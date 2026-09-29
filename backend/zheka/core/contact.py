@@ -22,7 +22,7 @@ def verify_bridge_contact(
     digits = phone.strip().removeprefix("+")
     signed = f"authDate={auth_date}\nphone={digits}\nuserId={max_user_id}"
     expected = hmac.new(token.encode(), signed.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, signature.strip().lower()):
+    if not hmac.compare_digest(expected.encode(), signature.strip().lower().encode()):
         raise InvalidRequest(BAD_CONTACT)
     if not auth_date.isdecimal():
         raise InvalidRequest(BAD_CONTACT)

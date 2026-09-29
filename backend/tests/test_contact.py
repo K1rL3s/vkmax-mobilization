@@ -72,8 +72,9 @@ def test_a_contact_signed_by_the_bot_token_gives_the_phone(auth_date: str) -> No
             _signed("79991234567", str(int((NOW + timedelta(hours=1)).timestamp()))),
         ),
         ("1790000000", "0" * 64),
+        ("1790000000", "ж" * 64),
     ],
-    ids=["other_user", "other_token", "stale", "future", "forged"],
+    ids=["other_user", "other_token", "stale", "future", "forged", "not_hex"],
 )
 def test_a_contact_not_signed_for_this_user_now_is_refused(
     auth_date: str,
