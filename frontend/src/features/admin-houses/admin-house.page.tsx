@@ -191,7 +191,7 @@ const AdminHousePage = () => {
         <CellSimple
           separator
           before={<Icon src={qrIcon} className={styles.CellIcon} />}
-          title="Подъездные QR-коды"
+          title="QR-коды дома"
           subtitle={
             house.entrances > 0
               ? `${house.entrances} ${plural(house.entrances, ["подъезд", "подъезда", "подъездов"])}, печать на A4`
