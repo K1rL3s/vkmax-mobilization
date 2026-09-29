@@ -1,8 +1,15 @@
+from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from zheka.base import ZhekaType
-from zheka.core.enums import ChatCardKind, EventType, RequestCategory
+from zheka.core.enums import (
+    ChatCardKind,
+    EventType,
+    RequestCategory,
+    RequestCompletionReason,
+    RequestStatus,
+)
 from zheka.core.ids import FlatId, HouseId, RequestGroupId, UserId
 from zheka.core.models import OrgSettings, Request
 from zheka.core.services.events import EventsService
@@ -11,6 +18,11 @@ from zheka.infra.database.repos.requests import RequestsRepo
 
 DEFAULT_GROUP_THRESHOLD = 3
 DEFAULT_GROUP_WINDOW_HOURS = 24
+PRIVATE_CATEGORIES = frozenset(
+    {RequestCategory.METER_ERROR, RequestCategory.CHARGE_DISPUTE},
+)
+RESOLVED_PERIOD = timedelta(days=30)
+RESOLVED_SHOWN = 20
 
 
 class GroupingRules(ZhekaType):
@@ -141,3 +153,82 @@ class GroupingService:
             group_size=sizes.get(group_id, 0),
         )
         self._notifications.sync_chat_card(ChatCardKind.GROUP, group_id, post=True)
+
+
+class OpenProblem(ZhekaType):
+    category: RequestCategory
+    flats_count: int
+    status: RequestStatus
+    since: datetime
+    mine: bool
+
+
+class ResolvedProblem(ZhekaType):
+    category: RequestCategory
+    done_at: datetime
+    confirmed: bool
+
+
+class HouseProblems(ZhekaType):
+    open: Sequence[OpenProblem]
+    resolved: Sequence[ResolvedProblem]
+    resolved_total: int
+
+
+def problems_of(
+    open_requests: Sequence[Request],
+    done_requests: Sequence[Request],
+    user_id: UserId,
+    flat_id: FlatId | None,
+) -> HouseProblems:
+    shown = [
+        request
+        for request in open_requests
+        if request.category not in PRIVATE_CATEGORIES
+    ]
+    problems: dict[tuple[RequestCategory, RequestGroupId | None], list[Request]] = (
+        defaultdict(list)
+    )
+    for request in shown:
+        problems[request.category, request.group_id].append(request)
+    open_groups = {request.group_id for request in shown} - {None}
+    finished: dict[tuple[str, int], list[Request]] = defaultdict(list)
+    for request in done_requests:
+        if request.category in PRIVATE_CATEGORIES or request.group_id in open_groups:
+            continue
+        if request.group_id is None:
+            finished["request", request.id].append(request)
+        else:
+            finished["group", request.group_id].append(request)
+    resolved = [
+        ResolvedProblem(
+            category=members[0].category,
+            done_at=max(filter(None, (member.done_at for member in members))),
+            confirmed=any(
+                member.completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED
+                for member in members
+            ),
+        )
+        for members in finished.values()
+    ]
+    return HouseProblems(
+        open=[
+            OpenProblem(
+                category=category,
+                flats_count=max(len(complaint_sources(members)), 1),
+                status=min(
+                    (member.status for member in members),
+                    key=list(RequestStatus).index,
+                ),
+                since=min(member.created_at for member in members),
+                mine=any(
+                    member.author_user_id == user_id
+                    or (flat_id is not None and member.flat_id == flat_id)
+                    for member in members
+                ),
+            )
+            for (category, _), members in problems.items()
+        ],
+        resolved=resolved[:RESOLVED_SHOWN],
+        resolved_total=len(resolved),
+    )

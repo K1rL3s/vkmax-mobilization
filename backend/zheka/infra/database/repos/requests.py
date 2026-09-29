@@ -16,8 +16,17 @@ from zheka.core.enums import (
     RequestCompletionReason,
     RequestGroupStatus,
     RequestStatus,
+    ResidentStatus,
 )
-from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
+from zheka.core.ids import (
+    API_CHECKER_MAX_USER_ID,
+    FlatId,
+    HouseId,
+    OrgId,
+    RequestGroupId,
+    RequestId,
+    UserId,
+)
 from zheka.core.models.requests import WARN_MAX, WARN_MIN, WARN_SHARE
 from zheka.infra.database.models import (
     House,
@@ -26,6 +35,7 @@ from zheka.infra.database.models import (
     RequestGroup,
     RequestMessage,
     RequestStatusLog,
+    Resident,
 )
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.scopes import scoped_to_org
@@ -36,6 +46,8 @@ from zheka.infra.database.tables.requests import (
     request_status_log_table,
     requests_table,
 )
+from zheka.infra.database.tables.residents import residents_table
+from zheka.infra.database.tables.users import users_table
 
 OPEN_STATUSES = (RequestStatus.NEW, RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS)
 
@@ -578,33 +590,77 @@ class RequestsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return {RequestGroupId(group_id): at for group_id, at in result.tuples()}
 
-    async def stamp_thread(
+    async def list_demo_neighbours(
         self,
-        request: Request,
-        *,
-        question_asked_at: datetime | None,
-        resident_answered_at: datetime | None,
-    ) -> None:
-        request.question_asked_at = question_asked_at
-        request.resident_answered_at = resident_answered_at
-        await self._session.flush()
-
-    async def group_dangers(
-        self,
-        group_ids: Collection[RequestGroupId],
-    ) -> dict[RequestGroupId, DangerKind]:
-        if not group_ids:
-            return {}
-        stmt = (
-            select(requests_table.c.group_id, func.min(requests_table.c.danger))
+        house_id: HouseId,
+        category: RequestCategory,
+        since: datetime,
+        limit: int,
+    ) -> Sequence[Resident]:
+        complained = (
+            select(requests_table.c.id)
             .where(
-                requests_table.c.group_id.in_(group_ids),
-                requests_table.c.danger.is_not(None),
+                or_(
+                    requests_table.c.flat_id == residents_table.c.flat_id,
+                    requests_table.c.author_user_id == residents_table.c.user_id,
+                ),
+                requests_table.c.category == category,
+                requests_table.c.status.in_((*OPEN_STATUSES, RequestStatus.ON_REVIEW)),
+                requests_table.c.created_at >= since,
             )
-            .group_by(requests_table.c.group_id)
+            .exists()
+        )
+        stmt = (
+            select(Resident)
+            .join(users_table, users_table.c.id == residents_table.c.user_id)
+            .where(
+                residents_table.c.house_id == house_id,
+                residents_table.c.flat_id.is_not(None),
+                residents_table.c.status == ResidentStatus.ACTIVE,
+                users_table.c.max_user_id < 0,
+                users_table.c.max_user_id > API_CHECKER_MAX_USER_ID,
+                ~complained,
+            )
+            .distinct(residents_table.c.flat_id)
+            .order_by(residents_table.c.flat_id, residents_table.c.id)
+            .limit(limit)
         )
         result = await self._session.execute(stmt)
-        return {RequestGroupId(group_id): kind for group_id, kind in result.tuples()}
+        return result.scalars().all()
+
+    async def list_open_for_house(self, house_id: HouseId) -> Sequence[Request]:
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.house_id == house_id,
+                requests_table.c.status.in_((*OPEN_STATUSES, RequestStatus.ON_REVIEW)),
+            )
+            .order_by(requests_table.c.created_at)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def list_done_for_house(
+        self,
+        house_id: HouseId,
+        since: datetime,
+    ) -> Sequence[Request]:
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.house_id == house_id,
+                requests_table.c.done_at >= since,
+                requests_table.c.completion_reason.in_(
+                    (
+                        RequestCompletionReason.RESIDENT_ACCEPTED,
+                        RequestCompletionReason.AUTO_CLOSED,
+                    ),
+                ),
+            )
+            .order_by(requests_table.c.done_at.desc())
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
 
 
 def escalation_active(now: datetime, table: FromClause) -> ColumnElement[bool]:

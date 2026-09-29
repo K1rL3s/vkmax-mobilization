@@ -21,7 +21,7 @@ from zheka.api.schemas.requests import (
     ClassifyRequestRequest,
     ClassifyRequestResponse,
     CreateRequestRequest,
-    Pp290Catalog,
+    HouseProblemsResponse,
     RateRequestRequest,
     RepeatRequestRequest,
     RequestCard,
@@ -113,6 +113,19 @@ async def find_similar_requests(
         category,
     )
     return SimilarRequestsResponse.of(similar, works)
+
+
+@router.get("/requests/house-problems", summary="Проблемы дома")
+async def list_house_problems(
+    residency: CurrentResidencyDep,
+    requests_service: FromDishka[RequestsService],
+) -> HouseProblemsResponse:
+    problems = await requests_service.house_problems(
+        residency.user_id,
+        residency.house_id,
+        datetime.now(UTC),
+    )
+    return HouseProblemsResponse.of(problems)
 
 
 @router.post("/requests", summary="Новая заявка")
@@ -311,45 +324,32 @@ async def escalate_request(
     return _card(card, files_service)
 
 
-PP290 = files("zheka.core").joinpath("pp290.json").read_bytes()
-
-
-@router.get(
-    "/pp290",
-    summary="Минимальный перечень работ УК (ПП РФ № 290)",
-    description=(
-        "Пункты перечня с разделами, на них ссылаются категории заявок "
-        "(pp290_refs). Файл отдается как есть, браузер кэширует его на сутки"
-    ),
-    response_model=Pp290Catalog,
-)
-async def get_pp290(current_account: RequireConsentDep) -> Response:  # noqa: ARG001
-    return Response(
-        PP290,
-        media_type="application/json",
-        headers={"Cache-Control": "private, max-age=86400"},
-    )
-
-
 @router.post(
-    "/requests/{request_id}/gji-pdf",
-    summary="Жалоба в ГЖИ файлом в чат с ботом",
+    "/requests/{request_id}/demo/neighbours",
+    summary="Демо: соседи сообщили о том же",
     description=(
-        "Только автор просроченной открытой заявки, чужая - 404. Непросроченная "
-        "или закрытая заявка и автор, которому бот не может написать (нет чата "
-        "с ботом или бот остановлен), - 409. Бот присылает PDF с фактами "
-        "заявки, нормативным сроком, историей статусов и строками для подписей "
-        "соседей; на демо-УК - с пометкой «ДЕМО»"
+        "Только автор открытой заявки без группы в демо-УК, поданной в окне "
+        "склейки, пока в доме есть модельные жители без такой заявки, иначе "
+        "404. До 4 модельных соседей из других квартир подают заявку той же "
+        "категории без уведомлений сотрудникам, и заявка автора собирается с "
+        "ними в коллективную с порогом 2 квартиры. Тестовый токен - 403"
     ),
 )
-async def send_gji_pdf(
+async def add_demo_neighbours(
     request_id: RequestId,
+    current_user: CurrentUserDep,
     current_account: RequireConsentDep,
     requests_service: FromDishka[RequestsService],
-) -> OkResponse:
-    await requests_service.send_gji_pdf(
+    files_service: FromDishka[FilesService],
+) -> RequestCard:
+    if current_user.user.id == API_CHECKER_MAX_USER_ID:
+        raise NotEnoughRights(
+            "Тестовый токен не собирает демо-соседей: "
+            "на его заявках держатся обязательные проверки API",
+        )
+    card = await requests_service.demo_neighbours(
         current_account.user_id,
         request_id,
         datetime.now(UTC),
     )
-    return OkResponse()
+    return _card(card, files_service)

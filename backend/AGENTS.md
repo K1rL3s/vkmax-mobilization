@@ -33,7 +33,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   startup kills the worker (ERROR + traceback, healthcheck red); under polling
   a rejected token is one ERROR line and the API runs without the bot.
 - Worker retries nothing: a MAX send is not idempotent; `MaxSender` swallows
-  MAX errors per recipient.
+  MAX errors per recipient. The one retry: `send_message` and `edit_message`
+  repeat a 429 (MAX refused, nothing sent) once after `RETRY_AFTER_429`
+  (1 s, a guess: maxo's 429 carries no `retry_after`) through the limiters,
+  logged as a warning; a second failure takes the old path.
 - `api/asgi.py` builds the app at import (needs a real env): import
   `app_factory` from `zheka.api.app`. Env names: `POSTGRES_*`, `REDIS_DB`,
   `LOG_LEVEL`.
@@ -86,9 +89,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `API_CHECKER_MAX_USER_ID` (below every seeded id); else `WebAppData` or 401.
   `/demo/activate` gives it only EMPLOYEE of `API_CHECKER_DEMO_NUMBER`, else
   403: the token is public and the jury sits in org 1. Its own requests stop
-  at `ACCEPTED` (`change_request_status`) and it cancels none
-  (`cancel_request`): `DATA-API.yaml` `staff_status` moves the test request
-  there and fails 409 once it is further. Demo org
+  at `ACCEPTED` (`change_request_status`), it cancels none
+  (`cancel_request`) and gathers no demo neighbours (`add_demo_neighbours`: a
+  group would let `change_request_group_status` move it on):
+  `DATA-API.yaml` `staff_status` moves the test request there and fails 409
+  once it is further. Demo org
   `API_CHECKER_DEMO_NUMBER` is the token's alone (`DemoService._org` refuses
   anyone else) and the token activates no org invite: nobody can block its
   resident, move its test request or give it a second membership (staff
@@ -424,11 +429,16 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   a single-answer poll votes by `VotePayload` buttons (chat router,
   `PollsService.vote_in_chat`, `POLL_VOTED.source`), a multi-answer one opens
   the app. The 48-hour chat reminder replies to the card.
-- Announcements, poll reminders and cards in the chat end with their search
-  tag line (`texts` `ANNOUNCEMENT_HASHTAG`, `POLL_HASHTAG`, `CARD_HASHTAG`;
-  the chat welcome lists them); the direct copy of an announcement, the pin
-  list, member greetings and replies have none, and collapsed done or grouped
-  cards drop theirs.
+- The resident's house board (`GET /api/requests/house-problems`,
+  `problems_of` in `request_groups.py`) shows no more than a group card:
+  category, flats by `complaint_sources`, the earliest status, the first
+  moment and `mine` (own request or own verified flat: an unverified one is
+  picked freely and would tell which flat reported what); never flats, names or
+  descriptions, never `meter_error` or `charge_dispute` (one flat's bill),
+  never a `HouseCard` field. An open row is a group or the ungrouped open and
+  on-review requests of one category; a resolved row is a group or a request
+  closed `resident_accepted` or `auto_closed` within 30 days, the latest 20
+  plus the total.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap
   and after each failed chat send. `set_admin` records `CHAT_ADMIN_GRANTED`
   and queues the welcome only on `false -> true`; a failed send without rights
@@ -593,14 +603,24 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `EntityNotFound`; no `consent_at` -> `NotEnoughRights`. A reviewer's flat
   account is random (seeded ones are the zero-padded number), so no other
   reviewer can verify into it.
-- Demo orgs are shared by strangers: block, revoke-verification and
-  displacing a chairman refuse a real user (positive `max_user_id`) other
-  than the actor, a DIRECT announcement reaches only its author, and staff
-  see a phone only if it is their own. Org settings, category executors,
-  reception windows and member removal sit behind `LiveAdminOrgDep` (403
-  `DEMO_LOCKED` in a demo org), and there only its author revokes an invite or
-  finishes planned works.
-  Changing a demo org's setup takes SQL or a reseed.
+- «Демо: соседи сообщили» (`RequestsService.demo_neighbours`): the author of
+  an open ungrouped request in a demo org, filed within the org's grouping
+  window, gets up to `DEMO_NEIGHBOURS` model residents of the house (seeded:
+  `API_CHECKER_MAX_USER_ID < max_user_id < 0`, active, one per flat, no open
+  or on-review request of the category in the window by flat or author)
+  filing the same category through `RequestsRepo.create`: no staff
+  notification, no `REQUEST_CREATED`, deadline stamps set at once so
+  `watch_request_deadlines` reports only the author's request.
+  `GroupingService.attach` then runs with threshold 2 and the org's window;
+  when the request joins an open group instead (a repeat is filed ungrouped),
+  the neighbours join it too, so none is left alone in the inbox. None left
+  or any check failing -> 404
+  and `can_demo_neighbours` false. Every open request of the category in the
+  window joins, other reviewers' too (the first house is shared).
+- Demo orgs are shared by strangers: block and revoke-verification refuse a
+  real user (positive `max_user_id`) other than the actor, a DIRECT
+  announcement reaches only its author, and staff see a phone only if it is
+  their own.
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
   reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed
   on the deploy closest to judging. `scripts/fetch_seed_data.py` rewrites

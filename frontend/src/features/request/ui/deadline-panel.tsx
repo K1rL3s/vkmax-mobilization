@@ -19,6 +19,7 @@ type DeadlineSource = Pick<
   RequestCard,
   | "id"
   | "can_demo_expire"
+  | "can_demo_neighbours"
   | "created_at"
   | "status"
   | "deadline_at"
@@ -76,6 +77,9 @@ export const DeadlinePanel = ({ request }: { request: DeadlineSource }) => {
       </Typography.Text>
       {request.pp290_refs.length > 0 && <Pp290Refs refs={request.pp290_refs} />}
       {request.can_demo_expire && <DemoExpireButton requestId={request.id} />}
+      {request.can_demo_neighbours && (
+        <DemoNeighboursButton requestId={request.id} />
+      )}
     </div>
   );
 };
@@ -114,60 +118,36 @@ const DemoExpireButton = ({ requestId }: { requestId: number }) => {
   );
 };
 
-const Pp290Refs = ({ refs }: { refs: string[] }) => {
-  const [open, setOpen] = useState(false);
-  const query = rqClient.useQuery(
-    "get",
-    "/api/pp290",
-    { params: authParams() },
-    { enabled: open, staleTime: Infinity },
-  );
-  const works = query.data?.items.filter((item) =>
-    refs.some((ref) => item.ref === ref || item.ref.startsWith(`${ref},`)),
+const DemoNeighboursButton = ({ requestId }: { requestId: number }) => {
+  const neighbours = rqClient.useMutation(
+    "post",
+    "/api/requests/{request_id}/demo/neighbours",
+    { onSuccess: refetchRequests },
   );
 
   return (
-    <details
-      className={styles.Works}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <Typography.Text asChild variant="description">
-        <summary className={styles.WorksTitle}>
-          Работы по минимальному перечню: ПП № 290, {refs.join(", ")}
-          <span className={styles.Chevron}>
-            <Chevron />
-          </span>
-        </summary>
-      </Typography.Text>
-      {query.isPending && (
-        <Typography.Text variant="description" color="secondary">
-          Загружаем пункты
-        </Typography.Text>
-      )}
-      {query.error && (
+    <>
+      <Button
+        size="medium"
+        variant="secondary"
+        stretched
+        loading={neighbours.isPending}
+        onClick={() =>
+          neighbours.mutate({
+            params: { ...authParams(), path: { request_id: requestId } },
+          })
+        }
+      >
+        👥 Демо: соседи сообщили
+      </Button>
+      {neighbours.error && (
         <Typography.Text variant="description" className={styles.Failed}>
           {errorMessage(
-            query.error,
-            "Пункты не загрузились. Проверьте связь и откройте ещё раз",
+            neighbours.error,
+            "Соседи не добавились. Проверьте связь и попробуйте ещё раз",
           )}
         </Typography.Text>
       )}
-      {works && (
-        <ul className={styles.WorksList}>
-          {works.map((work) => (
-            <Typography.Text
-              key={work.ref}
-              asChild
-              variant="description"
-              color="secondary"
-            >
-              <li>
-                {work.ref}: {work.text}
-              </li>
-            </Typography.Text>
-          ))}
-        </ul>
-      )}
-    </details>
+    </>
   );
 };

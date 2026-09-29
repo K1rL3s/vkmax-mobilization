@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import re
 import secrets
 from collections.abc import AsyncIterator
@@ -13,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from dishka import AsyncContainer
-from maxo import Router
+from maxo import Bot, Router
 from maxo.dialogs import BgManagerFactory, ShowMode, StartMode
 from maxo.dialogs.api.entities import DEFAULT_STACK_ID, NewMessage
 from maxo.dialogs.context.media_storage import MediaIdStorage
@@ -21,7 +22,12 @@ from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.dialogs.test_tools.keyboard import InlineButtonTextLocator
 from maxo.enums import ChatStatus as MaxChatStatus, ChatType, MessageLinkType
-from maxo.errors import MaxBotForbiddenError, MaxBotNetworkError, MaxBotNotFoundError
+from maxo.errors import (
+    MaxBotForbiddenError,
+    MaxBotNetworkError,
+    MaxBotNotFoundError,
+    MaxBotTooManyRequestsError,
+)
 from maxo.omit import Omittable, Omitted
 from maxo.routing.filters import Command
 from maxo.routing.signals import MaxoUpdate
@@ -5146,145 +5152,51 @@ async def test_a_voice_skips_speechkit_without_keys_or_quota(
     assert _text(message_manager).startswith(VOICE_FAILED)
 
 
-async def test_the_broadcast_marks_every_addressee_in_the_register(
-    client: BotClient,
-    task_broker: InMemoryBroker,
-    bot_session: AsyncSession,
-    fake_bot: FakeBot,
-    notices: _RecordingBot,
+TOO_MANY = MaxBotTooManyRequestsError(code="too.many.requests", error="", message="")
+
+
+def _sender_levels(caplog: pytest.LogCaptureFixture) -> list[int]:
+    return [
+        record.levelno
+        for record in caplog.records
+        if record.name == "zheka.infra.max.sender"
+    ]
+
+
+@pytest.mark.parametrize("second", [None, TOO_MANY])
+async def test_a_card_edit_is_retried_once_after_429(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    second: MaxBotTooManyRequestsError | None,
 ) -> None:
-    house_id = await _staff(bot_session, client)
-    ids = {"author": (await _user(bot_session, client)).id}
-    refused = _max_id()
-    for kind in ("neighbour", "refused", "muted", "stopped"):
-        user = User(
-            max_user_id=refused if kind == "refused" else _max_id(),
-            max_chat_id=MaxChatId(secrets.randbits(40)),
-            name="Сосед",
-            bot_stopped_at=datetime.now(UTC) if kind == "stopped" else None,
-        )
-        bot_session.add(user)
-        await bot_session.flush()
-        ids[kind] = user.id
-    await NotificationsRepo(bot_session).set_level(
-        ids["muted"],
-        NotificationCategory.ANNOUNCEMENTS,
-        NotificationLevel.OFF,
-    )
-    announcement_id = await _announcement(bot_session, house_id, ids["author"])
-    bot_session.add_all(
-        NoticeDelivery(
-            announcement_id=announcement_id,
-            user_id=user_id,
-            house_id=house_id,
-        )
-        for user_id in ids.values()
-    )
-    await bot_session.commit()
+    monkeypatch.setattr("zheka.infra.max.sender.RETRY_AFTER_429", 0)
+    bot = AsyncMock(spec=Bot)
+    bot.edit_message = AsyncMock(side_effect=[TOO_MANY, second])
+    sender = MaxSender(bot, cast(BgManagerFactory, None))
 
-    async def send_message(**kwargs: Any) -> Any:
-        if kwargs["user_id"] == refused:
-            return await _forbidden()
-        return await notices.send_message(**kwargs)
+    with caplog.at_level(logging.WARNING, logger="zheka.infra.max.sender"):
+        done = await sender.edit_message(MaxChatId(-70), "mid-1", "🏢 Карточка", [])
 
-    monkeypatch.setattr(fake_bot, "send_message", send_message)
-    await _run(
-        task_broker,
-        broadcast_to_users,
-        user_ids=list(ids.values()),
-        text="Отключат воду",
-        category=NotificationCategory.ANNOUNCEMENTS.value,
-        mandatory=False,
-        announcement_id=announcement_id,
+    assert done is (second is None)
+    assert bot.edit_message.await_count == 2
+    assert _sender_levels(caplog) == (
+        [logging.WARNING] if second is None else [logging.WARNING, logging.ERROR]
     )
 
-    stmt = select(
-        notice_deliveries_table.c.user_id,
-        notice_deliveries_table.c.status,
-        notice_deliveries_table.c.at,
-    ).where(notice_deliveries_table.c.announcement_id == announcement_id)
-    rows = (await bot_session.execute(stmt)).all()
-    assert {row.user_id: row.status for row in rows} == {
-        ids["author"]: NoticeStatus.DELIVERED,
-        ids["neighbour"]: NoticeStatus.DELIVERED,
-        ids["refused"]: NoticeStatus.FAILED,
-        ids["muted"]: NoticeStatus.MUTED,
-        ids["stopped"]: NoticeStatus.BOT_STOPPED,
-    }
-    assert all(row.at is not None for row in rows)
-    assert await _delivered(bot_session, announcement_id) == (2, None)
 
-
-async def test_the_description_window_warns_about_planned_works_of_the_category(
-    client: BotClient,
-    message_manager: MockMessageManager,
-    bot_session: AsyncSession,
+async def test_a_message_is_retried_once_after_429(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    house_id, _ = await _resident_of_a_connected_house(
-        bot_session,
-        client,
-        message_manager,
-    )
-    house = await HousesRepo(bot_session).get(house_id)
-    assert house is not None
-    assert house.org_id is not None
-    until = datetime.now(UTC) + timedelta(hours=2)
-    warning = WORKS_TEXT.format(works_until=f"{house.local(until):%H:%M %d.%m}")
-    bot_session.add(
-        Announcement(
-            org_id=house.org_id,
-            house_ids=[house_id],
-            text="Опрессовка",
-            channels=["direct"],
-            created_by=(await _user(bot_session, client)).id,
-            works_category=RequestCategory.WATER_SUPPLY,
-            works_from=datetime.now(UTC) - timedelta(hours=1),
-            works_until=until,
-        ),
-    )
-    await bot_session.commit()
-    water = CATEGORY_RULES[RequestCategory.WATER_SUPPLY].caption
+    monkeypatch.setattr("zheka.infra.max.sender.RETRY_AFTER_429", 0)
+    sent = object()
+    bot = AsyncMock(spec=Bot)
+    bot.send_message = AsyncMock(side_effect=[TOO_MANY, sent])
+    sender = MaxSender(bot, cast(BgManagerFactory, None))
 
-    await client.send("/start")
-    await client.click(message_manager.last_message(), NEW_REQUEST)
-    await client.click(message_manager.last_message(), InlineButtonTextLocator(water))
+    with caplog.at_level(logging.WARNING, logger="zheka.infra.max.sender"):
+        result = await sender.send_message("📢 Объявление", chat_id=MaxChatId(-70))
 
-    assert _text(message_manager) == f"{warning}\n\n{DESCRIPTION_TEXT}"
-    await client.click(message_manager.last_message(), BACK_BUTTON)
-    await client.click(message_manager.last_message(), FIRST_CATEGORY)
-    assert _text(message_manager) == DESCRIPTION_TEXT
-
-
-async def test_a_silent_broadcast_never_rings(
-    task_broker: InMemoryBroker,
-    bot_session: AsyncSession,
-    notices: _RecordingBot,
-) -> None:
-    user = User(
-        max_user_id=_max_id(),
-        max_chat_id=MaxChatId(secrets.randbits(40)),
-        name="Сосед",
-    )
-    bot_session.add(user)
-    await bot_session.flush()
-    user_id = user.id
-    await NotificationsRepo(bot_session).set_level(
-        user_id,
-        NotificationCategory.ANNOUNCEMENTS,
-        NotificationLevel.SOUND,
-    )
-    await bot_session.commit()
-
-    for silent in (False, True):
-        await _run(
-            task_broker,
-            broadcast_to_users,
-            user_ids=[user_id],
-            text="✅ Работы завершены: Водоснабжение",
-            category=NotificationCategory.ANNOUNCEMENTS.value,
-            mandatory=False,
-            silent=silent,
-        )
-
-    assert notices.notifies == [True, False]
+    assert result is sent
+    assert bot.send_message.await_count == 2
+    assert _sender_levels(caplog) == [logging.WARNING]

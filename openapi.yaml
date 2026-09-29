@@ -2885,6 +2885,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/house-problems:
+    get:
+      tags:
+      - Заявки
+      summary: Проблемы дома
+      operationId: list_house_problems
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: X-House-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-House-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseProblemsResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/requests/{request_id}:
     get:
       tags:
@@ -3557,80 +3631,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
-  /api/pp290:
-    get:
-      tags:
-      - Заявки
-      summary: Минимальный перечень работ УК (ПП РФ № 290)
-      description: Пункты перечня с разделами, на них ссылаются категории заявок (pp290_refs). Файл отдается как есть, браузер кэширует его на сутки
-      operationId: get_pp290
-      security:
-      - ApiTestToken: []
-      parameters:
-      - name: WebAppData
-        in: header
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Webappdata
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Pp290Catalog'
-        '400':
-          description: Некорректный запрос
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError_BaseError_'
-        '401':
-          description: Требуется авторизация
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError_BaseError_'
-        '403':
-          description: Недостаточно прав
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError_BaseError_'
-        '404':
-          description: Сущность не найдена
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError_BaseError_'
-        '409':
-          description: Конфликт состояния
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError_BaseError_'
-        '500':
-          description: Внутренняя ошибка сервера
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError_BaseError_'
-        default:
-          description: Любая другая ошибка, конверт тот же
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiError_BaseError_'
-  /api/requests/{request_id}/gji-pdf:
+  /api/requests/{request_id}/demo/neighbours:
     post:
       tags:
       - Заявки
-      summary: Жалоба в ГЖИ файлом в чат с ботом
-      description: Только автор просроченной открытой заявки, чужая - 404. Непросроченная или закрытая заявка и автор, которому бот не может написать (нет чата с ботом или бот остановлен), - 409. Бот присылает PDF с фактами заявки, нормативным сроком, историей статусов и строками для подписей соседей; на демо-УК - с пометкой «ДЕМО»
-      operationId: send_gji_pdf
+      summary: 'Демо: соседи сообщили о том же'
+      description: Только автор открытой заявки без группы в демо-УК, поданной в окне склейки, пока в доме есть модельные жители без такой заявки, иначе 404. До 4 модельных соседей из других квартир подают заявку той же категории без уведомлений сотрудникам, и заявка автора собирается с ними в коллективную с порогом 2 квартиры. Тестовый токен - 403
+      operationId: add_demo_neighbours
       security:
       - ApiTestToken: []
       parameters:
@@ -3654,7 +3661,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OkResponse'
+                $ref: '#/components/schemas/RequestCard'
         '400':
           description: Некорректный запрос
           content:
@@ -11982,10 +11989,10 @@ components:
           type: boolean
           title: Can Demo Expire
           description: Автор заявки в демо-УК может перенести ее срок на текущий момент
-        rejection_needs_photo:
+        can_demo_neighbours:
           type: boolean
-          title: Rejection Needs Photo
-          description: Вернуть работу с приемки можно только с фото или видео
+          title: Can Demo Neighbours
+          description: Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
         is_staff_author:
           type: boolean
           title: Is Staff Author
@@ -12036,7 +12043,7 @@ components:
       - can_review
       - can_rate
       - can_demo_expire
-      - rejection_needs_photo
+      - can_demo_neighbours
       - is_staff_author
       title: AdminRequestCard
     AdminRequestListItem:
@@ -14031,6 +14038,30 @@ components:
       required:
       - works
       title: HouseOverhaul
+    HouseProblemsResponse:
+      properties:
+        open:
+          items:
+            $ref: '#/components/schemas/OpenProblemItem'
+          type: array
+          title: Open
+          description: 'Открытые проблемы: группа или заявки без группы одной категории'
+        resolved:
+          items:
+            $ref: '#/components/schemas/ResolvedProblemItem'
+          type: array
+          title: Resolved
+          description: Решенные за 30 дней, последние 20
+        resolved_total:
+          type: integer
+          title: Resolved Total
+          description: Сколько решено за 30 дней всего
+      type: object
+      required:
+      - open
+      - resolved
+      - resolved_total
+      title: HouseProblemsResponse
     HouseResidentItem:
       properties:
         resident_id:
@@ -14647,6 +14678,38 @@ components:
           default: true
       type: object
       title: OkResponse
+    OpenProblemItem:
+      properties:
+        category:
+          $ref: '#/components/schemas/RequestCategory'
+        category_label:
+          type: string
+          title: Category Label
+        flats_count:
+          type: integer
+          title: Flats Count
+          description: Сколько квартир сообщили; заявка без квартиры - по автору
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+          description: Самый ранний статус среди заявок, как в карточке группы в чате
+        since:
+          type: string
+          format: date-time
+          title: Since
+          description: Когда сообщили первыми
+        mine:
+          type: boolean
+          title: Mine
+          description: Среди заявок есть ваша или вашей подтвержденной квартиры
+      type: object
+      required:
+      - category
+      - category_label
+      - flats_count
+      - status
+      - since
+      - mine
+      title: OpenProblemItem
     OrgCard:
       properties:
         id:
@@ -16131,10 +16194,10 @@ components:
           type: boolean
           title: Can Demo Expire
           description: Автор заявки в демо-УК может перенести ее срок на текущий момент
-        rejection_needs_photo:
+        can_demo_neighbours:
           type: boolean
-          title: Rejection Needs Photo
-          description: Вернуть работу с приемки можно только с фото или видео
+          title: Can Demo Neighbours
+          description: Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
       type: object
       required:
       - id
@@ -16157,7 +16220,7 @@ components:
       - can_review
       - can_rate
       - can_demo_expire
-      - rejection_needs_photo
+      - can_demo_neighbours
       title: RequestCard
     RequestCategory:
       type: string
@@ -16523,6 +16586,28 @@ components:
       - active
       - blocked
       title: ResidentStatus
+    ResolvedProblemItem:
+      properties:
+        category:
+          $ref: '#/components/schemas/RequestCategory'
+        category_label:
+          type: string
+          title: Category Label
+        done_at:
+          type: string
+          format: date-time
+          title: Done At
+        confirmed:
+          type: boolean
+          title: Confirmed
+          description: Житель принял работу; иначе заявка закрылась автоматически
+      type: object
+      required:
+      - category
+      - category_label
+      - done_at
+      - confirmed
+      title: ResolvedProblemItem
     ResponsibilityZone:
       type: string
       enum:

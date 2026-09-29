@@ -16,7 +16,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, Row, String, cast, func, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
-from tests.conftest import alembic_config, make_config
+from tests.conftest import alembic_config, make_config, requests_service
 from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
 
@@ -44,6 +44,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.houses import PUBLIC_STATS_MIN_CLOSED, PUBLIC_STATS_PERIOD
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService, current_period
+from zheka.core.services.requests import DEMO_NEIGHBOURS, RequestDraft
 from zheka.infra.database.models import Charge, User
 from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
@@ -707,63 +708,28 @@ def _map_state(rows: Sequence[Row[Any]], now: datetime) -> str:
     return "calm"
 
 
-async def test_a_demo_flat_sits_in_the_first_entrance(db: AsyncSession) -> None:
-    _, residency = await _demo(db).settle(await _checker(db), len(PROFILES))
-
-    assert residency.flat is not None
-    assert residency.flat.entrance == 1
-
-
-async def test_every_seeded_announcement_has_a_register_matching_its_counts(
+async def test_a_reviewer_gathers_model_neighbours_in_the_demo_house(
     db: AsyncSession,
 ) -> None:
-    deliveries = notice_deliveries_table.c
-    stmt = (
-        select(
-            announcements_table.c.org_id,
-            announcements_table.c.recipients_count,
-            announcements_table.c.delivered_direct,
-            func.count(deliveries.user_id),
-            func.count().filter(deliveries.status == NoticeStatus.DELIVERED),
-            func.array_agg(func.distinct(cast(deliveries.status, String))),
-        )
-        .join(
-            notice_deliveries_table,
-            deliveries.announcement_id == announcements_table.c.id,
-        )
-        .group_by(announcements_table.c.id)
+    user_id = await _positive_user(db)
+    _org, residency = await _demo(db).settle(user_id, 1)
+    service = requests_service(db)
+    card = await service.create(
+        user_id,
+        residency.house.id,
+        RequestDraft(
+            category=RequestCategory.ELEVATOR,
+            description="Лифт стоит",
+            flat_id=residency.resident.flat_id,
+        ),
     )
-    rows = (await db.execute(stmt)).tuples().all()
-    announcements = select(func.count()).select_from(announcements_table)
+    assert card.request.group_id is None
+    assert card.can_demo_neighbours
 
-    assert len(rows) == (await db.execute(announcements)).scalar_one()
-    assert all(
-        (recipients, direct) == (total, delivered)
-        for _org, recipients, direct, total, delivered, _statuses in rows
-    )
-    demo = await _demo_org(db)
-    assert any(
-        set(statuses) == set(NoticeStatus) - {NoticeStatus.PENDING}
-        for org_id, *_counts, statuses in rows
-        if org_id == demo
+    grouped = await service.demo_neighbours(
+        user_id,
+        card.request.id,
+        datetime.now(UTC),
     )
 
-
-async def test_the_first_house_of_every_demo_org_has_water_works_under_way(
-    db: AsyncSession,
-) -> None:
-    for profile in (*PROFILES, *BACKGROUND_PROFILES):
-        org = await OrgsRepo(db).get_by_inn(profile.inn)
-        assert org is not None
-        [first, *_others] = await HousesRepo(db).list_for_org(org.id)
-        stmt = select(announcements_table).where(
-            announcements_table.c.org_id == org.id,
-            announcements_table.c.works_until.is_not(None),
-        )
-        [works] = (await db.execute(stmt)).all()
-        assert works.house_ids == [first.id]
-        assert works.works_category is RequestCategory.WATER_SUPPLY
-        assert works.documents == [{"name": WORKS_ORDER, "title": WORKS_ORDER_TITLE}]
-        for hours in MAP_HOURS:
-            assert works.works_from <= NOW + timedelta(hours=hours) < works.works_until
-    assert (FILES / WORKS_ORDER).read_bytes().startswith(b"%PDF-")
+    assert grouped.group_size >= 1 + DEMO_NEIGHBOURS

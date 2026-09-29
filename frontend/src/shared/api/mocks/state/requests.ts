@@ -466,9 +466,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     auto_close_at:
       item.status === "on_review" ? shift(timeline[3].at, 48 * 60) : null,
     can_demo_expire: canDemoExpire(item),
-    rejection_needs_photo: !["meter_error", "charge_dispute"].includes(
-      item.category,
-    ),
+    can_demo_neighbours: canDemoNeighbours(item),
   };
 };
 
@@ -594,3 +592,49 @@ export const canDemoExpire = (item: MockRequest) =>
   ["new", "accepted", "in_progress"].includes(item.status) &&
   item.deadline_at !== null &&
   new Date(item.deadline_at).getTime() > Date.now();
+
+export const canDemoNeighbours = (item: MockRequest) =>
+  Boolean(findHouse(item.house_id)?.org?.is_demo) &&
+  ["new", "accepted", "in_progress"].includes(item.status) &&
+  item.group_id === null;
+
+export const houseProblems = (
+  houseId: number,
+): Schemas["HouseProblemsResponse"] => {
+  const shown = houseRequests(houseId, null).filter(
+    (item) => !["meter_error", "charge_dispute"].includes(item.category),
+  );
+  const resolved = shown
+    .filter((item) => item.status === "done")
+    .map((item) => ({
+      category: item.category,
+      category_label: CATEGORY_RULES[item.category].label,
+      done_at: item.created_at,
+      confirmed: item.completion_reason === "resident_accepted",
+    }));
+
+  return {
+    open: [
+      {
+        category: "heating",
+        category_label: CATEGORY_RULES.heating.label,
+        flats_count: 3,
+        status: "accepted",
+        since: days(-1),
+        mine: false,
+      },
+      ...shown
+        .filter((item) => item.status !== "done")
+        .map((item) => ({
+          category: item.category,
+          category_label: CATEGORY_RULES[item.category].label,
+          flats_count: item.group_size,
+          status: item.status,
+          since: item.created_at,
+          mine: true,
+        })),
+    ],
+    resolved,
+    resolved_total: resolved.length,
+  };
+};

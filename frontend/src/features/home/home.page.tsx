@@ -12,6 +12,7 @@ import { generatePath, Link, useNavigate } from "react-router-dom";
 import { EmergencyCard } from "@/features/emergency";
 import { residencyState } from "@/features/flat-confirmation";
 import { HouseSummary, OutagesPanel, useHouseCard } from "@/features/house";
+import { useHouseProblems } from "@/features/house-problems";
 import { useNextPoll } from "@/features/meetings";
 import {
   announcementWhen,
@@ -41,6 +42,7 @@ import {
   meterIcon,
   phoneIcon,
   pollIcon,
+  usersIcon,
 } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
@@ -248,6 +250,7 @@ const HomePage = () => {
   const { currentResidency: residency } = useSession();
   const request = useActiveRequest();
   const openPeriod = useOpenReadingPeriod();
+  const problems = useHouseProblems().data;
 
   const card = useHouseCard(residency?.house_id);
 
@@ -328,7 +331,7 @@ const HomePage = () => {
         />
       )}
 
-      {connected && (request || openPeriod || poll) && (
+      {connected && (request || openPeriod || poll || problems) && (
         <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
@@ -390,6 +393,30 @@ const HomePage = () => {
                     >
                       Голосовать
                     </Link>
+                  </Button>
+                </Card>
+              </Flex>
+            )}
+
+            {problems && (
+              <Flex asChild align="center" gap={12}>
+                <Card>
+                  <IconTile icon={usersIcon} tone="themed" />
+                  <Flex
+                    className={styles.Grow}
+                    align="stretch"
+                    direction="column"
+                    gapY={2}
+                  >
+                    <Typography.Text variant="body-strong" color="primary">
+                      Проблемы дома
+                    </Typography.Text>
+                    <Typography.Text variant="description" color="secondary">
+                      Открыто: {problems.open.length} · что сообщили соседи
+                    </Typography.Text>
+                  </Flex>
+                  <Button asChild size="small" variant="secondary">
+                    <Link to={Routes.HOUSE_PROBLEMS}>Смотреть</Link>
                   </Button>
                 </Card>
               </Flex>

@@ -1,0 +1,67 @@
+.Page {
+  flex: 1;
+  gap: 20px;
+  padding: 16px 16px 24px;
+
+  h2 {
+    margin: 0;
+  }
+
+  .Grow {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .Mine {
+    color: var(--text-themed);
+  }
+
+  .Resolved {
+    overflow: hidden;
+    padding-bottom: 6px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+  }
+
+  .Resolved:not([open]) {
+    padding-bottom: 0;
+  }
+
+  .Summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    list-style: none;
+    cursor: pointer;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:focus-visible {
+      border-radius: 16px;
+      outline: 2px solid var(--button-primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .Chevron {
+    display: flex;
+    transform: rotate(90deg);
+    transition: transform 0.2s;
+  }
+
+  .Resolved[open] .Chevron {
+    transform: rotate(-90deg);
+  }
+
+  .Row {
+    padding: 6px 16px;
+  }
+
+  .Note {
+    margin: 0;
+    padding: 6px 16px 8px;
+  }
+}

@@ -1,8 +1,9 @@
+import asyncio
 import logging
-from collections.abc import Iterator, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
 from maxo import Bot
@@ -13,6 +14,7 @@ from maxo.errors import (
     MaxBotForbiddenError,
     MaxBotNetworkError,
     MaxBotNotFoundError,
+    MaxBotTooManyRequestsError,
 )
 from maxo.fsm import State
 from maxo.omit import Omitted, is_defined
@@ -32,6 +34,7 @@ from zheka.infra.max.rate_limiter import RateLimiter
 logger = logging.getLogger(__name__)
 
 BOT_RATE_LIMIT = RateLimiter(max_calls=30)
+RETRY_AFTER_429 = 1.0
 
 dialog_notify: ContextVar[bool] = ContextVar("dialog_notify", default=False)
 
@@ -85,13 +88,17 @@ class MaxSender:
         result: SendMessageResult | None = None
         with _undelivered():
             async with BOT_RATE_LIMIT, _chat_rate_limit(recipient):
-                result = await self._bot.send_message(
-                    text=text,
-                    chat_id=Omitted() if chat_id is None else chat_id,
-                    user_id=Omitted() if user_id is None else user_id,
-                    notify=notify,
-                    attachments=attachments,
-                    link=link,
+                result = await _once_more_on_429(
+                    recipient,
+                    partial(
+                        self._bot.send_message,
+                        text=text,
+                        chat_id=Omitted() if chat_id is None else chat_id,
+                        user_id=Omitted() if user_id is None else user_id,
+                        notify=notify,
+                        attachments=attachments,
+                        link=link,
+                    ),
                 )
         return result
 
@@ -153,11 +160,15 @@ class MaxSender:
         done = False
         with _undelivered():
             async with BOT_RATE_LIMIT, _chat_rate_limit(chat_id):
-                await self._bot.edit_message(
-                    message_id=mid,
-                    text=text,
-                    attachments=keyboard_attachments(keyboard) if keyboard else [],
-                    notify=False,
+                await _once_more_on_429(
+                    chat_id,
+                    partial(
+                        self._bot.edit_message,
+                        message_id=mid,
+                        text=text,
+                        attachments=keyboard_attachments(keyboard) if keyboard else [],
+                        notify=False,
+                    ),
                 )
                 done = True
         return done
@@ -221,3 +232,16 @@ def keyboard_attachments(
     keyboard: Sequence[Sequence[InlineButtons]],
 ) -> list[AttachmentsRequests | Attachments]:
     return [InlineKeyboardAttachmentRequest.factory([list(row) for row in keyboard])]
+
+
+async def _once_more_on_429[T](
+    recipient: int,
+    call: Callable[[], Awaitable[T]],
+) -> T:
+    try:
+        return await call()
+    except MaxBotTooManyRequestsError as error:
+        logger.warning("MAX просит сбавить темп, повторяю через секунду: %s", error)
+    await asyncio.sleep(RETRY_AFTER_429)
+    async with BOT_RATE_LIMIT, _chat_rate_limit(recipient):
+        return await call()

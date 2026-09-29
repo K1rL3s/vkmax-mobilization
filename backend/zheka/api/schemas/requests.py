@@ -34,8 +34,12 @@ from zheka.core.services.admin_requests import (
     ExecutorView,
     RequestGroupCardData,
 )
-from zheka.core.services.announcements import ActiveWorks
-from zheka.core.services.request_groups import SimilarRequests
+from zheka.core.services.request_groups import (
+    HouseProblems,
+    OpenProblem,
+    ResolvedProblem,
+    SimilarRequests,
+)
 from zheka.core.services.requests import (
     MAX_RATING,
     MIN_RATING,
@@ -201,8 +205,11 @@ class RequestCard(RequestListItem):
     can_demo_expire: bool = Field(
         description="Автор заявки в демо-УК может перенести ее срок на текущий момент",
     )
-    rejection_needs_photo: bool = Field(
-        description="Вернуть работу с приемки можно только с фото или видео",
+    can_demo_neighbours: bool = Field(
+        description=(
+            "Автор открытой заявки в демо-УК может добавить к ней модельных "
+            "соседей и собрать коллективную заявку"
+        ),
     )
 
     @classmethod
@@ -245,7 +252,7 @@ class RequestCard(RequestListItem):
             flat_id=request.flat_id,
             auto_close_at=card.auto_close_at,
             can_demo_expire=card.can_demo_expire,
-            rejection_needs_photo=rule.rejection_needs_photo,
+            can_demo_neighbours=card.can_demo_neighbours,
         )
 
 
@@ -473,15 +480,63 @@ class ClassifyRequestResponse(BaseSchema):
         )
 
 
-class Pp290Item(BaseSchema):
-    ref: str = Field(description="Пункт и абзац, например «п. 22, абз. 2»")
-    section: str = Field(description="Заголовок пункта")
-    text: str
+class OpenProblemItem(BaseSchema):
+    category: RequestCategory
+    category_label: str
+    flats_count: int = Field(
+        description="Сколько квартир сообщили; заявка без квартиры - по автору",
+    )
+    status: RequestStatus = Field(
+        description="Самый ранний статус среди заявок, как в карточке группы в чате",
+    )
+    since: datetime = Field(description="Когда сообщили первыми")
+    mine: bool = Field(
+        description="Среди заявок есть ваша или вашей подтвержденной квартиры",
+    )
+
+    @classmethod
+    def of(cls, problem: OpenProblem) -> Self:
+        return cls(
+            category=problem.category,
+            category_label=CATEGORY_RULES[problem.category].label,
+            flats_count=problem.flats_count,
+            status=problem.status,
+            since=problem.since,
+            mine=problem.mine,
+        )
 
 
-class Pp290Catalog(BaseSchema):
-    source: str
-    edition: str = Field(description="Редакция постановления")
-    checked_at: date = Field(description="Когда пункты сверены с текстом")
-    note: str = Field(description="Как собран перечень и что из него исключено")
-    items: list[Pp290Item]
+class ResolvedProblemItem(BaseSchema):
+    category: RequestCategory
+    category_label: str
+    done_at: datetime
+    confirmed: bool = Field(
+        description="Житель принял работу; иначе заявка закрылась автоматически",
+    )
+
+    @classmethod
+    def of(cls, problem: ResolvedProblem) -> Self:
+        return cls(
+            category=problem.category,
+            category_label=CATEGORY_RULES[problem.category].label,
+            done_at=problem.done_at,
+            confirmed=problem.confirmed,
+        )
+
+
+class HouseProblemsResponse(BaseSchema):
+    open: list[OpenProblemItem] = Field(
+        description="Открытые проблемы: группа или заявки без группы одной категории",
+    )
+    resolved: list[ResolvedProblemItem] = Field(
+        description="Решенные за 30 дней, последние 20",
+    )
+    resolved_total: int = Field(description="Сколько решено за 30 дней всего")
+
+    @classmethod
+    def of(cls, problems: HouseProblems) -> Self:
+        return cls(
+            open=[OpenProblemItem.of(problem) for problem in problems.open],
+            resolved=[ResolvedProblemItem.of(problem) for problem in problems.resolved],
+            resolved_total=problems.resolved_total,
+        )

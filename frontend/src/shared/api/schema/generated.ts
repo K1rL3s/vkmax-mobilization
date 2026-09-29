@@ -491,6 +491,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/house-problems": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Проблемы дома */
+    get: operations["list_house_problems"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/requests/{request_id}": {
     parameters: {
       query?: never;
@@ -653,27 +670,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/pp290": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Минимальный перечень работ УК (ПП РФ № 290)
-     * @description Пункты перечня с разделами, на них ссылаются категории заявок (pp290_refs). Файл отдается как есть, браузер кэширует его на сутки
-     */
-    get: operations["get_pp290"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/requests/{request_id}/gji-pdf": {
+  "/api/requests/{request_id}/demo/neighbours": {
     parameters: {
       query?: never;
       header?: never;
@@ -683,10 +680,10 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Жалоба в ГЖИ файлом в чат с ботом
-     * @description Только автор просроченной открытой заявки, чужая - 404. Непросроченная или закрытая заявка и автор, которому бот не может написать (нет чата с ботом или бот остановлен), - 409. Бот присылает PDF с фактами заявки, нормативным сроком, историей статусов и строками для подписей соседей; на демо-УК - с пометкой «ДЕМО»
+     * Демо: соседи сообщили о том же
+     * @description Только автор открытой заявки без группы в демо-УК, поданной в окне склейки, пока в доме есть модельные жители без такой заявки, иначе 404. До 4 модельных соседей из других квартир подают заявку той же категории без уведомлений сотрудникам, и заявка автора собирается с ними в коллективную с порогом 2 квартиры. Тестовый токен - 403
      */
-    post: operations["send_gji_pdf"];
+    post: operations["add_demo_neighbours"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2559,10 +2556,10 @@ export interface components {
        */
       can_demo_expire: boolean;
       /**
-       * Rejection Needs Photo
-       * @description Вернуть работу с приемки можно только с фото или видео
+       * Can Demo Neighbours
+       * @description Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
        */
-      rejection_needs_photo: boolean;
+      can_demo_neighbours: boolean;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -3757,6 +3754,24 @@ export interface components {
       /** Works */
       works: components["schemas"]["OverhaulWork"][];
     };
+    /** HouseProblemsResponse */
+    HouseProblemsResponse: {
+      /**
+       * Open
+       * @description Открытые проблемы: группа или заявки без группы одной категории
+       */
+      open: components["schemas"]["OpenProblemItem"][];
+      /**
+       * Resolved
+       * @description Решенные за 30 дней, последние 20
+       */
+      resolved: components["schemas"]["ResolvedProblemItem"][];
+      /**
+       * Resolved Total
+       * @description Сколько решено за 30 дней всего
+       */
+      resolved_total: number;
+    };
     /** HouseResidentItem */
     HouseResidentItem: {
       /** Resident Id */
@@ -4108,6 +4123,30 @@ export interface components {
        * @default true
        */
       ok: boolean;
+    };
+    /** OpenProblemItem */
+    OpenProblemItem: {
+      category: components["schemas"]["RequestCategory"];
+      /** Category Label */
+      category_label: string;
+      /**
+       * Flats Count
+       * @description Сколько квартир сообщили; заявка без квартиры - по автору
+       */
+      flats_count: number;
+      /** @description Самый ранний статус среди заявок, как в карточке группы в чате */
+      status: components["schemas"]["RequestStatus"];
+      /**
+       * Since
+       * Format: date-time
+       * @description Когда сообщили первыми
+       */
+      since: string;
+      /**
+       * Mine
+       * @description Среди заявок есть ваша или вашей подтвержденной квартиры
+       */
+      mine: boolean;
     };
     /** OrgCard */
     OrgCard: {
@@ -5032,10 +5071,10 @@ export interface components {
        */
       can_demo_expire: boolean;
       /**
-       * Rejection Needs Photo
-       * @description Вернуть работу с приемки можно только с фото или видео
+       * Can Demo Neighbours
+       * @description Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
        */
-      rejection_needs_photo: boolean;
+      can_demo_neighbours: boolean;
     };
     /**
      * RequestCategory
@@ -5264,6 +5303,22 @@ export interface components {
      * @enum {string}
      */
     ResidentStatus: "active" | "blocked";
+    /** ResolvedProblemItem */
+    ResolvedProblemItem: {
+      category: components["schemas"]["RequestCategory"];
+      /** Category Label */
+      category_label: string;
+      /**
+       * Done At
+       * Format: date-time
+       */
+      done_at: string;
+      /**
+       * Confirmed
+       * @description Житель принял работу; иначе заявка закрылась автоматически
+       */
+      confirmed: boolean;
+    };
     /**
      * ResponsibilityZone
      * @enum {string}
@@ -8755,6 +8810,92 @@ export interface operations {
       };
     };
   };
+  list_house_problems: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-House-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HouseProblemsResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
   get_request: {
     parameters: {
       query?: never;
@@ -9549,92 +9690,7 @@ export interface operations {
       };
     };
   };
-  get_pp290: {
-    parameters: {
-      query?: never;
-      header?: {
-        WebAppData?: string | null;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Pp290Catalog"];
-        };
-      };
-      /** @description Некорректный запрос */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApiError_BaseError_"];
-        };
-      };
-      /** @description Требуется авторизация */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApiError_BaseError_"];
-        };
-      };
-      /** @description Недостаточно прав */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApiError_BaseError_"];
-        };
-      };
-      /** @description Сущность не найдена */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApiError_BaseError_"];
-        };
-      };
-      /** @description Конфликт состояния */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApiError_BaseError_"];
-        };
-      };
-      /** @description Внутренняя ошибка сервера */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApiError_BaseError_"];
-        };
-      };
-      /** @description Любая другая ошибка, конверт тот же */
-      default: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApiError_BaseError_"];
-        };
-      };
-    };
-  };
-  send_gji_pdf: {
+  add_demo_neighbours: {
     parameters: {
       query?: never;
       header?: {
@@ -9653,7 +9709,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["OkResponse"];
+          "application/json": components["schemas"]["RequestCard"];
         };
       };
       /** @description Некорректный запрос */

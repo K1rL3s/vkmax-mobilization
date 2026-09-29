@@ -6,7 +6,6 @@ from zheka.core import texts
 from zheka.core.deeplinks import admin_request_app_path, request_app_path
 from zheka.core.enums import (
     CATEGORY_RULES,
-    CancelReason,
     ChatCardKind,
     EventType,
     NotificationCategory,
@@ -49,9 +48,12 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.houses import NOT_CONNECTED, is_connected
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
+    RESOLVED_PERIOD,
     GroupingRules,
     GroupingService,
+    HouseProblems,
     SimilarRequests,
+    problems_of,
     rules_of,
 )
 from zheka.infra.database.repos.chats import ChatsRepo
@@ -68,6 +70,8 @@ TOO_MANY_VIDEOS = "Можно приложить не больше 2 видео"
 AUTO_CLOSE_AFTER = timedelta(hours=48)
 MIN_RATING = 1
 MAX_RATING = 5
+DEMO_NEIGHBOURS = 4
+DEMO_GROUP_THRESHOLD = 2
 
 BLOCKED = "Вы заблокированы в этом доме"
 GROUP_CLOSED = "Группа заявок уже закрыта"
@@ -84,7 +88,6 @@ SHARE_FINISHED = "Заявку на приемке или закрытую со�
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
-GJI_NOT_OVERDUE = "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек"
 NEIGHBOUR_DESCRIPTION = "Та же проблема: {}"
 
 
@@ -126,6 +129,7 @@ class RequestCardData(ZhekaType):
     can_rate: bool
     auto_close_at: datetime | None
     can_demo_expire: bool
+    can_demo_neighbours: bool
 
 
 class SharedRequest(ZhekaType):
@@ -735,25 +739,70 @@ class RequestsService:
         )
         return await self._built_card(request, house)
 
-    async def send_gji_pdf(
+    async def demo_neighbours(
         self,
         user_id: UserId,
         request_id: RequestId,
         now: datetime,
-    ) -> None:
+    ) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
-        if request.status not in OPEN_STATUSES or request.deadline_at > now:
-            raise InvalidState(GJI_NOT_OVERDUE)
-        user = await self._users.get_by_id(user_id)
-        if user is None or not user.in_dialog:
-            raise InvalidState(NO_BOT_DIALOG)
-        await self._events.record(
-            EventType.REQUEST_EXPORTED,
-            user_id=user_id,
-            request_id=request_id,
-            format="gji_pdf",
+        await self._requests.lock(request)
+        house = await self._get_house(request.house_id)
+        org = None if house.org_id is None else await self._orgs.get(house.org_id)
+        neighbours = await available_neighbours(
+            self._requests,
+            self._orgs,
+            request,
+            org,
+            now,
         )
-        self._notifications.send_gji_pdf(user_id, request_id)
+        if not neighbours:
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        description = NEIGHBOUR_DESCRIPTION.format(
+            CATEGORY_RULES[request.category].label.lower(),
+        )
+        created = []
+        for resident in neighbours:
+            neighbour = await self._requests.create(
+                house,
+                resident.flat_id,
+                resident.user_id,
+                request.category,
+                description,
+                RequestChannel.MINIAPP,
+                None,
+                None,
+                is_staff_author=False,
+            )
+            await self._open(neighbour, resident.user_id)
+            await self._requests.mark_deadline(neighbour, now, overdue=True)
+            created.append(neighbour)
+        rules = await self._rules(house)
+        await self._grouping.attach(
+            request,
+            GroupingRules(
+                threshold=DEMO_GROUP_THRESHOLD,
+                window_hours=rules.window_hours,
+            ),
+            now,
+        )
+        if request.group_id is not None:
+            await self._requests.attach_to_group(created, request.group_id)
+        return await self._built_card(request, house)
+
+    async def house_problems(
+        self,
+        user_id: UserId,
+        house_id: HouseId,
+        now: datetime,
+    ) -> HouseProblems:
+        resident = await self._active_resident(user_id, house_id)
+        return problems_of(
+            await self._requests.list_open_for_house(house_id),
+            await self._requests.list_done_for_house(house_id, now - RESOLVED_PERIOD),
+            user_id,
+            None if resident.verified_at is None else resident.flat_id,
+        )
 
 
 async def build_rows(
@@ -871,6 +920,16 @@ async def build_card(
             else None
         ),
         can_demo_expire=authored and demo_expirable(request, org, datetime.now(UTC)),
+        can_demo_neighbours=authored
+        and bool(
+            await available_neighbours(
+                requests_repo,
+                orgs_repo,
+                request,
+                org,
+                datetime.now(UTC),
+            ),
+        ),
     )
 
 
@@ -891,4 +950,30 @@ def demo_expirable(
         and org.is_demo
         and request.status in OPEN_STATUSES
         and request.deadline_at > now
+    )
+
+
+async def available_neighbours(
+    requests_repo: RequestsRepo,
+    orgs_repo: OrgsRepo,
+    request: Request,
+    org: Organization | None,
+    now: datetime,
+) -> Sequence[Resident]:
+    if (
+        org is None
+        or not org.is_demo
+        or request.status not in OPEN_STATUSES
+        or request.group_id is not None
+    ):
+        return []
+    rules = rules_of(await orgs_repo.get_settings(org.id))
+    since = now - timedelta(hours=rules.window_hours)
+    if request.created_at < since:
+        return []
+    return await requests_repo.list_demo_neighbours(
+        request.house_id,
+        request.category,
+        since,
+        DEMO_NEIGHBOURS,
     )

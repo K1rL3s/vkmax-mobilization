@@ -140,6 +140,11 @@ const router = createBrowserRouter([
                 path: Routes.EMERGENCY,
                 lazy: () => import("@/features/emergency/emergency.page"),
               },
+              {
+                path: Routes.HOUSE_PROBLEMS,
+                lazy: () =>
+                  import("@/features/house-problems/house-problems.page"),
+              },
             ],
           },
           {

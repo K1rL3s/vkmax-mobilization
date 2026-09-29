@@ -122,7 +122,7 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     parent_request_id: null,
     auto_close_at: null,
     can_demo_expire: false,
-    rejection_needs_photo: true,
+    can_demo_neighbours: false,
     ...fields,
   };
 };

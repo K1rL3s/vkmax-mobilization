@@ -13,8 +13,10 @@ import {
 } from "./reply";
 import {
   canDemoExpire,
+  canDemoNeighbours,
   createRequest,
   findRequest,
+  houseProblems,
   houseRequests,
   minutes,
   nextFileName,
@@ -108,6 +110,13 @@ export const requestsConfigs = [
     return houseId === null || !category
       ? badRequest("Укажите дом и категорию")
       : ok(similarRequests(houseId, category));
+  }),
+  endpoint("get", "/requests/house-problems", (request) => {
+    const houseId = houseOf(request);
+
+    return houseId === null
+      ? forbidden("Укажите X-House-Id")
+      : ok(houseProblems(houseId));
   }),
   endpoint("get", "/requests/:request_id", (request) => {
     const item = findRequest(Number(request.params.request_id));
@@ -290,59 +299,16 @@ export const requestsConfigs = [
 
     return ok({ name, url, is_video } satisfies Schemas["FileRef"]);
   }),
-  endpoint("get", "/pp290", () => {
-    const lift =
-      "Работы, выполняемые в целях надлежащего содержания и ремонта лифта (лифтов) в многоквартирном доме";
-    const emergency =
-      "Обеспечение устранения аварий в соответствии с установленными предельными сроками на внутридомовых инженерных системах в многоквартирном доме, выполнения заявок населения";
-
-    return ok({
-      source: "pp_290",
-      edition: "в ред. постановления Правительства РФ от 07.03.2025 № 293",
-      checked_at: "2026-09-29",
-      note: "Мок: два пункта из backend/zheka/core/pp290.json",
-      items: [
-        {
-          ref: "п. 22, абз. 2",
-          section: lift,
-          text: "организация системы диспетчерского контроля и обеспечение диспетчерской связи с кабиной лифта",
-        },
-        {
-          ref: "п. 22, абз. 3",
-          section: lift,
-          text: "обеспечение проведения осмотров, технического обслуживания и ремонт лифта (лифтов)",
-        },
-        {
-          ref: "п. 22, абз. 4",
-          section: lift,
-          text: "обеспечение проведения аварийного обслуживания лифта (лифтов)",
-        },
-        {
-          ref: "п. 22, абз. 5",
-          section: lift,
-          text: "обеспечение проведения технического освидетельствования лифта (лифтов), в том числе после замены элементов оборудования",
-        },
-        { ref: "п. 28", section: emergency, text: emergency },
-      ],
-    } satisfies Schemas["Pp290Catalog"]);
-  }),
-  endpoint("post", "/requests/:request_id/gji-pdf", (request) => {
+  endpoint("post", "/requests/:request_id/demo/neighbours", (request) => {
     const item = findRequest(Number(request.params.request_id));
 
-    if (!item) {
+    if (!item || !canDemoNeighbours(item)) {
       return notFound("Заявка не найдена");
     }
 
-    if (
-      !["new", "accepted", "in_progress"].includes(item.status) ||
-      item.deadline_at === null ||
-      new Date(item.deadline_at).getTime() > Date.now()
-    ) {
-      return conflict(
-        "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек",
-      );
-    }
+    item.group_id = item.id;
+    item.group_size = 5;
 
-    return ok({ ok: true } satisfies Schemas["OkResponse"]);
+    return ok(requestCard(item));
   }),
 ];

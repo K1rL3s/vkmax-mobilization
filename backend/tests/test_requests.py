@@ -13,6 +13,7 @@ from tests.conftest import (
     OrgHouseFlatUser,
     RecordingBroker,
     StubClassifier,
+    add_resident,
     add_user,
     admin_requests_service,
     events_of,
@@ -34,8 +35,10 @@ from zheka.api.schemas.requests import (
     CancelRequestRequest,
     ClassifyRequestRequest,
     CreateRequestRequest,
-    Pp290Catalog,
+    HouseProblemsResponse,
+    OpenProblemItem,
     RequestCard,
+    ResolvedProblemItem,
 )
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
@@ -1113,29 +1116,196 @@ async def test_request_accepts_two_videos_but_refuses_a_third_on_create_and_repe
         await service.repeat(own.user_id, card.request.id, "Снова течёт", videos)
 
 
-def test_the_management_company_answers_for_every_category() -> None:
-    zones = {category: rule.zone for category, rule in CATEGORY_RULES.items()}
-
-    assert zones == dict.fromkeys(RequestCategory, ResponsibilityZone.MANAGEMENT)
-
-
-def test_every_pp290_ref_of_a_category_names_a_point_of_the_catalog() -> None:
-    catalog = Pp290Catalog.model_validate_json(PP290)
-    points = {item.ref.split(",")[0] for item in catalog.items}
-    refs = {category: rule.pp290_refs for category, rule in CATEGORY_RULES.items()}
-
-    assert {ref for rule_refs in refs.values() for ref in rule_refs} <= points
-    assert refs[RequestCategory.ELEVATOR] == ("п. 22", "п. 28")
-    assert refs[RequestCategory.METER_ERROR] == ()
-    assert refs[RequestCategory.CHARGE_DISPUTE] == ()
+async def _finish(
+    session: AsyncSession,
+    request: Request,
+    reason: RequestCompletionReason,
+    done_at: datetime,
+) -> None:
+    request.status = RequestStatus.DONE
+    request.completion_reason = reason
+    request.done_at = done_at
+    await session.flush()
 
 
-async def test_pp290_is_served_whole_and_cached_for_a_day() -> None:
-    response = await get_pp290(_account(UserId(1)))
+async def test_house_problems_show_open_problems_of_the_house_without_private_ones(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    service = requests_service(session)
+    members, _ = await _group_of_three(session, own)
+    members[0].status = RequestStatus.IN_PROGRESS
+    members[1].status = RequestStatus.ACCEPTED
+    for number in ("21", "22"):
+        await _complain(
+            session,
+            await _neighbour(session, own.house_id, number),
+            own.house_id,
+            RequestCategory.ELECTRICITY,
+        )
+    await service.create(
+        own.user_id,
+        own.house_id,
+        _draft(category=RequestCategory.HEATING),
+    )
+    flatmate = await add_user(session)
+    await add_resident(session, flatmate, own.house_id, own.flat_id)
+    garbage = await service.create(
+        flatmate,
+        own.house_id,
+        _draft(category=RequestCategory.GARBAGE, flat_id=own.flat_id),
+    )
+    await _mark_on_review(session, garbage.request.id)
+    house = await HousesRepo(session).get(own.house_id)
+    assert house is not None
+    await RequestsRepo(session).create(
+        house,
+        None,
+        None,
+        RequestCategory.YARD,
+        "Яма у подъезда",
+        RequestChannel.PHONE,
+        None,
+        None,
+        is_staff_author=True,
+    )
+    neighbour = await _neighbour(session, own.house_id, "31")
+    for category in (RequestCategory.METER_ERROR, RequestCategory.CHARGE_DISPUTE):
+        await _complain(session, neighbour, own.house_id, category)
+    elevator = await _complain(
+        session,
+        neighbour,
+        own.house_id,
+        RequestCategory.ELEVATOR,
+    )
+    await _mark_done(session, elevator.id)
+    other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    await _complain(session, other.user_id, other.house_id, RequestCategory.ENTRANCE)
+    lodger = await add_user(session)
+    await add_resident(session, lodger, own.house_id, None)
+    claimer = await add_user(session)
+    await add_resident(session, claimer, own.house_id, own.flat_id, verified=False)
+    residents_repo = ResidentsRepo(session)
+    resident = await residents_repo.get_for_house(own.user_id, own.house_id)
+    assert resident is not None
+    await residents_repo.set_verified(resident, own.flat_id, datetime.now(UTC), None)
 
-    catalog = Pp290Catalog.model_validate_json(bytes(response.body))
-    assert response.headers["cache-control"] == "private, max-age=86400"
-    assert len(catalog.items) == 144
-    assert [item.ref for item in catalog.items if item.ref.startswith("п. 22,")] == [
-        f"п. 22, абз. {paragraph}" for paragraph in range(2, 6)
+    board = await service.house_problems(own.user_id, own.house_id, datetime.now(UTC))
+    stranger_boards = [
+        await service.house_problems(stranger, own.house_id, datetime.now(UTC))
+        for stranger in (lodger, claimer)
     ]
+
+    assert [
+        (problem.category, problem.flats_count, problem.status, problem.mine)
+        for problem in board.open
+    ] == [
+        (RequestCategory.LEAK, 3, RequestStatus.NEW, False),
+        (RequestCategory.ELECTRICITY, 2, RequestStatus.NEW, False),
+        (RequestCategory.HEATING, 1, RequestStatus.NEW, True),
+        (RequestCategory.GARBAGE, 1, RequestStatus.ON_REVIEW, True),
+        (RequestCategory.YARD, 1, RequestStatus.NEW, False),
+    ]
+    assert board.open[0].since == members[0].created_at
+    for stranger_board in stranger_boards:
+        assert [problem.mine for problem in stranger_board.open] == [False] * 5
+
+
+async def test_house_problems_list_the_latest_work_accepted_or_closed_in_30_days(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    make_org_house_flat_user: Fixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("zheka.core.services.request_groups.RESOLVED_SHOWN", 2)
+    now = datetime.now(UTC)
+    members, _ = await _group_of_three(session, own)
+    await _finish(
+        session,
+        members[0],
+        RequestCompletionReason.RESIDENT_ACCEPTED,
+        now - timedelta(days=3),
+    )
+    for member in members[1:]:
+        await _finish(
+            session,
+            member,
+            RequestCompletionReason.AUTO_CLOSED,
+            now - timedelta(days=1),
+        )
+    neighbour = await _neighbour(session, own.house_id, "21")
+    for category, reason, ago in [
+        (RequestCategory.ELEVATOR, RequestCompletionReason.RESIDENT_ACCEPTED, 120),
+        (RequestCategory.GARBAGE, RequestCompletionReason.AUTO_CLOSED, 48),
+        (RequestCategory.YARD, RequestCompletionReason.RESIDENT_ACCEPTED, 31 * 24),
+        (RequestCategory.ENTRANCE, RequestCompletionReason.RESIDENT_REJECTED, 1),
+        (RequestCategory.METER_ERROR, RequestCompletionReason.RESIDENT_ACCEPTED, 1),
+    ]:
+        request = await _complain(session, neighbour, own.house_id, category)
+        await _finish(session, request, reason, now - timedelta(hours=ago))
+    heating = [
+        await _complain(session, neighbour, own.house_id, RequestCategory.HEATING),
+        await _complain(session, own.user_id, own.house_id, RequestCategory.HEATING),
+    ]
+    await RequestsRepo(session).attach_to_group(
+        heating,
+        await _add_group(session, own.house_id, RequestCategory.HEATING),
+    )
+    await _finish(
+        session,
+        heating[0],
+        RequestCompletionReason.RESIDENT_ACCEPTED,
+        now - timedelta(hours=1),
+    )
+    other = await make_org_house_flat_user(resident_role=ResidentRole.OWNER)
+    await _finish(
+        session,
+        await _complain(session, other.user_id, other.house_id, RequestCategory.YARD),
+        RequestCompletionReason.RESIDENT_ACCEPTED,
+        now - timedelta(hours=1),
+    )
+
+    board = await requests_service(session).house_problems(
+        own.user_id,
+        own.house_id,
+        now,
+    )
+
+    assert [
+        (problem.category, problem.done_at, problem.confirmed)
+        for problem in board.resolved
+    ] == [
+        (RequestCategory.LEAK, now - timedelta(days=1), True),
+        (RequestCategory.GARBAGE, now - timedelta(days=2), False),
+    ]
+    assert board.resolved_total == 3
+    assert [(problem.category, problem.mine) for problem in board.open] == [
+        (RequestCategory.HEATING, True),
+    ]
+
+
+async def test_house_problems_refuse_a_blocked_resident(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    await _block(session, own.user_id, own.house_id)
+
+    with pytest.raises(NotEnoughRights):
+        await requests_service(session).house_problems(
+            own.user_id,
+            own.house_id,
+            datetime.now(UTC),
+        )
+
+
+def test_house_problems_name_no_neighbour_and_no_flat() -> None:
+    fields = {
+        *HouseProblemsResponse.model_fields,
+        *OpenProblemItem.model_fields,
+        *ResolvedProblemItem.model_fields,
+    }
+
+    assert fields.isdisjoint(
+        {"description", "flat_number", "flat_id", "author_name", "author_user_id"},
+    )
