@@ -933,7 +933,7 @@ async def test_a_new_and_a_repeat_request_notify_the_staff_but_not_executors(
     assert first["text"] == (
         f"🆕 Заявка №{created.request.id} «💧 Протечка»\n🏢 {house.address}\n"
         "🏠 Личная: в квартире\n"
-        f"⏱ Локализовать аварию до {house.local(react):%H:%M %d.%m}\n"
+        f"⏳ Локализовать аварию до {house.local(react):%H:%M %d.%m}\n"
         f"⏰ Срок: до {deadline:%H:%M %d.%m}\n"
         "📜 ПП РФ № 416, п. 13: локализовать аварию - за 30 минут с регистрации "
         "заявки, устранить - не более 3 суток с даты аварии"

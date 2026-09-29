@@ -3422,7 +3422,7 @@ async def test_a_bot_request_is_confirmed_with_its_deadline_and_a_link_to_it(
     assert _text(message_manager) == CREATED_TEXT.format(
         request_id=request.id,
         deadline=(
-            f"⏱ Локализовать аварию до {react:%H:%M %d.%m}\n"
+            f"⏳ Локализовать аварию до {react:%H:%M %d.%m}\n"
             f"⏰ Срок: до {deadline:%H:%M %d.%m}\n"
             "📜 ПП РФ № 416, п. 13: локализовать аварию - за 30 минут с регистрации "
             "заявки, устранить - не более 3 суток с даты аварии"

@@ -258,7 +258,7 @@ def deadline_lines(request: Request, house: House) -> str:
     if request.status is RequestStatus.NEW and request.react_deadline_at is not None:
         lines.insert(
             0,
-            "⏱ Локализовать аварию до "
+            "⏳ Локализовать аварию до "
             f"{house.local(request.react_deadline_at):{MOMENT}}",
         )
     return "\n".join(lines)
