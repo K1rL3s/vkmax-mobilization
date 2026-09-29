@@ -232,10 +232,14 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `NewRequest.category` and `NewRequest.sent` (`on_free_text`, consent checked
   first) and the fallback; `on_category` then skips to the photo.
 - A voice counts as free text by MAX's `transcription` (`transcript`, any
-  length). Without one, `transcribe_voice` rereads the message after 1, 2, 4 s
-  (`get_message_by_id`), then opens the next draft step or asks for text; the
-  audio is never downloaded. Unverified on a live client: MAX may never fill
-  `transcription` for bots.
+  length). Without one, `transcribe_voice` rereads the message once after 5 s
+  (`get_message_by_id`); still none, it downloads the audio into memory (never
+  to disk, nothing stored) and sends it to `SpeechClient` (SpeechKit v1 sync:
+  OGG Opus, up to 1 MB and 30 s, else HTTP 400 logged), then opens the next
+  draft step or asks for text. No Yandex keys (`SpeechClient.configured`) or
+  past `YandexQuota` skips the download. Unverified on a live client: MAX may
+  never fill `transcription` for bots, and its voice container may not be
+  Ogg.
 - A photo without a free-text caption sent to `Menu.main` or with no dialog
   open (fallback router, e.g. an expired state) is a meter reading
   (`bot/meter_photo.py`; other dialogs never take it, so a draft's photo stays
@@ -304,8 +308,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   the zone), the resident's text is its own `user` message, masked by
   `mask_pii` (`core/masking.py`: phones, e-mails, 8+ digit runs, flat numbers;
   names and street addresses stay). `YandexQuota`
-  caps classify and OCR together per user per api worker (`QUOTA_CALLS` an
-  hour; the bot's `recognize_meter_photo` counts per taskiq worker); past it
+  caps classify, OCR and speech together per user per api worker
+  (`QUOTA_CALLS` an hour; the bot's `recognize_meter_photo` and
+  `transcribe_voice` count per taskiq worker); past it
   the route answers as if Yandex were off. The bot does not
   classify. OCR gets the photo's real type and skips types it can't read.
 - Object QRs (`obj_<house>_<entrance>_<category>`, lift, light, entrance

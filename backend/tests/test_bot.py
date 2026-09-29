@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from html import escape
-from typing import Any, cast
+from typing import Any, BinaryIO, cast
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
@@ -297,7 +297,7 @@ from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
 from zheka.infra.max.sender import _chat_rate_limit, dialog_notify, is_chat_admin
-from zheka.infra.yandex import YandexQuota
+from zheka.infra.yandex import SpeechClient, YandexQuota
 from zheka.infra.yandex.vision import VisionClient
 
 
@@ -4269,7 +4269,7 @@ async def test_a_voice_without_a_transcript_waits_for_it(
 
 @pytest.fixture
 def instant_retries(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(bot_requests, "VOICE_RETRY_DELAYS", (0, 0))
+    monkeypatch.setattr(bot_requests, "VOICE_RECHECK_SECONDS", 0)
 
 
 def _reread(
@@ -4308,7 +4308,7 @@ async def test_a_late_transcript_opens_the_next_step(
     in_draft: bool,
 ) -> None:
     await _resident_of_a_connected_house(bot_session, client, message_manager)
-    asked = _reread(fake_bot, monkeypatch, [None, VOICE])
+    asked = _reread(fake_bot, monkeypatch, [VOICE])
     category = next(iter(RequestCategory))
     draft = NewRequestData(category=category if in_draft else None)
 
@@ -4321,7 +4321,7 @@ async def test_a_late_transcript_opens_the_next_step(
         in_draft=in_draft,
     )
 
-    assert asked == ["voice-1", "voice-1"]
+    assert asked == ["voice-1"]
     if in_draft:
         assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
     else:
@@ -4338,7 +4338,7 @@ async def test_a_voice_never_transcribed_asks_for_text(
     bot_session: AsyncSession,
 ) -> None:
     await _resident_of_a_connected_house(bot_session, client, message_manager)
-    _reread(fake_bot, monkeypatch, [None, None])
+    _reread(fake_bot, monkeypatch, [None])
 
     await _run(
         task_broker,
@@ -4853,7 +4853,7 @@ async def test_a_voice_outside_a_draft_never_transcribed_asks_for_text(
 ) -> None:
     await _resident_of_a_connected_house(bot_session, client, message_manager)
     await client.send("/start")
-    _reread(fake_bot, monkeypatch, [None, None])
+    _reread(fake_bot, monkeypatch, [None])
 
     await _run(
         task_broker,
@@ -4985,3 +4985,91 @@ async def test_executor_gets_video_on_send_only(
     await client.click(message_manager.last_message(), DEPART)
     await _run(task_broker, send_executor_card, request_id=request_id, user_id=user_id)
     send.assert_awaited_once()
+
+
+def _speechkit(
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    configured: bool = True,
+) -> tuple[list[str], list[bytes]]:
+    downloaded: list[str] = []
+    heard: list[bytes] = []
+
+    async def download(url: str, destination: BinaryIO) -> BinaryIO:
+        downloaded.append(url)
+        destination.write(b"OggS-voice")
+        return destination
+
+    async def recognize(_self: SpeechClient, audio: bytes) -> str:
+        heard.append(audio)
+        return VOICE
+
+    monkeypatch.setattr(fake_bot, "download", download)
+    monkeypatch.setattr(SpeechClient, "recognize", recognize)
+    monkeypatch.setattr(
+        SpeechClient,
+        "configured",
+        property(lambda _self: configured),
+    )
+    return downloaded, heard
+
+
+@pytest.mark.usefixtures("instant_retries")
+async def test_a_voice_max_left_untranscribed_is_recognized_by_speechkit(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    _reread(fake_bot, monkeypatch, [None])
+    downloaded, heard = _speechkit(fake_bot, monkeypatch)
+
+    await _run(
+        task_broker,
+        transcribe_voice,
+        user_id=(await _user(bot_session, client)).id,
+        mid="voice-1",
+        draft=NewRequestData(category=next(iter(RequestCategory))).to_data(),
+        in_draft=True,
+    )
+
+    assert downloaded == ["https://max.test/voice.ogg"]
+    assert heard == [b"OggS-voice"]
+    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
+    await client.click(message_manager.last_message(), NEXT)
+    assert VOICE in _text(message_manager)
+
+
+@pytest.mark.usefixtures("instant_retries")
+@pytest.mark.parametrize(("configured", "quota_left"), [(False, True), (True, False)])
+async def test_a_voice_skips_speechkit_without_keys_or_quota(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+    configured: bool,
+    quota_left: bool,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    _reread(fake_bot, monkeypatch, [None])
+    downloaded, heard = _speechkit(fake_bot, monkeypatch, configured=configured)
+    monkeypatch.setattr(YandexQuota, "take", lambda _self, _user_id: quota_left)
+
+    await _run(
+        task_broker,
+        transcribe_voice,
+        user_id=(await _user(bot_session, client)).id,
+        mid="voice-1",
+        draft=NewRequestData(category=next(iter(RequestCategory))).to_data(),
+        in_draft=True,
+    )
+
+    assert downloaded == []
+    assert heard == []
+    assert _text(message_manager).startswith(VOICE_FAILED)

@@ -22,7 +22,7 @@ export const useConsent = (onContinue: () => Promise<void>) => {
 
     consent.mutate({
       params: authParams(),
-      body: { version: "1.1" },
+      body: { version: "1.2" },
     });
   };
 

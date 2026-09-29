@@ -165,3 +165,10 @@ class AccessSlotsData(BaseDialogData):
 class ChairmanData(BaseDialogData):
     code: str
     offer: str
+
+
+def voice_url(body: MessageBody) -> str | None:
+    for item in body.attachments or []:
+        if isinstance(item, AudioAttachment):
+            return item.payload.url
+    return None

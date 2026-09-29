@@ -3,7 +3,12 @@ from collections.abc import AsyncIterable
 import aiohttp
 from dishka import BaseScope, Provider, Scope, provide
 
-from zheka.infra.yandex import VisionClient, YandexClassifier, YandexQuota
+from zheka.infra.yandex import (
+    SpeechClient,
+    VisionClient,
+    YandexClassifier,
+    YandexQuota,
+)
 
 
 class YandexProvider(Provider):
@@ -12,6 +17,7 @@ class YandexProvider(Provider):
     vision_client = provide(VisionClient)
     classifier = provide(YandexClassifier)
     quota = provide(YandexQuota)
+    speech_client = provide(SpeechClient)
 
     @provide
     async def http_session(self) -> AsyncIterable[aiohttp.ClientSession]:
