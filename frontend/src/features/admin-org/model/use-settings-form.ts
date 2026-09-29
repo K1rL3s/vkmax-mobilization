@@ -6,7 +6,10 @@ import { errorMessage } from "@/shared/api/errors";
 import type { components } from "@/shared/api/schema/generated";
 import { orgParams } from "@/shared/model/session";
 
-import { orgFormConstraints as limits } from "../domain/org-form-constraints";
+import {
+  isSiteAddress,
+  orgFormConstraints as limits,
+} from "../domain/org-form-constraints";
 import { useSaveSettings } from "./use-org";
 
 export type OrgSettings = components["schemas"]["OrgSettingsResponse"];
@@ -60,11 +63,7 @@ const settingsSchema = z.object({
     .trim()
     .max(limits.site, `Ссылка длиннее ${limits.site} символов`)
     .refine(
-      (value) =>
-        value === "" ||
-        /^([\w-]+(\.[\w-]+)+\.?)(\/|$)/.test(
-          value.replace(/^https?:\/\//i, ""),
-        ),
+      (value) => value === "" || isSiteAddress(value),
       "Нужен адрес вида uk-primer.ru",
     ),
   reception_note: z

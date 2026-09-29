@@ -109,7 +109,7 @@ export const SettingsForm = ({ settings, readOnly }: SettingsFormProps) => {
 
   return (
     <Flex asChild align="stretch" direction="column" gapY={24}>
-      <form onSubmit={form.submit}>
+      <form noValidate onSubmit={form.submit}>
         <Section
           id="meter-window"
           title="Окно подачи показаний"

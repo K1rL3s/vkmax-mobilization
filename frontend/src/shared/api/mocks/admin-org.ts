@@ -135,7 +135,8 @@ const withScheme = (site: string | undefined): string | null => {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 };
 
-const host = (site: string) => site.replace(/^https?:\/\//i, "").split("/")[0];
+const host = (site: string) =>
+  site.replace(/^https?:\/\//i, "").split(/[/?#]/)[0];
 
 const settingsError = (body: Record<string, unknown>): string | null => {
   const numbers = [
@@ -167,7 +168,10 @@ const settingsError = (body: Record<string, unknown>): string | null => {
 
   const site = withScheme((body.site as string | null) ?? undefined);
 
-  if (site && !/^[\w-]+(\.[\w-]+)+\.?$/.test(host(site))) {
+  if (
+    site &&
+    !/^[\p{L}\p{N}\p{M}_-]+(\.[\p{L}\p{N}\p{M}_-]+)+\.?$/u.test(host(site))
+  ) {
     return "Сайт УК указан неверно: нужен адрес вида uk-primer.ru";
   }
 

@@ -173,7 +173,7 @@ const Org = ({ house }: { house: HouseCard }) => {
             separator
             before={<Icon src={globeIcon} className={styles.CellIcon} />}
             overline="Сайт"
-            title={org.site.replace(/^https?:\/\//, "")}
+            title={org.site.replace(/^https?:\/\//i, "")}
             showChevron
             asChild
           >

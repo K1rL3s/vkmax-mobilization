@@ -10,3 +10,8 @@ export const orgFormConstraints = {
   site: 200,
   receptionNote: 300,
 };
+
+export const isSiteAddress = (value: string) =>
+  /^[\p{L}\p{N}\p{M}_-]+(\.[\p{L}\p{N}\p{M}_-]+)+\.?([/?#]|$)/u.test(
+    value.replace(/^https?:\/\//i, ""),
+  );
