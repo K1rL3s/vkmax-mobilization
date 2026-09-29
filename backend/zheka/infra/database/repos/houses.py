@@ -3,7 +3,7 @@ from collections.abc import Collection, Sequence
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import ColumnElement, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import RequestStatus
@@ -64,14 +64,7 @@ class HousesRepo(BaseAlchemyRepo):
                 houses_table.c.building.istartswith(building, autoescape=True),
             )
         if query is not None:
-            address = func.concat_ws(
-                " ",
-                houses_table.c.city,
-                houses_table.c.street,
-                houses_table.c.building,
-            )
-            for word in query.replace(",", " ").split():
-                stmt = stmt.where(address.icontains(word, autoescape=True))
+            stmt = stmt.where(*address_matches(query))
 
         stmt = stmt.order_by(houses_table.c.street, houses_table.c.building)
         return await self._page(stmt, limit, offset)
@@ -227,12 +220,7 @@ class HousesRepo(BaseAlchemyRepo):
     ) -> tuple[Sequence[House], int]:
         stmt = select(House).where(houses_table.c.org_id == org_id)
         if query is not None:
-            stmt = stmt.where(
-                or_(
-                    houses_table.c.street.icontains(query, autoescape=True),
-                    houses_table.c.building.istartswith(query, autoescape=True),
-                ),
-            )
+            stmt = stmt.where(*address_matches(query))
 
         stmt = stmt.order_by(houses_table.c.street, houses_table.c.building)
         return await self._page(stmt, limit, offset)
@@ -379,3 +367,16 @@ class HousesRepo(BaseAlchemyRepo):
     async def lock_adding(self) -> None:
         stmt = select(func.pg_advisory_xact_lock(ADD_HOUSE_LOCK))
         await self._session.execute(stmt)
+
+
+def address_matches(query: str) -> list[ColumnElement[bool]]:
+    address = func.concat_ws(
+        " ",
+        houses_table.c.city,
+        houses_table.c.street,
+        houses_table.c.building,
+    )
+    return [
+        address.icontains(word, autoescape=True)
+        for word in query.replace(",", " ").split()
+    ]

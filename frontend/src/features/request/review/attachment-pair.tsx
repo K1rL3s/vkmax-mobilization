@@ -1,7 +1,5 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
-import { cameraIcon, Icon } from "@/shared/ui/icon";
-
 import { formatDay } from "@/shared/lib/format";
 import type { RequestAttachment, RequestCard } from "../domain/types";
 
@@ -19,26 +17,22 @@ const Shot = ({ title, caption, attachments }: ShotProps) => {
   return (
     <Flex align="stretch" direction="column" gapY={4}>
       <div className={styles.Tile}>
-        {attachments[0] ? (
-          attachments[0].is_video ? (
-            <video
-              src={attachments[0].url}
-              controls
-              playsInline
-              preload="metadata"
-            />
-          ) : (
-            <img src={attachments[0].url} alt={attachments[0].name} />
-          )
+        {attachments[0]?.is_video ? (
+          <video
+            src={attachments[0].url}
+            controls
+            playsInline
+            preload="metadata"
+          />
         ) : (
-          <Icon src={cameraIcon} size={28} className={styles.Empty} />
+          <img src={attachments[0]?.url} alt={attachments[0]?.name} />
         )}
       </div>
       <Typography.Text variant="body-strong" color="primary">
         {title}
       </Typography.Text>
       <Typography.Text variant="description" color="secondary">
-        {attachments.length > 0 ? caption : "Вложений нет"}
+        {caption}
         {rest > 0 && ` · ещё ${rest}`}
       </Typography.Text>
     </Flex>
@@ -51,17 +45,27 @@ export const AttachmentPair = ({
 }: {
   request: RequestCard;
   doneAt: string | null;
-}) => (
-  <div className={styles.Pair}>
-    <Shot
-      title="Было"
-      caption={`Ваше · ${formatDay(request.created_at)}`}
-      attachments={request.photos}
-    />
-    <Shot
-      title="Стало"
-      caption={`Исполнителя${doneAt ? ` · ${formatDay(doneAt)}` : ""}`}
-      attachments={request.result_photos}
-    />
-  </div>
-);
+}) => {
+  const shots = [
+    {
+      title: "Было",
+      caption: `Ваше · ${formatDay(request.created_at)}`,
+      attachments: request.photos,
+    },
+    {
+      title: "Стало",
+      caption: `Исполнителя${doneAt ? ` · ${formatDay(doneAt)}` : ""}`,
+      attachments: request.result_photos,
+    },
+  ].filter((shot) => shot.attachments.length > 0);
+
+  if (shots.length === 0) return null;
+
+  return (
+    <div className={styles.Pair}>
+      {shots.map((shot) => (
+        <Shot key={shot.title} {...shot} />
+      ))}
+    </div>
+  );
+};

@@ -414,7 +414,7 @@ MAX и которая живет сутки. Поэтому для провер�
 ```sh
 TOKEN=34c63235dea4b1fb95ce89a9f108fc18
 curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"version":"1.0"}' https://vkmax.k1rles.ru/api/me/consent
+  -d '{"version":"1.1"}' https://vkmax.k1rles.ru/api/me/consent
 curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"number":5}' https://vkmax.k1rles.ru/api/demo/activate
 curl -H "Authorization: Bearer $TOKEN" https://vkmax.k1rles.ru/api/me

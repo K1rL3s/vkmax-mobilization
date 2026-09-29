@@ -761,3 +761,29 @@ async def test_a_search_finds_a_house_by_any_displayed_form_of_its_address(
         )
         assert [item.house.id for item in found] == [wanted], query
         assert total == 1
+
+
+async def test_an_org_search_finds_a_house_by_its_address_with_the_city(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    wanted = await _add_house(
+        session,
+        fixture.org_id,
+        city="Москва",
+        street="Ленинский проспект",
+        building="61/1",
+    )
+    await _add_house(
+        session,
+        fixture.org_id,
+        city="Москва",
+        street="Ленинский проспект",
+        building="62",
+    )
+    houses = HousesRepo(session)
+
+    for query in ("Москва, Ленинский проспект, 61/1", "ленинский 61", "61/1"):
+        found, total = await houses.search_for_org(fixture.org_id, query, 20, 0)
+        assert (total, [house.id for house in found]) == (1, [wanted]), query
