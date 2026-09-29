@@ -17,6 +17,7 @@ import { orgParams } from "@/shared/model/session";
 const draftSchema = pollDraftSchema.extend({
   houseId: z.string().min(1, "Выберите дом"),
   isMultiple: z.boolean(),
+  notifyResidents: z.boolean(),
 });
 
 export type AdminPollDraft = z.infer<typeof draftSchema>;
@@ -37,6 +38,7 @@ export const useAdminPollForm = () => {
       description: "",
       options: [{ text: "" }, { text: "" }],
       isMultiple: false,
+      notifyResidents: false,
       endsAt: "",
     },
   });
@@ -94,6 +96,7 @@ export const useAdminPollForm = () => {
           options: draft.options.map(({ text }) => text),
           ends_at: endOfDay(draft.endsAt).toISOString(),
           is_multiple: draft.isMultiple,
+          notify_residents: draft.notifyResidents,
         },
       }),
     ),

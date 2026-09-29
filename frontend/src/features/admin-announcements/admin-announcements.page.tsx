@@ -1,12 +1,18 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
+import { useIsOrgAdmin } from "@/features/admin-reception";
 import { Routes } from "@/shared/model/routes";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { FilterChip } from "@/shared/ui/filter-chip";
 import { Icon, megaphoneIcon, plusIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
-import { useAnnouncementList, useSentOutcome } from "./model/use-announcements";
+import {
+  useAnnouncementList,
+  useFinishWorks,
+  useSentOutcome,
+} from "./model/use-announcements";
 import { AnnouncementRow } from "./ui/announcement-row";
 import { SentNotice } from "./ui/sent-notice";
 
@@ -21,6 +27,8 @@ const NewAnnouncementButton = () => (
 const AdminAnnouncementsPage = () => {
   const list = useAnnouncementList();
   const outcome = useSentOutcome();
+  const isAdmin = useIsOrgAdmin();
+  const finish = useFinishWorks();
 
   const content = () => {
     if (list.isPending) {
@@ -63,6 +71,8 @@ const AdminAnnouncementsPage = () => {
             key={announcement.id}
             announcement={announcement}
             houses={list.houses}
+            withRegister={isAdmin}
+            onFinish={() => finish.ask(announcement)}
           />
         ))}
 
@@ -104,6 +114,18 @@ const AdminAnnouncementsPage = () => {
       )}
 
       {content()}
+
+      <ConfirmDialog
+        isOpen={finish.target !== undefined}
+        title="Завершить работы досрочно?"
+        description="Окончанием работ станет текущее время. Жители получат без звука «Работы завершены» туда же, куда ушло объявление, а предупреждение в форме заявки пропадёт"
+        confirmLabel="Завершить"
+        confirmVariant="primary"
+        error={finish.error}
+        isPending={finish.isPending}
+        onConfirm={finish.confirm}
+        onClose={finish.dismiss}
+      />
     </Panel>
   );
 };

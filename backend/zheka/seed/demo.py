@@ -18,6 +18,7 @@ from zheka.core.enums import (
     AnnouncementChannel,
     AppointmentStatus,
     EventType,
+    NoticeStatus,
     OrgRole,
     PollStatus,
     RequestActorRole,
@@ -40,6 +41,7 @@ from zheka.core.models import (
     Flat,
     House,
     Meter,
+    NoticeDelivery,
     OrgMember,
     OrgSettings,
     Organization,
@@ -109,6 +111,12 @@ CLOSED_BEFORE = timedelta(days=4)
 URGENT_EVERY = 6
 ACTIVE_POLL_EVERY = 5
 RECEPTION_DAYS = 30
+NOTICE_WEIGHTS = {
+    NoticeStatus.DELIVERED: 86,
+    NoticeStatus.FAILED: 3,
+    NoticeStatus.MUTED: 6,
+    NoticeStatus.BOT_STOPPED: 5,
+}
 
 
 class OrgProfile(ZhekaType):
@@ -284,6 +292,14 @@ ACTIVE_POLL = (
     "Покраска подъездов",
     "Покраска стен и перил во всех подъездах за счет текущего ремонта",
 )
+PLANNED_WORKS = (
+    "Опрессовка системы водоснабжения\n"
+    "Возможны перепады давления и кратковременные отключения холодной воды днем. "
+    "Приказ о проведении работ приложен"
+)
+WORKS_ORDER = "99865224236a46b1870414615a7ed62f.pdf"
+WORKS_ORDER_TITLE = "Приказ № 12 об опрессовке (модельный)"
+WORKS_DAYS_LEFT = 7
 RECEPTION_WINDOWS = ((0, 9, 12), (1, 9, 12), (2, 15, 19), (3, 15, 19), (4, 9, 12))
 MAP_STATES = ("emergency", "escalated", "overdue", "open", "calm")
 STATE_CATEGORIES = {
@@ -509,7 +525,7 @@ async def seed(
 
 def _copy_files(files_dir: Path) -> None:
     files_dir.mkdir(parents=True, exist_ok=True)
-    for name in (*DOCUMENTS, *RESULT_PHOTOS):
+    for name in (*DOCUMENTS, *RESULT_PHOTOS, WORKS_ORDER):
         target = files_dir / name
         if not target.exists():
             shutil.copyfile(FILES_DIR / name, target)
@@ -760,7 +776,7 @@ class Seeder:
                 below=scenario == "below",
                 verification_soon=scenario == "verification",
             )
-        self._resident(await self._user(), main[0], ResidentRole.TENANT, staff)
+        tenant = self._resident(await self._user(), main[0], ResidentRole.TENANT, staff)
 
         total = sum(flat.area or 0 for flat in flats)
         voted = sum(flat.area or 0 for flat in main)
@@ -778,7 +794,7 @@ class Seeder:
             org,
             staff,
             [house.id],
-            len(owners) + 1,
+            [*(resident for _user, resident in owners), tenant],
             [POLL_RESULTS],
         )
         await self._meters(house, owners[len(main) :])
@@ -898,25 +914,41 @@ class Seeder:
         org: Organization,
         staff: Staff,
         house_ids: Sequence[HouseId],
-        recipients: int,
+        residents: Sequence[Resident],
         rows: Sequence[tuple[timedelta, str, bool]],
-    ) -> None:
-        self._session.add_all(
-            Announcement(
+    ) -> list[Announcement]:
+        created = []
+        for age, text, urgent in rows:
+            rng = Random(f"notices:{org.inn}:{text}")
+            statuses = rng.choices(
+                list(NOTICE_WEIGHTS),
+                weights=list(NOTICE_WEIGHTS.values()),
+                k=len(residents),
+            )
+            announcement = Announcement(
                 org_id=org.id,
                 house_ids=list(house_ids),
                 text=text,
                 channels=[AnnouncementChannel.DIRECT.value],
                 created_by=staff.admin,
-                recipients_count=recipients,
+                recipients_count=len(residents),
                 created_at=self._now - age,
                 urgent=urgent,
-                delivered_direct=recipients - 1,
+                delivered_direct=statuses.count(NoticeStatus.DELIVERED),
                 delivered_chat=0,
             )
-            for age, text, urgent in rows
-        )
+            self._session.add(announcement)
+            await self._session.flush()
+            created.append(announcement)
+            for resident, status in zip(residents, statuses, strict=True):
+                delivery = NoticeDelivery.of(announcement.id, resident)
+                delivery.status = status
+                delivery.at = announcement.created_at + timedelta(
+                    seconds=rng.randint(1, 90),
+                )
+                self._session.add(delivery)
         await self._session.flush()
+        return created
 
     async def _demand(
         self,
@@ -1353,12 +1385,14 @@ class Seeder:
                 pinned=pinned,
             )
             await self._activity(house, org, staff, owners, pinned)
+            if index == 0:
+                await self._planned_works(house, org, staff, owners)
             booked.append((house, owners))
         await self._announcements(
             org,
             staff,
             [house.id for house, _owners in booked],
-            sum(len(owners) for _house, owners in booked),
+            [resident for _house, owners in booked for _user, resident in owners],
             ANNOUNCEMENTS,
         )
         if is_enterable:
@@ -1480,7 +1514,13 @@ class Seeder:
                 True,
             )
         if urgent is not None:
-            await self._announcements(org, staff, [house.id], len(owners), [urgent])
+            await self._announcements(
+                org,
+                staff,
+                [house.id],
+                [resident for _user, resident in owners],
+                [urgent],
+            )
         if pinned == "open" or rng.randrange(ACTIVE_POLL_EVERY) == 0:
             ends_at = self._now + timedelta(days=rng.randint(7, 20))
             await self._poll(house, org, staff, owners, ends_at)
@@ -1501,3 +1541,31 @@ class Seeder:
         taken = {item.house.id for item in nearest}
         free[:] = [item for item in free if item.house.id not in taken]
         return nearest
+
+    async def _planned_works(
+        self,
+        house: House,
+        org: Organization,
+        staff: Staff,
+        owners: Sequence[tuple[User, Resident]],
+    ) -> None:
+        [works] = await self._announcements(
+            org,
+            staff,
+            [house.id],
+            [resident for _user, resident in owners],
+            [(timedelta(days=3), PLANNED_WORKS, False)],
+        )
+        works.works_category = RequestCategory.WATER_SUPPLY
+        works.works_from = datetime.combine(
+            self._today - timedelta(days=1),
+            time(9),
+            house.zone,
+        )
+        works.works_until = datetime.combine(
+            self._today + timedelta(days=WORKS_DAYS_LEFT),
+            time(18),
+            house.zone,
+        )
+        works.documents = [{"name": WORKS_ORDER, "title": WORKS_ORDER_TITLE}]
+        await self._session.flush()

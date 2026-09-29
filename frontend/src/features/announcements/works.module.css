@@ -1,0 +1,8 @@
+.Documents {
+  overflow: hidden;
+  margin-inline: -12px;
+}
+
+.Icon {
+  color: var(--icon-primary);
+}

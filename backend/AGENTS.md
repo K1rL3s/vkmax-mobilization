@@ -144,17 +144,45 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   person), reads house polls and announcements, votes without area weight and
   files requests. Charges, meters, flat residents and weighted votes need a
   verified flat.
+- An announcement targets a whole house, or entrances or flats of one house
+  (`entrances` / `flat_ids`, never both), always DIRECT; a flat one never
+  goes to the chat. Recipients and the feed follow the resident's `flat_id`:
+  an entrance reaches residents whose flat sits in it, a flat only its
+  verified residents, a resident without `flat_id` neither. The weekly digest
+  counts only whole-house announcements (a flat one would quote its text to
+  the house).
+- `AnnouncementsService.create` writes a `pending` `notice_deliveries` row
+  per DIRECT addressee (house, flat, role and verification at send time) by
+  the broadcast's own rules, so a demo org's row is its author's.
+  `broadcast_to_users` with `announcement_id` sets every row in one
+  `UPDATE ... FROM (VALUES ...)`: `delivered` (MAX accepted), `failed` (MAX
+  refused, or a negative id the sender drops), `muted` (announcements off),
+  `bot_stopped` (cut by `recipients`). The register
+  (`GET /api/admin/announcements/{id}/register`) is admin-only like the
+  residents list; it lists the house's flats in the announcement's scope, and
+  the app shows `pending` as sending for 10 minutes, then as no data.
+  `POST .../register/pdf` (same checks, 409 while the admin is not
+  `in_dialog`) queues `send_register_pdf`: `NoticeRegisterPdf` of that house,
+  the screen's `unmarked_only` filter and pending rule, as `reestr-<id>.pdf`.
+  An org poll created with `notify_residents` announces itself this way
+  (`announcements.poll_id`, `texts.VOTE` button).
+- Planned works are an announcement with `works_from` / `works_until` (UTC,
+  typed in the first target house's local time) and an optional
+  `works_category`. Its `documents` (jsonb `[{name, title}]`, in
+  `referenced_names`) are PDFs from `POST /api/admin/files`, staff only:
+  `save_document` takes `application/pdf` starting `%PDF-`, while
+  `POST /api/files` stays images and video and request and reading photos
+  pass `media_path_of` (no `.pdf`). `active_works` (the form's
+  `SimilarRequestsResponse.works`, the bot's description window) follows the
+  feed's visibility and `works_from <= now < works_until`. `finish_works` is
+  one conditional UPDATE (going works only, else `InvalidState`) and sends
+  «✅ Работы завершены» with `silent` (no sound whatever the resident's
+  level) to the `notice_deliveries` addressees and, with CHAT, the house
+  chats; reaching `works_until` sends nothing.
 - `UploadQuota` (`infra/quota.py`, like `YandexQuota`) caps `POST /api/files`
-  per user per api worker (`UPLOAD_CALLS` an hour, then 429): the host nginx
-  hides client IPs, so no per-IP limit. `VerifyQuota` caps
-  `POST /api/flats/{id}/verify` the same way (`VERIFY_CALLS` an hour, every
-  attempt counts), so a resident cannot brute-force an account number. Free
-  text in request bodies is `FreeText` (4000 chars).
-- `FilesService.save_download` names a file by its first 12 bytes (JPEG,
-  PNG, WEBP, HEIC brands, other `ftyp` as MP4 or MOV), not by the client
-  Content-Type: that only picks the size cap and refuses early. Unknown
-  content or a photo sent as video and back is deleted with 400. A polyglot
-  behind a valid header still passes: no decoding, no Pillow.
+  and `POST /api/admin/files` together per user per api worker (`UPLOAD_CALLS` an hour, then 429): the host nginx
+  hides client IPs, so no per-IP limit. Free text in request bodies is
+  `FreeText` (4000 chars).
 - A poll ballot's rows carry `choice_index` 0..n-1: unique `(poll, user,
   choice_index)` and `(poll, flat, choice_index) WHERE counted_by_area` make a
   racing second ballot insert nothing (`add_vote` -> `ALREADY_VOTED`).
@@ -396,6 +424,11 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   a single-answer poll votes by `VotePayload` buttons (chat router,
   `PollsService.vote_in_chat`, `POLL_VOTED.source`), a multi-answer one opens
   the app. The 48-hour chat reminder replies to the card.
+- Announcements, poll reminders and cards in the chat end with their search
+  tag line (`texts` `ANNOUNCEMENT_HASHTAG`, `POLL_HASHTAG`, `CARD_HASHTAG`;
+  the chat welcome lists them); the direct copy of an announcement, the pin
+  list, member greetings and replies have none, and collapsed done or grouped
+  cards drop theirs.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap
   and after each failed chat send. `set_admin` records `CHAT_ADMIN_GRANTED`
   and queues the welcome only on `false -> true`; a failed send without rights
@@ -565,7 +598,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   than the actor, a DIRECT announcement reaches only its author, and staff
   see a phone only if it is their own. Org settings, category executors,
   reception windows and member removal sit behind `LiveAdminOrgDep` (403
-  `DEMO_LOCKED` in a demo org), and there only its author revokes an invite.
+  `DEMO_LOCKED` in a demo org), and there only its author revokes an invite or
+  finishes planned works.
   Changing a demo org's setup takes SQL or a reseed.
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
   reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed

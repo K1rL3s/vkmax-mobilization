@@ -36,6 +36,7 @@ export const Routes = {
   ADMIN_REQUEST_GROUP: "/admin/request-groups/:groupId",
   ADMIN_ANNOUNCEMENTS: "/admin/announcements",
   ADMIN_ANNOUNCEMENT_NEW: "/admin/announcements/new",
+  ADMIN_ANNOUNCEMENT_REGISTER: "/admin/announcements/:announcementId/register",
   ADMIN_POLLS: "/admin/polls",
   ADMIN_POLL: "/admin/polls/:pollId",
   ADMIN_POLL_NEW: "/admin/polls/new",

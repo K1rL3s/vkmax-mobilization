@@ -7,6 +7,7 @@ from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.polls import AdminPollListItem, CreateOrgPollRequest, PollCard
 from zheka.core.enums import PollStatus
 from zheka.core.ids import HouseId
+from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.polls import PollsService
 
 router = APIRouter(tags=["Админка: опросы"], route_class=DishkaRoute)
@@ -37,6 +38,7 @@ async def create_org_poll(
     current_org: CurrentOrgDep,
     body: CreateOrgPollRequest,
     polls_service: FromDishka[PollsService],
+    announcements_service: FromDishka[AnnouncementsService],
     idempotency: IdempotencyDep,
 ) -> PollCard:
     saved = await idempotency.replay(PollCard)
@@ -48,6 +50,12 @@ async def create_org_poll(
         body.draft(),
         org_id=current_org.org_id,
     )
+    if body.notify_residents:
+        await announcements_service.announce_poll(
+            current_org.org_id,
+            current_org.user_id,
+            card.poll,
+        )
     response = PollCard.of_card(card)
     await idempotency.save(response)
     return response

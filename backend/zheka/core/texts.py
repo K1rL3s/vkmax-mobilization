@@ -88,9 +88,27 @@ def resident_unblocked(address: str) -> str:
     return f"✅ УК вернула вам доступ к дому {escape(address)}"
 
 
-def announcement(org_name: str, text: str, *, urgent: bool) -> str:
+def announcement(
+    org_name: str,
+    text: str,
+    *,
+    urgent: bool,
+    entrances: Sequence[int] | None = None,
+    for_flats: bool = False,
+    works: str | None = None,
+    documents: bool = False,
+) -> str:
     heading = "🚨 Срочное объявление" if urgent else "📢 Объявление"
-    return f"{heading} от {escape(org_name)}\n\n{escape(text)}"
+    heading = f"{heading} от {escape(org_name)}"
+    if entrances:
+        label = "Подъезды" if len(entrances) > 1 else "Подъезд"
+        heading += f"\n📍 {label} {', '.join(map(str, entrances))}"
+    elif for_flats:
+        heading += "\n📍 Для вашей квартиры"
+    if works:
+        heading += f"\n{works}"
+    message = f"{heading}\n\n{escape(text)}"
+    return f"{message}\n\n{DOCUMENTS_IN_APP}" if documents else message
 
 
 def blocked_detail(reason: str | None) -> str:
@@ -146,7 +164,10 @@ def poll_reminder(title: str, ends_at: datetime) -> str:
 
 
 def poll_chat_reminder(title: str, ends_at: datetime) -> str:
-    return f"🗳 Идет опрос «{escape(title)}», голосование закончится {ends_at:%d.%m.%Y}"
+    return (
+        f"🗳 Идет опрос «{escape(title)}», голосование закончится "
+        f"{ends_at:%d.%m.%Y}\n{POLL_HASHTAG}"
+    )
 
 
 def verification_soon(meter: str, serial: str, due: date, days: int) -> str:
@@ -522,8 +543,33 @@ def _quoted(text: str) -> str:
     return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"
 
 
-def gji_pdf_sent(request_id: RequestId) -> str:
-    return (
-        f"📄 Жалоба по заявке №{request_id} для ГЖИ\n"
-        "✍️ Впишите ФИО и адрес, распечатайте и подпишите"
+def poll_notice(title: str, ends_at: datetime) -> str:
+    return f"🗳 Новый опрос «{title}», голосование до {ends_at:%d.%m.%Y}\n{POLL_NOT_OSS}"
+
+
+ANNOUNCEMENT_HASHTAG = "#объявление"
+
+DOCUMENTS_IN_APP = "📎 Документы в приложении"
+OPEN_DOCUMENTS = "📎 Открыть документы"
+
+
+def planned_works(
+    category: RequestCategory | None,
+    starts_at: datetime,
+    ends_at: datetime,
+) -> str:
+    until = (
+        f"{ends_at:%H:%M}"
+        if ends_at.date() == starts_at.date()
+        else f"{ends_at:%d.%m %H:%M}"
     )
+    period = f"{starts_at:%d.%m %H:%M} - {until}"
+    if category is None:
+        return f"🚧 Плановые работы, {period}"
+    return f"🚧 Плановые работы: {CATEGORY_RULES[category].label}, {period}"
+
+
+def works_finished(category: RequestCategory | None) -> str:
+    if category is None:
+        return "✅ Плановые работы завершены"
+    return f"✅ Работы завершены: {CATEGORY_RULES[category].label}"

@@ -55,4 +55,11 @@
     flex-shrink: 0;
     color: var(--icon-negative);
   }
+
+  .Works {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
+    text-decoration: none;
+  }
 }

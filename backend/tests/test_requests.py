@@ -312,6 +312,7 @@ async def test_create_refuses_a_flat_that_is_not_the_authors(
             InvalidRequest,
         ),
         (_draft(attachments=["../../etc/passwd"]), EntityNotFound),
+        (_draft(attachments=[photo_name().replace(".jpg", ".pdf")]), EntityNotFound),
         (_draft(description="   "), InvalidRequest),
     ],
 )

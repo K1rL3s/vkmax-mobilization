@@ -41,6 +41,7 @@ from zheka.core.enums import (
 )
 from zheka.core.ids import RequestId
 from zheka.core.models import RequestAttachment
+from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER, request_share_text
@@ -98,6 +99,7 @@ async def list_my_requests(
 async def find_similar_requests(
     residency: CurrentResidencyDep,
     requests_service: FromDishka[RequestsService],
+    announcements_service: FromDishka[AnnouncementsService],
     category: RequestCategory,
 ) -> SimilarRequestsResponse:
     similar = await requests_service.similar(
@@ -105,7 +107,12 @@ async def find_similar_requests(
         residency.house_id,
         category,
     )
-    return SimilarRequestsResponse.of(similar)
+    works = await announcements_service.active_works(
+        residency.user_id,
+        residency.house_id,
+        category,
+    )
+    return SimilarRequestsResponse.of(similar, works)
 
 
 @router.post("/requests", summary="Новая заявка")

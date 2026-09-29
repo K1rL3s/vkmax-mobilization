@@ -430,6 +430,7 @@ async def test_the_poll_reminder_goes_into_the_bound_chat_only(
         if bound in kwargs["chat_ids"]
     ]
     assert unbound not in queued["chat_ids"]
+    assert queued["text"].endswith("\n#опрос")
     assert (queued["app_button"], queued["app_path"]) == (
         texts.VOTE,
         f"/meetings/{poll_id}",

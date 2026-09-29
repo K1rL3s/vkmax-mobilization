@@ -9382,6 +9382,14 @@ paths:
           - type: integer
           - type: 'null'
           title: House Id
+      - name: poll_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Poll Id
       - name: limit
         in: query
         required: false
@@ -9507,6 +9515,176 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateAnnouncementRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementItem'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/announcements/{announcement_id}/register:
+    get:
+      tags:
+      - 'Админка: объявления'
+      summary: Реестр уведомлений по объявлению
+      description: Квартиры одного дома объявления (house_id, по умолчанию первый) и статус личного сообщения каждому жителю. Только администратору УК
+      operationId: notice_register
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: announcement_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Announcement Id
+      - name: house_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: House Id
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoticeRegister'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/announcements/{announcement_id}/finish:
+    post:
+      tags:
+      - 'Админка: объявления'
+      summary: Завершить плановые работы досрочно
+      description: Окончание работ становится текущим моментом, жители получают без звука «Работы завершены» в те же каналы. Только для идущих работ; в демо-УК - 403 на чужие работы
+      operationId: finish_works
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: announcement_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Announcement Id
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
       responses:
         '200':
           description: Successful Response
@@ -10923,6 +11101,87 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/files:
+    post:
+      tags:
+      - Файлы
+      summary: Загрузить документ PDF
+      description: 'Только сотрудникам УК: приказ или график к объявлению'
+      operationId: upload_document
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_document'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileRef'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
 components:
   schemas:
     AccessRequestGrid:
@@ -11921,6 +12180,23 @@ components:
       - chat
       - direct
       title: AnnouncementChannel
+    AnnouncementDocument:
+      properties:
+        name:
+          type: string
+          title: Name
+        title:
+          type: string
+          title: Title
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - name
+      - title
+      - url
+      title: AnnouncementDocument
     AnnouncementItem:
       properties:
         id:
@@ -11970,6 +12246,37 @@ components:
           title: Urgent
           description: 'Срочное: авария, отключение. Житель видит его выделенным'
           default: false
+        entrances:
+          anyOf:
+          - items:
+              type: integer
+            type: array
+          - type: 'null'
+          title: Entrances
+          description: Подъезды, которым адресовано объявление; null - всему дому
+        flats_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Flats Count
+          description: Скольким квартирам адресовано объявление; null - не квартирам
+        poll_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Poll Id
+          description: Опрос, о котором это объявление сообщает жителям
+        works:
+          anyOf:
+          - $ref: '#/components/schemas/AnnouncementWorks'
+          - type: 'null'
+          description: Плановые работы, о которых объявление; null - обычное объявление
+        documents:
+          items:
+            $ref: '#/components/schemas/AnnouncementDocument'
+          type: array
+          title: Documents
+          description: 'Документы PDF к объявлению: приказ, график'
       type: object
       required:
       - id
@@ -11979,6 +12286,28 @@ components:
       - channels
       - delivered_count
       title: AnnouncementItem
+    AnnouncementWorks:
+      properties:
+        category:
+          anyOf:
+          - $ref: '#/components/schemas/RequestCategory'
+          - type: 'null'
+          description: Категория заявок, в форме которых житель увидит предупреждение
+        starts_at:
+          type: string
+          format: date-time
+          title: Starts At
+        ends_at:
+          type: string
+          format: date-time
+          title: Ends At
+          description: Окончание; после «Завершить досрочно» - момент завершения
+      type: object
+      required:
+      - category
+      - starts_at
+      - ends_at
+      title: AnnouncementWorks
     AnswerProposalRequest:
       properties:
         accepted:
@@ -12229,6 +12558,16 @@ components:
       required:
       - reason
       title: BlockResidentRequest
+    Body_upload_document:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_upload_document
     Body_upload_file:
       properties:
         file:
@@ -12795,6 +13134,36 @@ components:
           title: Urgent
           description: 'Срочное: авария, отключение. Житель видит его выделенным'
           default: false
+        entrances:
+          anyOf:
+          - items:
+              type: integer
+            type: array
+            minItems: 1
+          - type: 'null'
+          title: Entrances
+          description: 'Только эти подъезды одного дома: личные сообщения получат жители, у которых указана квартира в этих подъездах; null - весь дом'
+        flat_ids:
+          anyOf:
+          - items:
+              type: integer
+            type: array
+            minItems: 1
+          - type: 'null'
+          title: Flat Ids
+          description: 'Только эти квартиры одного дома: личные сообщения получат их подтвержденные жители, в чат дома такое объявление не уходит; null - весь дом'
+        works:
+          anyOf:
+          - $ref: '#/components/schemas/WorksInput'
+          - type: 'null'
+          description: 'Плановые работы: жители увидят срок, форма заявки - предупреждение'
+        documents:
+          items:
+            $ref: '#/components/schemas/DocumentInput'
+          type: array
+          maxItems: 5
+          title: Documents
+          description: До 5 документов PDF из upload_document
       type: object
       required:
       - house_ids
@@ -12873,6 +13242,11 @@ components:
         house_id:
           type: integer
           title: House Id
+        notify_residents:
+          type: boolean
+          title: Notify Residents
+          description: Сообщить жителям дома в личные сообщения объявлением с кнопкой голосования; по нему УК видит реестр уведомлений
+          default: false
       type: object
       required:
       - title
@@ -13132,6 +13506,22 @@ components:
       required:
       - request_id
       title: DisputeChargeResponse
+    DocumentInput:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Имя файла из upload_document, не ссылка
+        title:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Title
+      type: object
+      required:
+      - name
+      - title
+      title: DocumentInput
     EntranceQr:
       properties:
         entrance:
@@ -14078,6 +14468,123 @@ components:
       - has_chairman
       - items
       title: MyProposalsResponse
+    NoticeRecipient:
+      properties:
+        role:
+          anyOf:
+          - $ref: '#/components/schemas/ResidentRole'
+          - type: 'null'
+          description: Собственник или арендатор; null - автор демо-объявления вне дома
+        verified:
+          type: boolean
+          title: Verified
+        status:
+          $ref: '#/components/schemas/NoticeStatus'
+          description: 'pending - рассылка не дошла до жителя: первые 10 минут идет, потом нет данных; delivered - MAX принял сообщение, прочтение MAX не сообщает; failed - MAX отказал; muted - житель выключил объявления; bot_stopped - житель остановил бота'
+        at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: At
+          description: Когда стал известен статус
+      type: object
+      required:
+      - role
+      - verified
+      - status
+      - at
+      title: NoticeRecipient
+    NoticeRegister:
+      properties:
+        announcement:
+          $ref: '#/components/schemas/AnnouncementItem'
+        house_id:
+          type: integer
+          title: House Id
+        address:
+          type: string
+          title: Address
+        flats:
+          items:
+            $ref: '#/components/schemas/NoticeRegisterFlat'
+          type: array
+          title: Flats
+          description: Квартиры дома, которым адресовано объявление, по порядку номеров
+        without_flat:
+          items:
+            $ref: '#/components/schemas/NoticeRecipient'
+          type: array
+          title: Without Flat
+          description: Адресаты в этом доме, не указавшие квартиру
+        flats_delivered:
+          type: integer
+          title: Flats Delivered
+        chat_delivered:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Chat Delivered
+          description: Скольким чатам домов объявления MAX принял сообщение; null, пока рассылка идет. По квартирам чат не раскладывается
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        is_demo:
+          type: boolean
+          title: Is Demo
+      type: object
+      required:
+      - announcement
+      - house_id
+      - address
+      - flats
+      - without_flat
+      - flats_delivered
+      - chat_delivered
+      - generated_at
+      - is_demo
+      title: NoticeRegister
+    NoticeRegisterFlat:
+      properties:
+        flat_id:
+          type: integer
+          title: Flat Id
+        number:
+          type: string
+          title: Number
+        entrance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entrance
+        recipients:
+          items:
+            $ref: '#/components/schemas/NoticeRecipient'
+          type: array
+          title: Recipients
+          description: Жители сервиса на момент отправки; пусто - нет в сервисе
+        delivered:
+          type: boolean
+          title: Delivered
+          description: Хотя бы одному жителю MAX доставил
+      type: object
+      required:
+      - flat_id
+      - number
+      - entrance
+      - recipients
+      - delivered
+      title: NoticeRegisterFlat
+    NoticeStatus:
+      type: string
+      enum:
+      - pending
+      - delivered
+      - failed
+      - muted
+      - bot_stopped
+      title: NoticeStatus
     NotificationCategory:
       type: string
       enum:
@@ -14746,6 +15253,25 @@ components:
       - charge_id
       - paid_at
       title: PayChargeResponse
+    PlannedWorks:
+      properties:
+        announcement_id:
+          type: integer
+          title: Announcement Id
+        title:
+          type: string
+          title: Title
+          description: Первая строка объявления
+        ends_at:
+          type: string
+          format: date-time
+          title: Ends At
+      type: object
+      required:
+      - announcement_id
+      - title
+      - ends_at
+      title: PlannedWorks
     PointAddress:
       properties:
         region:
@@ -16128,6 +16654,11 @@ components:
             format: date-time
           - type: 'null'
           title: Window Started At
+        works:
+          anyOf:
+          - $ref: '#/components/schemas/PlannedWorks'
+          - type: 'null'
+          description: Идущие плановые работы УК по этой категории в доме жителя; заявку подать все равно можно
       type: object
       required:
       - category
@@ -16479,16 +17010,27 @@ components:
       required:
       - option_ids
       title: VoteRequest
-    WriteToRequestRequest:
+    WorksInput:
       properties:
-        text:
+        category:
+          anyOf:
+          - $ref: '#/components/schemas/RequestCategory'
+          - type: 'null'
+        starts_at:
           type: string
-          maxLength: 4000
-          title: Text
+          format: date-time
+          title: Starts At
+          description: Начало, местное время первого дома
+        ends_at:
+          type: string
+          format: date-time
+          title: Ends At
+          description: Окончание, местное время первого дома
       type: object
       required:
-      - text
-      title: WriteToRequestRequest
+      - starts_at
+      - ends_at
+      title: WorksInput
   securitySchemes:
     ApiTestToken:
       type: http

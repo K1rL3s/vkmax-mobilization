@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
 
+import { FlatPicker, useIsOrgAdmin } from "@/features/admin-reception";
 import { Card } from "@/shared/ui/card";
 import { Checkbox } from "@/shared/ui/checkbox";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -9,9 +10,16 @@ import { alertIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
 import { announcementFormConstraints } from "../domain/announcement-form-constraints";
-import { addressees, channelsLabel, housesCount } from "../domain/labels";
+import {
+  addressees,
+  channelsLabel,
+  housesCount,
+  scopeLabel,
+} from "../domain/labels";
 import { useAnnouncementForm } from "../model/use-announcement-form";
 import type { OrgHouse } from "../model/use-announcements";
+
+import { WorksFields } from "./works-fields";
 
 import styles from "./announcement-form.module.css";
 
@@ -21,14 +29,16 @@ const Option = ({
   label,
   caption,
   isWarning = false,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
   caption?: ReactNode;
   isWarning?: boolean;
+  disabled?: boolean;
 }) => (
-  <Checkbox checked={checked} onChange={onChange}>
+  <Checkbox checked={checked} disabled={disabled} onChange={onChange}>
     <Flex align="stretch" direction="column" gapY={2}>
       <Typography.Text variant="body" color="primary">
         {label}
@@ -47,9 +57,32 @@ const Option = ({
   </Checkbox>
 );
 
+const Chip = ({
+  isPressed,
+  onClick,
+  children,
+}: {
+  isPressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) => (
+  <Button
+    type="button"
+    size="small"
+    variant={isPressed ? "primary" : "secondary"}
+    aria-pressed={isPressed}
+    onClick={onClick}
+  >
+    {children}
+  </Button>
+);
+
 export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
   const form = useAnnouncementForm(houses);
+  const isAdmin = useIsOrgAdmin();
   const { textMax } = announcementFormConstraints;
+  const house = form.scopeHouse;
+  const hasEntrances = house !== undefined && house.entrances > 1;
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -123,6 +156,96 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
             </section>
           </Flex>
 
+          {house && (hasEntrances || isAdmin) && (
+            <Flex asChild align="stretch" direction="column" gapY={8}>
+              <section>
+                <Typography.Text asChild variant="title" color="primary">
+                  <h2>Кому в доме</h2>
+                </Typography.Text>
+
+                <div className={styles.Chips}>
+                  <Chip
+                    isPressed={form.scope === "house"}
+                    onClick={() => form.setScope("house")}
+                  >
+                    Всему дому
+                  </Chip>
+
+                  {hasEntrances && (
+                    <Chip
+                      isPressed={form.scope === "entrances"}
+                      onClick={() => form.setScope("entrances")}
+                    >
+                      Подъездам
+                    </Chip>
+                  )}
+
+                  {isAdmin && (
+                    <Chip
+                      isPressed={form.scope === "flats"}
+                      onClick={() => form.setScope("flats")}
+                    >
+                      Квартирам
+                    </Chip>
+                  )}
+                </div>
+
+                {form.scope === "entrances" && (
+                  <Card>
+                    <div className={styles.Chips}>
+                      {Array.from(
+                        { length: house.entrances },
+                        (_, index) => index + 1,
+                      ).map((entrance) => {
+                        const isPicked = form.entrances.includes(entrance);
+
+                        return (
+                          <Chip
+                            key={entrance}
+                            isPressed={isPicked}
+                            onClick={() =>
+                              form.toggleEntrance(entrance, !isPicked)
+                            }
+                          >
+                            Подъезд {entrance}
+                          </Chip>
+                        );
+                      })}
+                    </div>
+
+                    <Typography.Text variant="description" color="secondary">
+                      Придёт в личные сообщения только жителям выбранных
+                      подъездов. Жители, которые не указали квартиру, его не
+                      получат
+                    </Typography.Text>
+                  </Card>
+                )}
+
+                {form.scope === "flats" && (
+                  <Card>
+                    <FlatPicker
+                      houseId={house.id}
+                      flatsCount={house.flats_count}
+                      selected={form.flats}
+                      onToggle={form.toggleFlat}
+                    />
+
+                    <Typography.Text variant="description" color="secondary">
+                      Придёт в личные сообщения только подтверждённым жителям
+                      выбранных квартир. В чат дома не уходит
+                    </Typography.Text>
+                  </Card>
+                )}
+
+                <FieldError
+                  message={
+                    form.errors.entrances?.message ?? form.errors.flats?.message
+                  }
+                />
+              </section>
+            </Flex>
+          )}
+
           <Flex asChild align="stretch" direction="column" gapY={8}>
             <section>
               <Typography.Text asChild variant="title" color="primary">
@@ -130,18 +253,29 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
               </Typography.Text>
 
               <Card>
-                <Option
-                  checked={form.channels.includes("chat")}
-                  onChange={(checked) => form.toggleChannel("chat", checked)}
-                  label="Чат дома"
-                  caption="Одно сообщение в чат, который бот привязал к дому"
-                />
+                {form.scope !== "flats" && (
+                  <Option
+                    checked={form.channels.includes("chat")}
+                    onChange={(checked) => form.toggleChannel("chat", checked)}
+                    label="Чат дома"
+                    caption={
+                      form.scope === "entrances"
+                        ? "Одно сообщение на весь чат с пометкой подъезда"
+                        : "Одно сообщение в чат, который бот привязал к дому"
+                    }
+                  />
+                )}
 
                 <Option
                   checked={form.channels.includes("direct")}
+                  disabled={form.scope !== "house"}
                   onChange={(checked) => form.toggleChannel("direct", checked)}
                   label="Личные сообщения"
-                  caption="Каждому жителю от бота. Для срочного: в обычных объявлениях создаёт дубль тем, кто состоит в чате"
+                  caption={
+                    form.scope === "house"
+                      ? "Каждому жителю от бота. Для срочного: в обычных объявлениях создаёт дубль тем, кто состоит в чате"
+                      : "Адресное объявление всегда уходит в личные сообщения"
+                  }
                 />
               </Card>
 
@@ -157,6 +291,8 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
               caption="Для аварий и отключений. Житель увидит объявление выделенным, бот пришлёт его с заголовком «🚨 Срочное объявление». Куда отправить, решают галочки выше"
             />
           </Card>
+
+          <WorksFields form={form} />
 
           {form.withoutChat.length > 0 && (
             <Card>
@@ -190,8 +326,22 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
         description={
           form.draft && (
             <>
-              {addressees(form.draft.houseIds, houses)}.{" "}
-              {channelsLabel(form.draft.channels)}.
+              {[
+                addressees(form.draft.houseIds, houses),
+                scopeLabel({
+                  entrances:
+                    form.draft.scope === "entrances"
+                      ? form.draft.entrances
+                      : null,
+                  flats_count:
+                    form.draft.scope === "flats"
+                      ? form.draft.flats.length
+                      : null,
+                }),
+              ]
+                .filter(Boolean)
+                .join(", ")}
+              . {channelsLabel(form.draft.channels)}.
               {form.withoutChat.length > 0 &&
                 (form.withoutChat.length === form.draft.houseIds.length
                   ? " Ни у одного из этих домов нет привязанного чата, объявление никто не получит."

@@ -114,3 +114,6 @@ def org_register_app_path(code: str) -> str:
 
 def poll_app_path(poll_id: PollId) -> str:
     return f"/meetings/{poll_id}"
+
+
+ANNOUNCEMENTS_APP_PATH = "/announcements"

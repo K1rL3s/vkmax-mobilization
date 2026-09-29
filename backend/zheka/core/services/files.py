@@ -26,8 +26,12 @@ _HEIC_BRANDS = frozenset(
 )
 _UNSUPPORTED = "Поддерживаются только изображения и видео MP4 или MOV"
 FILE_URL_TTL = timedelta(hours=1)
+PDF_SUFFIX = ".pdf"
+ONLY_PDF = "Приложите документ в формате PDF"
 
-_SUFFIX_PATTERN = "|".join(re.escape(suffix) for suffix in _SUFFIX_BY_MIME.values())
+_SUFFIX_PATTERN = "|".join(
+    re.escape(suffix) for suffix in (*_SUFFIX_BY_MIME.values(), PDF_SUFFIX)
+)
 _NAME_RE = re.compile(f"^[0-9a-f]{{32}}(?:{_SUFFIX_PATTERN})$")
 
 _CHUNK_SIZE = 64 * 1024
@@ -48,8 +52,7 @@ class FilesService:
             while chunk := await upload.read(_CHUNK_SIZE):
                 out.write(chunk)
 
-        content_type = (upload.content_type or "").split(";", 1)[0].strip()
-        return await self.save_download(content_type, copy)
+        return await self.save_download(_content_type(upload), copy)
 
     def sign(self, name: str) -> str:
         self.path_of(name)
@@ -89,19 +92,10 @@ class FilesService:
         if suffix is None:
             raise InvalidRequest(_UNSUPPORTED)
 
-        destination = self.path_of(f"{uuid4().hex}{suffix}")
-        video = self.is_video(suffix)
-        try:
-            with destination.open("w+b") as out:
-                limit = self._max_video_mb if video else self._max_size_mb
-                writer = _CappedWriter(out, limit, "Видео" if video else "Файл")
-                await download(cast("BinaryIO", writer))
-                out.seek(0)
-                actual = _suffix_of(out.read(12))
-        except BaseException:
-            destination.unlink(missing_ok=True)
-            raise
-        if actual is None or self.is_video(actual) != video:
+        destination = self.path_of(await self._write(suffix, download))
+        with destination.open("rb") as saved:
+            actual = _suffix_of(saved.read(12))
+        if actual is None or self.is_video(actual) != self.is_video(suffix):
             destination.unlink()
             raise InvalidRequest(_UNSUPPORTED)
         return destination.rename(destination.with_suffix(actual)).name
@@ -116,6 +110,43 @@ class FilesService:
             path.unlink(missing_ok=True)
             removed += 1
         return removed
+
+    async def save_document(self, upload: UploadFile) -> str:
+        if _content_type(upload) != "application/pdf":
+            raise InvalidRequest(ONLY_PDF)
+
+        async def copy(out: BinaryIO) -> None:
+            head = await upload.read(_CHUNK_SIZE)
+            if not head.startswith(b"%PDF-"):
+                raise InvalidRequest(ONLY_PDF)
+            out.write(head)
+            while chunk := await upload.read(_CHUNK_SIZE):
+                out.write(chunk)
+
+        return await self._write(PDF_SUFFIX, copy)
+
+    async def _write(
+        self,
+        suffix: str,
+        download: Callable[[BinaryIO], Awaitable[object]],
+    ) -> str:
+        name = f"{uuid4().hex}{suffix}"
+        destination = self.path_of(name)
+        try:
+            with destination.open("wb") as out:
+                video = self.is_video(name)
+                limit = self._max_video_mb if video else self._max_size_mb
+                writer = _CappedWriter(out, limit, "Видео" if video else "Файл")
+                await download(cast("BinaryIO", writer))
+        except BaseException:
+            destination.unlink(missing_ok=True)
+            raise
+        return name
+
+    def media_path_of(self, name: str) -> Path:
+        if name.endswith(PDF_SUFFIX):
+            raise EntityNotFound("Файл не найден")
+        return self.path_of(name)
 
 
 class _CappedWriter:
@@ -149,3 +180,7 @@ def _suffix_of(head: bytes) -> str | None:
     if head[8:12] in _HEIC_BRANDS:
         return ".heic"
     return ".mov" if head[8:12] == b"qt  " else ".mp4"
+
+
+def _content_type(upload: UploadFile) -> str:
+    return (upload.content_type or "").split(";", 1)[0].strip()

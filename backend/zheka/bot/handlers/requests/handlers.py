@@ -18,17 +18,11 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.danger import detect_danger
 from zheka.core.deeplinks import request_app_path
-from zheka.core.enums import (
-    CANCEL_REASONS,
-    CATEGORY_RULES,
-    CancelReason,
-    RequestCategory,
-    RequestChannel,
-)
-from zheka.core.errors import ZhekaError
-from zheka.core.ids import RequestId
+from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestChannel
+from zheka.core.ids import HouseId, RequestId
+from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.profile import ProfileService
-from zheka.core.texts import danger_warning
+from zheka.core.texts import MOMENT
 
 SENT_TEXT = "⏳ Принял, оформляю"
 NOT_CREATED = "😔 Заявку не удалось оформить: {reason}"
@@ -222,42 +216,23 @@ async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
     NewRequestData.load_start(dialog_manager).dump(dialog_manager)
 
 
-async def get_cancel(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
-    return {
-        "request_id": NewRequestData.load_start(dialog_manager).request_id,
-        "reasons": [
-            {"id": reason.value, "label": f"↩️ {CANCEL_REASONS[reason]}"}
-            for reason in CancelReason
-            if reason is not CancelReason.OTHER
-        ],
-    }
-
-
 @inject
-async def on_cancel_reason(
-    callback: MessageCallback,
-    _select: Any,
+async def get_description(
     dialog_manager: DialogManager,
-    reason: str,
-    requests_service: FromDishka[RequestsService],
-) -> None:
-    request_id = NewRequestData.load_start(dialog_manager).request_id
-    if request_id is None:
-        await dialog_manager.switch_to(NewRequest.sent)
-        return
-    try:
-        await requests_service.cancel(
+    announcements_service: FromDishka[AnnouncementsService],
+    **_: Any,
+) -> dict[str, Any]:
+    data = NewRequestData.load(dialog_manager)
+    works = (
+        None
+        if data.house_id is None or data.category is None
+        else await announcements_service.active_works(
             dialog_user_id(dialog_manager),
-            RequestId(request_id),
-            CancelReason(reason),
-            None,
+            HouseId(data.house_id),
+            data.category,
         )
-    except ZhekaError as error:
-        await refused(callback, error)
-        return
-    await back_to_menu(
-        dialog_manager,
-        f"↩️ Заявка №{request_id} отменена",
-        OPEN_REQUEST,
-        request_app_path(RequestId(request_id)),
     )
+    return {
+        **await get_draft(dialog_manager),
+        "works_until": None if works is None else f"{works.ends_at:{MOMENT}}",
+    }

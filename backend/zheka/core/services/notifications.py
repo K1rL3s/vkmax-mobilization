@@ -15,6 +15,7 @@ from zheka.core.ids import (
     AnnouncementId,
     HouseId,
     MaxChatId,
+    OrgId,
     RequestId,
     UserId,
 )
@@ -92,6 +93,7 @@ class NotificationsService:
         app_button: str | None = None,
         app_path: str | None = None,
         announcement_id: AnnouncementId | None = None,
+        silent: bool = False,
     ) -> None:
         if not user_ids:
             return
@@ -104,6 +106,7 @@ class NotificationsService:
             app_button=app_button,
             app_path=app_path,
             announcement_id=announcement_id,
+            silent=silent,
         )
 
     def notify_chats(
@@ -199,9 +202,30 @@ class NotificationsService:
                 app_path=request_app_path(request.id),
             )
 
+    def open_question_card(self, request_id: RequestId) -> None:
+        self._publisher.publish(TaskName.SEND_QUESTION_CARD, request_id=request_id)
+
     def send_gji_pdf(self, user_id: UserId, request_id: RequestId) -> None:
         self._publisher.publish(
             TaskName.SEND_GJI_PDF,
             user_id=user_id,
             request_id=request_id,
+        )
+
+    def send_register_pdf(
+        self,
+        user_id: UserId,
+        org_id: OrgId,
+        announcement_id: AnnouncementId,
+        house_id: HouseId,
+        *,
+        unmarked_only: bool,
+    ) -> None:
+        self._publisher.publish(
+            TaskName.SEND_REGISTER_PDF,
+            user_id=user_id,
+            org_id=org_id,
+            announcement_id=announcement_id,
+            house_id=house_id,
+            unmarked_only=unmarked_only,
         )

@@ -221,6 +221,15 @@ const AdminPollNewPage = () => {
           </section>
         </Flex>
 
+        <div className={styles.Panel}>
+          <CellSimple
+            as="label"
+            title="Сообщить жителям в личку"
+            subtitle="Объявление с кнопкой «Проголосовать» и реестр, каким квартирам оно дошло"
+            after={<Switch {...form.register("notifyResidents")} />}
+          />
+        </div>
+
         <Typography.Text variant="description" color="secondary">
           Жители увидят пометку: опрос - предварительный сбор позиций
           собственников и не является общим собранием (ОСС) по ЖК РФ

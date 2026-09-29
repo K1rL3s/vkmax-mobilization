@@ -508,6 +508,14 @@ export const similarRequests = (
     can_join: false,
     group_id: null,
     window_started_at: null,
+    works:
+      houseId === 1 && category === "water_supply"
+        ? {
+            announcement_id: 11,
+            title: "Опрессовка системы водоснабжения",
+            ends_at: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+          }
+        : null,
   };
 };
 

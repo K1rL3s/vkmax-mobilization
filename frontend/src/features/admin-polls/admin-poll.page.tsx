@@ -1,4 +1,5 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
+import { generatePath, Link } from "react-router-dom";
 
 import {
   authorCaption,
@@ -6,6 +7,7 @@ import {
   PollOption,
   QuorumPanel,
 } from "@/features/meetings";
+import { Routes } from "@/shared/model/routes";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
@@ -15,7 +17,7 @@ import { useAdminPoll } from "./use-admin-poll";
 import styles from "./admin-poll.module.css";
 
 const AdminPollPage = () => {
-  const { poll, results, address, closing, ...view } = useAdminPoll();
+  const { poll, results, address, noticeId, closing, ...view } = useAdminPoll();
 
   if (view.isPending) {
     return <LoadingState fill title="Загружаем опрос" />;
@@ -86,6 +88,18 @@ const AdminPollPage = () => {
         </Flex>
 
         <QuorumPanel results={results} />
+
+        {noticeId !== undefined && (
+          <Button asChild size="medium" variant="secondary">
+            <Link
+              to={generatePath(Routes.ADMIN_ANNOUNCEMENT_REGISTER, {
+                announcementId: String(noticeId),
+              })}
+            >
+              Реестр уведомлений
+            </Link>
+          </Button>
+        )}
       </div>
 
       {isActive && (

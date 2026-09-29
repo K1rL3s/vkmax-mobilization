@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { EmergencyCard, emergencyContact } from "@/features/emergency";
 import { outageForCategory, outageTitle, useHouseCard } from "@/features/house";
-import type { components } from "@/shared/api/schema/generated";
+import { formatDayTime } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 import {
@@ -11,7 +11,8 @@ import {
   AttachmentPicker,
 } from "@/shared/ui/attachment-picker";
 import { Chevron } from "@/shared/ui/chevron";
-import { alertIcon, Icon } from "@/shared/ui/icon";
+import { alertIcon, Icon, wrenchIcon } from "@/shared/ui/icon";
+import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
@@ -144,6 +145,29 @@ const NewRequestPage = () => {
             {outage.is_demo && (
               <StatusPill tone="themed">демо-данные</StatusPill>
             )}
+          </Flex>
+        )}
+
+        {!form.isDispute && form.neighbours?.works && (
+          <Flex asChild align="center" gap={12}>
+            <Link to={Routes.ANNOUNCEMENTS} className={styles.Works}>
+              <IconTile icon={wrenchIcon} tone="themed" />
+              <Flex
+                className={styles.Grow}
+                align="stretch"
+                direction="column"
+                gapY={2}
+              >
+                <Typography.Text variant="body-strong" color="primary">
+                  В доме идут плановые работы до{" "}
+                  {formatDayTime(form.neighbours.works.ends_at)}
+                </Typography.Text>
+                <Typography.Text variant="description" color="secondary">
+                  {form.neighbours.works.title}
+                </Typography.Text>
+              </Flex>
+              <Chevron />
+            </Link>
           </Flex>
         )}
 

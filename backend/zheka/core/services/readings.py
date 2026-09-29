@@ -263,7 +263,7 @@ class ReadingsService:
         if len(draft.photos) > MAX_PHOTOS:
             raise InvalidRequest(TOO_MANY_PHOTOS)
         for name in draft.photos:
-            self._files.path_of(name)
+            self._files.media_path_of(name)
 
         now = datetime.now(UTC)
         today = house.local(now).date()

@@ -1,8 +1,10 @@
 from datetime import datetime
 
 from sqlalchemy import delete, func, select, union, update
+from sqlalchemy.dialects.postgresql import JSONB
 
 from zheka.infra.database.repos.base import BaseAlchemyRepo
+from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.charges import tariffs_table
 from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.meters import readings_table
@@ -18,6 +20,12 @@ class FilesRepo(BaseAlchemyRepo):
             select(request_attachments_table.c.path),
             select(func.jsonb_array_elements_text(readings_table.c.photo_paths)),
             select(func.jsonb_array_elements_text(houses_table.c.documents)),
+            select(
+                func.jsonb_array_elements(
+                    announcements_table.c.documents,
+                    type_=JSONB,
+                )["name"].astext,
+            ),
             select(tariffs_table.c.document_url).where(
                 tariffs_table.c.document_url.is_not(None),
             ),

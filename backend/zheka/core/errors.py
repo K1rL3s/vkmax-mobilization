@@ -42,3 +42,8 @@ class InvalidRequest(ZhekaError):
 
 class TooManyRequests(ZhekaError):
     message = "Слишком много запросов, попробуйте позже"
+
+
+NO_BOT_DIALOG = (
+    "Бот не может вам написать: откройте чат с ботом, запустите его и повторите"
+)

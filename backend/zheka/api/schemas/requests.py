@@ -4,6 +4,7 @@ from typing import Self
 from pydantic import Field
 
 from zheka.api.dependencies import CurrentOrg
+from zheka.api.schemas.announcements import PlannedWorks
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FILES_DESCRIPTION, FileRef
 from zheka.core.danger import detect_danger
@@ -33,6 +34,7 @@ from zheka.core.services.admin_requests import (
     ExecutorView,
     RequestGroupCardData,
 )
+from zheka.core.services.announcements import ActiveWorks
 from zheka.core.services.request_groups import SimilarRequests
 from zheka.core.services.requests import (
     MAX_RATING,
@@ -263,15 +265,23 @@ class SimilarRequestsResponse(BaseSchema):
     can_join: bool
     group_id: RequestGroupId | None = None
     window_started_at: datetime | None = None
+    works: PlannedWorks | None = Field(
+        default=None,
+        description=(
+            "Идущие плановые работы УК по этой категории в доме жителя; "
+            "заявку подать все равно можно"
+        ),
+    )
 
     @classmethod
-    def of(cls, similar: SimilarRequests) -> Self:
+    def of(cls, similar: SimilarRequests, works: ActiveWorks | None) -> Self:
         return cls(
             category=similar.category,
             neighbours_count=similar.flats_count,
             can_join=similar.group_id is not None,
             group_id=similar.group_id,
             window_started_at=similar.window_started_at,
+            works=None if works is None else PlannedWorks.of(works),
         )
 
 

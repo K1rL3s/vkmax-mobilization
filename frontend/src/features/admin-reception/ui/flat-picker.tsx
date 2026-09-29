@@ -52,7 +52,7 @@ export const FlatPicker = ({
       ) : (
         <EmptyState
           title="Подтверждённых квартир нет"
-          description="Ячейку в сборе получает только квартира с подтверждённым жителем: в этом доме таких пока нет"
+          description="В списке только квартиры с подтверждённым жителем, а в этом доме таких пока нет"
         />
       );
     }
@@ -106,8 +106,8 @@ export const FlatPicker = ({
 
         {withoutResident > 0 && (
           <Typography.Text variant="detail" color="secondary">
-            Ещё {withoutResident} квартир без подтверждённого жителя: им некому
-            открыть
+            Ещё {withoutResident} квартир без подтверждённого жителя: выбрать их
+            нельзя
           </Typography.Text>
         )}
       </>

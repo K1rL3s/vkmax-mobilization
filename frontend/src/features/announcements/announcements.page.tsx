@@ -1,12 +1,14 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 
 import { Card } from "@/shared/ui/card";
-import { alertIcon, megaphoneIcon } from "@/shared/ui/icon";
+import { alertIcon, megaphoneIcon, wrenchIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
+import { entrancesLabel } from "./scope";
 import { useAnnouncements } from "./use-announcements";
 import { announcementWhen } from "./when";
+import { WorksDetails } from "./works";
 
 import styles from "./announcements.module.css";
 
@@ -48,7 +50,13 @@ const AnnouncementsPage = () => {
           <Card key={item.id}>
             <Flex align="center" gap={12}>
               <IconTile
-                icon={item.urgent ? alertIcon : megaphoneIcon}
+                icon={
+                  item.urgent
+                    ? alertIcon
+                    : item.works
+                      ? wrenchIcon
+                      : megaphoneIcon
+                }
                 tone={item.urgent ? "negative" : "themed"}
               />
 
@@ -59,11 +67,20 @@ const AnnouncementsPage = () => {
                 gapY={2}
               >
                 <Typography.Text variant="title" color="primary">
-                  {item.urgent ? "Срочное объявление" : "Объявление"}
+                  {item.urgent
+                    ? "Срочное объявление"
+                    : item.works
+                      ? "Плановые работы"
+                      : "Объявление"}
                 </Typography.Text>
 
                 <Typography.Text variant="description" color="tertiary">
-                  {[item.org_name, announcementWhen(item.created_at)]
+                  {[
+                    item.org_name,
+                    item.entrances && entrancesLabel(item.entrances),
+                    item.flats_count && "Для вашей квартиры",
+                    announcementWhen(item.created_at),
+                  ]
                     .filter(Boolean)
                     .join(" · ")}
                 </Typography.Text>
@@ -77,6 +94,8 @@ const AnnouncementsPage = () => {
             >
               {item.text}
             </Typography.Text>
+
+            <WorksDetails announcement={item} />
           </Card>
         ))}
 

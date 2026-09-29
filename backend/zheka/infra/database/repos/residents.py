@@ -241,19 +241,23 @@ class ResidentsRepo(BaseAlchemyRepo):
         resident.verified_by = by
         await self._session.flush()
 
-    async def active_user_ids(self, house_ids: Collection[HouseId]) -> Sequence[UserId]:
+    async def active_residents(
+        self,
+        house_ids: Collection[HouseId],
+    ) -> Sequence[Resident]:
         if not house_ids:
             return []
         stmt = (
-            select(residents_table.c.user_id)
+            select(Resident)
             .where(
                 residents_table.c.house_id.in_(house_ids),
                 residents_table.c.status == ResidentStatus.ACTIVE,
             )
-            .distinct()
+            .distinct(residents_table.c.user_id)
+            .order_by(residents_table.c.user_id, residents_table.c.id)
         )
         result = await self._session.execute(stmt)
-        return [UserId(user_id) for user_id in result.scalars().all()]
+        return result.scalars().all()
 
     async def list_for_houses_and_users(
         self,
@@ -290,3 +294,27 @@ class ResidentsRepo(BaseAlchemyRepo):
             ),
         )
         return bool(await self._session.scalar(stmt))
+
+    async def active_residents_in(
+        self,
+        house_id: HouseId,
+        entrances: Collection[int],
+        flat_ids: Collection[FlatId],
+    ) -> Sequence[Resident]:
+        stmt = (
+            select(Resident)
+            .join(flats_table, flats_table.c.id == residents_table.c.flat_id)
+            .where(
+                residents_table.c.house_id == house_id,
+                residents_table.c.status == ResidentStatus.ACTIVE,
+                or_(
+                    flats_table.c.entrance.in_(entrances),
+                    and_(
+                        flats_table.c.id.in_(flat_ids),
+                        residents_table.c.verified_at.is_not(None),
+                    ),
+                ),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()

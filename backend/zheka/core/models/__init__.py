@@ -1,5 +1,5 @@
 from zheka.core.models.access import AccessRequest, AccessSlot, AccessTarget
-from zheka.core.models.announcements import Announcement
+from zheka.core.models.announcements import Announcement, NoticeDelivery
 from zheka.core.models.charges import Charge, Tariff
 from zheka.core.models.chats import Chat, ChatCard, ChatPin
 from zheka.core.models.events import Event
@@ -46,6 +46,7 @@ __all__ = (
     "House",
     "IdempotencyKey",
     "Meter",
+    "NoticeDelivery",
     "NotificationSetting",
     "OrgInvite",
     "OrgMember",

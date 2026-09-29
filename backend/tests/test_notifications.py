@@ -24,6 +24,7 @@ from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.notifications import _fan_out
 from zheka.core.enums import (
     EventType,
+    NoticeStatus,
     NotificationCategory,
     NotificationLevel,
     OrgRole,
@@ -194,11 +195,12 @@ async def test_fan_out_sends_with_the_resolved_sound(
     sender = _FakeSender()
     category = NotificationCategory.REQUESTS.value
 
-    count = await _fan_out(sender, repo, [data.user_id], TEXT, category, mandatory)
+    results = await _fan_out(sender, repo, [data.user_id], TEXT, category, mandatory)
 
     user = await UsersRepo(session).get_by_id(data.user_id)
     assert user is not None
-    assert count == len(sent)
+    [(status, _at)] = results.values()
+    assert status is (NoticeStatus.DELIVERED if sent else NoticeStatus.MUTED)
     assert sender.sent == [(user.max_user_id, flag) for flag in sent]
 
 
@@ -445,7 +447,7 @@ async def test_fan_out_does_not_count_a_refused_send(
     sender = _FakeSender(refuse=True)
     category = NotificationCategory.REQUESTS.value
 
-    count = await _fan_out(
+    results = await _fan_out(
         sender,
         repo,
         [data.user_id],
@@ -455,4 +457,4 @@ async def test_fan_out_does_not_count_a_refused_send(
     )
 
     assert len(sender.sent) == 1
-    assert count == 0
+    assert results[data.user_id][0] is NoticeStatus.FAILED

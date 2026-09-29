@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { useIsOrgAdmin } from "@/features/admin-reception";
 import { useClosePoll } from "@/features/meetings";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { useRouteParams } from "@/shared/lib/router";
@@ -29,6 +30,14 @@ export const useAdminPoll = () => {
     params: { ...orgParams(), query: { limit: 100 } },
   });
 
+  const isAdmin = useIsOrgAdmin();
+  const notices = rqClient.useQuery(
+    "get",
+    "/api/admin/announcements",
+    { params: { ...orgParams(), query: { poll_id: route?.pollId, limit: 1 } } },
+    { enabled: route !== null && isAdmin },
+  );
+
   const poll = card.data;
 
   return {
@@ -36,6 +45,7 @@ export const useAdminPoll = () => {
     results: results.data,
     address: houses.data?.items.find((house) => house.id === poll?.house_id)
       ?.address,
+    noticeId: notices.data?.items[0]?.id,
     closing: useClosePoll(route?.pollId ?? 0),
     isPending: route !== null && (card.isPending || results.isPending),
     isError: route === null || card.isError || results.isError,

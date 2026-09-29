@@ -1,22 +1,28 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.types.buttons import InlineButtons
+from maxo.utils.upload_media import BufferedInputFile
 from taskiq import async_shared_broker
 
 from zheka.bot.cards import app_link, open_app
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import recheck_chat_rights
-from zheka.core.enums import ChatCardKind, NotificationCategory
-from zheka.core.ids import AnnouncementId, MaxChatId, UserId
+from zheka.core import texts
+from zheka.core.enums import ChatCardKind, NoticeStatus, NotificationCategory
+from zheka.core.ids import AnnouncementId, HouseId, MaxChatId, OrgId, UserId
+from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.chats import ChatsService
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
+from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
+from zheka.infra.pdf import NoticeRegisterPdf
 
 logger = logging.getLogger(__name__)
 
@@ -29,26 +35,37 @@ async def _fan_out(
     category: str,
     mandatory: bool,
     keyboard: Sequence[Sequence[InlineButtons]] | None = None,
-) -> int:
+    *,
+    silent: bool = False,
+) -> dict[UserId, tuple[NoticeStatus, datetime]]:
     recipients = await repo.recipients(user_ids, NotificationCategory(category))
     logger.info("Рассылка %s: получателей %s", category, len(recipients))
 
-    sent = 0
+    started = datetime.now(UTC)
+    results = dict.fromkeys(user_ids, (NoticeStatus.BOT_STOPPED, started))
     for recipient in recipients:
         notify = recipient.level.resolve_notify(mandatory=mandatory)
         if notify is None:
+            results[recipient.user_id] = (NoticeStatus.MUTED, started)
             continue
         result = await sender.send_message(
             text,
             user_id=recipient.max_user_id,
-            notify=notify,
+            notify=notify and not silent,
             keyboard=keyboard,
         )
-        if result is not None:
-            sent += 1
+        results[recipient.user_id] = (
+            NoticeStatus.FAILED if result is None else NoticeStatus.DELIVERED,
+            datetime.now(UTC),
+        )
 
-    logger.info("Рассылка %s: отправлено %s из %s", category, sent, len(recipients))
-    return sent
+    logger.info(
+        "Рассылка %s: отправлено %s из %s",
+        category,
+        _delivered(results),
+        len(recipients),
+    )
+    return results
 
 
 @async_shared_broker.task(task_name=TaskName.SEND_TO_USER.value)
@@ -65,7 +82,7 @@ async def send_to_user(
     app_path: str | None = None,
 ) -> int:
     keyboard = None if app_button is None else open_app(bot, app_button, app_path)
-    return await _fan_out(
+    results = await _fan_out(
         sender,
         repo,
         [user_id],
@@ -74,6 +91,7 @@ async def send_to_user(
         mandatory,
         keyboard,
     )
+    return _delivered(results)
 
 
 @async_shared_broker.task(task_name=TaskName.BROADCAST_TO_USERS.value)
@@ -90,11 +108,23 @@ async def broadcast_to_users(
     app_button: str | None = None,
     app_path: str | None = None,
     announcement_id: AnnouncementId | None = None,
+    silent: bool = False,
 ) -> int:
     keyboard = None if app_button is None else open_app(bot, app_button, app_path)
-    sent = await _fan_out(sender, repo, user_ids, text, category, mandatory, keyboard)
+    results = await _fan_out(
+        sender,
+        repo,
+        user_ids,
+        text,
+        category,
+        mandatory,
+        keyboard,
+        silent=silent,
+    )
+    sent = _delivered(results)
     if announcement_id is not None:
         await announcements_repo.set_delivered(announcement_id, direct=sent)
+        await announcements_repo.set_deliveries(announcement_id, results)
     return sent
 
 
@@ -144,3 +174,42 @@ async def broadcast_to_chats(
     if announcement_id is not None:
         await announcements_repo.set_delivered(announcement_id, chat=sent)
     return sent
+
+
+def _delivered(results: Mapping[UserId, tuple[NoticeStatus, datetime]]) -> int:
+    return sum(status is NoticeStatus.DELIVERED for status, _at in results.values())
+
+
+@async_shared_broker.task(task_name=TaskName.SEND_REGISTER_PDF.value)
+@inject(patch_module=True)
+async def send_register_pdf(
+    user_id: UserId,
+    org_id: OrgId,
+    announcement_id: AnnouncementId,
+    house_id: HouseId,
+    unmarked_only: bool,
+    announcements_service: FromDishka[AnnouncementsService],
+    orgs_repo: FromDishka[OrgsRepo],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> None:
+    user = await users_repo.get_by_id(user_id)
+    org = await orgs_repo.get(org_id)
+    if user is None or org is None:
+        return
+    register = await announcements_service.register(org_id, announcement_id, house_id)
+    await sender.send_file(
+        user,
+        BufferedInputFile.file(
+            NoticeRegisterPdf(
+                register,
+                demo=org.is_demo,
+                unmarked_only=unmarked_only,
+            ).render(),
+            f"reestr-{announcement_id}.pdf",
+        ),
+        texts.register_pdf_sent(
+            register.house.local(register.announcement.announcement.created_at),
+            register.house.address,
+        ),
+    )

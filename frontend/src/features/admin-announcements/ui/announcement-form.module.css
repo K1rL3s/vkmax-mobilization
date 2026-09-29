@@ -32,6 +32,12 @@
   min-width: 0;
 }
 
+.Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .Error {
   color: var(--text-negative);
 }

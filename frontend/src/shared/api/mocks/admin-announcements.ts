@@ -1,7 +1,24 @@
 import type { components } from "../schema/generated";
 
-import { badRequest, endpoint, notFound, number, ok, page } from "./reply";
-import { ZHILSERVIS, hours } from "./state";
+import { readUploadedFile } from "./multipart";
+import {
+  badRequest,
+  conflict,
+  endpoint,
+  notFound,
+  number,
+  ok,
+  page,
+} from "./reply";
+import {
+  ZHILSERVIS,
+  addressOf,
+  fileUrl,
+  houseFlats,
+  hours,
+  nextFileName,
+  uploads,
+} from "./state";
 
 type Schemas = components["schemas"];
 
@@ -54,6 +71,23 @@ const item = (
 });
 
 const announcements: Item[] = [
+  {
+    ...item(
+      9,
+      20,
+      [1],
+      ["chat", "direct"],
+      "Опрессовка системы водоснабжения\nВозможны перепады давления и кратковременные отключения холодной воды днём",
+    ),
+    works: {
+      category: "water_supply",
+      starts_at: hours(-3),
+      ends_at: hours(5),
+    },
+    documents: [
+      { name: "order.pdf", title: "Приказ № 12 об опрессовке", url: "#" },
+    ],
+  },
   item(
     8,
     2,
@@ -155,14 +189,29 @@ export const adminAnnouncementsConfigs = [
       return notFound("Дом не найден");
     }
 
-    const created = item(
-      Math.max(0, ...announcements.map(({ id }) => id)) + 1,
-      0,
-      houseIds,
-      channels,
-      text,
-      body.urgent ?? false,
-    );
+    const created = {
+      ...item(
+        Math.max(0, ...announcements.map(({ id }) => id)) + 1,
+        0,
+        houseIds,
+        channels,
+        text,
+        body.urgent ?? false,
+      ),
+      entrances: body.entrances ?? null,
+      flats_count: body.flat_ids?.length ?? null,
+      works: body.works
+        ? {
+            category: body.works.category ?? null,
+            starts_at: new Date(body.works.starts_at).toISOString(),
+            ends_at: new Date(body.works.ends_at).toISOString(),
+          }
+        : null,
+      documents: (body.documents ?? []).map((document) => ({
+        ...document,
+        url: fileUrl(document.name),
+      })),
+    };
     announcements.unshift(created);
 
     return ok({
@@ -170,4 +219,124 @@ export const adminAnnouncementsConfigs = [
       houses_without_chat: deliver(houseIds, channels).withoutChat,
     } satisfies Item);
   }),
+  endpoint(
+    "get",
+    "/admin/announcements/:announcement_id/register",
+    (request) => {
+      const announcement = announcements.find(
+        ({ id }) => id === Number(request.params.announcement_id),
+      );
+      const houseId =
+        number(request.query.house_id) ?? announcement?.house_ids[0] ?? 0;
+
+      if (!announcement || !announcement.house_ids.includes(houseId)) {
+        return notFound("Объявление не найдено");
+      }
+
+      const statuses: Schemas["NoticeStatus"][] = [
+        "delivered",
+        "delivered",
+        "muted",
+        "delivered",
+        "bot_stopped",
+        "delivered",
+        "failed",
+      ];
+      const at = (index: number) =>
+        new Date(
+          Date.parse(announcement.created_at) + (index + 1) * 1000,
+        ).toISOString();
+      const flats = houseFlats(houseId, "").map((flat, index) => {
+        const recipients: Schemas["NoticeRecipient"][] =
+          index % 4 === 3
+            ? []
+            : [
+                {
+                  role: index % 5 === 2 ? "tenant" : "owner",
+                  verified: index % 3 !== 1,
+                  status:
+                    announcement.delivered_count === null
+                      ? "pending"
+                      : statuses[index % statuses.length],
+                  at: announcement.delivered_count === null ? null : at(index),
+                },
+              ];
+
+        return {
+          flat_id: flat.id,
+          number: flat.number,
+          entrance: flat.entrance ?? null,
+          recipients,
+          delivered: recipients.some(({ status }) => status === "delivered"),
+        };
+      });
+
+      return ok({
+        announcement,
+        house_id: houseId,
+        address: addressOf(houseId),
+        flats,
+        without_flat: [
+          { role: "owner", verified: false, status: "delivered", at: at(0) },
+        ],
+        flats_delivered: flats.filter(({ delivered }) => delivered).length,
+        chat_delivered: announcement.channels.includes("chat") ? 1 : 0,
+        generated_at: new Date().toISOString(),
+        is_demo: false,
+      } satisfies Schemas["NoticeRegister"]);
+    },
+  ),
+  endpoint("post", "/admin/files", async (request) => {
+    const url = await readUploadedFile(request);
+
+    if (!url?.startsWith("data:application/pdf;")) {
+      return badRequest("Приложите документ в формате PDF");
+    }
+
+    const name = nextFileName("pdf");
+    uploads.set(name, url);
+
+    return ok({ name, url, is_video: false } satisfies Schemas["FileRef"]);
+  }),
+  endpoint(
+    "post",
+    "/admin/announcements/:announcement_id/finish",
+    (request) => {
+      const announcement = announcements.find(
+        ({ id }) => id === Number(request.params.announcement_id),
+      );
+
+      if (!announcement) {
+        return notFound("Объявление не найдено");
+      }
+
+      if (
+        !announcement.works ||
+        Date.parse(announcement.works.ends_at) <= Date.now()
+      ) {
+        return conflict("Работы сейчас не идут");
+      }
+
+      announcement.works.ends_at = new Date().toISOString();
+
+      return ok(announcement satisfies Item);
+    },
+  ),
+  endpoint(
+    "post",
+    "/admin/announcements/:announcement_id/register/pdf",
+    (request) => {
+      const announcement = announcements.find(
+        ({ id }) => id === Number(request.params.announcement_id),
+      );
+      const houseId =
+        number(request.query.house_id) ?? announcement?.house_ids[0] ?? 0;
+
+      if (!announcement || !announcement.house_ids.includes(houseId)) {
+        return notFound("Объявление не найдено");
+      }
+
+      return ok({ ok: true } satisfies Schemas["OkResponse"]);
+    },
+  ),
 ];

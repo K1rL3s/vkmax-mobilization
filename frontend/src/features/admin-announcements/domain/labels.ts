@@ -1,3 +1,4 @@
+import { entrancesLabel } from "@/features/announcements";
 import type { components } from "@/shared/api/schema/generated";
 import { plural } from "@/shared/lib/format";
 
@@ -61,3 +62,59 @@ export const undeliveredReason = ({ channels }: Delivery) =>
   ]
     .filter(Boolean)
     .join(", или ");
+
+export const scopeLabel = ({
+  entrances,
+  flats_count: flatsCount,
+}: Pick<Delivery, "entrances" | "flats_count">) => {
+  if (entrances) {
+    return entrancesLabel(entrances);
+  }
+
+  if (flatsCount) {
+    return `${flatsCount} ${plural(flatsCount, ["квартира", "квартиры", "квартир"])}`;
+  }
+
+  return undefined;
+};
+
+type Recipient = components["schemas"]["NoticeRecipient"];
+
+const NOTICE_LABELS: Record<Exclude<Recipient["status"], "pending">, string> = {
+  delivered: "Доставлено",
+  failed: "MAX не доставил",
+  muted: "Выключил объявления",
+  bot_stopped: "Бот остановлен",
+};
+
+export const noticeLabel = (status: Recipient["status"], sending: boolean) => {
+  if (status !== "pending") {
+    return NOTICE_LABELS[status];
+  }
+
+  return sending ? "Отправляется…" : "Нет данных";
+};
+
+export const recipientLabel = ({ role, verified }: Recipient) => {
+  if (role === null) {
+    return "автор объявления";
+  }
+
+  return `${role === "owner" ? "собственник" : "арендатор"}, ${verified ? "подтверждён" : "не подтверждён"}`;
+};
+
+export const chatLabel = (delivery: Delivery, chatDelivered: number | null) => {
+  if (!delivery.channels.includes("chat")) {
+    return "В чат дома не отправлялось";
+  }
+
+  if (chatDelivered === null) {
+    return `В чат дома: ${isSending(delivery) ? "отправляется…" : "нет данных"}`;
+  }
+
+  if (delivery.house_ids.length > 1) {
+    return `В чаты домов: отправлено в ${chatDelivered}`;
+  }
+
+  return `В чат дома: ${chatDelivered > 0 ? "отправлено" : "не отправлено"}`;
+};

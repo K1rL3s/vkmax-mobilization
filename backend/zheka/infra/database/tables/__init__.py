@@ -4,7 +4,10 @@ from zheka.infra.database.tables.access import (
     access_slots_table,
     access_targets_table,
 )
-from zheka.infra.database.tables.announcements import announcements_table
+from zheka.infra.database.tables.announcements import (
+    announcements_table,
+    notice_deliveries_table,
+)
 from zheka.infra.database.tables.base import mapper_registry, metadata
 from zheka.infra.database.tables.charges import charges_table, tariffs_table
 from zheka.infra.database.tables.chats import (
@@ -97,3 +100,4 @@ mapper_registry.map_imperatively(
     verification_revocations_table,
 )
 mapper_registry.map_imperatively(models.ChairmanHandover, chairman_handovers_table)
+mapper_registry.map_imperatively(models.NoticeDelivery, notice_deliveries_table)

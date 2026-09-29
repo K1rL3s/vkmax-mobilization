@@ -150,20 +150,43 @@ export const announcementsConfigs = [
 
     const orgName = findHouse(houseId)?.org?.name ?? null;
 
+    const works: Schemas["AnnouncementItem"] = {
+      id: SEEDS.length + 1,
+      created_at: minutes(-20 * 60),
+      text: "Опрессовка системы водоснабжения\nВозможны перепады давления и кратковременные отключения холодной воды днём",
+      urgent: false,
+      org_name: orgName,
+      house_ids: [houseId],
+      channels: ["chat"],
+      recipients_count: 0,
+      delivered_count: 0,
+      works: {
+        category: "water_supply",
+        starts_at: minutes(-3 * 60),
+        ends_at: minutes(5 * 60),
+      },
+      documents: [
+        { name: "order.pdf", title: "Приказ № 12 об опрессовке", url: "#" },
+      ],
+    };
+
     return ok(
       page(
         houseId === 1
-          ? SEEDS.map((seed, index) => ({
-              id: SEEDS.length - index,
-              created_at: createdAt(seed),
-              text: seed.text,
-              urgent: seed.urgent ?? false,
-              org_name: orgName,
-              house_ids: [houseId],
-              channels: ["chat" as const],
-              recipients_count: 0,
-              delivered_count: 0,
-            }))
+          ? [
+              works,
+              ...SEEDS.map((seed, index) => ({
+                id: SEEDS.length - index,
+                created_at: createdAt(seed),
+                text: seed.text,
+                urgent: seed.urgent ?? false,
+                org_name: orgName,
+                house_ids: [houseId],
+                channels: ["chat" as const],
+                recipients_count: 0,
+                delivered_count: 0,
+              })),
+            ]
           : [],
         request.query,
       ) satisfies Schemas["Page_AnnouncementItem_"],

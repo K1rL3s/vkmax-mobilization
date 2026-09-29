@@ -261,6 +261,7 @@ class DemoService:
             flat_number,
             area=Random(f"demo-flat:{user_id}").randint(3_800, 7_800),
             account_no=f"Д{secrets.randbelow(10**9):09d}",
+            entrance=1,
         )
         if created:
             await self.furnish(

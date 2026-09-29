@@ -1,0 +1,188 @@
+.Page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px 24px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.Screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.Panel,
+.Options {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Options {
+  background-color: var(--background-secondary);
+}
+
+.SheetTitle {
+  margin: 0;
+}
+
+.Sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.Demo {
+  align-self: flex-start;
+  margin: 0;
+  padding: 2px 8px;
+  border: 2px solid currentcolor;
+  border-radius: 6px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.Title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 26px;
+}
+
+.Line,
+.Note {
+  margin: 0;
+}
+
+.Quote {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.Note {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.Table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 18px;
+
+  th,
+  td {
+    padding: 6px 4px;
+    border-bottom: 1px solid var(--divider-primary);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  th:first-child,
+  td:first-child {
+    padding-left: 0;
+  }
+
+  th:last-child,
+  td:last-child {
+    width: 64px;
+    padding-right: 0;
+  }
+}
+
+.Unmarked {
+  color: var(--text-negative);
+}
+
+.Role {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@page {
+  size: A4;
+  margin: 15mm;
+}
+
+@media print {
+  .Page {
+    padding: 0;
+    gap: 0;
+    background-color: #fff;
+  }
+
+  .Screen {
+    display: none;
+  }
+
+  .Sheet {
+    padding: 0;
+    border-radius: 0;
+    background-color: #fff;
+    color: #000;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  .Quote,
+  .Note,
+  .Role,
+  .Table th {
+    color: #333;
+  }
+
+  .Quote {
+    display: block;
+  }
+
+  .Unmarked {
+    color: #000;
+    font-weight: 700;
+  }
+
+  .Table {
+    font-size: 10pt;
+
+    th,
+    td {
+      border-bottom-color: #999;
+    }
+
+    tr {
+      break-inside: avoid;
+    }
+
+    td:last-child {
+      width: auto;
+      white-space: nowrap;
+    }
+  }
+}
+
+.Failed {
+  color: var(--text-negative);
+}

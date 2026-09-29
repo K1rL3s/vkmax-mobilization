@@ -9,10 +9,12 @@ from httpx import ASGITransport, AsyncClient
 from tests.conftest import photo_name
 
 from zheka.api.dependencies.current_account import CurrentAccount
-from zheka.api.routes.files import download_file, upload_file
+from zheka.api.dependencies.current_org import CurrentOrg
+from zheka.api.routes.files import download_file, upload_document, upload_file
 from zheka.config import FilesConfig
+from zheka.core.enums import OrgRole
 from zheka.core.errors import EntityNotFound, InvalidRequest, TooManyRequests
-from zheka.core.ids import UserId
+from zheka.core.ids import OrgId, UserId
 from zheka.core.services.files import FilesService
 from zheka.infra.quota import UPLOAD_CALLS, UploadQuota
 
@@ -237,3 +239,21 @@ async def test_save_refuses_content_that_is_not_the_declared_kind(
         await service.save(_FakeUpload(content_type, len(head), head))  # type: ignore[arg-type]
 
     assert list(tmp_path.iterdir()) == []  # noqa: ASYNC240
+
+
+async def test_documents_share_the_upload_quota_with_photos(tmp_path: Path) -> None:
+    service = _make_service(tmp_path, max_size_mb=10)
+    account = CurrentAccount(user_id=UserId(1), consent_at=None)
+    staff = CurrentOrg(
+        org_id=OrgId(1),
+        user_id=UserId(1),
+        role=OrgRole.EMPLOYEE,
+        is_demo=False,
+    )
+    quota = UploadQuota()
+    for _ in range(UPLOAD_CALLS):
+        await upload_file(account, _FakeUpload("image/png", 16), service, quota)  # type: ignore[arg-type]
+
+    with pytest.raises(TooManyRequests):
+        await upload_document(staff, _FakeUpload("application/pdf", 16), service, quota)  # type: ignore[arg-type]
+    assert len(list(tmp_path.iterdir())) == UPLOAD_CALLS  # noqa: ASYNC240

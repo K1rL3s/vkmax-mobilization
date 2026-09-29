@@ -24,6 +24,7 @@ from zheka.core.errors import (
     FLAT_NOT_FOUND,
     GROUP_NOT_FOUND,
     HOUSE_NOT_FOUND,
+    NO_BOT_DIALOG,
     REQUEST_NOT_FOUND,
     EntityNotFound,
     InvalidRequest,
@@ -84,9 +85,7 @@ RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
 GJI_NOT_OVERDUE = "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек"
-GJI_NO_DIALOG = (
-    "Бот не может вам написать: откройте чат с ботом, запустите его и повторите"
-)
+NEIGHBOUR_DESCRIPTION = "Та же проблема: {}"
 
 
 class RequestDraft(ZhekaType):
@@ -502,7 +501,7 @@ class RequestsService:
         if sum(self._files.is_video(name) for name in attachments) > MAX_VIDEOS:
             raise InvalidRequest(TOO_MANY_VIDEOS)
         for name in attachments:
-            self._files.path_of(name)
+            self._files.media_path_of(name)
         return attachments
 
     async def _active_resident(self, user_id: UserId, house_id: HouseId) -> Resident:
@@ -747,7 +746,7 @@ class RequestsService:
             raise InvalidState(GJI_NOT_OVERDUE)
         user = await self._users.get_by_id(user_id)
         if user is None or not user.in_dialog:
-            raise InvalidState(GJI_NO_DIALOG)
+            raise InvalidState(NO_BOT_DIALOG)
         await self._events.record(
             EventType.REQUEST_EXPORTED,
             user_id=user_id,

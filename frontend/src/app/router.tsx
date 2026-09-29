@@ -313,6 +313,11 @@ const router = createBrowserRouter([
                     lazy: () =>
                       import("@/features/admin-announcements/admin-announcement-new.page"),
                   },
+                  {
+                    path: Routes.ADMIN_ANNOUNCEMENT_REGISTER,
+                    lazy: () =>
+                      import("@/features/admin-announcements/admin-announcement-register.page"),
+                  },
                 ],
               },
               {

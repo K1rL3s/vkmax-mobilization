@@ -384,3 +384,35 @@ async def test_the_sunday_task_sends_one_digest_a_day(
     assert queued[0]["app_button"] == texts.OPEN_APP
     assert blocked not in queued[0]["user_ids"]
     assert "📢 Объявлений УК: 1" in queued[0]["text"]
+
+
+async def test_the_digest_skips_announcements_for_entrances_and_flats(
+    session: AsyncSession,
+) -> None:
+    org_id, house = await _org_house(session)
+    author = await _user(session, "Сотрудник")
+    session.add_all(
+        [
+            Announcement(
+                org_id=org_id,
+                house_ids=[house.id],
+                text="Нет ГВС во втором подъезде",
+                channels=[AnnouncementChannel.DIRECT.value],
+                created_by=author,
+                created_at=NOW - timedelta(days=1),
+                entrances=[2],
+            ),
+            Announcement(
+                org_id=org_id,
+                house_ids=[house.id],
+                text="Откройте доступ в квартиру",
+                channels=[AnnouncementChannel.DIRECT.value],
+                created_by=author,
+                created_at=NOW - timedelta(days=1),
+                flat_ids=[await _flat(session, house.id)],
+            ),
+        ],
+    )
+    await session.flush()
+
+    assert await _service(session).for_house(house, NOW) is None

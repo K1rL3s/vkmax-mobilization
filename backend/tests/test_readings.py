@@ -886,3 +886,18 @@ async def test_the_meter_card_keeps_the_reading_before_the_last_period(
         _period_back(1),
         {TariffZone.SINGLE: 5_000},
     )
+
+
+async def test_submit_refuses_a_document_as_a_photo(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own, meter_id = await _owner_with_meter(session, make_org_house_flat_user)
+    draft = SubmitDraft(
+        period=_period_back(0),
+        values={TariffZone.SINGLE: 1_000},
+        photos=[photo_name().replace(".jpg", ".pdf")],
+    )
+
+    with pytest.raises(EntityNotFound):
+        await _make_service(session).submit(own.user_id, meter_id, draft)

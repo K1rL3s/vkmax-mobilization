@@ -19,6 +19,7 @@ from zheka.bot.handlers.requests.handlers import (
     SENT_TEXT,
     get_cancel,
     get_category,
+    get_description,
     get_draft,
     get_sent,
     on_attachment,
@@ -46,6 +47,10 @@ NOT_CONNECTED_TEXT = (
     "приложении - так УК узнает, что сервис здесь ждут"
 )
 DESCRIPTION_TEXT = "✍️ Опишите проблему одним сообщением"
+WORKS_TEXT = (
+    "🚧 По дому идут плановые работы до {works_until}. "
+    "Если у вас другая проблема, опишите ее"
+)
 DESCRIPTION_ATTACHMENTS_TEXT = "📎 Вложений приложено: {attachments}"
 ATTACHMENTS_TEXT = "📷 Пришлите фото или видео проблемы. Вложений: {attachments}"
 CONFIRM_TEXT = (
@@ -99,6 +104,7 @@ request_dialog = Dialog(
     Window(
         Multi(
             Const(VOICE_FAILED, when=F["voice_failed"]),
+            Format(WORKS_TEXT, when=F["works_until"]),
             Const(DESCRIPTION_TEXT),
             Format(DESCRIPTION_ATTACHMENTS_TEXT, when=F["attachments"]),
             Format("🎬 Видео: {videos}", when=F["videos"]),
@@ -113,7 +119,7 @@ request_dialog = Dialog(
         TextInput(id="description", on_success=on_description),
         Row(SwitchTo(BACK, id="to_category", state=NewRequest.category), TO_MENU),
         state=NewRequest.description,
-        getter=get_draft,
+        getter=get_description,
     ),
     Window(
         Format("{error}", when=F["error"]),

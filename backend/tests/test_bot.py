@@ -147,6 +147,7 @@ from zheka.bot.handlers.requests.windows import (
     NOT_CONNECTED_TEXT,
     NO_HOUSE_TEXT,
     PROBLEM_TEXT,
+    WORKS_TEXT,
 )
 from zheka.bot.handlers.review.handlers import REJECTION_TAKEN, repeat_sent
 from zheka.bot.handlers.review.windows import (
@@ -182,6 +183,7 @@ from zheka.broker.tasks.meters import recognize_meter_photo
 from zheka.broker.tasks.notifications import (
     broadcast_to_chats,
     broadcast_to_users,
+    send_register_pdf,
     send_to_user,
 )
 from zheka.broker.tasks.reminders import broadcast_access_request
@@ -208,6 +210,7 @@ from zheka.core.enums import (
     EventSource,
     EventType,
     MeterType,
+    NoticeStatus,
     NotificationCategory,
     NotificationLevel,
     OrgRole,
@@ -290,6 +293,7 @@ from zheka.infra.database.models import (
     ChatPin,
     Flat,
     House,
+    NoticeDelivery,
     OrgInvite,
     OrgMember,
     Organization,
@@ -309,7 +313,10 @@ from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
 from zheka.infra.database.tables.access import access_targets_table
-from zheka.infra.database.tables.announcements import announcements_table
+from zheka.infra.database.tables.announcements import (
+    announcements_table,
+    notice_deliveries_table,
+)
 from zheka.infra.database.tables.chats import chat_cards_table
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.houses import houses_table
@@ -319,6 +326,7 @@ from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
 from zheka.infra.max.sender import _chat_rate_limit, dialog_notify, is_chat_admin
+from zheka.infra.pdf import PdfDocument
 from zheka.infra.yandex import SpeechClient, YandexQuota
 from zheka.infra.yandex.vision import VisionClient
 
@@ -1976,6 +1984,7 @@ async def test_the_welcome_carries_the_link_to_the_house(
     [message] = pin_api.sent
     assert message["chat_id"] == chat_id
     assert message["notify"] is False
+    assert message["text"].endswith("поиском: #объявление, #опрос, #заявка")
     [attachment] = message["attachments"]
     assert attachment.payload.buttons == _join_house(fake_bot, house_id)
 
@@ -5137,31 +5146,145 @@ async def test_a_voice_skips_speechkit_without_keys_or_quota(
     assert _text(message_manager).startswith(VOICE_FAILED)
 
 
-async def test_the_gji_pdf_task_sends_the_complaint_file_to_its_author(
+async def test_the_broadcast_marks_every_addressee_in_the_register(
     client: BotClient,
     task_broker: InMemoryBroker,
     bot_session: AsyncSession,
+    fake_bot: FakeBot,
+    notices: _RecordingBot,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     house_id = await _staff(bot_session, client)
-    author = (await _user(bot_session, client)).id
-    request_id = await _request(
+    ids = {"author": (await _user(bot_session, client)).id}
+    refused = _max_id()
+    for kind in ("neighbour", "refused", "muted", "stopped"):
+        user = User(
+            max_user_id=refused if kind == "refused" else _max_id(),
+            max_chat_id=MaxChatId(secrets.randbits(40)),
+            name="Сосед",
+            bot_stopped_at=datetime.now(UTC) if kind == "stopped" else None,
+        )
+        bot_session.add(user)
+        await bot_session.flush()
+        ids[kind] = user.id
+    await NotificationsRepo(bot_session).set_level(
+        ids["muted"],
+        NotificationCategory.ANNOUNCEMENTS,
+        NotificationLevel.OFF,
+    )
+    announcement_id = await _announcement(bot_session, house_id, ids["author"])
+    bot_session.add_all(
+        NoticeDelivery(
+            announcement_id=announcement_id,
+            user_id=user_id,
+            house_id=house_id,
+        )
+        for user_id in ids.values()
+    )
+    await bot_session.commit()
+
+    async def send_message(**kwargs: Any) -> Any:
+        if kwargs["user_id"] == refused:
+            return await _forbidden()
+        return await notices.send_message(**kwargs)
+
+    monkeypatch.setattr(fake_bot, "send_message", send_message)
+    await _run(
+        task_broker,
+        broadcast_to_users,
+        user_ids=list(ids.values()),
+        text="Отключат воду",
+        category=NotificationCategory.ANNOUNCEMENTS.value,
+        mandatory=False,
+        announcement_id=announcement_id,
+    )
+
+    stmt = select(
+        notice_deliveries_table.c.user_id,
+        notice_deliveries_table.c.status,
+        notice_deliveries_table.c.at,
+    ).where(notice_deliveries_table.c.announcement_id == announcement_id)
+    rows = (await bot_session.execute(stmt)).all()
+    assert {row.user_id: row.status for row in rows} == {
+        ids["author"]: NoticeStatus.DELIVERED,
+        ids["neighbour"]: NoticeStatus.DELIVERED,
+        ids["refused"]: NoticeStatus.FAILED,
+        ids["muted"]: NoticeStatus.MUTED,
+        ids["stopped"]: NoticeStatus.BOT_STOPPED,
+    }
+    assert all(row.at is not None for row in rows)
+    assert await _delivered(bot_session, announcement_id) == (2, None)
+
+
+async def test_the_description_window_warns_about_planned_works_of_the_category(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
         bot_session,
-        house_id,
-        RequestStatus.ACCEPTED,
-        author=author,
+        client,
+        message_manager,
     )
-    send_file = AsyncMock()
-    monkeypatch.setattr(MaxSender, "send_file", send_file)
-
-    await _run(task_broker, send_gji_pdf, user_id=author, request_id=request_id)
-
-    send_file.assert_awaited_once()
-    user, file, text = send_file.call_args.args
-    assert user.id == author
-    assert file.file_name == f"zhaloba-{request_id}.pdf"
-    assert (await file.read()).startswith(b"%PDF")
-    assert text == (
-        f"📄 Жалоба по заявке №{request_id} для ГЖИ\n"
-        "✍️ Впишите ФИО и адрес, распечатайте и подпишите"
+    house = await HousesRepo(bot_session).get(house_id)
+    assert house is not None
+    assert house.org_id is not None
+    until = datetime.now(UTC) + timedelta(hours=2)
+    warning = WORKS_TEXT.format(works_until=f"{house.local(until):%H:%M %d.%m}")
+    bot_session.add(
+        Announcement(
+            org_id=house.org_id,
+            house_ids=[house_id],
+            text="Опрессовка",
+            channels=["direct"],
+            created_by=(await _user(bot_session, client)).id,
+            works_category=RequestCategory.WATER_SUPPLY,
+            works_from=datetime.now(UTC) - timedelta(hours=1),
+            works_until=until,
+        ),
     )
+    await bot_session.commit()
+    water = CATEGORY_RULES[RequestCategory.WATER_SUPPLY].caption
+
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), InlineButtonTextLocator(water))
+
+    assert _text(message_manager) == f"{warning}\n\n{DESCRIPTION_TEXT}"
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    assert _text(message_manager) == DESCRIPTION_TEXT
+
+
+async def test_a_silent_broadcast_never_rings(
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    user = User(
+        max_user_id=_max_id(),
+        max_chat_id=MaxChatId(secrets.randbits(40)),
+        name="Сосед",
+    )
+    bot_session.add(user)
+    await bot_session.flush()
+    user_id = user.id
+    await NotificationsRepo(bot_session).set_level(
+        user_id,
+        NotificationCategory.ANNOUNCEMENTS,
+        NotificationLevel.SOUND,
+    )
+    await bot_session.commit()
+
+    for silent in (False, True):
+        await _run(
+            task_broker,
+            broadcast_to_users,
+            user_ids=[user_id],
+            text="✅ Работы завершены: Водоснабжение",
+            category=NotificationCategory.ANNOUNCEMENTS.value,
+            mandatory=False,
+            silent=silent,
+        )
+
+    assert notices.notifies == [True, False]

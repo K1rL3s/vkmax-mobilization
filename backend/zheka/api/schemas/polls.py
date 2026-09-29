@@ -107,6 +107,13 @@ class CreateInitiativeRequest(BaseSchema):
 
 class CreateOrgPollRequest(CreatePollRequest):
     house_id: HouseId
+    notify_residents: bool = Field(
+        default=False,
+        description=(
+            "Сообщить жителям дома в личные сообщения объявлением с кнопкой "
+            "голосования; по нему УК видит реестр уведомлений"
+        ),
+    )
 
 
 class VoteRequest(BaseSchema):

@@ -1,0 +1,35 @@
+.Panel {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.Pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.Field > * {
+  min-width: 0;
+}
+
+.Document {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.Error {
+  color: var(--text-negative);
+}

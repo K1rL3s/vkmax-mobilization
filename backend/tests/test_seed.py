@@ -13,7 +13,7 @@ import pytest_asyncio
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
-from sqlalchemy import Connection, Row, func, select, update
+from sqlalchemy import Connection, Row, String, cast, func, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from tests.conftest import alembic_config, make_config
@@ -21,9 +21,8 @@ from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
 
 from zheka.core.charges import parse_lines
-from zheka.core.danger import detect_danger
 from zheka.core.enums import (
-    DangerKind,
+    NoticeStatus,
     OrgRole,
     PollStatus,
     RequestCategory,
@@ -55,7 +54,10 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
-from zheka.infra.database.tables.announcements import announcements_table
+from zheka.infra.database.tables.announcements import (
+    announcements_table,
+    notice_deliveries_table,
+)
 from zheka.infra.database.tables.base import metadata
 from zheka.infra.database.tables.charges import charges_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
@@ -81,6 +83,8 @@ from zheka.seed.demo import (
     POLL_RESULTS,
     PROFILES,
     RESULT_PHOTOS,
+    WORKS_ORDER,
+    WORKS_ORDER_TITLE,
     seed,
 )
 from zheka.seed.directory import DATA_DIR
@@ -703,24 +707,63 @@ def _map_state(rows: Sequence[Row[Any]], now: datetime) -> str:
     return "calm"
 
 
-async def test_a_seeded_sparking_socket_is_marked_dangerous(db: AsyncSession) -> None:
-    stmt = select(requests_table.c.description, requests_table.c.danger).distinct()
+async def test_a_demo_flat_sits_in_the_first_entrance(db: AsyncSession) -> None:
+    _, residency = await _demo(db).settle(await _checker(db), len(PROFILES))
 
-    marks = dict((await db.execute(stmt)).tuples().all())
-
-    assert marks["Искрит розетка в щитке на этаже"] == DangerKind.ELECTRIC
-    assert marks["Течет стояк в санузле"] is None
+    assert residency.flat is not None
+    assert residency.flat.entrance == 1
 
 
-async def test_every_seeded_request_is_marked_by_its_own_words(
+async def test_every_seeded_announcement_has_a_register_matching_its_counts(
     db: AsyncSession,
 ) -> None:
-    stmt = select(requests_table.c.description, requests_table.c.danger).distinct()
+    deliveries = notice_deliveries_table.c
+    stmt = (
+        select(
+            announcements_table.c.org_id,
+            announcements_table.c.recipients_count,
+            announcements_table.c.delivered_direct,
+            func.count(deliveries.user_id),
+            func.count().filter(deliveries.status == NoticeStatus.DELIVERED),
+            func.array_agg(func.distinct(cast(deliveries.status, String))),
+        )
+        .join(
+            notice_deliveries_table,
+            deliveries.announcement_id == announcements_table.c.id,
+        )
+        .group_by(announcements_table.c.id)
+    )
+    rows = (await db.execute(stmt)).tuples().all()
+    announcements = select(func.count()).select_from(announcements_table)
 
-    marks = set((await db.execute(stmt)).tuples().all())
+    assert len(rows) == (await db.execute(announcements)).scalar_one()
+    assert all(
+        (recipients, direct) == (total, delivered)
+        for _org, recipients, direct, total, delivered, _statuses in rows
+    )
+    demo = await _demo_org(db)
+    assert any(
+        set(statuses) == set(NoticeStatus) - {NoticeStatus.PENDING}
+        for org_id, *_counts, statuses in rows
+        if org_id == demo
+    )
 
-    assert marks == {
-        (description, None if found is None else found.kind)
-        for description, _ in marks
-        for found in [detect_danger(description)]
-    }
+
+async def test_the_first_house_of_every_demo_org_has_water_works_under_way(
+    db: AsyncSession,
+) -> None:
+    for profile in (*PROFILES, *BACKGROUND_PROFILES):
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+        [first, *_others] = await HousesRepo(db).list_for_org(org.id)
+        stmt = select(announcements_table).where(
+            announcements_table.c.org_id == org.id,
+            announcements_table.c.works_until.is_not(None),
+        )
+        [works] = (await db.execute(stmt)).all()
+        assert works.house_ids == [first.id]
+        assert works.works_category is RequestCategory.WATER_SUPPLY
+        assert works.documents == [{"name": WORKS_ORDER, "title": WORKS_ORDER_TITLE}]
+        for hours in MAP_HOURS:
+            assert works.works_from <= NOW + timedelta(hours=hours) < works.works_until
+    assert (FILES / WORKS_ORDER).read_bytes().startswith(b"%PDF-")

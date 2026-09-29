@@ -1,6 +1,6 @@
 from zheka.core.enums.admin_map import HouseState, MapPeriod
 from zheka.core.enums.analytics import AnalyticsMetric, MetricUnit
-from zheka.core.enums.announcements import AnnouncementChannel
+from zheka.core.enums.announcements import AnnouncementChannel, NoticeStatus
 from zheka.core.enums.appointments import AppointmentStatus
 from zheka.core.enums.chats import ChatBinder, ChatCardKind, ChatStatus, UnpinMethod
 from zheka.core.enums.city_services import CityServiceKind
@@ -55,6 +55,7 @@ __all__ = (
     "MapPeriod",
     "MeterType",
     "MetricUnit",
+    "NoticeStatus",
     "NotificationCategory",
     "NotificationLevel",
     "OrgRole",

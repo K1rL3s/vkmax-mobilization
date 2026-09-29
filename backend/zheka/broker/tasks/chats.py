@@ -23,7 +23,13 @@ from zheka.core.ids import HouseId, MaxChatId, MaxUserId
 from zheka.core.models import ChatCard
 from zheka.core.services.chat_cards import CardVote, ChatCardView, ChatCardsService
 from zheka.core.services.chats import ChatsService, pins_text
-from zheka.core.texts import ME_TOO, VOTE_IN_APP
+from zheka.core.texts import (
+    ANNOUNCEMENT_HASHTAG,
+    CARD_HASHTAG,
+    ME_TOO,
+    POLL_HASHTAG,
+    VOTE_IN_APP,
+)
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
@@ -34,7 +40,9 @@ logger = logging.getLogger(__name__)
 WELCOME_TEXT = (
     "👋 Здравствуйте, соседи! Я бот вашего дома. Сюда буду присылать "
     "объявления УК и напоминания об опросах, а заявки, показания и "
-    "начисления - в личке со мной"
+    "начисления - в личке со мной\n\n"
+    f"🔎 Мои сообщения здесь легко найти поиском: {ANNOUNCEMENT_HASHTAG}, "
+    f"{POLL_HASHTAG}, {CARD_HASHTAG}"
 )
 WELCOME_MEMBER_TEXT = (
     "👋 {name}, добро пожаловать в чат дома! Я бот дома: публикую здесь "

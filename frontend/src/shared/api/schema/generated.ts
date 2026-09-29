@@ -1766,6 +1766,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/admin/announcements/{announcement_id}/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Реестр уведомлений по объявлению
+     * @description Квартиры одного дома объявления (house_id, по умолчанию первый) и статус личного сообщения каждому жителю. Только администратору УК
+     */
+    get: operations["notice_register"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/admin/announcements/{announcement_id}/finish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Завершить плановые работы досрочно
+     * @description Окончание работ становится текущим моментом, жители получают без звука «Работы завершены» в те же каналы. Только для идущих работ; в демо-УК - 403 на чужие работы
+     */
+    post: operations["finish_works"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/admin/polls": {
     parameters: {
       query?: never;
@@ -1993,6 +2033,26 @@ export interface paths {
     get: operations["download_file"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/admin/files": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Загрузить документ PDF
+     * @description Только сотрудникам УК: приказ или график к объявлению
+     */
+    post: operations["upload_document"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2596,6 +2656,15 @@ export interface components {
      * @enum {string}
      */
     AnnouncementChannel: "chat" | "direct";
+    /** AnnouncementDocument */
+    AnnouncementDocument: {
+      /** Name */
+      name: string;
+      /** Title */
+      title: string;
+      /** Url */
+      url: string;
+    };
     /** AnnouncementItem */
     AnnouncementItem: {
       /** Id */
@@ -2635,6 +2704,44 @@ export interface components {
        * @default false
        */
       urgent: boolean;
+      /**
+       * Entrances
+       * @description Подъезды, которым адресовано объявление; null - всему дому
+       */
+      entrances?: number[] | null;
+      /**
+       * Flats Count
+       * @description Скольким квартирам адресовано объявление; null - не квартирам
+       */
+      flats_count?: number | null;
+      /**
+       * Poll Id
+       * @description Опрос, о котором это объявление сообщает жителям
+       */
+      poll_id?: number | null;
+      /** @description Плановые работы, о которых объявление; null - обычное объявление */
+      works?: components["schemas"]["AnnouncementWorks"] | null;
+      /**
+       * Documents
+       * @description Документы PDF к объявлению: приказ, график
+       */
+      documents?: components["schemas"]["AnnouncementDocument"][];
+    };
+    /** AnnouncementWorks */
+    AnnouncementWorks: {
+      /** @description Категория заявок, в форме которых житель увидит предупреждение */
+      category: components["schemas"]["RequestCategory"] | null;
+      /**
+       * Starts At
+       * Format: date-time
+       */
+      starts_at: string;
+      /**
+       * Ends At
+       * Format: date-time
+       * @description Окончание; после «Завершить досрочно» - момент завершения
+       */
+      ends_at: string;
     };
     /** AnswerProposalRequest */
     AnswerProposalRequest: {
@@ -2780,6 +2887,11 @@ export interface components {
     BlockResidentRequest: {
       /** Reason */
       reason: string;
+    };
+    /** Body_upload_document */
+    Body_upload_document: {
+      /** File */
+      file: string;
     };
     /** Body_upload_file */
     Body_upload_file: {
@@ -3129,6 +3241,23 @@ export interface components {
        * @default false
        */
       urgent: boolean;
+      /**
+       * Entrances
+       * @description Только эти подъезды одного дома: личные сообщения получат жители, у которых указана квартира в этих подъездах; null - весь дом
+       */
+      entrances?: number[] | null;
+      /**
+       * Flat Ids
+       * @description Только эти квартиры одного дома: личные сообщения получат их подтвержденные жители, в чат дома такое объявление не уходит; null - весь дом
+       */
+      flat_ids?: number[] | null;
+      /** @description Плановые работы: жители увидят срок, форма заявки - предупреждение */
+      works?: components["schemas"]["WorksInput"] | null;
+      /**
+       * Documents
+       * @description До 5 документов PDF из upload_document
+       */
+      documents?: components["schemas"]["DocumentInput"][];
     };
     /** CreateFlatInviteRequest */
     CreateFlatInviteRequest: {
@@ -3184,6 +3313,12 @@ export interface components {
       is_multiple: boolean;
       /** House Id */
       house_id: number;
+      /**
+       * Notify Residents
+       * @description Сообщить жителям дома в личные сообщения объявлением с кнопкой голосования; по нему УК видит реестр уведомлений
+       * @default false
+       */
+      notify_residents: boolean;
     };
     /** CreatePhoneRequestRequest */
     CreatePhoneRequestRequest: {
@@ -3336,6 +3471,16 @@ export interface components {
     DisputeChargeResponse: {
       /** Request Id */
       request_id: number;
+    };
+    /** DocumentInput */
+    DocumentInput: {
+      /**
+       * Name
+       * @description Имя файла из upload_document, не ссылка
+       */
+      name: string;
+      /** Title */
+      title: string;
     };
     /** EntranceQr */
     EntranceQr: {
@@ -3855,6 +4000,76 @@ export interface components {
       /** Items */
       items: components["schemas"]["ProposalItem"][];
     };
+    /** NoticeRecipient */
+    NoticeRecipient: {
+      /** @description Собственник или арендатор; null - автор демо-объявления вне дома */
+      role: components["schemas"]["ResidentRole"] | null;
+      /** Verified */
+      verified: boolean;
+      /** @description pending - рассылка не дошла до жителя: первые 10 минут идет, потом нет данных; delivered - MAX принял сообщение, прочтение MAX не сообщает; failed - MAX отказал; muted - житель выключил объявления; bot_stopped - житель остановил бота */
+      status: components["schemas"]["NoticeStatus"];
+      /**
+       * At
+       * @description Когда стал известен статус
+       */
+      at: string | null;
+    };
+    /** NoticeRegister */
+    NoticeRegister: {
+      announcement: components["schemas"]["AnnouncementItem"];
+      /** House Id */
+      house_id: number;
+      /** Address */
+      address: string;
+      /**
+       * Flats
+       * @description Квартиры дома, которым адресовано объявление, по порядку номеров
+       */
+      flats: components["schemas"]["NoticeRegisterFlat"][];
+      /**
+       * Without Flat
+       * @description Адресаты в этом доме, не указавшие квартиру
+       */
+      without_flat: components["schemas"]["NoticeRecipient"][];
+      /** Flats Delivered */
+      flats_delivered: number;
+      /**
+       * Chat Delivered
+       * @description Скольким чатам домов объявления MAX принял сообщение; null, пока рассылка идет. По квартирам чат не раскладывается
+       */
+      chat_delivered: number | null;
+      /**
+       * Generated At
+       * Format: date-time
+       */
+      generated_at: string;
+      /** Is Demo */
+      is_demo: boolean;
+    };
+    /** NoticeRegisterFlat */
+    NoticeRegisterFlat: {
+      /** Flat Id */
+      flat_id: number;
+      /** Number */
+      number: string;
+      /** Entrance */
+      entrance: number | null;
+      /**
+       * Recipients
+       * @description Жители сервиса на момент отправки; пусто - нет в сервисе
+       */
+      recipients: components["schemas"]["NoticeRecipient"][];
+      /**
+       * Delivered
+       * @description Хотя бы одному жителю MAX доставил
+       */
+      delivered: boolean;
+    };
+    /**
+     * NoticeStatus
+     * @enum {string}
+     */
+    NoticeStatus: "pending" | "delivered" | "failed" | "muted" | "bot_stopped";
     /**
      * NotificationCategory
      * @enum {string}
@@ -4234,6 +4449,21 @@ export interface components {
        * @default true
        */
       is_demo: boolean;
+    };
+    /** PlannedWorks */
+    PlannedWorks: {
+      /** Announcement Id */
+      announcement_id: number;
+      /**
+       * Title
+       * @description Первая строка объявления
+       */
+      title: string;
+      /**
+       * Ends At
+       * Format: date-time
+       */
+      ends_at: string;
     };
     /** PointAddress */
     PointAddress: {
@@ -5120,6 +5350,8 @@ export interface components {
       group_id?: number | null;
       /** Window Started At */
       window_started_at?: string | null;
+      /** @description Идущие плановые работы УК по этой категории в доме жителя; заявку подать все равно можно */
+      works?: components["schemas"]["PlannedWorks"] | null;
     };
     /** SubmitReadingRequest */
     SubmitReadingRequest: {
@@ -5312,10 +5544,21 @@ export interface components {
       /** Option Ids */
       option_ids: number[];
     };
-    /** WriteToRequestRequest */
-    WriteToRequestRequest: {
-      /** Text */
-      text: string;
+    /** WorksInput */
+    WorksInput: {
+      category?: components["schemas"]["RequestCategory"] | null;
+      /**
+       * Starts At
+       * Format: date-time
+       * @description Начало, местное время первого дома
+       */
+      starts_at: string;
+      /**
+       * Ends At
+       * Format: date-time
+       * @description Окончание, местное время первого дома
+       */
+      ends_at: string;
     };
   };
   responses: never;
@@ -15567,6 +15810,7 @@ export interface operations {
     parameters: {
       query?: {
         house_id?: number | null;
+        poll_id?: number | null;
         /** @description Размер страницы */
         limit?: number;
         /** @description Сдвиг от начала списка */
@@ -15671,6 +15915,184 @@ export interface operations {
         "application/json": components["schemas"]["CreateAnnouncementRequest"];
       };
     };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AnnouncementItem"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  notice_register: {
+    parameters: {
+      query?: {
+        house_id?: number | null;
+      };
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path: {
+        announcement_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NoticeRegister"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  finish_works: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path: {
+        announcement_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       /** @description Successful Response */
       200: {
@@ -17103,6 +17525,96 @@ export interface operations {
         };
         content: {
           "application/octet-stream": unknown;
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  upload_document: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["Body_upload_document"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FileRef"];
         };
       };
       /** @description Некорректный запрос */

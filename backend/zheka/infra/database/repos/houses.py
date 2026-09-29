@@ -320,10 +320,17 @@ class HousesRepo(BaseAlchemyRepo):
         number: str,
         area: int | None,
         account_no: str | None,
+        entrance: int | None,
     ) -> tuple[Flat, bool]:
         stmt = (
             pg_insert(Flat)
-            .values(house_id=house_id, number=number, area=area, account_no=account_no)
+            .values(
+                house_id=house_id,
+                number=number,
+                area=area,
+                account_no=account_no,
+                entrance=entrance,
+            )
             .on_conflict_do_nothing(
                 index_elements=[flats_table.c.house_id, flats_table.c.number],
             )

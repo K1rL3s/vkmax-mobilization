@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { nextOffset } from "@/shared/api/next-offset";
+import { invalidatePaths } from "@/shared/api/query-client";
 import type { components } from "@/shared/api/schema/generated";
 import { orgParams } from "@/shared/model/session";
+import { useConfirm } from "@/shared/ui/confirm-dialog";
 
 import { isSending } from "../domain/labels";
 
@@ -84,4 +87,48 @@ export const useSentOutcome = () => {
   }, [state, pathname, navigate]);
 
   return { sent, dismiss: () => setSent(null) };
+};
+
+export const useFinishWorks = () => {
+  const confirm = useConfirm<Announcement>();
+  const finish = rqClient.useMutation(
+    "post",
+    "/api/admin/announcements/{announcement_id}/finish",
+    {
+      onSuccess: async () => {
+        confirm.dismiss();
+        await invalidatePaths("/api/admin/announcements");
+      },
+    },
+  );
+
+  return {
+    target: confirm.target,
+    ask: (announcement: Announcement) => {
+      finish.reset();
+      confirm.ask(announcement);
+    },
+    isPending: finish.isPending,
+    error:
+      finish.isError &&
+      errorMessage(
+        finish.error,
+        "Не получилось завершить. Проверьте связь и попробуйте ещё раз",
+      ),
+    confirm: () => {
+      if (confirm.target) {
+        finish.mutate({
+          params: {
+            ...orgParams(),
+            path: { announcement_id: confirm.target.id },
+          },
+        });
+      }
+    },
+    dismiss: () => {
+      if (!finish.isPending) {
+        confirm.dismiss();
+      }
+    },
+  };
 };
