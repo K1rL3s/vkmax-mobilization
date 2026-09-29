@@ -18,6 +18,8 @@ _SUFFIX_BY_MIME = {
     "image/png": ".png",
     "image/webp": ".webp",
     "image/heic": ".heic",
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
 }
 FILE_URL_TTL = timedelta(hours=1)
 
@@ -28,12 +30,13 @@ _CHUNK_SIZE = 64 * 1024
 
 
 class FilesService:
-    __slots__ = ("_dir", "_max_size_mb", "_token")
+    __slots__ = ("_dir", "_max_size_mb", "_max_video_mb", "_token")
 
     def __init__(self, config: FilesConfig, token: str) -> None:
         self._dir = Path(config.dir)
         self._dir.mkdir(parents=True, exist_ok=True)
         self._max_size_mb = config.max_size_mb
+        self._max_video_mb = config.max_video_mb
         self._token = token
 
     async def save(self, upload: UploadFile) -> str:
@@ -62,6 +65,10 @@ class FilesService:
             raise EntityNotFound("Файл не найден")
         return self._dir / name
 
+    @staticmethod
+    def is_video(name: str) -> bool:
+        return name.endswith((".mp4", ".mov"))
+
     def _sign(self, name: str, exp: int) -> str:
         return hmac.new(
             self._token.encode(),
@@ -76,13 +83,17 @@ class FilesService:
     ) -> str:
         suffix = _SUFFIX_BY_MIME.get(content_type)
         if suffix is None:
-            raise InvalidRequest("Поддерживаются только изображения")
+            raise InvalidRequest(
+                "Поддерживаются только изображения и видео MP4 или MOV",
+            )
 
         name = f"{uuid4().hex}{suffix}"
         destination = self.path_of(name)
         try:
             with destination.open("wb") as out:
-                writer = _CappedWriter(out, self._max_size_mb)
+                video = self.is_video(name)
+                limit = self._max_video_mb if video else self._max_size_mb
+                writer = _CappedWriter(out, limit, "Видео" if video else "Файл")
                 await download(cast("BinaryIO", writer))
         except BaseException:
             destination.unlink(missing_ok=True)
@@ -102,9 +113,10 @@ class FilesService:
 
 
 class _CappedWriter:
-    __slots__ = ("_max_size_mb", "_out", "_written")
+    __slots__ = ("_label", "_max_size_mb", "_out", "_written")
 
-    def __init__(self, out: BinaryIO, max_size_mb: int) -> None:
+    def __init__(self, out: BinaryIO, max_size_mb: int, label: str) -> None:
+        self._label = label
         self._out = out
         self._max_size_mb = max_size_mb
         self._written = 0
@@ -112,7 +124,7 @@ class _CappedWriter:
     def write(self, chunk: bytes) -> int:
         self._written += len(chunk)
         if self._written > self._max_size_mb * 1024 * 1024:
-            raise InvalidRequest(f"Файл больше {self._max_size_mb} МБ")
+            raise InvalidRequest(f"{self._label} больше {self._max_size_mb} МБ")
         return self._out.write(chunk)
 
     def flush(self) -> None:

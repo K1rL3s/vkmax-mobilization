@@ -15,19 +15,19 @@ type MockRequest = {
   description: string;
   status: Schemas["RequestStatus"];
   channel: Schemas["RequestChannel"];
-  has_photos: boolean;
+  has_attachments: boolean;
   group_size: number;
   group_id: number | null;
   flat_number: string | null;
   executor_name: string | null;
   rating: number | null;
   feedback: string | null;
-  has_result_photos: boolean;
+  has_result_attachments: boolean;
   deadline_at: string | null;
   escalated_at: string | null;
   parent_request_id: number | null;
   completion_reason: Schemas["RequestCompletionReason"] | null;
-  photo_names: string[];
+  attachment_names: string[];
   messages: { after_minutes: number; text: string }[];
 };
 
@@ -41,19 +41,19 @@ const request = (
   const item: MockRequest = {
     house_id: 1,
     channel: "miniapp",
-    has_photos: true,
+    has_attachments: true,
     group_size: 1,
     group_id: null,
     flat_number: "45",
     executor_name: null,
     rating: null,
     feedback: null,
-    has_result_photos: false,
+    has_result_attachments: false,
     deadline_at: null,
     escalated_at: null,
     parent_request_id: null,
     completion_reason: null,
-    photo_names: [],
+    attachment_names: [],
     messages: [],
     ...fields,
   };
@@ -126,7 +126,7 @@ const requests: MockRequest[] = [
     created_at: days(-2),
     deadline_at: days(-1),
     executor_name: "Механик Ильдар Гафуров",
-    has_result_photos: true,
+    has_result_attachments: true,
     messages: [
       {
         after_minutes: 1330,
@@ -141,7 +141,7 @@ const requests: MockRequest[] = [
     status: "new",
     created_at: minutes(-120),
     deadline_at: minutes(22 * 60),
-    has_photos: false,
+    has_attachments: false,
   }),
   request({
     id: 131,
@@ -189,7 +189,7 @@ const requests: MockRequest[] = [
     status: "done",
     created_at: days(-33),
     rating: 4,
-    has_photos: false,
+    has_attachments: false,
   }),
   request({
     id: 112,
@@ -198,7 +198,7 @@ const requests: MockRequest[] = [
     status: "done",
     created_at: days(-40),
     rating: 5,
-    has_photos: false,
+    has_attachments: false,
   }),
   request({
     id: 108,
@@ -312,7 +312,7 @@ export const requestListItem = (
   description: item.description,
   status: item.status,
   channel: item.channel,
-  has_photos: item.has_photos,
+  has_photos: item.has_attachments,
   group_size: item.group_size,
   flat_number: item.flat_number,
   group_id: item.group_id,
@@ -352,24 +352,27 @@ const requestTimeline = (
 };
 
 const RESULT_PHOTO: Schemas["FileRef"] = {
+  is_video: false,
   name: "Фото исполнителя",
   url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23c7d4e0'/%3E%3C/svg%3E",
 };
 
 const PHOTO: Schemas["FileRef"] = {
+  is_video: false,
   name: "Фото от жителя",
   url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23d9d9d9'/%3E%3C/svg%3E",
 };
 
-const requestPhotos = (item: MockRequest): Schemas["FileRef"][] => {
-  if (item.photo_names.length > 0) {
-    return item.photo_names.map((name) => ({
+const requestAttachments = (item: MockRequest): Schemas["FileRef"][] => {
+  if (item.attachment_names.length > 0) {
+    return item.attachment_names.map((name) => ({
       name,
+      is_video: /\.(mp4|mov)$/.test(name),
       url: fileUrl(name) || PHOTO.url,
     }));
   }
 
-  return item.has_photos ? [PHOTO] : [];
+  return item.has_attachments ? [PHOTO] : [];
 };
 
 export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
@@ -388,8 +391,8 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
       : item.deadline_at && item.deadline_at < react
         ? item.deadline_at
         : react,
-    photos: requestPhotos(item),
-    result_photos: item.has_result_photos ? [RESULT_PHOTO] : [],
+    photos: requestAttachments(item),
+    result_photos: item.has_result_attachments ? [RESULT_PHOTO] : [],
     messages: item.messages.map((message) => ({
       created_at: shift(item.created_at, message.after_minutes),
       author_role: "staff",
@@ -463,8 +466,8 @@ export const createRequest = (
     deadline_at: categoryDeadline(body.category),
     flat_number: residencyForHouse(houseId)?.flat_number ?? null,
     group_id: body.join_group_id ?? null,
-    has_photos: (body.photos?.length ?? 0) > 0,
-    photo_names: body.photos ?? [],
+    has_attachments: (body.photos?.length ?? 0) > 0,
+    attachment_names: body.photos ?? [],
   });
   requests.push(created);
 
@@ -485,7 +488,7 @@ export const createRequest = (
 export const repeatRequest = (
   item: MockRequest,
   description: string | null,
-  photos: string[],
+  attachments: string[],
 ): MockRequest => {
   const created = request({
     id: nextRequestId++,
@@ -497,8 +500,8 @@ export const repeatRequest = (
     deadline_at: categoryDeadline(item.category),
     flat_number: item.flat_number,
     parent_request_id: item.id,
-    has_photos: photos.length > 0,
-    photo_names: photos,
+    has_attachments: attachments.length > 0,
+    attachment_names: attachments,
   });
   requests.push(created);
 

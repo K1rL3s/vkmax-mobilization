@@ -27,7 +27,7 @@ import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
 import { LetterPanel } from "./ui/letter-panel";
 import { RatePanel } from "./ui/rate-panel";
-import { RequestPhotos } from "./ui/request-photos";
+import { RequestAttachments } from "./ui/request-attachments";
 import { RequestTimeline } from "./ui/request-timeline";
 import { SharePanel } from "./ui/share-panel";
 
@@ -183,7 +183,10 @@ const RequestPage = () => {
       )}
 
       {!request.can_review && (
-        <RequestPhotos title="Ваши фото" files={request.photos} />
+        <RequestAttachments
+          title="Ваши вложения"
+          attachments={request.photos}
+        />
       )}
     </Panel>
   );

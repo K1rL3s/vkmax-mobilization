@@ -10,11 +10,11 @@ from zheka.core.enums import (
     NotificationCategory,
     OrgRole,
     RequestActorRole,
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
-    RequestPhotoKind,
     RequestStatus,
     ResidentStatus,
 )
@@ -34,8 +34,8 @@ from zheka.core.models import (
     House,
     Organization,
     Request,
+    RequestAttachment,
     RequestMessage,
-    RequestPhoto,
     RequestStatusLog,
     Resident,
     User,
@@ -59,7 +59,9 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.yandex import YandexClassifier
 
-MAX_PHOTOS = 12
+MAX_ATTACHMENTS = 12
+MAX_VIDEOS = 2
+TOO_MANY_VIDEOS = "Можно приложить не больше 2 видео"
 AUTO_CLOSE_AFTER = timedelta(hours=48)
 MIN_RATING = 1
 MAX_RATING = 5
@@ -68,7 +70,7 @@ BLOCKED = "Вы заблокированы в этом доме"
 GROUP_CLOSED = "Группа заявок уже закрыта"
 GROUP_OTHER_CATEGORY = "Группа заявок собрана по другой категории"
 EMPTY_DESCRIPTION = "Опишите проблему"
-TOO_MANY_PHOTOS = f"К заявке можно приложить не больше {MAX_PHOTOS} фото"
+TOO_MANY_ATTACHMENTS = f"К заявке можно приложить не больше {MAX_ATTACHMENTS} вложений"
 RATE_NOT_DONE = "Оценку ставят принятой жителем заявке"
 RATED_ALREADY = "Оценка уже поставлена"
 REPEAT_NOT_DONE = "Повторную заявку подают после приемки или по выполненной"
@@ -85,7 +87,7 @@ class RequestDraft(ZhekaType):
     category: RequestCategory
     description: str
     flat_id: FlatId | None = None
-    photos: Sequence[str] = ()
+    attachments: Sequence[str] = ()
     group_id: RequestGroupId | None = None
     llm_suggested: bool = False
     llm_accepted: bool = False
@@ -99,7 +101,7 @@ class RequestMessageView(ZhekaType):
 class RequestRow(ZhekaType):
     request: Request
     flat: Flat | None
-    has_photos: bool
+    has_attachments: bool
     group_size: int
     executor: User | None
 
@@ -109,8 +111,8 @@ class RequestCardData(ZhekaType):
     house: House
     org: Organization | None
     flat: Flat | None
-    issue_photos: Sequence[RequestPhoto]
-    result_photos: Sequence[RequestPhoto]
+    issue_attachments: Sequence[RequestAttachment]
+    result_attachments: Sequence[RequestAttachment]
     timeline: Sequence[RequestStatusLog]
     messages: Sequence[RequestMessageView]
     group_size: int
@@ -186,7 +188,7 @@ class RequestsService:
         description = stated(draft.description, EMPTY_DESCRIPTION)
         if draft.flat_id is not None and resident.flat_id != draft.flat_id:
             raise EntityNotFound(FLAT_NOT_FOUND)
-        photos = self._checked_photos(draft.photos)
+        attachments = self._checked_attachments(draft.attachments)
         group_id = await self._checked_group(draft.group_id, house_id, draft.category)
 
         request = await self._requests.create(
@@ -200,7 +202,7 @@ class RequestsService:
             None,
             is_staff_author=await self._is_staff(house, user_id),
         )
-        await self._add_photos(request, photos, user_id)
+        await self._add_attachments(request, attachments, user_id)
         await self._open(request, user_id)
         await self._group(request, house, group_id)
         await self._events.record(
@@ -209,7 +211,7 @@ class RequestsService:
             house_id=house_id,
             category=draft.category.value,
             channel=channel.value,
-            has_photo=bool(photos),
+            has_attachments=bool(attachments),
             is_repeat=False,
             llm_suggested=draft.llm_suggested,
             llm_accepted=draft.llm_accepted,
@@ -230,7 +232,7 @@ class RequestsService:
         user_id: UserId,
         request_id: RequestId,
         description: str | None,
-        photos: Sequence[str],
+        attachments: Sequence[str],
         channel: RequestChannel = RequestChannel.MINIAPP,
     ) -> RequestCardData:
         parent = await self._own_request(user_id, request_id)
@@ -249,7 +251,7 @@ class RequestsService:
                 parent.description if description is None else description,
                 EMPTY_DESCRIPTION,
             )
-        checked = self._checked_photos(photos)
+        checked = self._checked_attachments(attachments)
         if rejected_on_review:
             await self._complete_review(
                 parent,
@@ -269,7 +271,7 @@ class RequestsService:
             parent.id,
             is_staff_author=await self._is_staff(house, user_id),
         )
-        await self._add_photos(request, checked, user_id)
+        await self._add_attachments(request, checked, user_id)
         await self._open(request, user_id)
         await self._events.record(
             EventType.REQUEST_CREATED,
@@ -277,7 +279,7 @@ class RequestsService:
             house_id=house_id,
             category=parent.category.value,
             channel=channel.value,
-            has_photo=bool(checked),
+            has_attachments=bool(checked),
             is_repeat=True,
             parent_request_id=parent.id,
         )
@@ -474,26 +476,28 @@ class RequestsService:
             datetime.now(UTC),
         )
 
-    async def _add_photos(
+    async def _add_attachments(
         self,
         request: Request,
-        photos: Sequence[str],
+        attachments: Sequence[str],
         user_id: UserId,
     ) -> None:
-        for name in photos:
-            await self._requests.add_photo(
+        for name in attachments:
+            await self._requests.add_attachment(
                 request.id,
                 name,
-                RequestPhotoKind.ISSUE,
+                RequestAttachmentKind.ISSUE,
                 user_id,
             )
 
-    def _checked_photos(self, photos: Sequence[str]) -> Sequence[str]:
-        if len(photos) > MAX_PHOTOS:
-            raise InvalidRequest(TOO_MANY_PHOTOS)
-        for name in photos:
+    def _checked_attachments(self, attachments: Sequence[str]) -> Sequence[str]:
+        if len(attachments) > MAX_ATTACHMENTS:
+            raise InvalidRequest(TOO_MANY_ATTACHMENTS)
+        if sum(self._files.is_video(name) for name in attachments) > MAX_VIDEOS:
+            raise InvalidRequest(TOO_MANY_VIDEOS)
+        for name in attachments:
             self._files.path_of(name)
-        return photos
+        return attachments
 
     async def _active_resident(self, user_id: UserId, house_id: HouseId) -> Resident:
         resident = await self._residents.get_for_house(user_id, house_id)
@@ -732,7 +736,7 @@ async def build_rows(
     users_repo: UsersRepo,
     requests: Sequence[Request],
 ) -> list[RequestRow]:
-    photo_counts = await requests_repo.count_photos(
+    attachment_counts = await requests_repo.count_attachments(
         [request.id for request in requests],
     )
     group_sizes = await requests_repo.count_by_group(
@@ -758,7 +762,7 @@ async def build_rows(
         RequestRow(
             request=request,
             flat=flats.get(request.flat_id),
-            has_photos=photo_counts.get(request.id, 0) > 0,
+            has_attachments=attachment_counts.get(request.id, 0) > 0,
             group_size=(
                 0 if request.group_id is None else group_sizes.get(request.group_id, 0)
             ),
@@ -779,7 +783,7 @@ async def build_card(
     authored: bool = False,
     with_internal: bool = False,
 ) -> RequestCardData:
-    photos = await requests_repo.list_photos(request.id)
+    attachments = await requests_repo.list_attachments(request.id)
     messages = [
         message
         for message in await requests_repo.list_messages(request.id)
@@ -809,11 +813,15 @@ async def build_card(
             if request.flat_id is None
             else await houses_repo.get_flat(request.flat_id)
         ),
-        issue_photos=[
-            photo for photo in photos if photo.kind is RequestPhotoKind.ISSUE
+        issue_attachments=[
+            attachment
+            for attachment in attachments
+            if attachment.kind is RequestAttachmentKind.ISSUE
         ],
-        result_photos=[
-            photo for photo in photos if photo.kind is RequestPhotoKind.RESULT
+        result_attachments=[
+            attachment
+            for attachment in attachments
+            if attachment.kind is RequestAttachmentKind.RESULT
         ],
         timeline=await requests_repo.list_log(request.id),
         messages=[

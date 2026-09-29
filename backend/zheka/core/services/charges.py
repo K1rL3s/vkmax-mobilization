@@ -225,7 +225,7 @@ class ChargesService:
                 category=RequestCategory.CHARGE_DISPUTE,
                 description=description,
                 flat_id=flat_id,
-                photos=photos,
+                attachments=photos,
             ),
             channel=RequestChannel.MINIAPP,
         )

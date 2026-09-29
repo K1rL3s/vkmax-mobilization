@@ -606,7 +606,7 @@ async def test_ready_with_a_result_photo_opens_the_review_card(
     card = await admin_requests_service(session).executor_card(executor, request_id)
     assert card is not None
     assert card.request.status is RequestStatus.ON_REVIEW
-    assert [photo.path for photo in card.result_photos] == [name]
+    assert [photo.path for photo in card.result_attachments] == [name]
     await publisher.flush()
     assert broker.enqueued(TaskName.SEND_REVIEW_CARD) == [{"request_id": request_id}]
     assert broker.enqueued(TaskName.SEND_TO_USER) == []
@@ -635,7 +635,7 @@ async def test_a_refused_move_attaches_no_result_photo(
 
     card = await service.executor_card(executor, request_id)
     assert card is not None
-    assert len(card.result_photos) == 1
+    assert len(card.result_attachments) == 1
 
 
 @pytest.mark.parametrize("loss", ["another_executor", "removed", "demoted"])

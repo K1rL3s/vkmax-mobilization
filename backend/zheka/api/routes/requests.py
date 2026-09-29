@@ -30,7 +30,7 @@ from zheka.api.schemas.requests import (
 from zheka.core.deeplinks import house_category_payload
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
-from zheka.core.models import RequestPhoto
+from zheka.core.models import RequestAttachment
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER, request_share_text
@@ -40,17 +40,19 @@ router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
 
 
 def signed(
-    photos: Sequence[RequestPhoto],
+    attachments: Sequence[RequestAttachment],
     files_service: FilesService,
 ) -> list[FileRef]:
-    return [FileRef.signed(photo.path, files_service) for photo in photos]
+    return [
+        FileRef.signed(attachment.path, files_service) for attachment in attachments
+    ]
 
 
 def _card(card: RequestCardData, files_service: FilesService) -> RequestCard:
     return RequestCard.of(
         card,
-        signed(card.issue_photos, files_service),
-        signed(card.result_photos, files_service),
+        signed(card.issue_attachments, files_service),
+        signed(card.result_attachments, files_service),
     )
 
 
@@ -111,8 +113,9 @@ async def create_request(
         residency.user_id,
         residency.house_id,
         RequestDraft(
-            **body.model_dump(exclude={"join_group_id"}),
+            **body.model_dump(exclude={"join_group_id", "photos"}),
             group_id=body.join_group_id,
+            attachments=body.photos,
         ),
     )
     response = _card(card, files_service)

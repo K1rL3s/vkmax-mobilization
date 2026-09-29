@@ -39,8 +39,8 @@ router = APIRouter(tags=["Админка: заявки"], route_class=DishkaRout
 def _card(data: AdminRequestCardData, files_service: FilesService) -> AdminRequestCard:
     return AdminRequestCard.of_admin(
         data,
-        signed(data.card.issue_photos, files_service),
-        signed(data.card.result_photos, files_service),
+        signed(data.card.issue_attachments, files_service),
+        signed(data.card.result_attachments, files_service),
     )
 
 

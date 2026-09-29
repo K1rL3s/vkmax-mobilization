@@ -45,6 +45,8 @@ async def send_executor_card(
     users_repo: FromDishka[UsersRepo],
     notifications_service: FromDishka[NotificationsService],
     sender: FromDishka[MaxSender],
+    files_service: FromDishka[FilesService],
+    admin_requests_service: FromDishka[AdminRequestsService],
     user_id: UserId | None = None,
 ) -> None:
     request = await requests_repo.get(request_id)
@@ -63,6 +65,19 @@ async def send_executor_card(
         ExecutorCardData(request_id=request_id).to_data(),
         ShowMode.SEND if user_id is None else None,
     )
+    if user_id is None:
+        card = await admin_requests_service.executor_card(recipient, request_id)
+        if card is None:
+            return
+        user = await users_repo.get_by_id(recipient)
+        if user is not None:
+            for attachment in card.issue_attachments:
+                if files_service.is_video(attachment.path):
+                    await sender.send_video(
+                        files_service.path_of(attachment.path),
+                        user,
+                        request_id,
+                    )
 
 
 @async_shared_broker.task(task_name=TaskName.SEND_REVIEW_CARD.value)

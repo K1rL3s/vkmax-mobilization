@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from html import escape
 from typing import Any, cast
+from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -37,6 +38,7 @@ from maxo.types import (
     DialogUnmuted,
     GetPinnedMessageResult,
     LocationAttachment,
+    MediaAttachmentPayload,
     Message,
     MessageBody,
     MessageCallback,
@@ -50,6 +52,9 @@ from maxo.types import (
     RequestGeoLocationButton,
     SendMessageResult,
     UserAddedToChat,
+    VideoAttachment,
+    VideoAttachmentDetails,
+    VideoUrls,
 )
 from maxo.types.chat import Chat as MaxChat
 from maxo.types.link_button import LinkButton
@@ -131,14 +136,14 @@ from zheka.bot.handlers.requests.handlers import (
     SENT_TEXT,
 )
 from zheka.bot.handlers.requests.windows import (
+    ATTACHMENTS_TEXT,
     CATEGORY_TEXT,
     CONFIRM_TEXT,
     CREATED_TEXT,
-    DESCRIPTION_PHOTOS_TEXT,
+    DESCRIPTION_ATTACHMENTS_TEXT,
     DESCRIPTION_TEXT,
     NOT_CONNECTED_TEXT,
     NO_HOUSE_TEXT,
-    PHOTO_TEXT,
     PROBLEM_TEXT,
 )
 from zheka.bot.handlers.review.handlers import repeat_sent
@@ -189,6 +194,7 @@ from zheka.core.enums import (
     MeterType,
     NotificationCategory,
     OrgRole,
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
@@ -2861,7 +2867,7 @@ async def test_back_and_menu_walk_the_request_draft(
     await client.send("Течет кран на кухне")
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), BACK_BUTTON)
-    assert PHOTO_TEXT.format(photos=0) in _text(message_manager)
+    assert ATTACHMENTS_TEXT.format(attachments=0) in _text(message_manager)
 
     await client.click(message_manager.last_message(), TO_MENU)
     assert GREETING in _text(message_manager)
@@ -3248,11 +3254,11 @@ async def test_a_photo_at_the_description_step_is_kept_and_its_caption_describes
 
     await _send_photo(client, None)
     assert _text(message_manager) == (
-        f"{DESCRIPTION_TEXT}\n\n{DESCRIPTION_PHOTOS_TEXT.format(photos=1)}"
+        f"{DESCRIPTION_TEXT}\n\n{DESCRIPTION_ATTACHMENTS_TEXT.format(attachments=1)}"
     )
     await _send_photo(client, "Течет из-под ванны")
 
-    assert _text(message_manager) == PHOTO_TEXT.format(photos=2)
+    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=2)
     await client.click(message_manager.last_message(), NEXT)
     assert "Течет из-под ванны" in _text(message_manager)
 
@@ -3497,7 +3503,7 @@ async def test_a_free_text_quotes_the_problem_and_skips_the_description(
         description=PROBLEM,
     )
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
-    assert _text(message_manager) == PHOTO_TEXT.format(photos=0)
+    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), SEND)
     enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
@@ -3522,7 +3528,7 @@ async def test_a_photo_with_a_caption_starts_a_request_with_the_photo(
         description=PROBLEM,
     )
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
-    assert _text(message_manager) == PHOTO_TEXT.format(photos=1)
+    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=1)
 
 
 async def test_a_long_problem_is_quoted_short_and_escaped_but_sent_whole(
@@ -4199,7 +4205,7 @@ async def test_a_transcribed_voice_describes_the_request(
 
     await _send(client, _voice(VOICE))
 
-    assert _text(message_manager) == PHOTO_TEXT.format(photos=0)
+    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
     await client.click(message_manager.last_message(), NEXT)
     assert VOICE in _text(message_manager)
     await client.click(message_manager.last_message(), SEND)
@@ -4279,7 +4285,7 @@ async def test_a_late_transcript_opens_the_next_step(
 
     assert asked == ["voice-1", "voice-1"]
     if in_draft:
-        assert _text(message_manager) == PHOTO_TEXT.format(photos=0)
+        assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
     else:
         assert f"«{VOICE}»" in _text(message_manager)
 
@@ -4635,3 +4641,82 @@ async def test_a_chairman_link_opened_by_a_stranger_says_why(
     await _bot_started(client, chairman_payload(code))
 
     assert NOT_A_NEIGHBOUR in notices.texts
+
+
+async def test_video_from_both_draft_windows_reaches_the_created_request(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    task_broker: InMemoryBroker,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    video = VideoAttachment(
+        payload=MediaAttachmentPayload(token=str(1), url=RESULT_URL),
+    )
+    await _send(client, video)
+    assert "🎬 Видео: 1" in _text(message_manager)
+    await client.send("Течет с потолка")
+    await _send(client, video)
+    assert "🎬 Видео: 2" in _text(message_manager)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    kwargs = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert kwargs["video_tokens"] == [str(1), str(1)]
+    details = AsyncMock(
+        return_value=VideoAttachmentDetails(
+            token=str(1),
+            duration=5,
+            width=10,
+            height=10,
+            urls=VideoUrls(mp4_480=RESULT_URL),
+        ),
+    )
+    download = AsyncMock(side_effect=lambda _url, out, **_: out.write(b"video"))
+    monkeypatch.setattr(fake_bot, "get_video_attachment_details", details)
+    monkeypatch.setattr(fake_bot, "download", download)
+    await _run(task_broker, create_bot_request, **kwargs)
+    user = await _user(bot_session, client)
+    stmt = select(Request).where(requests_table.c.author_user_id == user.id)
+    request = (await bot_session.execute(stmt)).scalar_one()
+    attachments = await RequestsRepo(bot_session).list_attachments(request.id)
+    assert len(attachments) == 2
+    assert all(attachment.path.endswith(".mp4") for attachment in attachments)
+    assert f"Заявка №{request.id} отправлена" in _text(message_manager)
+
+
+async def test_executor_gets_video_on_send_only(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = await _executor_on(bot_session, client, RequestStatus.ACCEPTED)
+    user = await _user(bot_session, client)
+    user_id = user.id
+    name = photo_name().replace(".jpg", ".mp4")
+    await RequestsRepo(bot_session).add_attachment(
+        request_id,
+        name,
+        RequestAttachmentKind.ISSUE,
+        user.id,
+    )
+    await bot_session.commit()
+    send = AsyncMock()
+    monkeypatch.setattr(MaxSender, "send_video", send)
+    await _run(task_broker, send_executor_card, request_id=request_id)
+    assert "🎬 Видео: 1" in _text(message_manager)
+    assert not any(
+        isinstance(item, (PhotoAttachment, VideoAttachment))
+        for item in message_manager.last_message().body.attachments or []
+    )
+    send.assert_awaited_once()
+    assert send.call_args.args[0].name == name
+    await client.click(message_manager.last_message(), DEPART)
+    await _run(task_broker, send_executor_card, request_id=request_id, user_id=user_id)
+    send.assert_awaited_once()

@@ -9,6 +9,7 @@ from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.dialogs import ShowMode
 from maxo.errors import MaxBotApiError, MaxBotNetworkError
+from maxo.omit import is_defined
 from taskiq import async_shared_broker
 
 from zheka.bot.dialog_data import NewRequestData, transcript
@@ -54,7 +55,7 @@ async def transcribe_voice(
     data.voice_pending = False
     if text:
         data.description = text
-        state = NewRequest.photo if in_draft else NewRequest.category
+        state = NewRequest.attachments if in_draft else NewRequest.category
     elif in_draft:
         data.error = VOICE_FAILED
         state = NewRequest.description
@@ -102,10 +103,12 @@ async def create_bot_request(
     requests_service: FromDishka[RequestsService],
     users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
+    video_tokens: Sequence[str] = (),
 ) -> int | None:
     user = await users_repo.get_by_id(user_id)
     try:
-        photos = await save_photos(bot, files_service, photo_urls)
+        attachments = await save_photos(bot, files_service, photo_urls)
+        attachments.extend(await save_videos(bot, files_service, video_tokens))
         card = await requests_service.create(
             user_id,
             house_id,
@@ -113,7 +116,7 @@ async def create_bot_request(
                 category=RequestCategory(category),
                 description=description,
                 flat_id=flat_id,
-                photos=photos,
+                attachments=attachments,
             ),
             RequestChannel(channel),
         )
@@ -133,6 +136,36 @@ async def create_bot_request(
     )
     await _show_outcome(sender, user, stack_id, outcome)
     return request_id
+
+
+async def save_videos(
+    bot: Bot,
+    files_service: FilesService,
+    video_tokens: Sequence[str],
+) -> list[str]:
+    videos = []
+    for token in video_tokens:
+        details = await bot.get_video_attachment_details(video_token=token)
+        urls = details.urls
+        url = None
+        if is_defined(urls) and urls is not None:
+            url = next(
+                (
+                    value
+                    for value in (urls.mp4_480, urls.mp4_360, urls.mp4_720)
+                    if is_defined(value) and value
+                ),
+                None,
+            )
+        if url is None:
+            raise InvalidRequest("Видео пока недоступно, отправьте его ещё раз")
+        videos.append(
+            await files_service.save_download(
+                "video/mp4",
+                partial(bot.download, url, seek=False),
+            ),
+        )
+    return videos
 
 
 async def save_photos(

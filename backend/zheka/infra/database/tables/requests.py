@@ -13,11 +13,11 @@ from sqlalchemy import (
 )
 
 from zheka.core.enums import (
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
-    RequestPhotoKind,
     RequestStatus,
 )
 from zheka.infra.database.tables._columns import created_at_column, id_column
@@ -82,14 +82,18 @@ request_groups_table = Table(
     ),
 )
 
-request_photos_table = Table(
+request_attachments_table = Table(
     "request_photos",
     metadata,
     id_column(),
     created_at_column(),
     Column("request_id", BigInteger, ForeignKey("requests.id"), nullable=False),
     Column("path", String(64), nullable=False),
-    Column("kind", pg_enum(RequestPhotoKind, "request_photo_kind"), nullable=False),
+    Column(
+        "kind",
+        pg_enum(RequestAttachmentKind, "request_photo_kind"),
+        nullable=False,
+    ),
     Column("uploaded_by", BigInteger, ForeignKey("users.id"), nullable=False),
 )
 

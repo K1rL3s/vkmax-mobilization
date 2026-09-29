@@ -4,7 +4,7 @@ import { duration, formatDayTime } from "@/shared/lib/format";
 import { autoClose } from "../domain/timeline";
 import type { RequestCard } from "../domain/types";
 
-import { PhotoPair } from "./photo-pair";
+import { AttachmentPair } from "./attachment-pair";
 import { COMMENT_LIMIT, useReview } from "./use-review";
 
 import styles from "./review-panel.module.css";
@@ -45,7 +45,7 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
         </>
       )}
 
-      <PhotoPair request={request} doneAt={closing?.sentAt ?? null} />
+      <AttachmentPair request={request} doneAt={closing?.sentAt ?? null} />
 
       <Flex align="stretch" direction="column" gapY={4}>
         <Textarea

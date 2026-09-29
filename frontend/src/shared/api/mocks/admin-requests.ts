@@ -46,17 +46,31 @@ const executors: Schemas["ExecutorItem"][] = [
   },
 ];
 
+const fromResident = (
+  item: ReturnType<typeof houseRequests>[number],
+): Request => ({
+  ...structuredClone(requestCard(item)),
+  is_staff_author: false,
+  author_name: "Гульнара Ахметзяновна Сафиуллина-Валиева",
+  caller_name: null,
+  caller_phone: null,
+  executor_user_id: item.executor_name ? 31 : null,
+  executor_name: item.executor_name ? executors[0].name : null,
+});
+
 const requests: Request[] = houseIds.flatMap((houseId) =>
-  houseRequests(houseId, null).map((item) => ({
-    ...structuredClone(requestCard(item)),
-    is_staff_author: false,
-    author_name: "Гульнара Ахметзяновна Сафиуллина-Валиева",
-    caller_name: null,
-    caller_phone: null,
-    executor_user_id: item.executor_name ? 31 : null,
-    executor_name: item.executor_name ? executors[0].name : null,
-  })),
+  houseRequests(houseId, null).map(fromResident),
 );
+
+const includeResidentRequests = () => {
+  for (const houseId of houseIds) {
+    for (const item of houseRequests(houseId, null)) {
+      if (!requests.some((request) => request.id === item.id)) {
+        requests.push(fromResident(item));
+      }
+    }
+  }
+};
 
 let nextId = Math.max(1000, ...requests.map((request) => request.id)) + 1;
 
@@ -177,8 +191,10 @@ requests.push(
   }),
 );
 
-const findRequest = (id: string) =>
-  requests.find((request) => request.id === Number(id));
+const findRequest = (id: string) => {
+  includeResidentRequests();
+  return requests.find((request) => request.id === Number(id));
+};
 const membersOf = (id: number) =>
   requests.filter((request) => request.group_id === id);
 const closedGroups = new Set<number>();
@@ -239,6 +255,7 @@ const changeStatus = (
 
 export const adminRequestsConfigs = [
   endpoint("get", "/admin/requests", (request) => {
+    includeResidentRequests();
     const found = requests
       .filter(
         (item) =>

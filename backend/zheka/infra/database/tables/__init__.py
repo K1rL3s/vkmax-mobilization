@@ -32,9 +32,9 @@ from zheka.infra.database.tables.reception import (
     reception_windows_table,
 )
 from zheka.infra.database.tables.requests import (
+    request_attachments_table,
     request_groups_table,
     request_messages_table,
-    request_photos_table,
     request_status_log_table,
     requests_table,
 )
@@ -76,7 +76,7 @@ mapper_registry.map_imperatively(models.ReceptionWindow, reception_windows_table
 mapper_registry.map_imperatively(models.Appointment, appointments_table)
 mapper_registry.map_imperatively(models.Request, requests_table)
 mapper_registry.map_imperatively(models.RequestGroup, request_groups_table)
-mapper_registry.map_imperatively(models.RequestPhoto, request_photos_table)
+mapper_registry.map_imperatively(models.RequestAttachment, request_attachments_table)
 mapper_registry.map_imperatively(models.RequestStatusLog, request_status_log_table)
 mapper_registry.map_imperatively(models.RequestMessage, request_messages_table)
 mapper_registry.map_imperatively(models.Resident, residents_table)

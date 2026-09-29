@@ -27,7 +27,7 @@ class Onboarding(StatesGroup):
 class NewRequest(StatesGroup):
     category = State()
     description = State()
-    photo = State()
+    attachments = State("photo")
     confirm = State()
     sent = State()
 

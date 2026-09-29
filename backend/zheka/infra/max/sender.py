@@ -3,10 +3,11 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import lru_cache
+from pathlib import Path
 
 from maxo import Bot
 from maxo.dialogs import BgManagerFactory, Data, ShowMode, StartMode
-from maxo.enums import ChatType, MessageLinkType
+from maxo.enums import ChatType, MessageLinkType, UploadType
 from maxo.errors import (
     MaxBotApiError,
     MaxBotForbiddenError,
@@ -17,10 +18,12 @@ from maxo.fsm import State
 from maxo.omit import Omitted, is_defined
 from maxo.types import Attachments, AttachmentsRequests, NewMessageLink
 from maxo.types.buttons import InlineButtons
+from maxo.types.facades.attachments import AttachmentsFacade
 from maxo.types.inline_keyboard_attachment_request import (
     InlineKeyboardAttachmentRequest,
 )
 from maxo.types.send_message_result import SendMessageResult
+from maxo.utils.upload_media import FSInputFile
 
 from zheka.core.ids import MaxChatId, MaxUserId
 from zheka.core.models import User
@@ -91,6 +94,26 @@ class MaxSender:
                     link=link,
                 )
         return result
+
+    async def send_video(self, path: Path, user: User, request_id: int) -> None:
+        if (
+            user.max_user_id < 0
+            or user.max_chat_id is None
+            or user.bot_stopped_at is not None
+        ):
+            return
+        with _undelivered():
+            async with BOT_RATE_LIMIT, _chat_rate_limit(user.max_user_id):
+                attachments = await AttachmentsFacade(self._bot).build_attachments(
+                    base=[],
+                    files=[FSInputFile(path, UploadType.VIDEO)],
+                )
+                await self._bot.send_message(
+                    user_id=user.max_user_id,
+                    text=f"🎬 Видео к заявке №{request_id}",
+                    attachments=list(attachments),
+                    notify=False,
+                )
 
     async def start_dialog(
         self,

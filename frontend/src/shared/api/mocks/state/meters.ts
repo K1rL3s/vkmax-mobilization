@@ -173,7 +173,11 @@ const readingItem = (
     period: reading.period,
     values: reading.values,
     consumption,
-    photos: reading.photos.map((name) => ({ name, url: fileUrl(name) })),
+    photos: reading.photos.map((name) => ({
+      name,
+      url: fileUrl(name),
+      is_video: false,
+    })),
     is_below_previous:
       previous !== null &&
       Object.entries(reading.values).some(

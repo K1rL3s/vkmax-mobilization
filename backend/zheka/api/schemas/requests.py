@@ -4,7 +4,7 @@ from typing import Self
 from pydantic import Field
 
 from zheka.api.schemas.base import BaseSchema, FreeText
-from zheka.api.schemas.files import PHOTOS_DESCRIPTION, FileRef
+from zheka.api.schemas.files import FILES_DESCRIPTION, FileRef
 from zheka.core.enums import (
     CATEGORY_RULES,
     CategoryRule,
@@ -74,7 +74,7 @@ class RequestListItem(BaseSchema):
     description: str
     status: RequestStatus
     channel: RequestChannel
-    has_photos: bool
+    has_photos: bool = Field(description="Есть вложения: фото или видео")
     group_size: int
     flat_number: str | None = None
     group_id: RequestGroupId | None = None
@@ -99,7 +99,7 @@ class RequestListItem(BaseSchema):
             description=request.description,
             status=request.status,
             channel=request.channel,
-            has_photos=row.has_photos,
+            has_photos=row.has_attachments,
             group_size=row.group_size,
             flat_number=None if row.flat is None else row.flat.number,
             group_id=request.group_id,
@@ -149,8 +149,10 @@ class RequestCard(RequestListItem):
         default=None,
         description="Срок реакции (принять заявку); пусто - не нормирован",
     )
-    photos: list[FileRef]
-    result_photos: list[FileRef]
+    photos: list[FileRef] = Field(description="Вложения проблемы: фото или видео")
+    result_photos: list[FileRef] = Field(
+        description="Вложения результата: фото или видео",
+    )
     messages: list[RequestMessageItem]
     timeline: list[RequestStatusLogItem]
     can_review: bool
@@ -170,8 +172,8 @@ class RequestCard(RequestListItem):
     def of(
         cls,
         card: RequestCardData,
-        photos: list[FileRef],
-        result_photos: list[FileRef],
+        attachments: list[FileRef],
+        result_attachments: list[FileRef],
     ) -> Self:
         request = card.request
         rule = CATEGORY_RULES[request.category]
@@ -179,7 +181,7 @@ class RequestCard(RequestListItem):
             RequestRow(
                 request=request,
                 flat=card.flat,
-                has_photos=bool(photos),
+                has_attachments=bool(attachments),
                 group_size=card.group_size,
                 executor=card.executor,
             ),
@@ -192,8 +194,8 @@ class RequestCard(RequestListItem):
             deadline_text=rule.deadline_text,
             deadline_basis=rule.basis,
             react_deadline_at=request.react_deadline_at,
-            photos=photos,
-            result_photos=result_photos,
+            photos=attachments,
+            result_photos=result_attachments,
             messages=[RequestMessageItem.of(view) for view in card.messages],
             timeline=[
                 RequestStatusLogItem.model_validate(log) for log in card.timeline
@@ -212,7 +214,7 @@ class CreateRequestRequest(BaseSchema):
     category: RequestCategory
     description: FreeText
     flat_id: FlatId | None = None
-    photos: list[str] = Field(default_factory=list, description=PHOTOS_DESCRIPTION)
+    photos: list[str] = Field(default_factory=list, description=FILES_DESCRIPTION)
     join_group_id: RequestGroupId | None = None
     llm_suggested: bool = False
     llm_accepted: bool = False
@@ -243,7 +245,7 @@ class RateRequestRequest(BaseSchema):
 
 class RepeatRequestRequest(BaseSchema):
     description: FreeText | None = None
-    photos: list[str] = Field(default_factory=list, description=PHOTOS_DESCRIPTION)
+    photos: list[str] = Field(default_factory=list, description=FILES_DESCRIPTION)
 
 
 class RequestExport(BaseSchema):
@@ -297,10 +299,10 @@ class AdminRequestCard(RequestCard):
     def of_admin(
         cls,
         data: AdminRequestCardData,
-        photos: list[FileRef],
-        result_photos: list[FileRef],
+        attachments: list[FileRef],
+        result_attachments: list[FileRef],
     ) -> Self:
-        base = RequestCard.of(data.card, photos, result_photos)
+        base = RequestCard.of(data.card, attachments, result_attachments)
         request = data.card.request
         return cls(
             **base.model_dump(),

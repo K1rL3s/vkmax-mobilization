@@ -4,7 +4,7 @@ from zheka.core.services.files import FilesService
 from zheka.infra.database.repos.files import FilesRepo
 from zheka.infra.database.repos.idempotency import IdempotencyRepo
 
-PHOTO_TTL = timedelta(days=365)
+ATTACHMENT_TTL = timedelta(days=365)
 ORPHAN_AGE = timedelta(days=1)
 KEY_TTL = timedelta(days=1)
 
@@ -25,8 +25,8 @@ class RetentionService:
     async def purge(self, now: datetime) -> int:
         referenced = await self._repo.referenced_names()
         removed = self._files.remove_orphans(referenced, now - ORPHAN_AGE)
-        await self._repo.drop_request_photos(now - PHOTO_TTL)
-        await self._repo.drop_reading_photos(now - PHOTO_TTL)
+        await self._repo.drop_request_attachments(now - ATTACHMENT_TTL)
+        await self._repo.drop_reading_photos(now - ATTACHMENT_TTL)
         return removed
 
     async def purge_keys(self, now: datetime) -> int:

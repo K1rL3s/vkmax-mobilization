@@ -6,12 +6,12 @@ from typing import Any, ClassVar, Self
 from adaptix import Retort
 from maxo.dialogs import DialogManager
 from maxo.omit import is_defined
-from maxo.types import AudioAttachment, MessageBody, PhotoAttachment
+from maxo.types import AudioAttachment, MessageBody, PhotoAttachment, VideoAttachment
 
 from zheka.base import ZhekaMutableType, ZhekaType
 from zheka.core.enums import EventSource, RequestCategory
 from zheka.core.ids import HouseId
-from zheka.core.services.requests import MAX_PHOTOS
+from zheka.core.services.requests import MAX_ATTACHMENTS, MAX_VIDEOS, TOO_MANY_VIDEOS
 
 MIN_REQUEST_TEXT = 15
 
@@ -87,15 +87,25 @@ class NewRequestData(BaseDialogData):
     category: RequestCategory | None = None
     description: str = ""
     photos: list[str] = field(default_factory=list)
+    videos: list[str] = field(default_factory=list)
     request_id: int | None = None
     deadline: str | None = None
     error: str | None = None
     voice_pending: bool = False
 
-    def attach_photos(self, body: MessageBody) -> None:
+    def attach_attachments(self, body: MessageBody) -> None:
+        self.error = None
         for attach in body.attachments or []:
-            if isinstance(attach, PhotoAttachment) and len(self.photos) < MAX_PHOTOS:
+            if isinstance(attach, VideoAttachment) and len(self.videos) >= MAX_VIDEOS:
+                self.error = f"🎬 {TOO_MANY_VIDEOS}"
+                continue
+            if len(self.photos) + len(self.videos) >= MAX_ATTACHMENTS:
+                self.error = f"📷 Можно приложить не больше {MAX_ATTACHMENTS} файлов"
+                break
+            if isinstance(attach, PhotoAttachment):
                 self.photos.append(attach.payload.url)
+            elif isinstance(attach, VideoAttachment):
+                self.videos.append(attach.payload.token)
 
     @classmethod
     def from_free_text(cls, body: MessageBody) -> Self | None:
@@ -105,7 +115,7 @@ class NewRequestData(BaseDialogData):
         if not text:
             return None
         draft = cls(description=text)
-        draft.attach_photos(body)
+        draft.attach_attachments(body)
         return draft
 
 

@@ -26,14 +26,14 @@ from zheka.core.errors import ZhekaError
 from zheka.core.ids import RequestId
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import (
-    MAX_PHOTOS,
+    MAX_ATTACHMENTS,
     MAX_RATING,
     MIN_RATING,
     RequestsService,
 )
 from zheka.core.texts import OPEN_REQUEST, REQUEST_STATUS_LABELS
 
-PHOTOS_PER_SIDE = MAX_PHOTOS // 2
+PHOTOS_PER_SIDE = MAX_ATTACHMENTS // 2
 
 
 def _request_id(dialog_manager: DialogManager) -> RequestId:
@@ -65,8 +65,8 @@ async def get_review(
         "photos": photo_media(
             files_service,
             [
-                *card.issue_photos[:PHOTOS_PER_SIDE],
-                *card.result_photos[:PHOTOS_PER_SIDE],
+                *card.issue_attachments[:PHOTOS_PER_SIDE],
+                *card.result_attachments[:PHOTOS_PER_SIDE],
             ],
         ),
     }

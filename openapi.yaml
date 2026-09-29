@@ -9761,7 +9761,7 @@ paths:
     post:
       tags:
       - Файлы
-      summary: Загрузить фото
+      summary: Загрузить фото или видео
       operationId: upload_file
       security:
       - ApiTestToken: []
@@ -10347,6 +10347,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size
@@ -10421,11 +10422,13 @@ components:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Photos
+          description: 'Вложения проблемы: фото или видео'
         result_photos:
           items:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Result Photos
+          description: 'Вложения результата: фото или видео'
         messages:
           items:
             $ref: '#/components/schemas/RequestMessageItem'
@@ -10544,6 +10547,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size
@@ -11807,10 +11811,14 @@ components:
         url:
           type: string
           title: Url
+        is_video:
+          type: boolean
+          title: Is Video
       type: object
       required:
       - name
       - url
+      - is_video
       title: FileRef
     FlatCard:
       properties:
@@ -13715,6 +13723,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size
@@ -13789,11 +13798,13 @@ components:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Photos
+          description: 'Вложения проблемы: фото или видео'
         result_photos:
           items:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Result Photos
+          description: 'Вложения результата: фото или видео'
         messages:
           items:
             $ref: '#/components/schemas/RequestMessageItem'
@@ -14005,6 +14016,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size

@@ -8,11 +8,11 @@ from sqlalchemy.sql.expression import FromClause
 from zheka.base import ZhekaType
 from zheka.core.enums import (
     CATEGORY_RULES,
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
-    RequestPhotoKind,
     RequestStatus,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, RequestGroupId, RequestId, UserId
@@ -20,17 +20,17 @@ from zheka.core.models.requests import WARN_MAX, WARN_MIN, WARN_SHARE
 from zheka.infra.database.models import (
     House,
     Request,
+    RequestAttachment,
     RequestGroup,
     RequestMessage,
-    RequestPhoto,
     RequestStatusLog,
 )
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.requests import (
+    request_attachments_table,
     request_groups_table,
     request_messages_table,
-    request_photos_table,
     request_status_log_table,
     requests_table,
 )
@@ -139,15 +139,15 @@ class RequestsRepo(BaseAlchemyRepo):
         request.feedback = feedback
         await self._session.flush()
 
-    async def add_photo(
+    async def add_attachment(
         self,
         request_id: RequestId,
         path: str,
-        kind: RequestPhotoKind,
+        kind: RequestAttachmentKind,
         uploaded_by: UserId,
     ) -> None:
         self._session.add(
-            RequestPhoto(
+            RequestAttachment(
                 request_id=request_id,
                 path=path,
                 kind=kind,
@@ -156,25 +156,28 @@ class RequestsRepo(BaseAlchemyRepo):
         )
         await self._session.flush()
 
-    async def list_photos(self, request_id: RequestId) -> Sequence[RequestPhoto]:
+    async def list_attachments(
+        self,
+        request_id: RequestId,
+    ) -> Sequence[RequestAttachment]:
         stmt = (
-            select(RequestPhoto)
-            .where(request_photos_table.c.request_id == request_id)
-            .order_by(request_photos_table.c.id)
+            select(RequestAttachment)
+            .where(request_attachments_table.c.request_id == request_id)
+            .order_by(request_attachments_table.c.id)
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
-    async def count_photos(
+    async def count_attachments(
         self,
         request_ids: Collection[RequestId],
     ) -> dict[RequestId, int]:
         if not request_ids:
             return {}
         stmt = (
-            select(request_photos_table.c.request_id, func.count())
-            .where(request_photos_table.c.request_id.in_(request_ids))
-            .group_by(request_photos_table.c.request_id)
+            select(request_attachments_table.c.request_id, func.count())
+            .where(request_attachments_table.c.request_id.in_(request_ids))
+            .group_by(request_attachments_table.c.request_id)
         )
         result = await self._session.execute(stmt)
         return {RequestId(request_id): count for request_id, count in result.tuples()}

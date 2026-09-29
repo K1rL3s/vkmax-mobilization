@@ -20,11 +20,11 @@ from zheka.core.enums import (
     OrgRole,
     PollStatus,
     RequestActorRole,
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
-    RequestPhotoKind,
     RequestStatus,
     ResidentRole,
     ServiceType,
@@ -45,8 +45,8 @@ from zheka.core.models import (
     PollVote,
     ReceptionWindow,
     Request,
+    RequestAttachment,
     RequestGroup,
-    RequestPhoto,
     RequestStatusLog,
     Resident,
     Tariff,
@@ -803,10 +803,10 @@ class Seeder:
                     continue
                 _created, request_id, _category, executor, reviewed_at = shown[-1]
                 self._session.add(
-                    RequestPhoto(
+                    RequestAttachment(
                         request_id=request_id,
                         path=photo,
-                        kind=RequestPhotoKind.RESULT,
+                        kind=RequestAttachmentKind.RESULT,
                         uploaded_by=executor,
                         created_at=reviewed_at,
                     ),

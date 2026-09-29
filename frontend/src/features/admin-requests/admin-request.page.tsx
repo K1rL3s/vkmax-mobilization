@@ -9,7 +9,7 @@ import {
   DeadlinePanel,
   isFinished,
   isOnReview,
-  RequestPhotos,
+  RequestAttachments,
   RequestTimeline,
   STATUS_LABEL,
   STATUS_TONE,
@@ -179,11 +179,17 @@ const AdminRequestPage = () => {
         </section>
       </Flex>
 
-      <RequestPhotos title="Фото проблемы" files={request.photos} />
+      <RequestAttachments
+        title="Вложения проблемы"
+        attachments={request.photos}
+      />
 
       {isAssignable && <RequestAssignment request={request} />}
 
-      <RequestPhotos title="Фото результата" files={request.result_photos} />
+      <RequestAttachments
+        title="Вложения результата"
+        attachments={request.result_photos}
+      />
 
       <Flex asChild align="stretch" direction="column" gap={8}>
         <section>

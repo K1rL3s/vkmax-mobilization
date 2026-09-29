@@ -19,7 +19,7 @@ from zheka.core.errors import ZhekaError
 from zheka.core.ids import RequestId
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.files import FilesService
-from zheka.core.services.requests import MAX_PHOTOS
+from zheka.core.services.requests import MAX_ATTACHMENTS
 from zheka.core.texts import REQUEST_STATUS_LABELS
 
 PHOTO_TAKEN = "✅ Фото получил, карточка заявки обновится"
@@ -57,7 +57,10 @@ async def get_card(
         "place": escape(place),
         "category": CATEGORY_RULES[request.category].caption,
         "description": escape(request.description),
-        "photos": photo_media(files_service, card.issue_photos[:MAX_PHOTOS]),
+        "videos": sum(
+            files_service.is_video(photo.path) for photo in card.issue_attachments
+        ),
+        "photos": photo_media(files_service, card.issue_attachments[:MAX_ATTACHMENTS]),
     }
 
 
@@ -107,7 +110,7 @@ async def on_result_photo(
         TaskName.ATTACH_RESULT_PHOTO,
         user_id=dialog_user_id(dialog_manager),
         request_id=_request_id(dialog_manager),
-        photo_urls=urls[:MAX_PHOTOS],
+        photo_urls=urls[:MAX_ATTACHMENTS],
     )
     await back_to_menu(dialog_manager, PHOTO_TAKEN)
 

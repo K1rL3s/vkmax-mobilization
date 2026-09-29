@@ -4,4 +4,5 @@ let nextFileId = 1;
 
 export const fileUrl = (name: string): string => uploads.get(name) ?? "";
 
-export const nextFileName = (): string => `upload-${nextFileId++}.jpg`;
+export const nextFileName = (suffix = "jpg"): string =>
+  `upload-${nextFileId++}.${suffix}`;

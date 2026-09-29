@@ -50,6 +50,13 @@ const CLASSIFY_RULES: [RegExp, Schemas["RequestCategory"]][] = [
   [/двор|яма|площадк|парковк/i, "yard"],
 ];
 
+const checkAttachments = (names: string[]): string | null => {
+  if (names.length > 12) return "Можно приложить не больше 12 файлов";
+  if (names.filter((name) => /\.(mp4|mov)$/.test(name)).length > 2)
+    return "Можно приложить не больше 2 видео";
+  return null;
+};
+
 export const requestsConfigs = [
   endpoint("post", "/requests/classify", (request) => {
     const text = String(request.body.text ?? "");
@@ -85,6 +92,8 @@ export const requestsConfigs = [
     }
 
     const body = request.body as Schemas["CreateRequestRequest"];
+    const mediaError = checkAttachments(body.photos ?? []);
+    if (mediaError) return badRequest(mediaError);
 
     return categoryOf(body.category) && body.description?.trim()
       ? ok(requestCard(createRequest(houseId, body)))
@@ -154,6 +163,8 @@ export const requestsConfigs = [
 
     const body = request.body as Schemas["RepeatRequestRequest"];
     const description = body.description?.trim() || null;
+    const mediaError = checkAttachments(body.photos ?? []);
+    if (mediaError) return badRequest(mediaError);
 
     if (item.status === "on_review") {
       if (!description) {
@@ -218,15 +229,35 @@ export const requestsConfigs = [
   }),
   endpoint("get", "/request-categories", () => ok(requestCategories())),
   endpoint("post", "/files", async (request) => {
-    const name = nextFileName();
     const url = await readUploadedFile(request);
 
     if (!url) {
       return badRequest("Файл не пришёл");
     }
 
+    const mime = /^data:([^;]+);/.exec(url)?.[1] ?? "";
+    const suffix = (
+      {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/heic": "heic",
+        "video/mp4": "mp4",
+        "video/quicktime": "mov",
+      } as Record<string, string>
+    )[mime];
+    if (!suffix)
+      return badRequest(
+        "Поддерживаются только изображения и видео MP4 или MOV",
+      );
+    const is_video = mime.startsWith("video/");
+    const size = atob(url.slice(url.indexOf(",") + 1)).length;
+    const limit = is_video ? 50 : 10;
+    if (size > limit * 1024 * 1024)
+      return badRequest(`${is_video ? "Видео" : "Файл"} больше ${limit} МБ`);
+    const name = nextFileName(suffix);
     uploads.set(name, url);
 
-    return ok({ name, url });
+    return ok({ name, url, is_video } satisfies Schemas["FileRef"]);
   }),
 ];

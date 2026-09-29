@@ -1798,7 +1798,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Загрузить фото */
+    /** Загрузить фото или видео */
     post: operations["upload_file"];
     delete?: never;
     options?: never;
@@ -2084,7 +2084,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;
@@ -2129,9 +2132,15 @@ export interface components {
        * @description Срок реакции (принять заявку); пусто - не нормирован
        */
       react_deadline_at?: string | null;
-      /** Photos */
+      /**
+       * Photos
+       * @description Вложения проблемы: фото или видео
+       */
       photos: components["schemas"]["FileRef"][];
-      /** Result Photos */
+      /**
+       * Result Photos
+       * @description Вложения результата: фото или видео
+       */
       result_photos: components["schemas"]["FileRef"][];
       /** Messages */
       messages: components["schemas"]["RequestMessageItem"][];
@@ -2186,7 +2195,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;
@@ -2959,6 +2971,8 @@ export interface components {
       name: string;
       /** Url */
       url: string;
+      /** Is Video */
+      is_video: boolean;
     };
     /** FlatCard */
     FlatCard: {
@@ -4071,7 +4085,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;
@@ -4116,9 +4133,15 @@ export interface components {
        * @description Срок реакции (принять заявку); пусто - не нормирован
        */
       react_deadline_at?: string | null;
-      /** Photos */
+      /**
+       * Photos
+       * @description Вложения проблемы: фото или видео
+       */
       photos: components["schemas"]["FileRef"][];
-      /** Result Photos */
+      /**
+       * Result Photos
+       * @description Вложения результата: фото или видео
+       */
       result_photos: components["schemas"]["FileRef"][];
       /** Messages */
       messages: components["schemas"]["RequestMessageItem"][];
@@ -4243,7 +4266,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;

@@ -10,10 +10,10 @@ import { alertIcon, Icon } from "@/shared/ui/icon";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { DESCRIPTION_LIMIT, useNewRequest } from "./model/use-new-request";
-import { PHOTO_LIMIT } from "./model/use-photos";
+import { ATTACHMENT_LIMIT } from "./model/use-attachments";
 import { CategoryChips } from "./ui/category-chips";
 import { CategoryInfo } from "./ui/category-info";
-import { PhotoPicker } from "./ui/photo-picker";
+import { AttachmentPicker } from "./ui/attachment-picker";
 import { SimilarPanel } from "./ui/similar-panel";
 
 import styles from "./new-request.module.css";
@@ -47,7 +47,7 @@ const NewRequestPage = () => {
       <div className={styles.Content}>
         {!form.isDispute &&
           form.description === "" &&
-          form.photos.photos.length === 0 && (
+          form.attachments.attachments.length === 0 && (
             <Flex asChild align="center" gap={12}>
               <Link to={Routes.EMERGENCY} className={styles.Emergency}>
                 <Icon src={alertIcon} className={styles.EmergencyIcon} />
@@ -145,28 +145,28 @@ const NewRequestPage = () => {
                   variant="title"
                   color="primary"
                 >
-                  <h2>Фото</h2>
+                  <h2>Вложения</h2>
                 </Typography.Text>
                 <Typography.Text variant="description" color="secondary">
                   необязательно
                 </Typography.Text>
               </Flex>
 
-              <PhotoPicker
-                photos={form.photos.photos}
-                isFull={form.photos.isFull}
-                isUploading={form.photos.isUploading}
-                onAdd={form.photos.add}
-                onRemove={form.photos.remove}
+              <AttachmentPicker
+                attachments={form.attachments.attachments}
+                isFull={form.attachments.isFull}
+                isUploading={form.attachments.isUploading}
+                onAdd={form.attachments.add}
+                onRemove={form.attachments.remove}
               />
 
               <Typography.Text
                 variant="description"
                 color="secondary"
-                className={form.photos.error ? styles.Failed : undefined}
+                className={form.attachments.error ? styles.Failed : undefined}
               >
-                {form.photos.error ??
-                  `До ${PHOTO_LIMIT} фото - так УК быстрее разберётся`}
+                {form.attachments.error ??
+                  `До ${ATTACHMENT_LIMIT} файлов, из них до 2 видео. Видео до 50 МБ и 60 секунд`}
               </Typography.Text>
             </section>
           </Flex>

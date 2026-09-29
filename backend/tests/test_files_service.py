@@ -2,11 +2,14 @@ import time
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from httpx import ASGITransport, AsyncClient
 
 from tests.conftest import photo_name
 
 from zheka.api.dependencies.current_account import CurrentAccount
-from zheka.api.routes.files import upload_file
+from zheka.api.routes.files import download_file, upload_file
 from zheka.config import FilesConfig
 from zheka.core.errors import EntityNotFound, InvalidRequest, TooManyRequests
 from zheka.core.ids import UserId
@@ -121,3 +124,65 @@ async def test_uploads_past_the_hourly_quota_are_refused(tmp_path: Path) -> None
     with pytest.raises(TooManyRequests):
         await upload_file(account, _FakeUpload("image/png", 16), service, quota)  # type: ignore[arg-type]
     assert len(list(tmp_path.iterdir())) == UPLOAD_CALLS  # noqa: ASYNC240
+
+
+@pytest.mark.parametrize(
+    ("mime", "suffix"),
+    [("video/mp4", ".mp4"), ("video/quicktime", ".mov")],
+)
+async def test_video_has_its_own_limit_and_signed_type(
+    tmp_path: Path,
+    mime: str,
+    suffix: str,
+) -> None:
+    service = _make_service(tmp_path, max_size_mb=1)
+    upload = _FakeUpload(mime, 50 * 1024 * 1024)
+    ref = await upload_file(
+        CurrentAccount(user_id=UserId(1), consent_at=None),
+        upload,  # type: ignore[arg-type]
+        service,
+        UploadQuota(),
+    )
+    assert ref.name.endswith(suffix)
+    assert ref.is_video
+    assert service.path_of(ref.name).stat().st_size == upload.size
+    assert "sig=" in ref.url
+
+
+async def test_oversized_video_is_removed(tmp_path: Path) -> None:
+    service = _make_service(tmp_path, max_size_mb=10)
+    with pytest.raises(InvalidRequest, match="Видео больше 50 МБ"):
+        await service.save(_FakeUpload("video/mp4", 51 * 1024 * 1024))  # type: ignore[arg-type]
+    assert not list(tmp_path.iterdir())  # noqa: ASYNC240
+
+
+async def test_avi_is_rejected_before_download(tmp_path: Path) -> None:
+    service = _make_service(tmp_path, max_size_mb=10)
+    upload = _FakeUpload("video/x-msvideo", 100)
+    with pytest.raises(InvalidRequest, match="MP4 или MOV"):
+        await service.save(upload)  # type: ignore[arg-type]
+    assert upload.total_read == 0
+
+
+async def test_signed_video_supports_seeking(tmp_path: Path) -> None:
+
+    files = _make_service(tmp_path, 10)
+    name = await files.save(_FakeUpload("video/mp4", 1024))  # type: ignore[arg-type]
+    app = FastAPI()
+
+    @app.get("/files/{name}")
+    async def download(name: str, exp: int, sig: str) -> FileResponse:
+        return await download_file(name, exp, sig, files)
+
+    async with AsyncClient(
+        transport=ASGITransport(app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            files.sign(name),
+            headers={"Range": "bytes=100-199"},
+        )
+    assert response.status_code == 206
+    assert response.headers["content-range"] == "bytes 100-199/1024"
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.content == b"x" * 100

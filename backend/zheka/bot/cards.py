@@ -19,18 +19,22 @@ from maxo.utils.payload import encode_payload
 
 from zheka.bot.states import Menu
 from zheka.core.errors import ZhekaError
-from zheka.core.models import RequestPhoto
+from zheka.core.models import RequestAttachment
 from zheka.core.services.files import FilesService
 from zheka.infra.max.sender import keyboard_attachments
 
 
 def photo_media(
     files_service: FilesService,
-    photos: Sequence[RequestPhoto],
+    attachments: Sequence[RequestAttachment],
 ) -> list[MediaAttachment]:
     return [
-        MediaAttachment(AttachmentType.IMAGE, path=files_service.path_of(photo.path))
-        for photo in photos
+        MediaAttachment(
+            AttachmentType.IMAGE,
+            path=files_service.path_of(attachment.path),
+        )
+        for attachment in attachments
+        if not files_service.is_video(attachment.path)
     ]
 
 

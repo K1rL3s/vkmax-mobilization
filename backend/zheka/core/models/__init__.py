@@ -12,9 +12,9 @@ from zheka.core.models.polls import Poll, PollOption, PollVote
 from zheka.core.models.reception import Appointment, ReceptionWindow
 from zheka.core.models.requests import (
     Request,
+    RequestAttachment,
     RequestGroup,
     RequestMessage,
-    RequestPhoto,
     RequestStatusLog,
 )
 from zheka.core.models.residents import (
@@ -55,9 +55,9 @@ __all__ = (
     "Reading",
     "ReceptionWindow",
     "Request",
+    "RequestAttachment",
     "RequestGroup",
     "RequestMessage",
-    "RequestPhoto",
     "RequestStatusLog",
     "Resident",
     "Tariff",
