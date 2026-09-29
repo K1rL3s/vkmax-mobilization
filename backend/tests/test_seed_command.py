@@ -11,6 +11,7 @@ from dishka import AsyncContainer
 from maxo.dialogs.test_tools import BotClient
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.enums import ChatType
+from maxo.errors import MaxBotNotFoundError
 from maxo.types import Message, MessageBody, Recipient
 from maxo.types.send_message_result import SendMessageResult
 from sqlalchemy import func, select, text
@@ -206,3 +207,28 @@ def test_the_worker_import_registers_every_task() -> None:
     )
 
     assert result.stdout.strip() == "[]"
+
+
+async def test_a_deleted_waiting_message_gets_the_result_as_a_new_one(
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def stub(*_: Any) -> bool:
+        return True
+
+    async def gone(**_: Any) -> Any:
+        raise MaxBotNotFoundError(code="not.found", error="", message="")
+
+    monkeypatch.setattr(seed_task, "seed", stub)
+    monkeypatch.setattr(fake_bot, "edit_message", gone, raising=False)
+    queued = len(bot_broker.messages)
+    user_id = UserId(secrets.randbits(30))
+
+    await _run(task_broker, seed_demo, user_id=user_id, mid=MID, chat_id=CHAT_ID)
+
+    [message] = bot_broker.messages[queued:]
+    assert message.task_name == TaskName.SEND_TO_USER.value
+    assert message.kwargs["user_id"] == user_id
+    assert message.kwargs["text"] == SEEDED
