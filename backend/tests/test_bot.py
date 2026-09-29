@@ -98,6 +98,8 @@ from zheka.bot.handlers.commands.start import (
     BOT_COMMANDS,
     CHAT_COMMANDS_ONLY,
     DEMO_REMINDERS_TEXT,
+    FAQ_TEXT,
+    HELP_TEXT,
     set_commands_handler,
 )
 from zheka.bot.handlers.consent.windows import GIVEN_TEXT
@@ -6101,3 +6103,30 @@ async def test_a_text_without_consent_gets_no_hint(
 
     assert NOT_UNDERSTOOD not in notices.texts
     assert CONSENT_TEXT in _text(message_manager)
+
+
+@pytest.mark.parametrize(
+    ("command", "text"),
+    [("/help", HELP_TEXT), ("/faq", FAQ_TEXT)],
+    ids=["help", "faq"],
+)
+async def test_help_and_faq_answer_in_one_message_listing_every_command(
+    bot_container: AsyncContainer,  # noqa: ARG001
+    bot_setup: BotSetup,
+    command: str,
+    text: str,
+) -> None:
+    max_user_id = _max_id()
+    recorder = _RecordingBot()
+    client = BotClient(
+        bot_setup.dp,
+        user_id=max_user_id,
+        chat_id=max_user_id,
+        bot=recorder,
+    )
+
+    await client.send(command)
+
+    assert recorder.texts == [text]
+    assert len(text.encode("utf-16-le")) // 2 <= texts.MESSAGE_LIMIT
+    assert all(f"/{bot_command.name} " in HELP_TEXT for bot_command in BOT_COMMANDS)
