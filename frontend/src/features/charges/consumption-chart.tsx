@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Flex, Typography } from "@maxhub/max-ui";
 import {
+  CartesianGrid,
   Line,
   LineChart,
   Tooltip,
@@ -9,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { ChartBox } from "@/shared/ui/chart-box";
+import { CHART_GRID, CHART_Y_AXIS, ChartBox } from "@/shared/ui/chart-box";
 
 import {
   formatMonth,
@@ -68,17 +69,24 @@ export const ConsumptionChart = ({
           <ChartBox height={140}>
             <LineChart
               data={data}
-              margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
+              margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
             >
+              <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="month"
                 axisLine={false}
                 tickLine={false}
+                tickMargin={8}
                 interval={0}
                 padding={{ left: 12, right: 12 }}
                 tick={{ fill: "var(--text-secondary)", fontSize: "0.75rem" }}
               />
-              <YAxis hide domain={["auto", "auto"]} />
+              <YAxis
+                {...CHART_Y_AXIS}
+                domain={[0, "auto"]}
+                tickCount={4}
+                tickFormatter={(value: number) => formatVolume(value * 1000)}
+              />
               <Tooltip
                 cursor={{ stroke: "var(--icon-tertiary)" }}
                 content={(props) => <MonthTooltip {...props} unit={unit} />}

@@ -2,6 +2,7 @@ import { Flex, Typography } from "@maxhub/max-ui";
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   LabelList,
   Line,
   LineChart,
@@ -12,10 +13,10 @@ import {
 } from "recharts";
 
 import type { components } from "@/shared/api/schema/generated";
-import { formatDay } from "@/shared/lib/format";
-import { ChartBox } from "@/shared/ui/chart-box";
+import { CHART_GRID, CHART_Y_AXIS, ChartBox } from "@/shared/ui/chart-box";
 
 import { formatMetric } from "../domain/metric";
+import { weekRange } from "../domain/week";
 
 import styles from "./charts-section.module.css";
 
@@ -83,7 +84,7 @@ const WeekTooltip = ({
       gapY={2}
     >
       <Typography.Text variant="detail-strong" color="primary">
-        Неделя с {formatDay(`${label}T00:00`)} {String(label).slice(0, 4)}
+        {weekRange(String(label))}
       </Typography.Text>
 
       <Typography.Text variant="detail" color="secondary">
@@ -97,18 +98,25 @@ const WeekChart = ({ series }: { series: ChartSeries }) => (
   <ChartBox height={160}>
     <LineChart
       data={series.points}
-      margin={{ top: 8, right: 20, bottom: 0, left: 20 }}
+      margin={{ top: 8, right: 20, bottom: 0, left: 0 }}
     >
+      <CartesianGrid {...CHART_GRID} />
       <XAxis
         dataKey="label"
         interval={2}
         padding={{ left: 8, right: 8 }}
         axisLine={false}
         tickLine={false}
+        tickMargin={8}
         tickFormatter={(iso: string) => `${iso.slice(8)}.${iso.slice(5, 7)}`}
         tick={{ fill: "var(--text-secondary)", fontSize: "0.75rem" }}
       />
-      <YAxis hide domain={["auto", "auto"]} />
+      <YAxis
+        {...CHART_Y_AXIS}
+        domain={[0, "auto"]}
+        allowDecimals={false}
+        tickCount={5}
+      />
       <Tooltip
         cursor={{ stroke: "var(--icon-tertiary)" }}
         content={(props) => <WeekTooltip {...props} unit={series.unit} />}

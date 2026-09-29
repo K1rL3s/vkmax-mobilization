@@ -1,51 +1,30 @@
-.Scroll {
-  overflow-x: auto;
-  margin: 0 -12px;
-  padding: 0 12px;
-  scrollbar-width: none;
-}
+.Row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
 
-.Table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.8125rem;
-  white-space: nowrap;
-
-  th,
-  td {
-    padding: 6px 10px 6px 0;
-    text-align: right;
-    font-weight: 400;
-    color: var(--text-primary);
+  &:first-child {
+    padding-top: 0;
   }
 
-  th:last-child,
-  td:last-child {
-    padding-right: 0;
+  &:last-child {
+    padding-bottom: 0;
   }
 
-  thead th {
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-  }
-
-  tbody tr + tr th,
-  tbody tr + tr td {
+  & + & {
     border-top: 1px solid var(--divider-primary);
   }
+}
 
-  .Name {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    width: 124px;
-    min-width: 124px;
-    max-width: 124px;
-    overflow: hidden;
-    padding-right: 12px;
-    background-color: var(--background-card);
-    text-align: left;
-    text-overflow: ellipsis;
-  }
+.Metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.Value {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
 }

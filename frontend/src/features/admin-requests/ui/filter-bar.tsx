@@ -13,6 +13,7 @@ export type FilterGroup<N extends string> = {
   label: string;
   options: readonly { id: string; label: string }[];
   value: string;
+  defaultValue?: string;
 };
 
 export const FilterBar = <N extends string>({
@@ -35,7 +36,11 @@ export const FilterBar = <N extends string>({
             key={group.name}
             type="button"
             size="small"
-            variant={group.value === "all" ? "secondary" : "primary"}
+            variant={
+              group.value === (group.defaultValue ?? "all")
+                ? "secondary"
+                : "primary"
+            }
             aria-haspopup="dialog"
             iconAfter={
               <Icon src={chevronSmallIcon} size={12} className={styles.Down} />

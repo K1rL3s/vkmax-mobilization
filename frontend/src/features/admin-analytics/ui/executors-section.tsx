@@ -1,3 +1,5 @@
+import { Typography } from "@maxhub/max-ui";
+
 import { EmptyState } from "@/shared/ui/state";
 
 import { formatMetric } from "../domain/metric";
@@ -27,34 +29,31 @@ export const ExecutorsSection = ({ period }: { period: PeriodDays }) => {
           description="Исполнителя приглашают диплинком в настройках организации"
         />
       ) : (
-        <div className={styles.Scroll}>
-          <table className={styles.Table}>
-            <thead>
-              <tr>
-                <th className={styles.Name} scope="col">
-                  Исполнитель
-                </th>
-                <th scope="col">Закрыто</th>
-                <th scope="col">Медиана</th>
-                <th scope="col">Оценка</th>
-                <th scope="col">Повторные</th>
-              </tr>
-            </thead>
+        <div>
+          {executors.data?.map((executor) => (
+            <div key={executor.user_id} className={styles.Row}>
+              <Typography.Text variant="body-strong" color="primary">
+                {executor.name}
+              </Typography.Text>
 
-            <tbody>
-              {executors.data?.map((executor) => (
-                <tr key={executor.user_id}>
-                  <th className={styles.Name} scope="row">
-                    {executor.name}
-                  </th>
-                  <td>{executor.closed}</td>
-                  <td>{dash(executor.median_time, "minutes")}</td>
-                  <td>{dash(executor.rating, "points")}</td>
-                  <td>{formatMetric(executor.repeat_share, "percent")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              <div className={styles.Metrics}>
+                {[
+                  ["закрыто", String(executor.closed)],
+                  ["медиана", dash(executor.median_time, "minutes")],
+                  ["оценка", dash(executor.rating, "points")],
+                  ["повторные", formatMetric(executor.repeat_share, "percent")],
+                ].map(([label, value]) => (
+                  <Typography.Text
+                    key={label}
+                    variant="detail"
+                    color="secondary"
+                  >
+                    {label} <span className={styles.Value}>{value}</span>
+                  </Typography.Text>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </Section>

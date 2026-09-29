@@ -28,6 +28,7 @@ import { StatusPill } from "@/shared/ui/status-pill";
 
 import { useAdminMap } from "./model/use-admin-map";
 import { HousesMap } from "./ui/houses-map";
+import { UnconnectedHouses } from "./ui/unconnected-houses";
 
 import styles from "./admin-houses.module.css";
 
@@ -308,7 +309,10 @@ const AdminHousesPage = () => {
       {view === "map" ? (
         <HousesMap map={map} />
       ) : (
-        <HouseList isAdmin={map.isAdmin} />
+        <>
+          <HouseList isAdmin={map.isAdmin} />
+          <UnconnectedHouses />
+        </>
       )}
     </Panel>
   );

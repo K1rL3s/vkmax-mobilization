@@ -15,20 +15,13 @@ export const BenchmarkLink = () => {
         className={styles.Link}
         onClick={() => void navigate(Routes.ADMIN_BENCHMARK)}
       >
-        <Flex
+        <Typography.Text
           className={styles.Grow}
-          direction="column"
-          align="stretch"
-          gapY={2}
+          variant="body-strong"
+          color="primary"
         >
-          <Typography.Text variant="body-strong" color="primary">
-            Сравнение с платформой
-          </Typography.Text>
-
-          <Typography.Text variant="detail" color="secondary">
-            Ваши показатели против медианы, названий других УК не показываем
-          </Typography.Text>
-        </Flex>
+          Сравнить себя с другими УК
+        </Typography.Text>
 
         <Chevron />
       </Tappable>

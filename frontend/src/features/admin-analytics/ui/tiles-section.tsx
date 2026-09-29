@@ -59,13 +59,19 @@ const TileGroup = ({
   );
 };
 
-export const TilesSection = ({ tiles }: { tiles: DashboardTile[] }) => {
+export const TilesSection = ({
+  tiles,
+  periodTitle,
+}: {
+  tiles: DashboardTile[];
+  periodTitle: string;
+}) => {
   const { now, period } = splitTiles(tiles);
 
   return (
     <Flex direction="column" align="stretch" gapY={20}>
       <TileGroup title="Сейчас" tiles={now} />
-      <TileGroup title="За период" tiles={period} />
+      <TileGroup title={periodTitle} tiles={period} />
     </Flex>
   );
 };

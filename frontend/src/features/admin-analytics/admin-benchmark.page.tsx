@@ -8,7 +8,6 @@ import { formatMetric } from "./domain/metric";
 import { useBenchmark } from "./model/use-benchmark";
 import { BenchmarkMetricRow } from "./ui/benchmark-metric";
 import { Section } from "./ui/section";
-import { UnconnectedHouses } from "./ui/unconnected-houses";
 
 import styles from "./admin-benchmark.module.css";
 
@@ -59,7 +58,7 @@ const AdminBenchmarkPage = () => {
     <Panel className={styles.Page} mode="secondary">
       <Flex direction="column" align="stretch" gapY={4}>
         <Typography.Text asChild variant="header" color="primary">
-          <h1>Сравнение с платформой</h1>
+          <h1>Сравнение с другими УК</h1>
         </Typography.Text>
 
         <Typography.Text variant="description" color="secondary">
@@ -118,15 +117,6 @@ const AdminBenchmarkPage = () => {
                   pick={(row) => row.city ?? row.region}
                 />
               </Flex>
-            </Section>
-          )}
-
-          {benchmark.data.unconnected_houses.length > 0 && (
-            <Section
-              title="Неподключённые дома"
-              note="Жители этих домов уже ждут сервис"
-            >
-              <UnconnectedHouses houses={benchmark.data.unconnected_houses} />
             </Section>
           )}
         </>

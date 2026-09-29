@@ -1,0 +1,14 @@
+.Section h2 {
+  margin: 0;
+}
+
+.Card {
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Waiting {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
