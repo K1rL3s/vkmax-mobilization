@@ -72,7 +72,6 @@ export const useAdminPollForm = () => {
     removeOption: (index: number) => options.remove(index),
     canAddOption: options.fields.length < pollFormConstraints.optionsMax,
     canRemoveOption: options.fields.length > pollFormConstraints.optionsMin,
-    minDate: new Date().toISOString().slice(0, 10),
     isSubmitting: create.isPending,
     submitError:
       create.isError &&

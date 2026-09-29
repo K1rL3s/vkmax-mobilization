@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Button, Flex, Typography } from "@maxhub/max-ui";
-import { Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Line,
+  LineChart,
+  Tooltip,
+  type TooltipContentProps,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { ChartBox } from "@/shared/ui/chart-box";
 
@@ -73,9 +80,8 @@ export const ConsumptionChart = ({
               />
               <YAxis hide domain={["auto", "auto"]} />
               <Tooltip
-                formatter={(value) =>
-                  `${formatVolume(Number(value) * 1000)} ${unit}`
-                }
+                cursor={{ stroke: "var(--icon-tertiary)" }}
+                content={(props) => <MonthTooltip {...props} unit={unit} />}
               />
               <Line
                 type="monotone"
@@ -121,6 +127,36 @@ export const ConsumptionChart = ({
           </Flex>
         </Flex>
       </div>
+    </Flex>
+  );
+};
+
+const MonthTooltip = ({
+  active,
+  payload,
+  label,
+  unit,
+}: TooltipContentProps & { unit: string }) => {
+  const own = payload?.find((entry) => entry.dataKey === "own");
+
+  if (!active || !own) {
+    return null;
+  }
+
+  return (
+    <Flex
+      className={styles.Tooltip}
+      direction="column"
+      align="stretch"
+      gapY={2}
+    >
+      <Typography.Text variant="detail-strong" color="primary">
+        {label}
+      </Typography.Text>
+
+      <Typography.Text variant="detail" color="secondary">
+        Ваш расход: {formatVolume(Number(own.value) * 1000)} {unit}
+      </Typography.Text>
     </Flex>
   );
 };

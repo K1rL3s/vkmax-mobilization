@@ -7,7 +7,9 @@ import {
   Textarea,
   Typography,
 } from "@maxhub/max-ui";
+import { Controller } from "react-hook-form";
 
+import { DateInput } from "@/shared/ui/date-input";
 import { Icon, pollIcon, trashIcon } from "@/shared/ui/icon";
 import { EmptyState } from "@/shared/ui/state";
 
@@ -117,12 +119,19 @@ const NewPollPage = () => {
               <h2>До какого дня</h2>
             </Typography.Text>
 
-            <Input
-              type="date"
-              min={form.minDate}
-              hint={form.errors.endsAt?.message}
-              innerClassNames={{ hint: styles.Error }}
-              {...form.register("endsAt")}
+            <Controller
+              control={form.control}
+              name="endsAt"
+              render={({ field }) => (
+                <DateInput
+                  hint={form.errors.endsAt?.message}
+                  innerClassNames={{ hint: styles.Error }}
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
 
             <Typography.Text variant="description" color="secondary">

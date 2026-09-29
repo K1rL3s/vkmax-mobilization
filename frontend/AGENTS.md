@@ -59,6 +59,8 @@ Knows every feature; nothing imports it.
   every in-app screen redirects to `Routes.OUTSIDE_MAX` when `isInsideMax` is
   false; the stub route sits outside it. `session-loader.ts` and
   `deeplink-loader.ts` route a launch to its start screen or run a deeplink.
+- `app.tsx` renders `ScrollRestoration`: a pushed screen opens at the top and
+  back restores the old position, so a page never scrolls itself on mount.
 - `app.tsx` alone imports `globals.css`, the only global stylesheet: max-ui
   styles, `color-scheme: light dark` on `:root`, and two resets
   (`-webkit-tap-highlight-color: transparent`; `:where(:focus) { outline:
@@ -120,7 +122,9 @@ Knows every feature; nothing imports it.
   `index.html`; outside MAX `getWebApp()` is `null` and the back button,
   closing confirmation and haptics are no-ops (the web and desktop clients
   have no haptics either).
-- `ui/`: the kit over max-ui. Every recharts chart goes in `ChartBox` (owns
+- `ui/`: the kit over max-ui. A date field is `DateInput` (mask ДД.ММ.ГГГГ,
+  value an ISO day or `""` until the date is full and real), never a native
+  `type="date"`: the MAX WebView draws an empty one as a blank box. Every recharts chart goes in `ChartBox` (owns
   `ResponsiveContainer`, kills the tap focus ring from `accessibilityLayer`),
   never a bare `<div>`. `StatusPill` is the one status badge of both
   cabinets; its `tone` is a subset of `IconTileTone`, so one tone map feeds a

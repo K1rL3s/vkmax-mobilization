@@ -129,6 +129,7 @@ export const useAccessForm = (houseIds: number[]) => {
 
   return {
     register: form.register,
+    control: form.control,
     errors: form.formState.errors,
     houseId,
     reason,

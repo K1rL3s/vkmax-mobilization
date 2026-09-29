@@ -92,7 +92,6 @@ export const useNewPoll = () => {
     canAddOption: options.fields.length < pollFormConstraints.optionsMax,
     canRemoveOption: options.fields.length > pollFormConstraints.optionsMin,
     control: form.control,
-    minDate: new Date().toISOString().slice(0, 10),
     isSubmitting: create.isPending,
     isFailed: create.isError,
     submit,

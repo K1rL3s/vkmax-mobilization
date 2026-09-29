@@ -8,9 +8,11 @@ import {
   Textarea,
   Typography,
 } from "@maxhub/max-ui";
+import { Controller } from "react-hook-form";
 
 import { plural } from "@/shared/lib/format";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { DateInput } from "@/shared/ui/date-input";
 import { FieldError } from "@/shared/ui/field-error";
 import { checkIcon, Icon } from "@/shared/ui/icon";
 
@@ -18,7 +20,6 @@ import {
   accessFormConstraints as limits,
   windowLabel,
 } from "../domain/access-form";
-import { dayKey } from "../domain/day";
 import { useAccessForm } from "../model/use-access-form";
 import { FlatPicker } from "./flat-picker";
 
@@ -119,11 +120,18 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
           </Typography.Text>
 
           <Field label="День">
-            <Input
-              type="date"
-              min={dayKey(new Date())}
-              withClearButton={false}
-              {...form.register("date")}
+            <Controller
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <DateInput
+                  withClearButton={false}
+                  name={field.name}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
           </Field>
 

@@ -1,5 +1,5 @@
 import { useMount } from "@siberiacancode/reactuse";
-import { Outlet } from "react-router-dom";
+import { Outlet, ScrollRestoration } from "react-router-dom";
 
 import { useTrack } from "@/shared/lib/analytics";
 import { getMaxLaunch } from "@/shared/lib/max";
@@ -23,6 +23,7 @@ export const App = () => {
       <div className={styles.App}>
         <Outlet />
       </div>
+      <ScrollRestoration />
     </div>
   );
 };
