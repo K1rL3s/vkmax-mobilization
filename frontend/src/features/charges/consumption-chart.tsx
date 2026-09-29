@@ -76,7 +76,7 @@ export const ConsumptionChart = ({
                 tickLine={false}
                 interval={0}
                 padding={{ left: 12, right: 12 }}
-                className={styles.Axis}
+                tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
               />
               <YAxis hide domain={["auto", "auto"]} />
               <Tooltip

@@ -124,9 +124,13 @@ Knows every feature; nothing imports it.
   have no haptics either).
 - `ui/`: the kit over max-ui. A date field is `DateInput` (mask ДД.ММ.ГГГГ,
   value an ISO day or `""` until the date is full and real), never a native
-  `type="date"`: the MAX WebView draws an empty one as a blank box. Every recharts chart goes in `ChartBox` (owns
+  `type="date"`: the MAX WebView draws an empty one as a blank box. A choice
+  from a list is a cell that opens `BottomSheet` with radio cells, never a
+  native `<select>`: MAX draws its own system dialog for it. Every recharts chart goes in `ChartBox` (owns
   `ResponsiveContainer`, kills the tap focus ring from `accessibilityLayer`),
-  never a bare `<div>`. `StatusPill` is the one status badge of both
+  never a bare `<div>`; axis labels are styled with the axis `tick` prop,
+  since recharts 3 draws them outside the axis group and a `className` on the
+  axis never reaches them. `StatusPill` is the one status badge of both
   cabinets; its `tone` is a subset of `IconTileTone`, so one tone map feeds a
   row's tile and badge; never re-create or restyle it in a screen's CSS.
 - `env.d.ts` declares every `VITE_*` var.

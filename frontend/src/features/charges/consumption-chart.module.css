@@ -13,11 +13,6 @@
   background-color: var(--background-card);
 }
 
-.Axis {
-  font-size: 12px;
-  fill: var(--text-secondary);
-}
-
 .OwnMark,
 .HouseMark {
   flex-shrink: 0;

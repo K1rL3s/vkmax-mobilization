@@ -9,7 +9,7 @@ import { Icon, infoIcon } from "@/shared/ui/icon";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
-import { ROLE_LABEL } from "./domain/roles";
+import { ROLE_LABEL, ROLE_TONE } from "./domain/roles";
 import { useActorRole, useOrgCard, useOrgSettings } from "./model/use-org";
 import { CategoryExecutors } from "./ui/category-executors";
 import { MembersSection } from "./ui/members-section";
@@ -79,9 +79,12 @@ const AdminOrgPage = () => {
         </Flex>
 
         {role && (
-          <Typography.Text variant="description" color="secondary">
-            Ваша роль: {ROLE_LABEL[role].toLowerCase()}
-          </Typography.Text>
+          <Flex align="center" gap={8}>
+            <Typography.Text variant="description" color="secondary">
+              Ваша роль
+            </Typography.Text>
+            <StatusPill tone={ROLE_TONE[role]}>{ROLE_LABEL[role]}</StatusPill>
+          </Flex>
         )}
       </Flex>
 

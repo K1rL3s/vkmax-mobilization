@@ -8,25 +8,18 @@ import { Routes } from "@/shared/model/routes";
 import { ConfirmDialog, useConfirm } from "@/shared/ui/confirm-dialog";
 import { Icon, trashIcon, usersIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
-import { StatusPill, type StatusPillTone } from "@/shared/ui/status-pill";
+import { StatusPill } from "@/shared/ui/status-pill";
 
 import {
   removeBlock,
   ROLE_LABEL,
   ROLE_ORDER,
+  ROLE_TONE,
   type OrgMember,
-  type OrgRole,
 } from "../domain/roles";
 import { useOrgMembers, useRemoveMember } from "../model/use-org";
 
 import styles from "./members-section.module.css";
-
-const ROLE_TONE: Record<OrgRole, StatusPillTone> = {
-  creator: "promo",
-  admin: "themed",
-  employee: "neutral",
-  executor: "positive",
-};
 
 const byRole = (a: OrgMember, b: OrgMember) =>
   ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) ||

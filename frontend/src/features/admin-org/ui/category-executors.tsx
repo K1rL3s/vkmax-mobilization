@@ -1,8 +1,10 @@
-import { Flex, Typography } from "@maxhub/max-ui";
+import { useState } from "react";
+import { Button, CellSimple, Flex, Radio, Typography } from "@maxhub/max-ui";
 
-import { useRequestCategories } from "@/features/request";
+import { type RequestCategory, useRequestCategories } from "@/features/request";
 import { errorMessage } from "@/shared/api/errors";
 import { orgParams } from "@/shared/model/session";
+import { BottomSheet } from "@/shared/ui/bottom-sheet";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
 import {
@@ -18,6 +20,10 @@ export const CategoryExecutors = ({ readOnly }: { readOnly: boolean }) => {
   const executors = useOrgExecutors();
   const chosen = useCategoryExecutors();
   const save = useSetCategoryExecutor();
+  const [picking, setPicking] = useState<{
+    category: RequestCategory;
+    label: string;
+  } | null>(null);
   const queries = [categories, executors, chosen];
 
   const body = () => {
@@ -35,36 +41,90 @@ export const CategoryExecutors = ({ readOnly }: { readOnly: boolean }) => {
       chosen.data.map((item) => [item.category, item.executor_user_id]),
     );
 
-    return categories.data.map((item) => (
-      <label key={item.category} className={styles.Row}>
-        <Typography.Text variant="description" color="secondary">
-          {item.label}
-        </Typography.Text>
-        <select
-          className={styles.Select}
-          value={byCategory.get(item.category) ?? ""}
-          disabled={readOnly || save.isPending}
-          onChange={(event) =>
-            save.mutate({
-              params: orgParams(),
-              body: {
-                category: item.category,
-                executor_user_id: event.target.value
-                  ? Number(event.target.value)
-                  : null,
-              },
-            })
-          }
-        >
-          <option value="">Не назначен</option>
-          {executors.data.map((executor) => (
-            <option key={executor.user_id} value={executor.user_id}>
-              {executor.name}
-            </option>
-          ))}
-        </select>
-      </label>
-    ));
+    const options = [
+      { id: null, name: "Не назначен" },
+      ...executors.data.map((executor) => ({
+        id: executor.user_id,
+        name: executor.name,
+      })),
+    ];
+    const nameOf = (id: number | null | undefined) =>
+      options.find((option) => option.id === (id ?? null))?.name ??
+      "Не назначен";
+
+    return (
+      <>
+        {categories.data.map((item, index) => (
+          <CellSimple
+            key={item.category}
+            separator={index > 0}
+            overline={item.label}
+            title={nameOf(byCategory.get(item.category))}
+            showChevron={!readOnly}
+            onClick={
+              readOnly
+                ? undefined
+                : () =>
+                    setPicking({ category: item.category, label: item.label })
+            }
+          />
+        ))}
+
+        <BottomSheet isOpen={picking !== null} onClose={() => setPicking(null)}>
+          {picking && (
+            <Flex direction="column" align="stretch" gapY={12}>
+              <Flex direction="column" gapY={4}>
+                <Typography.Text asChild variant="title" color="primary">
+                  <h2 className={styles.SheetTitle}>{picking.label}</h2>
+                </Typography.Text>
+                <Typography.Text variant="description" color="secondary">
+                  Кому сразу уходят новые заявки этой категории
+                </Typography.Text>
+              </Flex>
+
+              <div className={styles.Options}>
+                {options.map((option, index) => (
+                  <CellSimple
+                    key={option.id ?? "none"}
+                    as="label"
+                    separator={index > 0}
+                    title={option.name}
+                    after={
+                      <Radio
+                        name="category-executor"
+                        checked={
+                          (byCategory.get(picking.category) ?? null) ===
+                          option.id
+                        }
+                        onChange={() => {
+                          save.mutate({
+                            params: orgParams(),
+                            body: {
+                              category: picking.category,
+                              executor_user_id: option.id,
+                            },
+                          });
+                          setPicking(null);
+                        }}
+                      />
+                    }
+                  />
+                ))}
+              </div>
+
+              <Button
+                size="large"
+                variant="secondary"
+                stretched
+                onClick={() => setPicking(null)}
+              >
+                Отмена
+              </Button>
+            </Flex>
+          )}
+        </BottomSheet>
+      </>
+    );
   };
 
   return (

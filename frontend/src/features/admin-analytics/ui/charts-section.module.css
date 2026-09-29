@@ -4,9 +4,8 @@
   background-color: var(--background-card);
 }
 
-.Axis,
 .BarValue {
-  font-size: 11px;
+  font-size: 12px;
   fill: var(--text-secondary);
 }
 

@@ -1,4 +1,5 @@
 import type { components } from "@/shared/api/schema/generated";
+import type { StatusPillTone } from "@/shared/ui/status-pill";
 
 export type OrgRole = components["schemas"]["OrgRole"];
 
@@ -42,4 +43,11 @@ export const removeBlock = (member: OrgMember): string | null => {
   return member.role === "admin"
     ? "Администратора исключает только создатель"
     : "Этого сотрудника исключить нельзя";
+};
+
+export const ROLE_TONE: Record<OrgRole, StatusPillTone> = {
+  creator: "promo",
+  admin: "themed",
+  employee: "neutral",
+  executor: "positive",
 };

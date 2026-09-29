@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   Button,
-  CellSimple,
   Flex,
   Input,
   Switch,
@@ -115,17 +114,12 @@ export const SettingsForm = ({ settings, readOnly }: SettingsFormProps) => {
           title="Окно подачи показаний"
           note={windowNote(watched)}
         >
-          <CellSimple
-            as="label"
-            className={styles.Switch}
-            title="Принимать весь месяц"
-            after={
-              <Switch
-                type="checkbox"
-                {...register("meter_window_always_open")}
-              />
-            }
-          />
+          <label className={styles.Switch}>
+            <Typography.Text variant="body" color="primary">
+              Принимать весь месяц
+            </Typography.Text>
+            <Switch type="checkbox" {...register("meter_window_always_open")} />
+          </label>
 
           <div className={styles.Pair}>
             <Field label="С какого числа">

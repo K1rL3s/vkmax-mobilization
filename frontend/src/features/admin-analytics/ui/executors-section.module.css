@@ -6,6 +6,7 @@
 }
 
 .Table {
+  width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 13px;
@@ -17,6 +18,11 @@
     text-align: right;
     font-weight: 400;
     color: var(--text-primary);
+  }
+
+  th:last-child,
+  td:last-child {
+    padding-right: 0;
   }
 
   thead th {

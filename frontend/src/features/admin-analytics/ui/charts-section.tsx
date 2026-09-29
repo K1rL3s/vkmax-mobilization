@@ -2,6 +2,7 @@ import { Flex, Typography } from "@maxhub/max-ui";
 import {
   Bar,
   BarChart,
+  Cell,
   LabelList,
   Line,
   LineChart,
@@ -21,6 +22,20 @@ import styles from "./charts-section.module.css";
 
 type ChartSeries = components["schemas"]["ChartSeries"];
 
+const BAR_COLORS = [
+  "#0077ff",
+  "#30a46c",
+  "#f76b15",
+  "#8e4ec6",
+  "#12a594",
+  "#e5484d",
+  "#f5b400",
+  "#3e63dd",
+  "#e93d82",
+  "#978365",
+  "#8c96a3",
+];
+
 const CategoryChart = ({ series }: { series: ChartSeries }) => {
   const points =
     series.key === "by_category"
@@ -39,18 +54,23 @@ const CategoryChart = ({ series }: { series: ChartSeries }) => {
         <YAxis
           type="category"
           dataKey="label"
-          width={132}
+          width={148}
           axisLine={false}
           tickLine={false}
-          className={styles.Axis}
+          tick={{ fill: "var(--text-primary)", fontSize: 12 }}
         />
         <Bar
           dataKey="value"
           name={series.title}
-          fill="var(--button-primary)"
           radius={4}
           isAnimationActive={false}
         >
+          {points.map((point, index) => (
+            <Cell
+              key={point.label}
+              fill={BAR_COLORS[index % BAR_COLORS.length]}
+            />
+          ))}
           <LabelList
             dataKey="value"
             position="right"
@@ -106,7 +126,7 @@ const WeekChart = ({ series }: { series: ChartSeries }) => (
         axisLine={false}
         tickLine={false}
         tickFormatter={(iso: string) => `${iso.slice(8)}.${iso.slice(5, 7)}`}
-        className={styles.Axis}
+        tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
       />
       <YAxis hide domain={["auto", "auto"]} />
       <Tooltip
