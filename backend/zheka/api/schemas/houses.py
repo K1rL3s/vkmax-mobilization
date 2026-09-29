@@ -3,6 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
+from zheka.api.dependencies import CurrentOrg
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FileRef
 from zheka.core.enums import (
@@ -391,7 +392,7 @@ class HouseResidentItem(BaseSchema):
     phone: str | None = None
 
     @classmethod
-    def of(cls, view: HouseResidentView) -> Self:
+    def of(cls, view: HouseResidentView, viewer: CurrentOrg) -> Self:
         resident = view.resident
         return cls(
             resident_id=resident.id,
@@ -407,7 +408,7 @@ class HouseResidentItem(BaseSchema):
                 resident.flat_number if view.flat is None else view.flat.number
             ),
             block_reason=resident.block_reason,
-            phone=view.user.phone,
+            phone=viewer.phone_of(view.user),
         )
 
 

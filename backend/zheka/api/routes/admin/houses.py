@@ -123,7 +123,10 @@ async def list_house_residents(
         limit,
         offset,
     )
-    return Page(items=[HouseResidentItem.of(view) for view in residents], total=total)
+    return Page(
+        items=[HouseResidentItem.of(view, current_org) for view in residents],
+        total=total,
+    )
 
 
 @router.post("/admin/residents/{resident_id}/block", summary="Заблокировать жителя")
@@ -139,7 +142,7 @@ async def block_resident(
         body.reason,
         current_org.user_id,
     )
-    return HouseResidentItem.of(view)
+    return HouseResidentItem.of(view, current_org)
 
 
 @router.post("/admin/residents/{resident_id}/unblock", summary="Разблокировать жителя")
@@ -153,7 +156,7 @@ async def unblock_resident(
         resident_id,
         current_org.user_id,
     )
-    return HouseResidentItem.of(view)
+    return HouseResidentItem.of(view, current_org)
 
 
 @router.post(
@@ -172,7 +175,7 @@ async def revoke_flat_verification(
         body.reason,
         current_org.user_id,
     )
-    return HouseResidentItem.of(view)
+    return HouseResidentItem.of(view, current_org)
 
 
 @router.post(
@@ -190,7 +193,7 @@ async def set_chairman(
         resident_id,
         body.is_chairman,
     )
-    return HouseResidentItem.of(view)
+    return HouseResidentItem.of(view, current_org)
 
 
 @router.get("/admin/verification-requests", summary="Запросы подтверждения квартир")

@@ -59,7 +59,7 @@ async def test_scoped_to_org_lists_only_own_org(
 def test_resolve_org_infers_single_membership() -> None:
     membership = OrgMember(org_id=OrgId(7), user_id=UserId(1), role=OrgRole.ADMIN)
 
-    result = resolve_org([membership], UserId(1), org_id_header=None)
+    result = resolve_org([membership], org_id_header=None)
 
     assert result.org_id == 7
 
@@ -82,7 +82,7 @@ def test_resolve_org_refuses(
     ]
 
     with pytest.raises(NotEnoughRights):
-        resolve_org(memberships, UserId(1), org_id_header=header)
+        resolve_org(memberships, org_id_header=header)
 
 
 async def test_upsert_by_max_id_updates_existing_row(session: AsyncSession) -> None:

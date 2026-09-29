@@ -13,18 +13,29 @@ from tests.conftest import (
     events_of,
     make_config,
 )
-from tests.test_requests import _complain
+from tests.test_houses import _make_service
+from tests.test_requests import _complain, _group_of_three
 from tests.test_residency import _profile_service
 
 from zheka.api.dependencies.current_account import CurrentAccount
+from zheka.api.dependencies.current_org import CurrentOrg
+from zheka.api.routes.admin.houses import list_house_residents
+from zheka.api.routes.admin.requests import (
+    get_org_request,
+    get_request_group,
+    list_org_requests,
+)
 from zheka.api.routes.me import verify_phone
 from zheka.api.schemas.houses import HouseResidentItem
 from zheka.api.schemas.me import MeResponse, VerifyPhoneRequest
 from zheka.api.schemas.requests import AdminRequestCard
 from zheka.core.contact import BAD_CONTACT, verify_bridge_contact
-from zheka.core.enums import EventType
+from zheka.core.enums import EventType, OrgRole
 from zheka.core.errors import InvalidRequest
+from zheka.core.ids import UserId
+from zheka.core.services.files import FilesService
 from zheka.core.services.houses import HouseResidentView
+from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
@@ -99,10 +110,12 @@ async def test_a_phone_is_kept_shown_to_staff_and_forgotten(
     assert user is not None
     assert user.phone_verified_at is not None
     card = await admin_requests_service(session).card(own.org_id, request.id)
-    assert AdminRequestCard.of_admin(card, [], []).author_phone == "+79991234567"
+    staff = _viewer(own, UserId(0), is_demo=False)
+    assert AdminRequestCard.of_admin(card, [], [], staff).author_phone == "+79991234567"
     resident = (await ResidentsRepo(session).list_for_user(own.user_id))[0]
     item = HouseResidentItem.of(
         HouseResidentView(resident=resident, user=user, flat=None),
+        staff,
     )
     assert item.phone == "+79991234567"
 
@@ -154,3 +167,58 @@ async def test_the_route_checks_the_signature_of_the_current_max_user(
     stranger = replace(webapp, user=WebAppUser(id=user.max_user_id + 1, first_name="Ж"))
     with pytest.raises(InvalidRequest):
         await verify_phone(account, stranger, body, config, _profile_service(session))
+
+
+def _viewer(own: OrgHouseFlatUser, user_id: UserId, *, is_demo: bool) -> CurrentOrg:
+    return CurrentOrg(
+        org_id=own.org_id,
+        user_id=user_id,
+        role=OrgRole.ADMIN,
+        is_demo=is_demo,
+    )
+
+
+@pytest.mark.parametrize("endpoint", ["list", "card", "group", "residents"])
+@pytest.mark.parametrize(
+    ("is_demo", "by_owner", "seen"),
+    [(True, False, None), (True, True, "+79991234567"), (False, False, "+79991234567")],
+    ids=["demo_stranger", "demo_owner", "real_staff"],
+)
+async def test_a_demo_org_shows_a_phone_only_to_its_owner(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    endpoint: str,
+    is_demo: bool,
+    by_owner: bool,
+    seen: str | None,
+) -> None:
+    members, group_id = await _group_of_three(session, own)
+    request = members[0]
+    assert request.author_user_id is not None
+    author = await UsersRepo(session).get_by_id(request.author_user_id)
+    assert author is not None
+    await UsersRepo(session).set_phone(author, "+79991234567", datetime.now(UTC))
+    (await OrgsRepo(session).get_existing(own.org_id)).is_demo = is_demo
+    await session.flush()
+    viewer = _viewer(own, author.id if by_owner else own.user_id, is_demo=is_demo)
+    service = admin_requests_service(session)
+
+    if endpoint == "list":
+        page = await list_org_requests(viewer, service, house_id=own.house_id)
+        phones = [item.author_phone for item in page.items if item.id == request.id]
+    elif endpoint == "card":
+        files = FilesService(make_config().files, "test-token")
+        card = await get_org_request(request.id, viewer, service, files)
+        phones = [card.author_phone]
+    elif endpoint == "group":
+        group = await get_request_group(group_id, viewer, service)
+        phones = [item.author_phone for item in group.requests if item.id == request.id]
+    else:
+        residents = await list_house_residents(
+            own.house_id,
+            viewer,
+            _make_service(session),
+        )
+        phones = [item.phone for item in residents.items if item.user_id == author.id]
+
+    assert phones == [seen]

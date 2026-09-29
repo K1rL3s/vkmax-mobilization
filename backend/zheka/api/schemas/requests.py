@@ -3,6 +3,7 @@ from typing import Self
 
 from pydantic import Field
 
+from zheka.api.dependencies import CurrentOrg
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import PHOTOS_DESCRIPTION, FileRef
 from zheka.core.enums import (
@@ -269,7 +270,7 @@ class AdminRequestListItem(RequestListItem):
     caller_phone: str | None = None
 
     @classmethod
-    def of_admin(cls, row: AdminRequestRow) -> Self:
+    def of_admin(cls, row: AdminRequestRow, viewer: CurrentOrg) -> Self:
         base = RequestListItem.of_row(row)
         request = row.request
         return cls(
@@ -279,7 +280,7 @@ class AdminRequestListItem(RequestListItem):
             address=row.house.address,
             is_staff_author=request.is_staff_author,
             author_name=None if row.author is None else row.author.name,
-            author_phone=None if row.author is None else row.author.phone,
+            author_phone=viewer.phone_of(row.author),
             caller_name=request.caller_name,
             caller_phone=request.caller_phone,
         )
@@ -299,6 +300,7 @@ class AdminRequestCard(RequestCard):
         data: AdminRequestCardData,
         photos: list[FileRef],
         result_photos: list[FileRef],
+        viewer: CurrentOrg,
     ) -> Self:
         base = RequestCard.of(data.card, photos, result_photos)
         request = data.card.request
@@ -306,7 +308,7 @@ class AdminRequestCard(RequestCard):
             **base.model_dump(),
             is_staff_author=request.is_staff_author,
             author_name=None if data.author is None else data.author.name,
-            author_phone=None if data.author is None else data.author.phone,
+            author_phone=viewer.phone_of(data.author),
             caller_name=request.caller_name,
             caller_phone=request.caller_phone,
             executor_user_id=request.executor_user_id,
@@ -355,7 +357,7 @@ class RequestGroupCard(BaseSchema):
     requests: list[AdminRequestListItem]
 
     @classmethod
-    def of(cls, data: RequestGroupCardData) -> Self:
+    def of(cls, data: RequestGroupCardData, viewer: CurrentOrg) -> Self:
         group = data.group
         return cls(
             id=group.id,
@@ -366,7 +368,7 @@ class RequestGroupCard(BaseSchema):
             status=group.status,
             window_started_at=group.window_started_at,
             flats_count=data.flats_count,
-            requests=[AdminRequestListItem.of_admin(row) for row in data.rows],
+            requests=[AdminRequestListItem.of_admin(row, viewer) for row in data.rows],
         )
 
 

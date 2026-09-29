@@ -2,7 +2,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import CurrentOrgDep, CurrentUserDep
+from zheka.api.dependencies import CurrentOrg, CurrentOrgDep, CurrentUserDep
 from zheka.api.routes.requests import signed
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.requests import (
@@ -36,11 +36,16 @@ from zheka.infra.database.repos.requests import RequestFilters
 router = APIRouter(tags=["Админка: заявки"], route_class=DishkaRoute)
 
 
-def _card(data: AdminRequestCardData, files_service: FilesService) -> AdminRequestCard:
+def _card(
+    data: AdminRequestCardData,
+    files_service: FilesService,
+    viewer: CurrentOrg,
+) -> AdminRequestCard:
     return AdminRequestCard.of_admin(
         data,
         signed(data.card.issue_photos, files_service),
         signed(data.card.result_photos, files_service),
+        viewer,
     )
 
 
@@ -72,7 +77,10 @@ async def list_org_requests(
         limit,
         offset,
     )
-    return Page(items=[AdminRequestListItem.of_admin(row) for row in rows], total=total)
+    return Page(
+        items=[AdminRequestListItem.of_admin(row, current_org) for row in rows],
+        total=total,
+    )
 
 
 @router.get("/admin/requests/{request_id}", summary="Карточка заявки в админке")
@@ -83,7 +91,7 @@ async def get_org_request(
     files_service: FromDishka[FilesService],
 ) -> AdminRequestCard:
     data = await admin_requests_service.card(current_org.org_id, request_id)
-    return _card(data, files_service)
+    return _card(data, files_service, current_org)
 
 
 @router.post("/admin/requests/{request_id}/status", summary="Сменить статус заявки")
@@ -111,7 +119,7 @@ async def change_request_status(
         body.comment,
         current_org.user_id,
     )
-    return _card(data, files_service)
+    return _card(data, files_service, current_org)
 
 
 @router.post("/admin/requests/{request_id}/reply", summary="Ответить жителю")
@@ -128,7 +136,7 @@ async def reply_to_request(
         body.text,
         current_org.user_id,
     )
-    return _card(data, files_service)
+    return _card(data, files_service, current_org)
 
 
 @router.post("/admin/requests/{request_id}/assign", summary="Назначить исполнителя")
@@ -145,7 +153,7 @@ async def assign_request_executor(
         body.user_id,
         current_org.user_id,
     )
-    return _card(data, files_service)
+    return _card(data, files_service, current_org)
 
 
 @router.get("/admin/request-groups/{group_id}", summary="Группа заявок")
@@ -155,7 +163,7 @@ async def get_request_group(
     admin_requests_service: FromDishka[AdminRequestsService],
 ) -> RequestGroupCard:
     data = await admin_requests_service.group_card(current_org.org_id, group_id)
-    return RequestGroupCard.of(data)
+    return RequestGroupCard.of(data, current_org)
 
 
 @router.post(
@@ -175,7 +183,7 @@ async def change_request_group_status(
         body.comment,
         current_org.user_id,
     )
-    return RequestGroupCard.of(data)
+    return RequestGroupCard.of(data, current_org)
 
 
 @router.post("/admin/requests/phone", summary="Заявка по звонку")
@@ -190,7 +198,7 @@ async def create_phone_request(
         PhoneRequestDraft(**body.model_dump()),
         current_org.user_id,
     )
-    return _card(data, files_service)
+    return _card(data, files_service, current_org)
 
 
 @router.get("/admin/executors", summary="Исполнители организации")

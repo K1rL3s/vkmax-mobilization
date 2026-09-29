@@ -846,7 +846,12 @@ async def test_the_checker_takes_its_own_request_no_further_than_accepted(
     moved: bool,
 ) -> None:
     request = await _complain(session, own.user_id, own.house_id)
-    org = CurrentOrg(org_id=own.org_id, user_id=own.user_id, role=OrgRole.EMPLOYEE)
+    org = CurrentOrg(
+        org_id=own.org_id,
+        user_id=own.user_id,
+        role=OrgRole.EMPLOYEE,
+        is_demo=False,
+    )
     service = admin_requests_service(session)
     files = FilesService(make_config().files, "test-token")
 

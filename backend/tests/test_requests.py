@@ -21,6 +21,7 @@ from tests.conftest import (
 )
 
 from zheka.api.dependencies.current_account import CurrentAccount
+from zheka.api.dependencies.current_org import CurrentOrg
 from zheka.api.routes.requests import classify_request_text, export_request
 from zheka.api.schemas.requests import (
     AdminRequestCard,
@@ -404,6 +405,12 @@ async def test_card_takes_the_current_house_org_and_the_category_hours(
         await admin_requests_service(session).card(other.org_id, created.request.id),
         [],
         [],
+        CurrentOrg(
+            org_id=other.org_id,
+            user_id=other.user_id,
+            role=OrgRole.ADMIN,
+            is_demo=False,
+        ),
     )
     assert (admin_card.org_name, admin_card.deadline_text) == (org.name, "24 часа")
     house.org_id = None

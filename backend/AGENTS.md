@@ -110,8 +110,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   token over `authDate=…\nphone=…\nuserId=…` (phone without «+», the caller's
   MAX id), `authDate` in s or ms, within a day. Encoding and units come from
   hnnsly, not MAX docs: check on a live client. Staff see it as
-  `author_phone` and a resident's `phone`, scoped like the rest of the card.
-  Sharing it is its own consent; `consent_version` stays.
+  `author_phone` and a resident's `phone`, scoped like the rest of the card;
+  in a demo org only its owner does (`CurrentOrg.phone_of`). Sharing it is
+  its own consent; `consent_version` stays.
 - `ProfileService.forget` (`DELETE /api/me`, bot `/delete`) deletes the
   user's residents, verification requests and revocations, demand signals,
   notification settings and org roles, cancels their upcoming booked
@@ -484,8 +485,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   account is random (seeded ones are the zero-padded number), so no other
   reviewer can verify into it.
 - Demo orgs are shared by strangers: block and revoke-verification refuse a
-  real user (positive `max_user_id`) other than the actor, and a DIRECT
-  announcement reaches only its author.
+  real user (positive `max_user_id`) other than the actor, a DIRECT
+  announcement reaches only its author, and staff see a phone only if it is
+  their own.
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
   reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed
   on the deploy closest to judging. `scripts/fetch_seed_data.py` rewrites
