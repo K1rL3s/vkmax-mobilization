@@ -1,18 +1,19 @@
 from collections.abc import Collection, Sequence
 from datetime import datetime
 
-from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy import and_, exists, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import ResidentRole, ResidentStatus
 from zheka.core.errors import EntityNotFound
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
-from zheka.infra.database.models import Resident, VerificationRevocation
+from zheka.infra.database.models import Resident, Tenancy, VerificationRevocation
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.houses import flats_table
 from zheka.infra.database.tables.residents import (
     residents_table,
+    tenancies_table,
     verification_revocations_table,
 )
 from zheka.infra.database.tables.users import users_table
@@ -315,6 +316,42 @@ class ResidentsRepo(BaseAlchemyRepo):
                     ),
                 ),
             )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def start_tenancy(
+        self,
+        flat_id: FlatId,
+        user_id: UserId,
+        at: datetime,
+    ) -> None:
+        stmt = insert(Tenancy).values(flat_id=flat_id, user_id=user_id, started_at=at)
+        await self._session.execute(stmt)
+
+    async def end_tenancy(
+        self,
+        flat_id: FlatId,
+        user_id: UserId,
+        at: datetime,
+        by: UserId,
+    ) -> None:
+        stmt = (
+            update(Tenancy)
+            .where(
+                tenancies_table.c.flat_id == flat_id,
+                tenancies_table.c.user_id == user_id,
+                tenancies_table.c.ended_at.is_(None),
+            )
+            .values(ended_at=at, ended_by=by)
+        )
+        await self._session.execute(stmt)
+
+    async def list_tenancies(self, flat_id: FlatId) -> Sequence[Tenancy]:
+        stmt = (
+            select(Tenancy)
+            .where(tenancies_table.c.flat_id == flat_id)
+            .order_by(tenancies_table.c.started_at.desc())
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()

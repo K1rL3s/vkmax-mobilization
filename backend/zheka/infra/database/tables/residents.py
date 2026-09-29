@@ -125,3 +125,14 @@ chairman_handovers_table = Table(
         postgresql_where=text("decided_at IS NULL AND revoked_at IS NULL"),
     ),
 )
+
+tenancies_table = Table(
+    "tenancies",
+    metadata,
+    id_column(),
+    Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=False, index=True),
+    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+    Column("ended_at", DateTime(timezone=True), nullable=True),
+    Column("ended_by", BigInteger, ForeignKey("users.id"), nullable=True),
+)

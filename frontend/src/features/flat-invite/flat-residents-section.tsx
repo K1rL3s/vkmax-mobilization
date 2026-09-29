@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Button, CellSimple, Flex, Typography } from "@maxhub/max-ui";
 
+import { errorMessage } from "@/shared/api/errors";
 import { authParams } from "@/shared/api/instance";
 import { useSession, type Residency } from "@/shared/model/session";
 import { ConfirmDialog, useConfirm } from "@/shared/ui/confirm-dialog";
@@ -10,8 +11,10 @@ import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { InviteCard } from "./invite-card";
 import { IssueInviteDialog } from "./issue-invite-dialog";
 import {
+  useEndTenancy,
   useFlatInvites,
   useFlatResidents,
+  useFlatTenancies,
   useRevokeInvite,
   type FlatInvite,
   type FlatResident,
@@ -46,8 +49,18 @@ const Note = ({ children }: { children: string }) => (
   </Typography.Text>
 );
 
-const Residents = ({ flatId, userId }: { flatId: number; userId: number }) => {
+const Residents = ({
+  flatId,
+  userId,
+  canEnd,
+}: {
+  flatId: number;
+  userId: number;
+  canEnd: boolean;
+}) => {
   const residents = useFlatResidents(flatId);
+  const end = useEndTenancy();
+  const confirm = useConfirm<FlatResident>();
 
   if (residents.isPending) {
     return <LoadingState title="Загружаем жителей" />;
@@ -78,17 +91,96 @@ const Residents = ({ flatId, userId }: { flatId: number; userId: number }) => {
   );
 
   return (
-    <div className={styles.Panel}>
-      {list.map((resident, index) => (
-        <CellSimple
-          key={resident.resident_id}
-          separator={index > 0}
-          before={<Icon src={userIcon} />}
-          title={resident.user_id === userId ? "Вы" : resident.name}
-          subtitle={residentCaption(resident)}
-        />
-      ))}
-    </div>
+    <>
+      <div className={styles.Panel}>
+        {list.map((resident, index) => (
+          <Fragment key={resident.resident_id}>
+            <CellSimple
+              separator={index > 0}
+              before={<Icon src={userIcon} />}
+              title={resident.user_id === userId ? "Вы" : resident.name}
+              subtitle={residentCaption(resident)}
+            />
+            {canEnd && resident.role === "tenant" && (
+              <div className={styles.End}>
+                <Button
+                  size="small"
+                  variant="secondary"
+                  onClick={() => {
+                    end.reset();
+                    confirm.ask(resident);
+                  }}
+                >
+                  Завершить аренду
+                </Button>
+              </div>
+            )}
+          </Fragment>
+        ))}
+      </div>
+
+      <ConfirmDialog
+        isOpen={confirm.isOpen}
+        title="Завершить аренду?"
+        description="Арендатор потеряет доступ к квартире: показания, заявки от квартиры. Уже поданные заявки останутся"
+        confirmLabel="Завершить аренду"
+        error={
+          end.isError &&
+          errorMessage(
+            end.error,
+            "Не получилось завершить аренду. Попробуйте ещё раз",
+          )
+        }
+        isPending={end.isPending}
+        onConfirm={() => {
+          if (confirm.target) {
+            end.mutate(
+              {
+                params: {
+                  ...authParams(),
+                  path: {
+                    flat_id: flatId,
+                    resident_id: confirm.target.resident_id,
+                  },
+                },
+              },
+              { onSuccess: confirm.dismiss },
+            );
+          }
+        }}
+        onClose={confirm.dismiss}
+      />
+    </>
+  );
+};
+
+const day = (iso: string) => new Date(iso).toLocaleDateString("ru-RU");
+
+const PastTenants = ({ flatId }: { flatId: number }) => {
+  const tenancies = useFlatTenancies(flatId);
+
+  if (!tenancies.data?.length) {
+    return null;
+  }
+
+  return (
+    <>
+      <Typography.Text variant="body-strong" color="primary">
+        Арендаторы раньше
+      </Typography.Text>
+
+      <div className={styles.Panel}>
+        {tenancies.data.map((tenancy, index) => (
+          <CellSimple
+            key={tenancy.id}
+            separator={index > 0}
+            before={<Icon src={userIcon} />}
+            title={tenancy.name}
+            subtitle={`с ${day(tenancy.started_at)} по ${day(tenancy.ended_at)}`}
+          />
+        ))}
+      </div>
+    </>
   );
 };
 
@@ -153,7 +245,7 @@ const Invites = ({ flatId }: { flatId: number }) => {
       <ConfirmDialog
         isOpen={confirm.isOpen}
         title="Отозвать приглашение?"
-        description="По нему больше никто не войдёт. Тех, кто уже вошёл, это не выселит"
+        description="По нему больше никто не войдёт. Тех, кто уже вошёл, это не выселит: завершите им аренду в списке жителей"
         confirmLabel="Отозвать"
         error={
           revoke.isError &&
@@ -217,7 +309,15 @@ export const FlatResidentsSection = () => {
         </Typography.Text>
 
         {residency.verified && (
-          <Residents flatId={flatId} userId={session.user_id} />
+          <Residents
+            flatId={flatId}
+            userId={session.user_id}
+            canEnd={residency.role === "owner"}
+          />
+        )}
+
+        {residency.verified && residency.role === "owner" && (
+          <PastTenants flatId={flatId} />
         )}
 
         {invites()}

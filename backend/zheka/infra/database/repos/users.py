@@ -16,6 +16,7 @@ from zheka.infra.database.tables.residents import (
     demand_signals_table,
     flat_verification_requests_table,
     residents_table,
+    tenancies_table,
     verification_revocations_table,
 )
 from zheka.infra.database.tables.users import (
@@ -102,6 +103,7 @@ class UsersRepo(BaseAlchemyRepo):
             notification_settings_table,
             org_members_table,
             verification_revocations_table,
+            tenancies_table,
         ):
             stmt = delete(table).where(table.c.user_id == user.id)
             await self._session.execute(stmt)

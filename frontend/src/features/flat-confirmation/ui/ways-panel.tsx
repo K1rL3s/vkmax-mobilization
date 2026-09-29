@@ -1,6 +1,7 @@
 import { CellSimple, Flex, Typography } from "@maxhub/max-ui";
 import { generatePath, Link } from "react-router-dom";
 
+import { canScanCode } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 
 import styles from "./ways-panel.module.css";
@@ -22,7 +23,9 @@ export const WaysPanel = ({ residentId, returnTo }: WaysPanelProps) => {
           {
             method: "account",
             title: "По лицевому счёту",
-            subtitle: "Номер есть в квитанции",
+            subtitle: canScanCode()
+              ? "Номер есть в квитанции, QR можно отсканировать"
+              : "Номер есть в квитанции",
           },
           {
             method: "org",

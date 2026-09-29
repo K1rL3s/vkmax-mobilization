@@ -543,33 +543,8 @@ def _quoted(text: str) -> str:
     return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"
 
 
-def poll_notice(title: str, ends_at: datetime) -> str:
-    return f"🗳 Новый опрос «{title}», голосование до {ends_at:%d.%m.%Y}\n{POLL_NOT_OSS}"
-
-
-ANNOUNCEMENT_HASHTAG = "#объявление"
-
-DOCUMENTS_IN_APP = "📎 Документы в приложении"
-OPEN_DOCUMENTS = "📎 Открыть документы"
-
-
-def planned_works(
-    category: RequestCategory | None,
-    starts_at: datetime,
-    ends_at: datetime,
-) -> str:
-    until = (
-        f"{ends_at:%H:%M}"
-        if ends_at.date() == starts_at.date()
-        else f"{ends_at:%d.%m %H:%M}"
+def tenancy_ended(flat_number: str, address: str) -> str:
+    return (
+        f"🚪 Собственник завершил аренду кв. {escape(flat_number)}, "
+        f"{escape(address)}: доступ к квартире закрыт"
     )
-    period = f"{starts_at:%d.%m %H:%M} - {until}"
-    if category is None:
-        return f"🚧 Плановые работы, {period}"
-    return f"🚧 Плановые работы: {CATEGORY_RULES[category].label}, {period}"
-
-
-def works_finished(category: RequestCategory | None) -> str:
-    if category is None:
-        return "✅ Плановые работы завершены"
-    return f"✅ Работы завершены: {CATEGORY_RULES[category].label}"

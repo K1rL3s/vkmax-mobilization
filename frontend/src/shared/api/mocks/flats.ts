@@ -61,10 +61,11 @@ export const flatsConfigs = [
       });
     }
 
-    if (
-      normalizeAccount(flat.account_no) !==
-      normalizeAccount(text(request.body.account_no))
-    ) {
+    const stated =
+      /\|persacc=([^|]*)/i.exec(text(request.body.payment_qr))?.[1] ??
+      text(request.body.account_no);
+
+    if (normalizeAccount(flat.account_no) !== normalizeAccount(stated)) {
       return ok({
         verified: false,
         detail:

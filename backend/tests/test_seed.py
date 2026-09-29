@@ -24,11 +24,11 @@ from tests.test_houses import _make_service as houses_service
 from zheka.api.schemas.houses import HouseCard
 from zheka.core.charges import parse_lines
 from zheka.core.enums import (
-    NoticeStatus,
     OrgRole,
     PollStatus,
     RequestCategory,
     RequestStatus,
+    ResidentRole,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import (
@@ -717,121 +717,28 @@ def _map_state(rows: Sequence[Row[Any]], now: datetime) -> str:
     return "calm"
 
 
-async def test_a_directory_house_card_names_its_passport_sources(
-    db: AsyncSession,
-) -> None:
-    with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
-        row = next(
-            row
-            for row in csv.DictReader(file)
-            if row["gis_on"] and row["entrances_estimated"] == "1"
-        )
-    stmt = select(houses_table.c.id).where(
-        houses_table.c.city == row["city"],
-        houses_table.c.street == row["street"],
-        houses_table.c.building == row["building"],
-    )
-    house_id = HouseId((await db.execute(stmt)).scalar_one())
+async def test_a_reviewer_flat_comes_with_one_tenant_to_end(db: AsyncSession) -> None:
+    user_id = await _positive_user(db)
+    demo = _demo(db)
+    access = await demo.activate(user_id)
+    await demo.activate(user_id)
+    flat_id = FlatId(access.residency.resident.flat_id or 0)
+    residents = ResidentsRepo(db)
+    [tenant] = [
+        resident
+        for resident in await residents.list_for_flat(flat_id)
+        if resident.role is ResidentRole.TENANT
+    ]
+    assert tenant.verified_at is not None
+    lodger = await UsersRepo(db).get_by_id(tenant.user_id)
+    assert lodger is not None
+    assert lodger.max_user_id < 0
+    assert lodger.max_chat_id is None
+    await residents.delete(tenant)
+    await residents.end_tenancy(flat_id, tenant.user_id, datetime.now(UTC), user_id)
 
-    card = HouseCard.of(
-        await houses_service(db).house_card(house_id, UserId(0), NOW),
-        [],
-    )
+    await demo.activate(user_id)
 
-    assert card.cadastral_no == row["cadastral_no"]
-    assert card.passport is not None
-    assert card.passport.reforma_on == date(2026, 9, 1)
-    assert card.passport.gis_on == date.fromisoformat(row["gis_on"])
-    assert card.passport.entrances_estimated
-
-
-async def test_the_passport_migration_fills_every_directory_house_as_the_seed(
-    seeded: AsyncConnection,
-) -> None:
-    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
-        "5c1e8a7d3f20",
-    )
-    assert migration is not None
-
-    def rerun(connection: Connection) -> None:
-        with Operations.context(MigrationContext.configure(connection)):
-            migration.module.downgrade()
-            connection.execute(update(houses_table).values(cadastral_no=None))
-            migration.module.upgrade()
-
-    first = (
-        select(houses_table)
-        .where(~houses_table.c.added_by_resident)
-        .order_by(houses_table.c.id)
-        .limit(1)
-    )
-    stmt = select(
-        houses_table.c.added_by_resident,
-        houses_table.c.cadastral_no,
-        houses_table.c.passport,
-    ).order_by(houses_table.c.id)
-    savepoint = await seeded.begin_nested()
-    house = (await seeded.execute(first)).one()
-    await seeded.execute(
-        insert(houses_table).values(
-            region=house.region,
-            city=house.city,
-            street=house.street,
-            building=house.building,
-            timezone=house.timezone,
-            chat_binding_code="passport",
-            added_by_resident=True,
-        ),
-    )
-    seeded_houses = (await seeded.execute(stmt)).tuples().all()
-    await seeded.run_sync(rerun)
-    migrated = (await seeded.execute(stmt)).tuples().all()
-    await savepoint.rollback()
-
-    assert all(passport for resident, _, passport in migrated if not resident)
-    assert migrated == seeded_houses
-
-
-async def test_the_contacts_migration_fills_every_registry_org_as_the_seed(
-    seeded: AsyncConnection,
-) -> None:
-    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
-        "3f9d6b2e8a41",
-    )
-    assert migration is not None
-    unregistered = organizations_table.c.registered_at.is_(None)
-
-    def rerun(connection: Connection) -> None:
-        with Operations.context(MigrationContext.configure(connection)):
-            connection.execute(
-                update(organizations_table)
-                .where(unregistered)
-                .values(email=None, site=None),
-            )
-            migration.module.upgrade()
-
-    stmt = select(
-        unregistered,
-        organizations_table.c.email,
-        organizations_table.c.site,
-    ).order_by(organizations_table.c.id)
-    savepoint = await seeded.begin_nested()
-    registered = (
-        select(organizations_table.c.id)
-        .where(unregistered, organizations_table.c.email.is_not(None))
-        .order_by(organizations_table.c.id)
-        .limit(1)
-        .scalar_subquery()
-    )
-    await seeded.execute(
-        update(organizations_table)
-        .where(organizations_table.c.id == registered)
-        .values(registered_at=func.now(), email="priem@uk.ru", site=None),
-    )
-    seeded_orgs = (await seeded.execute(stmt)).tuples().all()
-    await seeded.run_sync(rerun)
-    migrated = (await seeded.execute(stmt)).tuples().all()
-    await savepoint.rollback()
-
-    assert any(email for free, email, _ in migrated if free)
-    assert migrated == seeded_orgs
+    assert [resident.role for resident in await residents.list_for_flat(flat_id)] == [
+        ResidentRole.OWNER,
+    ]

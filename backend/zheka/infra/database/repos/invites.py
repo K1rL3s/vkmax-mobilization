@@ -122,3 +122,14 @@ class InvitesRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         invite: InviteT | None = result.scalar_one_or_none()
         return invite
+
+    async def revoke_open_flat(self, flat_id: FlatId, at: datetime) -> None:
+        stmt = (
+            update(FlatInvite)
+            .where(
+                flat_invites_table.c.flat_id == flat_id,
+                flat_invites_table.c.revoked_at.is_(None),
+            )
+            .values(revoked_at=at)
+        )
+        await self._session.execute(stmt)

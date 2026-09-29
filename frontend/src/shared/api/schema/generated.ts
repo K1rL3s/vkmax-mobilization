@@ -345,7 +345,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Подтвердить квартиру лицевым счетом */
+    /** Подтвердить квартиру лицевым счетом или QR квитанции */
     post: operations["verify_flat"];
     delete?: never;
     options?: never;
@@ -433,6 +433,43 @@ export interface paths {
     put?: never;
     /** Активировать код квартиры */
     post: operations["activate_flat_invite"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/flats/{flat_id}/tenants/{resident_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Завершить аренду
+     * @description Собственник удаляет арендатора из квартиры и отзывает открытые коды приглашения, арендатору приходит сообщение в бот
+     */
+    delete: operations["end_tenancy"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/flats/{flat_id}/tenancies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** История аренды квартиры */
+    get: operations["list_tenancies"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -5494,6 +5531,23 @@ export interface components {
      * @enum {string}
      */
     TariffZone: "single" | "day" | "night";
+    /** TenancyItem */
+    TenancyItem: {
+      /** Id */
+      id: number;
+      /** Name */
+      name: string;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+      /**
+       * Ended At
+       * @description Пусто, пока аренда идет
+       */
+      ended_at: string | null;
+    };
     /** TrackEventRequest */
     TrackEventRequest: {
       /**
@@ -5587,6 +5641,14 @@ export interface components {
      * @enum {string}
      */
     VerificationStatus: "pending" | "approved" | "rejected";
+    /** VerifyFlatByQrRequest */
+    VerifyFlatByQrRequest: {
+      /**
+       * Payment Qr
+       * @description Строка платежного QR квитанции (ГОСТ Р 56042-2014) от сканера MAX. Из нее берется только persAcc, строка не хранится
+       */
+      payment_qr: string;
+    };
     /** VerifyFlatRequest */
     VerifyFlatRequest: {
       /** Account No */
@@ -7864,7 +7926,9 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": components["schemas"]["VerifyFlatRequest"];
+        "application/json":
+          | components["schemas"]["VerifyFlatRequest"]
+          | components["schemas"]["VerifyFlatByQrRequest"];
       };
     };
     responses: {
@@ -8405,6 +8469,181 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ResidencySummary"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  end_tenancy: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        flat_id: number;
+        resident_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OkResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  list_tenancies: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        flat_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TenancyItem"][];
         };
       };
       /** @description Некорректный запрос */

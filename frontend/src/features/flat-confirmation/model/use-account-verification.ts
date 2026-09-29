@@ -15,17 +15,21 @@ export const useAccountVerification = (
     },
   });
 
-  return {
-    send: ({ accountNo }: VerifyInput) => {
-      if (flatId == null) {
-        return;
-      }
+  const verify = (body: { account_no: string } | { payment_qr: string }) => {
+    if (flatId == null) {
+      return;
+    }
 
-      mutation.mutate({
-        params: { ...authParams(), path: { flat_id: flatId } },
-        body: { account_no: accountNo },
-      });
-    },
+    mutation.mutate({
+      params: { ...authParams(), path: { flat_id: flatId } },
+      body,
+    });
+  };
+
+  return {
+    send: ({ accountNo }: VerifyInput) => verify({ account_no: accountNo }),
+    sendQr: (paymentQr: string) => verify({ payment_qr: paymentQr }),
+    retry: () => mutation.variables && mutation.mutate(mutation.variables),
     reset: mutation.reset,
     mismatched: mutation.data?.verified === false,
     isPending: mutation.isPending,

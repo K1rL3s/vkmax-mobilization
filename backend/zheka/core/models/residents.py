@@ -7,6 +7,7 @@ from zheka.core.ids import (
     FlatId,
     HouseId,
     ResidentId,
+    TenancyId,
     UserId,
     VerificationRequestId,
 )
@@ -71,3 +72,12 @@ class ChairmanHandover(ZhekaMutableType):
             and self.revoked_at is None
             and self.expires_at > now
         )
+
+
+class Tenancy(ZhekaMutableType):
+    id: TenancyId = UNSET
+    flat_id: FlatId
+    user_id: UserId
+    started_at: datetime
+    ended_at: datetime | None = None
+    ended_by: UserId | None = None

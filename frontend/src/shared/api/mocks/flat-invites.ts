@@ -10,6 +10,7 @@ import {
 } from "./reply";
 import {
   addResidency,
+  days,
   findFlat,
   hours,
   residencyForFlat,
@@ -45,6 +46,36 @@ const NEIGHBOURS: Record<number, Schemas["FlatResidentItem"][]> = {
   104: [neighbour(9104, 73, "Ильдар Хасанов", "owner")],
   105: [neighbour(9105, 72, "Анна Смирнова", "tenant")],
 };
+
+const tenancies: (Schemas["TenancyItem"] & {
+  flat_id: number;
+  user_id: number;
+})[] = [
+  {
+    id: 1,
+    flat_id: 101,
+    user_id: 70,
+    name: "Олег Петров",
+    started_at: days(-400),
+    ended_at: days(-120),
+  },
+  {
+    id: 2,
+    flat_id: 101,
+    user_id: 71,
+    name: "Анна Смирнова",
+    started_at: days(-90),
+    ended_at: null,
+  },
+  {
+    id: 3,
+    flat_id: 105,
+    user_id: 72,
+    name: "Анна Смирнова",
+    started_at: days(-90),
+    ended_at: null,
+  },
+];
 
 const makeInvite = (
   code: string,
@@ -218,5 +249,67 @@ export const flatInvitesConfigs = [
     setVerified(residency, flat.id);
 
     return ok(residencySummary(residency));
+  }),
+  endpoint("delete", "/flats/:flat_id/tenants/:resident_id", (request) => {
+    const flatId = Number(request.params.flat_id);
+    const residency = residencyForFlat(flatId);
+
+    if (residency?.role !== "owner" || !residency.verified) {
+      return forbidden("Код приглашения выдает собственник, а не арендатор");
+    }
+
+    const neighbours = NEIGHBOURS[flatId] ?? [];
+    const index = neighbours.findIndex(
+      ({ resident_id }) => resident_id === Number(request.params.resident_id),
+    );
+
+    if (index === -1) {
+      return notFound("Житель не найден");
+    }
+
+    if (neighbours[index].role !== "tenant") {
+      return forbidden("Завершить аренду можно только у арендатора");
+    }
+
+    const [tenant] = neighbours.splice(index, 1);
+    const now = new Date().toISOString();
+    const open = tenancies.find(
+      (tenancy) =>
+        tenancy.flat_id === flatId &&
+        tenancy.user_id === tenant.user_id &&
+        tenancy.ended_at === null,
+    );
+
+    if (open) {
+      open.ended_at = now;
+    }
+
+    for (const invite of invites) {
+      if (invite.flat_id === flatId) {
+        invite.revoked_at ??= now;
+      }
+    }
+
+    return ok({ ok: true });
+  }),
+  endpoint("get", "/flats/:flat_id/tenancies", (request) => {
+    const flatId = Number(request.params.flat_id);
+    const residency = residencyForFlat(flatId);
+
+    if (residency?.role !== "owner" || !residency.verified) {
+      return forbidden("Код приглашения выдает собственник, а не арендатор");
+    }
+
+    return ok(
+      tenancies
+        .filter((tenancy) => tenancy.flat_id === flatId)
+        .sort((a, b) => b.started_at.localeCompare(a.started_at))
+        .map(({ id, name, started_at, ended_at }) => ({
+          id,
+          name,
+          started_at,
+          ended_at,
+        })),
+    );
   }),
 ];

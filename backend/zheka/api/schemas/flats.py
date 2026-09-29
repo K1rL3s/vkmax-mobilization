@@ -1,16 +1,24 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.core.enums import ResidentRole, ResidentStatus, VerificationStatus
-from zheka.core.ids import FlatId, HouseId, ResidentId, UserId, VerificationRequestId
+from zheka.core.ids import (
+    FlatId,
+    HouseId,
+    ResidentId,
+    TenancyId,
+    UserId,
+    VerificationRequestId,
+)
 from zheka.core.models import FlatInvite
 from zheka.core.services.flats import (
     ACCOUNT_TAIL,
     FlatCardData,
     FlatResidentView,
+    TenancyView,
     VerificationRequestView,
 )
 
@@ -62,6 +70,8 @@ class FlatCard(BaseSchema):
 
 
 class VerifyFlatRequest(BaseSchema):
+    model_config = ConfigDict(extra="forbid")
+
     account_no: str
 
 
@@ -167,3 +177,32 @@ class FlatInviteItem(BaseSchema):
 class CreateFlatInviteRequest(BaseSchema):
     expires_in_hours: int = 72
     max_activations: int = 1
+
+
+class VerifyFlatByQrRequest(BaseSchema):
+    model_config = ConfigDict(extra="forbid")
+
+    payment_qr: str = Field(
+        max_length=3000,
+        description=(
+            "Строка платежного QR квитанции (ГОСТ Р 56042-2014) от сканера MAX. "
+            "Из нее берется только persAcc, строка не хранится"
+        ),
+    )
+
+
+class TenancyItem(BaseSchema):
+    id: TenancyId
+    name: str
+    started_at: datetime
+    ended_at: datetime | None = Field(description="Пусто, пока аренда идет")
+
+    @classmethod
+    def of(cls, view: TenancyView) -> Self:
+        tenancy = view.tenancy
+        return cls(
+            id=tenancy.id,
+            name=view.user.name,
+            started_at=tenancy.started_at,
+            ended_at=tenancy.ended_at,
+        )

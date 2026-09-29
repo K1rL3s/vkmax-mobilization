@@ -16,14 +16,16 @@ from zheka.api.schemas.flats import (
     FlatInviteItem,
     FlatResidentItem,
     FlatVerificationRequest,
+    TenancyItem,
     VerificationRequestItem,
+    VerifyFlatByQrRequest,
     VerifyFlatRequest,
     VerifyFlatResponse,
 )
 from zheka.api.schemas.houses import ResidencySummary
 from zheka.core.deeplinks import flat_invite_payload
 from zheka.core.errors import TooManyRequests
-from zheka.core.ids import FlatId
+from zheka.core.ids import FlatId, ResidentId
 from zheka.core.services.flats import FlatsService
 from zheka.infra.quota import VerifyQuota
 
@@ -39,17 +41,31 @@ async def get_flat_card(
     return FlatCard.of(await flats_service.flat_card(residency.user_id, flat_id))
 
 
-@router.post("/flats/{flat_id}/verify", summary="Подтвердить квартиру лицевым счетом")
+@router.post(
+    "/flats/{flat_id}/verify",
+    summary="Подтвердить квартиру лицевым счетом или QR квитанции",
+)
 async def verify_flat(
     flat_id: FlatId,
     residency: ResidencyForFlatHouseDep,
     flats_service: FromDishka[FlatsService],
-    body: VerifyFlatRequest,
+    body: VerifyFlatRequest | VerifyFlatByQrRequest,
     quota: FromDishka[VerifyQuota],
 ) -> VerifyFlatResponse:
     if not quota.take(residency.user_id):
         raise TooManyRequests
-    result = await flats_service.verify(residency.user_id, flat_id, body.account_no)
+    if isinstance(body, VerifyFlatByQrRequest):
+        result = await flats_service.verify_by_qr(
+            residency.user_id,
+            flat_id,
+            body.payment_qr,
+        )
+    else:
+        result = await flats_service.verify(
+            residency.user_id,
+            flat_id,
+            body.account_no,
+        )
     return VerifyFlatResponse.model_validate(result)
 
 
@@ -137,3 +153,31 @@ async def activate_flat_invite(
 ) -> ResidencySummary:
     view = await flats_service.activate_invite(current_account.user_id, code)
     return ResidencySummary.of(view)
+
+
+@router.delete(
+    "/flats/{flat_id}/tenants/{resident_id}",
+    summary="Завершить аренду",
+    description=(
+        "Собственник удаляет арендатора из квартиры и отзывает открытые коды "
+        "приглашения, арендатору приходит сообщение в бот"
+    ),
+)
+async def end_tenancy(
+    flat_id: FlatId,
+    resident_id: ResidentId,
+    residency: ResidencyForFlatDep,
+    flats_service: FromDishka[FlatsService],
+) -> OkResponse:
+    await flats_service.end_tenancy(residency.user_id, flat_id, resident_id)
+    return OkResponse()
+
+
+@router.get("/flats/{flat_id}/tenancies", summary="История аренды квартиры")
+async def list_tenancies(
+    flat_id: FlatId,
+    residency: ResidencyForFlatDep,
+    flats_service: FromDishka[FlatsService],
+) -> list[TenancyItem]:
+    views = await flats_service.tenancies(residency.user_id, flat_id)
+    return [TenancyItem.of(view) for view in views]

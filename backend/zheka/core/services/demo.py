@@ -14,7 +14,12 @@ from zheka.core.enums import (
     TariffZone,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import API_CHECKER_MAX_USER_ID, UserId
+from zheka.core.ids import (
+    API_CHECKER_MAX_USER_ID,
+    DEMO_TENANT_MAX_ID_BASE,
+    MaxUserId,
+    UserId,
+)
 from zheka.core.models import Flat, Organization
 from zheka.core.services.houses import CONSENT_REQUIRED, ResidencyView
 from zheka.core.services.profile import OrgMembershipView
@@ -40,6 +45,8 @@ CHECKER_RESERVED = (
 
 CHARGED_MONTHS = 6
 VERIFICATION_SOON = timedelta(days=7)
+DEMO_TENANT_NAME = "Ирина К."
+DEMO_TENANCY_AGE = timedelta(days=92)
 
 MONTHLY_USAGE: dict[MeterType, dict[TariffZone, int]] = {
     MeterType.COLD_WATER: {TariffZone.SINGLE: 7_000},
@@ -269,6 +276,25 @@ class DemoService:
                 user_id,
                 house.local(now).date(),
                 verification_soon=True,
+            )
+        if not await self._residents.list_tenancies(flat.id):
+            tenant = await self._users.upsert_by_max_id(
+                MaxUserId(DEMO_TENANT_MAX_ID_BASE - user_id),
+                DEMO_TENANT_NAME,
+                None,
+            )
+            lodger, _created = await self._residents.add_or_get(
+                tenant.id,
+                house_id,
+                flat.id,
+                None,
+                ResidentRole.TENANT,
+            )
+            await self._residents.set_verified(lodger, flat.id, now, user_id)
+            await self._residents.start_tenancy(
+                flat.id,
+                tenant.id,
+                now - DEMO_TENANCY_AGE,
             )
 
         resident, _created = await self._residents.add_or_get(

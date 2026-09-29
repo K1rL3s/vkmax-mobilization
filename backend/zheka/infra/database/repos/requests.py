@@ -19,7 +19,7 @@ from zheka.core.enums import (
     ResidentStatus,
 )
 from zheka.core.ids import (
-    API_CHECKER_MAX_USER_ID,
+    DEMO_TENANT_MAX_ID_BASE,
     FlatId,
     HouseId,
     OrgId,
@@ -618,7 +618,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 residents_table.c.flat_id.is_not(None),
                 residents_table.c.status == ResidentStatus.ACTIVE,
                 users_table.c.max_user_id < 0,
-                users_table.c.max_user_id > API_CHECKER_MAX_USER_ID,
+                users_table.c.max_user_id > DEMO_TENANT_MAX_ID_BASE,
                 ~complained,
             )
             .distinct(residents_table.c.flat_id)

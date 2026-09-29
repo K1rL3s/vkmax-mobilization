@@ -8,4 +8,8 @@
     border-radius: 16px;
     background-color: var(--background-card);
   }
+
+  .End {
+    padding: 0 16px 12px;
+  }
 }

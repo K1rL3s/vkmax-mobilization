@@ -122,8 +122,15 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `author_phone` and a resident's `phone`, scoped like the rest of the card;
   in a demo org only its owner does (`CurrentOrg.phone_of`). Sharing it is
   its own consent; `consent_version` stays.
+- `POST /flats/{id}/verify` takes exactly one of `account_no` and
+  `payment_qr` (two bodies, both `extra="forbid"`). `payment_qr` is the raw
+  ГОСТ Р 56042 string from MAX's `openCodeReader`: `PaymentQr.parse`
+  (`core/payment_qr.py`) redecodes a string the scanner read as latin-1 or
+  cp1252 by the header's charset flag, and only `persAcc` goes on to
+  `verify` (`method="qr"`); the string (payer name, address) is never
+  stored. Whether MAX's scanner mangles cp1251 is unchecked on a live client.
 - `ProfileService.forget` (`DELETE /api/me`, bot `/delete`) deletes the
-  user's residents, verification requests and revocations, demand signals,
+  user's residents, tenancies, verification requests and revocations, demand signals,
   notification settings and org roles, cancels their upcoming booked
   appointments, clears `caller_name`/`caller_phone` on requests they authored,
   and tombstones the `users` row (`FORGOTTEN_NAME`, no phone,
@@ -138,6 +145,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   it only while an active chairman. `ResidentsRepo.revoke_verification`
   records `(user, flat)` in `verification_revocations`: that user never
   verifies the flat again by account or invite, only by УК approval.
+- A flat invite activation opens a `tenancies` row. `FlatsService.end_tenancy`
+  (a verified unblocked owner of the flat, the target a TENANT of that flat
+  the УК has not blocked) deletes the resident row like `unlink`, closes the
+  row, revokes the flat's open codes and sends the tenant a mandatory
+  message; the tenant's own `unlink` closes it too. It bars nothing, unlike
+  the УК revocation: a new code lets the same person back.
 - One chairman per house is the partial unique index
   `residents(house_id) WHERE is_chairman`. A handover link (`chair_<code>`,
   48 h, one open per house, a new one revokes the rest) is taken only by a
@@ -597,7 +610,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `DemoService` can't take it, `deeplinks` imports `demo`).
   `settle` gives the verified flat `Д{user_id}` in the org's first house,
   filled by `furnish` (charges from tariffs: every demo house has tariffs,
-  every demo org `meter_window_always_open`).
+  every demo org `meter_window_always_open`), and, while the flat has no
+  tenancy yet, a verified seeded tenant (negative `max_user_id`) to end.
   `POST /demo/activate` (`number`, `admin`) does both, keeping an existing
   role unless `admin` raises it or it is EXECUTOR; both idempotent. No seed ->
   `EntityNotFound`; no `consent_at` -> `NotEnoughRights`. A reviewer's flat
@@ -606,7 +620,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - «Демо: соседи сообщили» (`RequestsService.demo_neighbours`): the author of
   an open ungrouped request in a demo org, filed within the org's grouping
   window, gets up to `DEMO_NEIGHBOURS` model residents of the house (seeded:
-  `API_CHECKER_MAX_USER_ID < max_user_id < 0`, active, one per flat, no open
+  `DEMO_TENANT_MAX_ID_BASE < max_user_id < 0`, so neither the API checker nor
+  the tenant `settle` puts in a reviewer's flat; active, one per flat, no open
   or on-review request of the category in the window by flat or author)
   filing the same category through `RequestsRepo.create`: no staff
   notification, no `REQUEST_CREATED`, deadline stamps set at once so

@@ -22,6 +22,7 @@ from zheka.core.models.residents import (
     ChairmanHandover,
     DemandSignal,
     Resident,
+    Tenancy,
     VerificationRequest,
     VerificationRevocation,
 )
@@ -64,6 +65,7 @@ __all__ = (
     "RequestStatusLog",
     "Resident",
     "Tariff",
+    "Tenancy",
     "User",
     "VerificationRequest",
     "VerificationRevocation",

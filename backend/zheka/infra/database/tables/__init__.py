@@ -47,6 +47,7 @@ from zheka.infra.database.tables.residents import (
     demand_signals_table,
     flat_verification_requests_table,
     residents_table,
+    tenancies_table,
     verification_revocations_table,
 )
 from zheka.infra.database.tables.users import notification_settings_table, users_table
@@ -101,3 +102,4 @@ mapper_registry.map_imperatively(
 )
 mapper_registry.map_imperatively(models.ChairmanHandover, chairman_handovers_table)
 mapper_registry.map_imperatively(models.NoticeDelivery, notice_deliveries_table)
+mapper_registry.map_imperatively(models.Tenancy, tenancies_table)

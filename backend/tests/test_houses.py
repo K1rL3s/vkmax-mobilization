@@ -787,3 +787,20 @@ async def test_an_org_search_finds_a_house_by_its_address_with_the_city(
     for query in ("Москва, Ленинский проспект, 61/1", "ленинский 61", "61/1"):
         found, total = await houses.search_for_org(fixture.org_id, query, 20, 0)
         assert (total, [house.id for house in found]) == (1, [wanted]), query
+
+
+async def test_a_tenant_leaving_closes_their_tenancy(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(resident_role=ResidentRole.TENANT)
+    residents = ResidentsRepo(session)
+    tenant = await residents.get_for_house(own.user_id, own.house_id)
+    assert tenant is not None
+    await residents.start_tenancy(own.flat_id, own.user_id, datetime.now(UTC))
+
+    await _make_service(session).unlink(own.user_id, tenant.id)
+
+    [tenancy] = await residents.list_tenancies(own.flat_id)
+    assert tenancy.ended_at is not None
+    assert tenancy.ended_by == own.user_id

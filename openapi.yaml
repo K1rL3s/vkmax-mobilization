@@ -2023,7 +2023,7 @@ paths:
     post:
       tags:
       - Квартиры
-      summary: Подтвердить квартиру лицевым счетом
+      summary: Подтвердить квартиру лицевым счетом или QR квитанции
       operationId: verify_flat
       security:
       - ApiTestToken: []
@@ -2047,7 +2047,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyFlatRequest'
+              anyOf:
+              - $ref: '#/components/schemas/VerifyFlatRequest'
+              - $ref: '#/components/schemas/VerifyFlatByQrRequest'
+              title: Body
       responses:
         '200':
           description: Successful Response
@@ -2504,6 +2507,160 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResidencySummary'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/flats/{flat_id}/tenants/{resident_id}:
+    delete:
+      tags:
+      - Квартиры
+      summary: Завершить аренду
+      description: Собственник удаляет арендатора из квартиры и отзывает открытые коды приглашения, арендатору приходит сообщение в бот
+      operationId: end_tenancy
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: flat_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Flat Id
+      - name: resident_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Resident Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/flats/{flat_id}/tenancies:
+    get:
+      tags:
+      - Квартиры
+      summary: История аренды квартиры
+      operationId: list_tenancies
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: flat_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Flat Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TenancyItem'
+                title: Response List Tenancies
         '400':
           description: Некорректный запрос
           content:
@@ -16870,6 +17027,32 @@ components:
       - day
       - night
       title: TariffZone
+    TenancyItem:
+      properties:
+        id:
+          type: integer
+          title: Id
+        name:
+          type: string
+          title: Name
+        started_at:
+          type: string
+          format: date-time
+          title: Started At
+        ended_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Ended At
+          description: Пусто, пока аренда идет
+      type: object
+      required:
+      - id
+      - name
+      - started_at
+      - ended_at
+      title: TenancyItem
     TrackEventRequest:
       properties:
         type:
@@ -17060,11 +17243,24 @@ components:
       - approved
       - rejected
       title: VerificationStatus
+    VerifyFlatByQrRequest:
+      properties:
+        payment_qr:
+          type: string
+          maxLength: 3000
+          title: Payment Qr
+          description: Строка платежного QR квитанции (ГОСТ Р 56042-2014) от сканера MAX. Из нее берется только persAcc, строка не хранится
+      additionalProperties: false
+      type: object
+      required:
+      - payment_qr
+      title: VerifyFlatByQrRequest
     VerifyFlatRequest:
       properties:
         account_no:
           type: string
           title: Account No
+      additionalProperties: false
       type: object
       required:
       - account_no

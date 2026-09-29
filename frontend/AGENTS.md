@@ -117,11 +117,14 @@ Knows every feature; nothing imports it.
   `router.ts` (`useRouteParams`, zod-parsed), `analytics/` (`useTrack` ->
   `/api/events`), `max/` (the Bridge: typed `getWebApp`, `getMaxLaunch` with
   `isInsideMax`, `initData`, `startParam`, `useBackNavigation`,
-  `useClosingConfirmation(active)` for forms with unsaved input, and
-  `haptic.success/error/select`). The bridge is the CDN script in
-  `index.html`; outside MAX `getWebApp()` is `null` and the back button,
-  closing confirmation and haptics are no-ops (the web and desktop clients
-  have no haptics either).
+  `useClosingConfirmation(active)` for forms with unsaved input,
+  `haptic.success/error/select`, and `scanCode()` over `openCodeReader`
+  with the gallery allowed: `null` on cancel or without the method; the
+  bridge defines the method on every platform, so `canScanCode()` shows a
+  scan button only on iOS and Android). The bridge is the
+  CDN script in `index.html`; outside MAX `getWebApp()` is `null` and the
+  back button, closing confirmation and haptics are no-ops (the web and
+  desktop clients have no haptics either).
 - `ui/`: the kit over max-ui. A date field is `DateInput` (mask ДД.ММ.ГГГГ,
   value an ISO day or `""` until the date is full and real), never a native
   `type="date"`: the MAX WebView draws an empty one as a blank box. A choice

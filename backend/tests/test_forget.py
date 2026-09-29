@@ -66,6 +66,7 @@ async def test_a_forgotten_user_keeps_the_request_but_not_the_name_or_the_max_id
     residents = ResidentsRepo(session)
     for resident in await residents.list_for_user(own.user_id):
         resident.status = ResidentStatus.BLOCKED
+    await residents.start_tenancy(own.flat_id, own.user_id, datetime.now(UTC))
     users = UsersRepo(session)
     await users.set_consent(own.user_id, CONSENT_VERSION)
     user = await users.get_by_id(own.user_id)
@@ -79,6 +80,7 @@ async def test_a_forgotten_user_keeps_the_request_but_not_the_name_or_the_max_id
     assert user.consent_at is None
     assert await users.get_by_max_id(old_max_id) is None
     assert await residents.list_for_user(own.user_id) == []
+    assert await residents.list_tenancies(own.flat_id) == []
     assert await OrgsRepo(session).list_for_user(own.user_id) == []
     kept = await RequestsRepo(session).get(request.id)
     assert kept is not None

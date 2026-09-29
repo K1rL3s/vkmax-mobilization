@@ -8,15 +8,17 @@ from tests.conftest import (
     OrgHouseFlatUser,
     RecordingBroker,
     add_user,
+    events_of,
     make_notifications_service,
 )
 
 from zheka.api.dependencies.current_residency import CurrentResidency
 from zheka.api.routes.flats import verify_flat
-from zheka.api.schemas.flats import FlatCard, VerifyFlatRequest
+from zheka.api.schemas.flats import FlatCard, VerifyFlatByQrRequest, VerifyFlatRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
+    EventType,
     OrgRole,
     ResidentRole,
     ResidentStatus,
@@ -30,12 +32,16 @@ from zheka.core.errors import (
     TooManyRequests,
 )
 from zheka.core.ids import FlatId, HouseId, UserId
+from zheka.core.payment_qr import NOT_PAYMENT_QR
 from zheka.core.services.events import EventsService
 from zheka.core.services.flats import (
     ALREADY_VERIFIED_DETAIL,
     INVITE_ISSUER_GONE,
     MAX_INVITE_HOURS,
+    MISMATCH_DETAIL,
+    NOT_A_TENANT,
     REVOKED_BY_ORG,
+    TENANT_BLOCKED,
     FlatsService,
 )
 from zheka.core.services.houses import NOT_CONNECTED
@@ -777,4 +783,238 @@ async def test_verify_attempts_past_the_hourly_quota_are_refused(
     right = VerifyFlatRequest(account_no=ACCOUNT)
     with pytest.raises(TooManyRequests):
         await verify_flat(own.flat_id, residency, service, right, quota)
+    by_qr = VerifyFlatByQrRequest(payment_qr=_payment_qr(ACCOUNT))
+    with pytest.raises(TooManyRequests):
+        await verify_flat(own.flat_id, residency, service, by_qr, quota)
     assert resident.verified_at is None
+
+
+def _payment_qr(pers_acc: str) -> str:
+    return f"ST00012|Name=Демо-УК|PayeeINN=9900000001|persAcc={pers_acc}|Sum=150000"
+
+
+async def test_verify_by_qr_takes_the_account_from_the_receipt(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await _set_account(session, own.flat_id, "0000000012")
+    resident = await _add_resident(session, own.user_id, own.house_id, None)
+
+    result = await _make_service(session).verify_by_qr(
+        own.user_id,
+        own.flat_id,
+        _payment_qr("0000000012"),
+    )
+
+    assert result.verified is True
+    assert resident.flat_id == own.flat_id
+    assert resident.verified_at is not None
+    [requested] = await events_of(session, EventType.FLAT_VERIFICATION_REQUESTED)
+    [verified] = await events_of(session, EventType.FLAT_VERIFIED)
+    assert requested.payload["method"] == "qr"
+    assert verified.payload["by"] == "qr"
+
+
+async def test_verify_by_qr_of_another_flat_is_a_mismatch(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await _set_account(session, own.flat_id, "0000000012")
+    resident = await _add_resident(session, own.user_id, own.house_id, None)
+
+    result = await _make_service(session).verify_by_qr(
+        own.user_id,
+        own.flat_id,
+        _payment_qr("0000000013"),
+    )
+
+    assert result.verified is False
+    assert result.detail == MISMATCH_DETAIL
+    assert resident.verified_at is None
+
+
+@pytest.mark.parametrize(
+    "payment_qr",
+    ["https://vkmax.k1rles.ru/", "ST00012|Name=Демо-УК|PayeeINN=9900000001"],
+)
+async def test_verify_by_qr_refuses_a_qr_without_an_account(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    payment_qr: str,
+) -> None:
+    own = await make_org_house_flat_user()
+    await _set_account(session, own.flat_id, "0000000012")
+    resident = await _add_resident(session, own.user_id, own.house_id, None)
+
+    with pytest.raises(InvalidRequest, match=NOT_PAYMENT_QR):
+        await _make_service(session).verify_by_qr(
+            own.user_id,
+            own.flat_id,
+            payment_qr,
+        )
+    assert resident.verified_at is None
+    assert await FlatsRepo(session).get_latest_request(own.user_id, own.flat_id) is None
+
+
+async def test_verify_by_qr_refuses_a_tenant_as_manual_input_does(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await _set_account(session, own.flat_id, "0000000012")
+    await _add_resident(
+        session,
+        own.user_id,
+        own.house_id,
+        own.flat_id,
+        ResidentRole.TENANT,
+    )
+
+    with pytest.raises(NotEnoughRights, match="собственник"):
+        await _make_service(session).verify_by_qr(
+            own.user_id,
+            own.flat_id,
+            _payment_qr("0000000012"),
+        )
+
+
+async def _let(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    publisher: TaskPublisher | None = None,
+) -> tuple[OrgHouseFlatUser, Resident, FlatsService, str]:
+    own = await _verified_owner(session, make_org_house_flat_user)
+    service = _make_service(session, publisher)
+    invite = await service.create_invite(own.user_id, own.flat_id, 72, 2)
+    view = await service.activate_invite(await add_user(session), invite.code)
+    return own, view.resident, service, invite.code
+
+
+async def test_ending_a_tenancy_removes_the_tenant_and_their_code(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    own, tenant, service, code = await _let(
+        session,
+        make_org_house_flat_user,
+        publisher,
+    )
+    tenant_id = tenant.user_id
+
+    await service.end_tenancy(own.user_id, own.flat_id, tenant.id)
+
+    residents = ResidentsRepo(session)
+    assert await residents.get_for_house(tenant_id, own.house_id) is None
+    [tenancy] = await residents.list_tenancies(own.flat_id)
+    assert tenancy.user_id == tenant_id
+    assert tenancy.ended_at is not None
+    assert tenancy.ended_by == own.user_id
+    with pytest.raises(InvalidState):
+        await service.activate_invite(tenant_id, code)
+    [ended] = await events_of(session, EventType.TENANCY_ENDED)
+    assert ended.payload["tenant_id"] == tenant_id
+    await publisher.flush()
+    [sent] = broker.enqueued(TaskName.SEND_TO_USER)
+    assert sent["user_id"] == tenant_id
+    assert sent["mandatory"] is True
+    assert "завершил аренду" in sent["text"]
+
+
+async def test_an_ended_tenant_returns_by_a_new_code(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own, tenant, service, _code = await _let(session, make_org_house_flat_user)
+    await service.end_tenancy(own.user_id, own.flat_id, tenant.id)
+    fresh = await service.create_invite(own.user_id, own.flat_id, 72, 1)
+
+    back = await service.activate_invite(tenant.user_id, fresh.code)
+
+    assert back.resident.role is ResidentRole.TENANT
+    assert back.resident.verified_at is not None
+    history = await service.tenancies(own.user_id, own.flat_id)
+    assert [view.tenancy.ended_at is None for view in history] == [True, False]
+
+
+@pytest.mark.parametrize("actor", ["tenant", "unverified_owner", "neighbour"])
+async def test_only_a_verified_owner_of_the_flat_ends_a_tenancy(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    actor: str,
+) -> None:
+    own, tenant, service, code = await _let(session, make_org_house_flat_user)
+    actor_id = await add_user(session)
+    if actor == "tenant":
+        await service.activate_invite(actor_id, code)
+    elif actor == "unverified_owner":
+        await _add_resident(session, actor_id, own.house_id, own.flat_id)
+    else:
+        neighbour_flat = await _add_flat(session, own.house_id, "2")
+        await _add_resident(
+            session,
+            actor_id,
+            own.house_id,
+            neighbour_flat,
+            verified=True,
+        )
+
+    with pytest.raises(NotEnoughRights):
+        await service.end_tenancy(actor_id, own.flat_id, tenant.id)
+    with pytest.raises(NotEnoughRights):
+        await service.tenancies(actor_id, own.flat_id)
+    assert await ResidentsRepo(session).get(tenant.id) is not None
+
+
+async def test_an_owner_cannot_end_a_tenant_of_another_flat(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own, tenant, service, _code = await _let(session, make_org_house_flat_user)
+    neighbour_flat = await _add_flat(session, own.house_id, "2")
+    neighbour = await add_user(session)
+    await _add_resident(session, neighbour, own.house_id, neighbour_flat, verified=True)
+
+    with pytest.raises(EntityNotFound):
+        await service.end_tenancy(neighbour, neighbour_flat, tenant.id)
+    assert await ResidentsRepo(session).get(tenant.id) is not None
+
+
+@pytest.mark.parametrize("target", ["self", "co_owner"])
+async def test_ending_a_tenancy_never_removes_an_owner(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    target: str,
+) -> None:
+    own = await _verified_owner(session, make_org_house_flat_user)
+    residents = ResidentsRepo(session)
+    if target == "self":
+        owner = await residents.get_for_house(own.user_id, own.house_id)
+        assert owner is not None
+    else:
+        owner = await _add_resident(
+            session,
+            await add_user(session),
+            own.house_id,
+            own.flat_id,
+            verified=True,
+        )
+
+    with pytest.raises(NotEnoughRights, match=NOT_A_TENANT):
+        await _make_service(session).end_tenancy(own.user_id, own.flat_id, owner.id)
+    assert await residents.get(owner.id) is not None
+
+
+async def test_a_tenant_blocked_by_the_org_is_not_released_by_the_owner(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own, tenant, service, _code = await _let(session, make_org_house_flat_user)
+    await ResidentsRepo(session).set_status(tenant, ResidentStatus.BLOCKED, "долг")
+
+    with pytest.raises(InvalidState, match=TENANT_BLOCKED):
+        await service.end_tenancy(own.user_id, own.flat_id, tenant.id)
+    assert await ResidentsRepo(session).get(tenant.id) is not None

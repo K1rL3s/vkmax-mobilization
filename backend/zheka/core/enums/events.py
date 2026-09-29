@@ -59,6 +59,7 @@ class EventType(StrEnum):
     REQUEST_EXPORTED = "request_exported"
     REQUEST_SHARED = "request_shared"
     REQUEST_ESCALATED = "request_escalated"
+    REQUEST_CANCELED = "request_canceled"
     REQUEST_MESSAGE_SENT = "request_message_sent"
 
     FLAT_INVITE_CREATED = "flat_invite_created"
@@ -81,6 +82,7 @@ class EventType(StrEnum):
     PHONE_VERIFIED = "phone_verified"
     PHONE_FORGOTTEN = "phone_forgotten"
     HOUSE_ADDED = "house_added"
+    TENANCY_ENDED = "tenancy_ended"
 
 
 class EventSource(StrEnum):

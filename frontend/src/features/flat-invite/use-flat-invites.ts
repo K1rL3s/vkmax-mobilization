@@ -1,6 +1,6 @@
 import type { components } from "@/shared/api/schema/generated";
 import { authParams, rqClient } from "@/shared/api/instance";
-import { queryClient } from "@/shared/api/query-client";
+import { invalidatePaths, queryClient } from "@/shared/api/query-client";
 
 export type FlatInvite = components["schemas"]["FlatInviteItem"];
 
@@ -41,4 +41,28 @@ export const useIssueInvite = (flatId: number) =>
 export const useRevokeInvite = (flatId: number) =>
   rqClient.useMutation("delete", "/api/flat-invites/{code}", {
     onSuccess: () => refreshInvites(flatId),
+  });
+
+export const useFlatTenancies = (flatId: number) =>
+  rqClient.useQuery(
+    "get",
+    "/api/flats/{flat_id}/tenancies",
+    { params: { ...authParams(), path: { flat_id: flatId } } },
+    {
+      select: (tenancies) =>
+        tenancies.flatMap(({ ended_at, ...tenancy }) =>
+          ended_at === null ? [] : [{ ...tenancy, ended_at }],
+        ),
+    },
+  );
+
+export const useEndTenancy = () =>
+  rqClient.useMutation("delete", "/api/flats/{flat_id}/tenants/{resident_id}", {
+    onSuccess: () =>
+      invalidatePaths(
+        "/api/flats/{flat_id}",
+        "/api/flats/{flat_id}/residents",
+        "/api/flats/{flat_id}/tenancies",
+        "/api/flats/{flat_id}/invites",
+      ),
   });

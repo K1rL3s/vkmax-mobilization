@@ -1,7 +1,7 @@
 import secrets
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
@@ -311,6 +311,13 @@ class HousesService:
 
         house_id = resident.house_id
         await self._residents.delete(resident)
+        if resident.role is ResidentRole.TENANT and resident.flat_id is not None:
+            await self._residents.end_tenancy(
+                resident.flat_id,
+                user_id,
+                datetime.now(UTC),
+                user_id,
+            )
         await self._events.record(
             EventType.HOUSE_LEFT,
             user_id=user_id,

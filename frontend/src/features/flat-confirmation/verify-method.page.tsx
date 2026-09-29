@@ -2,6 +2,7 @@ import { Button, Input, Textarea, Typography } from "@maxhub/max-ui";
 import { Navigate } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
+import { Icon, qrIcon } from "@/shared/ui/icon";
 import { ErrorState } from "@/shared/ui/state";
 
 import { useVerifyMethod } from "./model/use-verify-method";
@@ -42,6 +43,19 @@ const VerifyMethodPage = () => {
           onChange={(event) => form.setAccountNo(event.target.value)}
         />
 
+        {form.scan && (
+          <Button
+            size="medium"
+            variant="secondary"
+            stretched
+            iconBefore={<Icon src={qrIcon} size={20} />}
+            disabled={form.isPending}
+            onClick={form.scan}
+          >
+            Сканировать QR квитанции
+          </Button>
+        )}
+
         {isOrg && (
           <Textarea
             mode="secondary"
@@ -66,7 +80,7 @@ const VerifyMethodPage = () => {
             title="Не получилось отправить"
             description="Проверьте связь и попробуйте ещё раз"
             error={form.failure}
-            onRetry={form.submit}
+            onRetry={form.retry}
           />
         )}
       </div>

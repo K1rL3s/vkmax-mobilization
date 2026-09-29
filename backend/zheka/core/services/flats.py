@@ -18,15 +18,24 @@ from zheka.core.errors import (
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import FlatId, HouseId, OrgId, UserId, VerificationRequestId
+from zheka.core.ids import (
+    FlatId,
+    HouseId,
+    OrgId,
+    ResidentId,
+    UserId,
+    VerificationRequestId,
+)
 from zheka.core.models import (
     Flat,
     FlatInvite,
     House,
     Resident,
+    Tenancy,
     User,
     VerificationRequest,
 )
+from zheka.core.payment_qr import NOT_PAYMENT_QR, PaymentQr
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import NOT_CONNECTED, ResidencyView, is_connected
 from zheka.core.services.invites import issue_invite
@@ -55,6 +64,10 @@ VERIFY_FIRST = "Сначала подтвердите квартиру"
 INVITE_ISSUER_GONE = "Код приглашения больше не действует"
 REVOKED_BY_ORG = (
     "УК сняла подтверждение этой квартиры: отправьте ей запрос на подтверждение"
+)
+NOT_A_TENANT = "Завершить аренду можно только у арендатора"
+TENANT_BLOCKED = (
+    "Арендатора заблокировала УК: завершить аренду можно после разблокировки"
 )
 
 
@@ -86,6 +99,11 @@ class VerificationRequestView(ZhekaType):
 
 class FlatResidentView(ZhekaType):
     resident: Resident
+    user: User
+
+
+class TenancyView(ZhekaType):
+    tenancy: Tenancy
     user: User
 
 
@@ -139,6 +157,7 @@ class FlatsService:
         user_id: UserId,
         flat_id: FlatId,
         account_no: str,
+        method: str = "account",
     ) -> VerifyResult:
         flat, _ = await self._flat_and_house(flat_id)
         resident = await self._resident_of_house(user_id, flat.house_id)
@@ -165,7 +184,7 @@ class FlatsService:
             EventType.FLAT_VERIFICATION_REQUESTED,
             user_id=user_id,
             flat_id=flat_id,
-            method="account",
+            method=method,
             matched=matched,
         )
         if not matched:
@@ -182,7 +201,7 @@ class FlatsService:
             EventType.FLAT_VERIFIED,
             user_id=user_id,
             flat_id=flat_id,
-            by="account",
+            by=method,
         )
         return VerifyResult(verified=True, detail="Квартира подтверждена")
 
@@ -397,12 +416,9 @@ class FlatsService:
             None,
             ResidentRole.TENANT,
         )
-        await self._residents.set_verified(
-            resident,
-            flat_id,
-            datetime.now(UTC),
-            invite.created_by,
-        )
+        now = datetime.now(UTC)
+        await self._residents.set_verified(resident, flat_id, now, invite.created_by)
+        await self._residents.start_tenancy(flat_id, user_id, now)
         await self._events.record(
             EventType.FLAT_INVITE_ACTIVATED,
             user_id=user_id,
@@ -533,3 +549,56 @@ class FlatsService:
             category=NotificationCategory.REQUESTS,
             mandatory=True,
         )
+
+    async def verify_by_qr(
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
+        payment_qr: str,
+    ) -> VerifyResult:
+        account_no = PaymentQr.parse(payment_qr).pers_acc
+        if account_no is None:
+            raise InvalidRequest(NOT_PAYMENT_QR)
+        return await self.verify(user_id, flat_id, account_no, "qr")
+
+    async def end_tenancy(
+        self,
+        user_id: UserId,
+        flat_id: FlatId,
+        resident_id: ResidentId,
+    ) -> None:
+        await self._verified_owner(user_id, flat_id)
+        tenant = await self._residents.get(resident_id)
+        if tenant is None or tenant.flat_id != flat_id:
+            raise EntityNotFound("Житель не найден")
+        if tenant.role is not ResidentRole.TENANT:
+            raise NotEnoughRights(NOT_A_TENANT)
+        if tenant.status is ResidentStatus.BLOCKED:
+            raise InvalidState(TENANT_BLOCKED)
+
+        flat, house = await self._flat_and_house(flat_id)
+        now = datetime.now(UTC)
+        await self._residents.delete(tenant)
+        await self._residents.end_tenancy(flat_id, tenant.user_id, now, user_id)
+        await self._invites.revoke_open_flat(flat_id, now)
+        await self._events.record(
+            EventType.TENANCY_ENDED,
+            user_id=user_id,
+            flat_id=flat_id,
+            tenant_id=tenant.user_id,
+        )
+        self._notify(tenant.user_id, texts.tenancy_ended(flat.number, house.address))
+
+    async def tenancies(self, user_id: UserId, flat_id: FlatId) -> list[TenancyView]:
+        await self._verified_owner(user_id, flat_id)
+        tenancies = await self._residents.list_tenancies(flat_id)
+        users = {
+            user.id: user
+            for user in await self._users.list_by_ids(
+                [tenancy.user_id for tenancy in tenancies],
+            )
+        }
+        return [
+            TenancyView(tenancy=tenancy, user=users[tenancy.user_id])
+            for tenancy in tenancies
+        ]

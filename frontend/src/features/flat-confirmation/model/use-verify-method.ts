@@ -2,6 +2,7 @@ import { useState } from "react";
 import { generatePath, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { canScanCode, scanCode } from "@/shared/lib/max";
 import { useRouteParams } from "@/shared/lib/router";
 import { Routes } from "@/shared/model/routes";
 
@@ -40,6 +41,7 @@ export const useVerifyMethod = () => {
   const method = params?.method;
   const way = method === "org" ? org : account;
   const stated = accountNo.trim();
+  const submit = () => way.send({ accountNo: stated, comment: comment.trim() });
 
   return {
     method,
@@ -51,7 +53,18 @@ export const useVerifyMethod = () => {
       setAccountNo(value);
       way.reset();
     },
-    submit: () => way.send({ accountNo: stated, comment: comment.trim() }),
+    submit,
+    retry: method === "org" ? submit : account.retry,
+    scan:
+      method === "account" && canScanCode()
+        ? async () => {
+            const paymentQr = await scanCode();
+
+            if (paymentQr) {
+              account.sendQr(paymentQr);
+            }
+          }
+        : undefined,
     askOrg: () => {
       if (!residency) {
         return;
@@ -67,7 +80,7 @@ export const useVerifyMethod = () => {
     },
     mismatched: way.mismatched,
     isPending: way.isPending,
-    isDisabled: stated === "" || way.isPending,
+    isDisabled: way.isPending || (stated === "" && !way.mismatched),
     isFailed: way.isFailed,
     failure: way.failure,
   };
