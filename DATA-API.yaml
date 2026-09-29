@@ -1,273 +1,315 @@
-schema_version: "1.0"
+schemaVersion: "1.0"
 
 solution:
   name: Жэка Коммуналкин
-  team: Мобилизация
-  track: Умный город
+  teamId: Мобилизация
 
-base_url: https://vkmax.k1rles.ru/api
-
-openapi: openapi.yaml
-
-auth:
-  type: bearer
-  header: Authorization
-  format: "Bearer <токен>"
-  token: "34c63235dea4b1fb95ce89a9f108fc18"
-  description: >-
-    Мини-приложение авторизуется подписанной initData из MAX в заголовке WebAppData.
-    Для проверки API без MAX выдан тестовый токен: он открывает одну учетную запись
-    «Проверяющий API», у которой обе роли. Тот же токен на служебном слайде
-    презентации и в README. Проверки provision_consent и provision_demo
-    заводят учетную запись и повторяются без побочных эффектов.
-  roles:
-    resident:
-      description: Житель демо-УК №5 с подтвержденной квартирой, начислениями и показаниями за полгода
-    staff:
-      description: Сотрудник демо-УК №5, видит заявки домов своей организации
-
-error_format:
-  content_type: application/json
-  required_fields:
-    - status
-    - trace_id
-    - error.title
-    - error.detail
-
-test_data:
-  house_id: 6
-  flat_id: 1121
-  request_id: 766
-  foreign_request_id: 1
+api:
+  baseUrl: https://vkmax.k1rles.ru
+  openapi: openapi.yaml
 
 checks:
   - id: provision_consent
-    description: Согласие на обработку персональных данных, без него API не пускает дальше
+    name: Согласие на обработку персональных данных
+    description: >-
+      Согласие на обработку персональных данных, без него API не пускает дальше.
+      Роли resident и staff - одна учетная запись «Проверяющий API» с тестовым токеном
+      в заголовке Authorization: Bearer <токен>, токен на служебном слайде презентации и в README.
+      resident - житель демо-УК №5 с подтвержденной квартирой, начислениями и показаниями за полгода.
+      staff - сотрудник демо-УК №5, видит заявки домов своей организации.
+      Мини-приложение вместо токена передает подписанную initData из MAX в заголовке WebAppData
     method: POST
-    path: /me/consent
-    headers:
-      Content-Type: application/json
-    body:
-      version: "1.0"
+    path: /api/me/consent
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [user_id, name, consent_at, consent_version, residencies, orgs, is_demo]
+    request:
+      headers:
+        Content-Type: application/json
+      body:
+        version: "1.0"
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [user_id, name, consent_at, consent_version, residencies, orgs, is_demo]
+    repeatable: true
 
   - id: provision_demo
+    name: Демо-доступ проверяющего
     description: Демо-доступ - своя квартира в первом доме демо-УК №5 и роль сотрудника этой УК. Ссылки со служебного слайда ведут в демо-УК №1, поэтому заявки проверки не пересекаются с заявками жюри
     method: POST
-    path: /demo/activate
-    headers:
-      Content-Type: application/json
-    body:
-      number: 5
+    path: /api/demo/activate
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [org.org_id, org.name, org.role, org.is_demo, residency.resident_id, residency.house_id, residency.address]
+    dependsOn: [provision_consent]
+    request:
+      headers:
+        Content-Type: application/json
+      body:
+        number: 5
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [org, residency]
+      bodySchema:
+        type: object
+        properties:
+          org: {type: object, required: [org_id, name, role, is_demo]}
+          residency: {type: object, required: [resident_id, house_id, address]}
+    repeatable: true
 
   - id: healthcheck
+    name: Доступность сервиса
     description: Сервис и база доступны
     method: GET
-    path: /healthcheck
-    role: null
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [ok]
+    path: /api/healthcheck
+    role: public
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [ok]
+    repeatable: true
 
   - id: profile
+    name: Профиль проверяющего
     description: Профиль проверяющего - дома, квартиры и роли в организациях
     method: GET
-    path: /me
+    path: /api/me
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [user_id, name, consent_at, consent_version, residencies, orgs, is_demo]
+    dependsOn: [provision_demo]
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [user_id, name, consent_at, consent_version, residencies, orgs, is_demo]
+    repeatable: true
 
   - id: profile_unauthorized
+    name: Запрос без токена
     description: Без токена API отказывает
     method: GET
-    path: /me
-    role: null
-    expected_status: [401]
-    response:
-      content_type: application/json
-      required_fields: [status, trace_id, error.title, error.detail]
+    path: /api/me
+    role: public
+    expected:
+      statusCodes: [401]
+      contentType: application/json
+      requiredFields: [status, trace_id, error]
+      bodySchema:
+        type: object
+        properties:
+          error: {type: object, required: [title, detail]}
+    repeatable: true
 
   - id: request_categories
+    name: Категории заявок
     description: Категории заявок и срок выполнения каждой
     method: GET
-    path: /request-categories
+    path: /api/request-categories
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      type: array
-      required_fields: ["[].category", "[].label", "[].zone", "[].deadline_text"]
+    dependsOn: [provision_demo]
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      bodySchema:
+        type: array
+        items: {type: object, required: [category, label, zone, deadline_text]}
+    repeatable: true
 
   - id: house_search
+    name: Поиск дома по адресу
     description: Поиск дома по адресу в справочнике
     method: GET
-    path: /houses
-    query:
-      q: Ленинский проспект
-      limit: 20
+    path: /api/houses
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields:
-        - items
-        - total
-        - "items[].id"
-        - "items[].address"
-        - "items[].city"
-        - "items[].street"
-        - "items[].building"
-        - "items[].is_connected"
+    dependsOn: [provision_demo]
+    request:
+      query:
+        q: Ленинский проспект
+        limit: 20
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [items, total]
+      bodySchema:
+        type: object
+        properties:
+          items:
+            type: array
+            items: {type: object, required: [id, address, city, street, building, is_connected]}
+    repeatable: true
 
   - id: house_card
+    name: Карточка дома
     description: Карточка дома - УК, тарифы, капремонт, документы
     method: GET
-    path: /houses/{house_id}
-    path_params:
-      house_id: "{test_data.house_id}"
+    path: /api/houses/{house_id}
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [id, address, region, city, street, building, cadastral_no, entrances, is_connected, demand_count, demand_sent, documents]
+    dependsOn: [provision_demo]
+    request:
+      path:
+        house_id: 6
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [id, address, region, city, street, building, cadastral_no, entrances, is_connected, demand_count, demand_sent, documents]
+    repeatable: true
 
   - id: request_create
+    name: Подача заявки
     description: Житель подает заявку о протечке и сразу получает номер и срок
     method: POST
-    path: /requests
-    headers:
-      Content-Type: application/json
-      X-House-Id: "6"
-    body:
-      category: leak
-      description: Течет кран в ванной, проверка API
+    path: /api/requests
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [id, created_at, category, category_label, description, status, channel, has_photos, group_size, house_id, address, org_name, deadline_text, photos, result_photos, messages, timeline, can_review, can_rate]
+    dependsOn: [provision_demo]
+    request:
+      headers:
+        Content-Type: application/json
+        X-House-Id: "6"
+      body:
+        category: leak
+        description: Течет кран в ванной, проверка API
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [id, created_at, category, category_label, description, status, channel, has_photos, group_size, house_id, address, org_name, deadline_text, photos, result_photos, messages, timeline, can_review, can_rate]
+    repeatable: false
 
   - id: request_list
+    name: Список заявок жителя
     description: Список заявок жителя со статусами
     method: GET
-    path: /requests
-    headers:
-      X-House-Id: "6"
-    query:
-      limit: 20
-      offset: 0
+    path: /api/requests
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields:
-        - items
-        - total
-        - "items[].id"
-        - "items[].created_at"
-        - "items[].category"
-        - "items[].status"
-        - "items[].group_size"
+    dependsOn: [provision_demo]
+    request:
+      headers:
+        X-House-Id: "6"
+      query:
+        limit: 20
+        offset: 0
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [items, total]
+      bodySchema:
+        type: object
+        properties:
+          items:
+            type: array
+            items: {type: object, required: [id, created_at, category, status, group_size]}
+    repeatable: true
 
   - id: request_card
+    name: Карточка своей заявки
     description: Карточка своей заявки - статус, срок, история
     method: GET
-    path: /requests/{request_id}
-    path_params:
-      request_id: "{test_data.request_id}"
+    path: /api/requests/{request_id}
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [id, created_at, category, status, house_id, address, deadline_text, timeline, messages]
+    dependsOn: [provision_demo]
+    request:
+      path:
+        request_id: 766
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [id, created_at, category, status, house_id, address, deadline_text, timeline, messages]
+    repeatable: true
 
   - id: request_card_foreign
+    name: Чужая заявка
     description: Чужая заявка недоступна - данные изолированы по жителю и организации
     method: GET
-    path: /requests/{request_id}
-    path_params:
-      request_id: "{test_data.foreign_request_id}"
+    path: /api/requests/{request_id}
     role: resident
-    expected_status: [404]
-    response:
-      content_type: application/json
-      required_fields: [status, trace_id, error.title, error.detail]
+    dependsOn: [provision_demo]
+    request:
+      path:
+        request_id: 1
+    expected:
+      statusCodes: [404]
+      contentType: application/json
+      requiredFields: [status, trace_id, error]
+      bodySchema:
+        type: object
+        properties:
+          error: {type: object, required: [title, detail]}
+    repeatable: true
 
   - id: meters
+    name: Счетчики квартиры
     description: Счетчики квартиры жителя и возможность передать показание
     method: GET
-    path: /flats/{flat_id}/meters
-    path_params:
-      flat_id: "{test_data.flat_id}"
+    path: /api/flats/{flat_id}/meters
     role: resident
-    expected_status: [200]
-    response:
-      content_type: application/json
-      type: array
-      required_fields: ["[].id", "[].flat_id", "[].type", "[].tariff_zones", "[].serial", "[].can_submit", "[].verification_expired"]
+    dependsOn: [provision_demo]
+    request:
+      path:
+        flat_id: 1121
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      bodySchema:
+        type: array
+        items: {type: object, required: [id, flat_id, type, tariff_zones, serial, can_submit, verification_expired]}
+    repeatable: true
 
   - id: staff_requests
+    name: Входящие заявки УК
     description: Входящие заявки домов организации сотрудника
     method: GET
-    path: /admin/requests
-    query:
-      limit: 20
-      offset: 0
+    path: /api/admin/requests
     role: staff
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields:
-        - items
-        - total
-        - "items[].id"
-        - "items[].status"
-        - "items[].house_id"
-        - "items[].address"
-        - "items[].is_staff_author"
+    dependsOn: [provision_demo]
+    request:
+      query:
+        limit: 20
+        offset: 0
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [items, total]
+      bodySchema:
+        type: object
+        properties:
+          items:
+            type: array
+            items: {type: object, required: [id, status, house_id, address, is_staff_author]}
+    repeatable: true
 
   - id: staff_reply
+    name: Ответ сотрудника жителю
     description: Сотрудник отвечает жителю, ответ уходит жителю сообщением бота
     method: POST
-    path: /admin/requests/{request_id}/reply
-    path_params:
-      request_id: "{test_data.request_id}"
-    headers:
-      Content-Type: application/json
-    body:
-      text: Приняли, мастер придет сегодня
+    path: /api/admin/requests/{request_id}/reply
     role: staff
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [id, status, messages, timeline, is_staff_author]
+    dependsOn: [provision_demo]
+    request:
+      path:
+        request_id: 766
+      headers:
+        Content-Type: application/json
+      body:
+        text: Приняли, мастер придет сегодня
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [id, status, messages, timeline, is_staff_author]
+    repeatable: false
 
   - id: staff_status
+    name: Принятие заявки в работу
     description: >-
       Сотрудник принимает заявку в работу. Повторный вызов с тем же статусом
       ничего не меняет и отвечает той же карточкой
     method: POST
-    path: /admin/requests/{request_id}/status
-    path_params:
-      request_id: "{test_data.request_id}"
-    headers:
-      Content-Type: application/json
-    body:
-      status: accepted
+    path: /api/admin/requests/{request_id}/status
     role: staff
-    expected_status: [200]
-    response:
-      content_type: application/json
-      required_fields: [id, status, timeline]
+    dependsOn: [provision_demo]
+    request:
+      path:
+        request_id: 766
+      headers:
+        Content-Type: application/json
+      body:
+        status: accepted
+    expected:
+      statusCodes: [200]
+      contentType: application/json
+      requiredFields: [id, status, timeline]
+    repeatable: true

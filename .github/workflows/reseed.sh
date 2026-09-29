@@ -28,10 +28,13 @@ fresh = {
     "request_id": str(request["id"]),
     "foreign_request_id": sys.argv[3].strip(),
 }
-print("test_data:")
 for key, value in fresh.items():
-    print(f"  {key}: {value}")
-committed = dict(re.findall(r"^  (\w+_id): (\d+)$", Path("DATA-API.yaml").read_text(), re.M))
-if committed != fresh:
-    sys.exit("DATA-API.yaml test_data differs from the new ids: update it and commit")
+    print(f"{key}: {value}")
+committed = {
+    (("foreign_" if check.endswith("_foreign") else "") + key.replace("X-House-Id", "house_id"), value)
+    for check, block in re.findall(r"^  - id: (\w+)\n((?:    .*\n)+)", Path("DATA-API.yaml").read_text(), re.M)
+    for key, value in re.findall(r'^ +(\w+_id|X-House-Id): "?(\d+)"?$', block, re.M)
+}
+if committed != set(fresh.items()):
+    sys.exit("DATA-API.yaml ids differ from the new ones: update them and commit")
 PY
