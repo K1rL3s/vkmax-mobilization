@@ -119,6 +119,7 @@ class MeterPhotoData(BaseDialogData):
     recognized: int | None = None
     anomaly_ack: bool = False
     notice: str | None = None
+    manual: bool = False
 
     @staticmethod
     def photo_of(body: MessageBody) -> str | None:

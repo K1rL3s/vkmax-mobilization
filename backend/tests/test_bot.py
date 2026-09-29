@@ -111,6 +111,7 @@ from zheka.bot.handlers.menu.windows import (
 )
 from zheka.bot.handlers.meter_photo.handlers import ANOMALY_TEXT
 from zheka.bot.handlers.meter_photo.windows import (
+    MANUAL_TEXT as METER_MANUAL_TEXT,
     UNREADABLE_TEXT as METER_UNREADABLE_TEXT,
     WAIT_TEXT as METER_WAIT_TEXT,
 )
@@ -4434,6 +4435,7 @@ def recognized(monkeypatch: pytest.MonkeyPatch) -> list[int | None]:
 
     monkeypatch.setattr(meter_tasks, "save_photos", save)
     monkeypatch.setattr(VisionClient, "recognize", recognize)
+    monkeypatch.setattr(VisionClient, "configured", property(lambda _self: True))
     return values
 
 
@@ -4491,6 +4493,7 @@ async def test_an_unreadable_photo_takes_a_typed_reading(
 
     await _recognized_card(bot_session, client, task_broker, meter_id)
     assert METER_UNREADABLE_TEXT in _text(message_manager)
+    assert METER_MANUAL_TEXT not in _text(message_manager)
     await client.click(message_manager.last_message(), EDIT_READING)
     await client.send("123,4")
 
@@ -4794,7 +4797,8 @@ async def test_a_meter_photo_past_the_yandex_quota_is_not_recognized(
 
     await _recognized_card(bot_session, client, task_broker, meter_id)
 
-    assert METER_UNREADABLE_TEXT in _text(message_manager)
+    assert METER_MANUAL_TEXT in _text(message_manager)
+    assert METER_UNREADABLE_TEXT not in _text(message_manager)
 
 
 @pytest.mark.usefixtures("instant_retries")
@@ -4843,3 +4847,22 @@ async def test_a_meter_photo_with_no_dialog_open_waits_for_recognition(
     assert _text(message_manager) == METER_WAIT_TEXT
     queued = bot_broker.enqueued(TaskName.RECOGNIZE_METER_PHOTO)[-1]
     assert queued["data"]["meter_id"] == meter_id
+
+
+@pytest.mark.usefixtures("recognized")
+async def test_a_meter_photo_without_ocr_keys_asks_for_the_number(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(VisionClient, "configured", property(lambda _self: False))
+    meter_id = await _meter_owner(bot_session, client, message_manager)
+
+    await _recognized_card(bot_session, client, task_broker, meter_id)
+    assert METER_MANUAL_TEXT in _text(message_manager)
+    assert METER_UNREADABLE_TEXT not in _text(message_manager)
+    await client.send("123,4")
+
+    assert "123,400 м³" in _text(message_manager)

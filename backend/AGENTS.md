@@ -241,7 +241,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   connected house with a submittable single-tariff meter
   (`MeterPhotoService.meters`, else a refusal and «📟 Мои счетчики»).
   `recognize_meter_photo` saves the photo, runs `VisionClient` and opens the
-  confirm window; «Отправить» asks once more on the app's anomaly rules
+  confirm window, which also takes a typed number; without Yandex keys
+  (`VisionClient.configured`) or past `YandexQuota` it skips OCR and asks for
+  the number (`MeterPhotoData.manual`), since a retake cannot help; «Отправить» asks once more on the app's anomaly rules
   (below the last value or over ten typical months), then submits with
   `channel=bot`. Two-tariff meters go to the app.
 - House search and request draft steps have «🏠 Меню» and, past the first,

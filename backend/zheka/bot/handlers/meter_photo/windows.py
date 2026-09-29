@@ -25,6 +25,7 @@ WAIT_TEXT = "⏳ Распознаю показание"
 UNREADABLE_TEXT = (
     "📷 Не разобрал цифры: переснимите без блика или напишите показание числом"
 )
+MANUAL_TEXT = "✏️ Не удалось распознать, напишите показание числом, например 123,456"
 UNSAVED_TEXT = "📷 Фото не сохранилось, пришлите его еще раз"
 EDIT_TEXT = "✏️ Напишите показание числом, например 123,456"
 
@@ -60,11 +61,18 @@ meter_photo_dialog = Dialog(
             Format("{label} · {period}", when=F["label"]),
             Format("{line}", when=F["line"]),
             Const(UNREADABLE_TEXT, when=F["unreadable"]),
+            Const(MANUAL_TEXT, when=F["manual"]),
             Const(UNSAVED_TEXT, when=F["unsaved"]),
             Format("{notice}", when=F["notice"]),
             sep="\n",
         ),
         MessageInput(on_new_photo, content_types=[AttachmentType.IMAGE]),
+        TextInput(
+            id="typed",
+            type_factory=volume_factory,
+            on_success=on_value,
+            on_error=on_bad_value,
+        ),
         Button(
             Const("✅ Всё верно, отправить"),
             id="send_ack",

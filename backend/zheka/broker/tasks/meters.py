@@ -36,9 +36,12 @@ async def recognize_meter_photo(
     urls = [] if draft.photo_url is None else [draft.photo_url]
     names = await save_photos(bot, files_service, urls)
     draft.photo_name = names[0] if names else None
+    draft.manual = draft.photo_name is not None and not (
+        vision.configured and quota.take(user_id)
+    )
     values = (
         None
-        if draft.photo_name is None or not quota.take(user_id)
+        if draft.photo_name is None or draft.manual
         else await vision.recognize(draft.photo_name)
     )
     draft.recognized = None if values is None else values.get(TariffZone.SINGLE)

@@ -153,11 +153,13 @@ async def get_confirm(
                 f", прошлое {format_volume(previous)}, "
                 f"расход {format_volume(value - previous)} {unit}"
             )
+    unread = value is None and data.photo_name is not None
     return {
         "label": meter_label(card),
         "period": f"{MONTHS[period.month - 1]} {period.year}",
         "line": line,
-        "unreadable": value is None and data.photo_name is not None,
+        "unreadable": unread and not data.manual,
+        "manual": unread and data.manual,
         "unsaved": data.photo_name is None,
         "can_send": value is not None and data.photo_name is not None,
         "ack": data.anomaly_ack,

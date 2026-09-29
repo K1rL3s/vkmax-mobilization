@@ -54,7 +54,7 @@ class VisionClient:
         self._session = session
 
     async def recognize(self, photo_path: str) -> dict[TariffZone, int] | None:
-        if not self._config.api_key or not self._config.folder_id:
+        if not self.configured:
             return None
         mime_type = _MIME_TYPES.get(PurePath(photo_path).suffix)
         if mime_type is None:
@@ -93,3 +93,7 @@ class VisionClient:
             logger.warning("Не удалось распознать показание счетчика через OCR")
             return None
         return _full_text(data)
+
+    @property
+    def configured(self) -> bool:
+        return bool(self._config.api_key and self._config.folder_id)
