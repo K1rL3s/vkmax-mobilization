@@ -368,7 +368,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   from the house id and local date, no table, no network. Each carries
   `is_demo` and the app labels it «демо-данные»: it is fiction about a real
   house, so the label never goes. `recalc_hint` quotes ПП 354 прил. 1
-  without computing money.
+  without computing money; the hot-water one excludes the annual maintenance
+  (up to 14 days), which п. 4 leaves to the sanitary rules. While outages are
+  fiction the request form only names the outage, never «заявку можно не
+  подавать».
 
 ## Readings, reminders, analytics
 

@@ -117,8 +117,7 @@ const NewRequestPage = () => {
         {outage && (
           <Flex direction="column" align="flex-start" gap={6}>
             <Typography.Text variant="description" color="secondary">
-              По дому {outageTitle(outage).toLowerCase()}, заявку можно не
-              подавать
+              По дому {outageTitle(outage).toLowerCase()}
             </Typography.Text>
             {outage.is_demo && (
               <StatusPill tone="themed">демо-данные</StatusPill>
