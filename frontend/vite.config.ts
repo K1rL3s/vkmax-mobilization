@@ -37,11 +37,6 @@ export default defineConfig(({ mode }) => {
           headers: { "User-Agent": "zheka-kommunalkin/1.0 (dev)" },
           rewrite: (path) => path.replace(/^\/tiles\/osm/, ""),
         },
-        "/tiles/topo": {
-          target: "https://a.tile.opentopomap.org",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/tiles\/topo/, ""),
-        },
       },
     },
   };

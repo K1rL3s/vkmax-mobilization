@@ -49,15 +49,6 @@ export const BASEMAPS = [
     attribution: OSM_ATTRIBUTION,
     swatch: ["#f2efe9", "#aad3df"],
   },
-  {
-    id: "topo",
-    label: "Топографическая",
-    kind: "raster",
-    tiles: "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
-    maxzoom: 17,
-    attribution: `Картография © <a href="https://opentopomap.org" target="_blank">OpenTopoMap</a> (CC-BY-SA), данные ${OSM_ATTRIBUTION}, SRTM`,
-    swatch: ["#e8efd9", "#c9b48c"],
-  },
 ] as const;
 
 export type Basemap = (typeof BASEMAPS)[number];

@@ -29,10 +29,6 @@ test("sends every known tile host through our proxy", () => {
     proxiedUrl("https://tile.openstreetmap.org/12/2476/1284.png", ORIGIN),
     `${ORIGIN}/tiles/osm/12/2476/1284.png`,
   );
-  assert.equal(
-    proxiedUrl("https://a.tile.opentopomap.org/9/1/2.png", ORIGIN),
-    `${ORIGIN}/tiles/topo/9/1/2.png`,
-  );
 });
 
 test("leaves other urls alone", () => {
@@ -45,7 +41,7 @@ test("leaves other urls alone", () => {
 test("auto follows the MAX colour scheme", () => {
   assert.equal(resolveBasemap("auto", "light").id, "light");
   assert.equal(resolveBasemap("auto", "dark").id, "dark");
-  assert.equal(resolveBasemap("topo", "dark").id, "topo");
+  assert.equal(resolveBasemap("osm", "dark").id, "osm");
 });
 
 test("a raster basemap still has glyphs for our labels", () => {

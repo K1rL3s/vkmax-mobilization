@@ -1,7 +1,6 @@
 const PROXIED: readonly (readonly [string, string])[] = [
   ["https://tiles.openfreemap.org/", "/tiles/ofm/"],
   ["https://tile.openstreetmap.org/", "/tiles/osm/"],
-  ["https://a.tile.opentopomap.org/", "/tiles/topo/"],
 ];
 
 export const proxiedUrl = (url: string, origin: string): string => {
