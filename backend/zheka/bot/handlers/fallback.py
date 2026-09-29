@@ -5,12 +5,14 @@ from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import MessageInput
 from maxo.types import MessageCreated
 
-from zheka.bot.dialog_data import NewRequestData, has_voice
+from zheka.bot.dialog_data import MeterPhotoData, NewRequestData, has_voice
+from zheka.bot.meter_photo import start_meter_photo
 from zheka.bot.middlewares.user import USER_KEY
 from zheka.bot.states import NewRequest, entry_state
 from zheka.bot.voice import VOICE_PENDING, publish_transcription
 from zheka.broker.publisher import TaskPublisher
 from zheka.core.models import User
+from zheka.core.services.meter_photo import MeterPhotoService
 
 router = Router(name=__name__)
 
@@ -21,9 +23,15 @@ async def no_state_handler(
     dialog_manager: DialogManager,
     user: User,
     publisher: FromDishka[TaskPublisher],
+    meter_photos: FromDishka[MeterPhotoService],
 ) -> None:
-    draft = NewRequestData.from_free_text(update.message.body)
-    if user.consent_at is not None and draft is None and has_voice(update.message.body):
+    body = update.message.body
+    draft = NewRequestData.from_free_text(body)
+    photo_url = MeterPhotoData.photo_of(body)
+    if user.consent_at is not None and draft is None and photo_url is not None:
+        await start_meter_photo(photo_url, dialog_manager, meter_photos, publisher)
+        return
+    if user.consent_at is not None and draft is None and has_voice(body):
         await _transcribe(update, publisher, user)
         return
     if user.consent_at is None or draft is None:

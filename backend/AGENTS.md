@@ -234,9 +234,10 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   (`get_message_by_id`), then opens the next draft step or asks for text; the
   audio is never downloaded. Unverified on a live client: MAX may never fill
   `transcription` for bots.
-- A photo sent to `Menu.main` without a free-text caption is a meter reading
-  (`meter_photo` flow; only the menu takes it, so a draft's photo stays the
-  draft's): the latest residency must be a verified active flat of a
+- A photo without a free-text caption sent to `Menu.main` or with no dialog
+  open (fallback router, e.g. an expired state) is a meter reading
+  (`bot/meter_photo.py`; other dialogs never take it, so a draft's photo stays
+  the draft's): the latest residency must be a verified active flat of a
   connected house with a submittable single-tariff meter
   (`MeterPhotoService.meters`, else a refusal and «📟 Мои счетчики»).
   `recognize_meter_photo` saves the photo, runs `VisionClient` and opens the

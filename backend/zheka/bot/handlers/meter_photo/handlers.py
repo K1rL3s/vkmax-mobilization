@@ -2,7 +2,7 @@ from datetime import date
 from typing import Any
 
 from dishka import FromDishka
-from maxo.dialogs import DialogManager, StartMode
+from maxo.dialogs import DialogManager
 from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import ManagedTextInput, MessageInput
 from maxo.dialogs.widgets.kbd import Button
@@ -11,11 +11,10 @@ from maxo.types import MessageCallback, MessageCreated
 from zheka.bot.cards import back_to_menu
 from zheka.bot.dialog_data import MeterPhotoData, NewRequestData
 from zheka.bot.handlers.fallback import on_free_text
+from zheka.bot.meter_photo import publish_recognition, start_meter_photo
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import MeterPhoto
 from zheka.broker.publisher import TaskPublisher
-from zheka.broker.task_names import TaskName
-from zheka.core.deeplinks import METERS_APP_PATH
 from zheka.core.enums import TariffZone
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import MeterId
@@ -29,7 +28,6 @@ from zheka.core.services.meter_photo import (
     parse_volume,
 )
 from zheka.core.services.readings import SubmitResult
-from zheka.core.texts import MY_METERS
 
 MONTHS = (
     "январь",
@@ -65,42 +63,7 @@ async def on_meter_photo(
     if NewRequestData.from_free_text(body) is not None or photo_url is None:
         await on_free_text(update, widget, dialog_manager)
         return
-    choice = await service.meters(dialog_user_id(dialog_manager))
-    if choice.refusal is not None or choice.period is None:
-        await back_to_menu(
-            dialog_manager,
-            choice.refusal or "",
-            MY_METERS,
-            METERS_APP_PATH,
-        )
-        return
-    data = MeterPhotoData(period=choice.period.isoformat(), photo_url=photo_url)
-    if len(choice.cards) > 1:
-        await dialog_manager.start(
-            MeterPhoto.meter,
-            data=data.to_data(),
-            mode=StartMode.RESET_STACK,
-        )
-        return
-    data.meter_id = choice.cards[0].meter.id
-    await dialog_manager.start(
-        MeterPhoto.wait,
-        data=data.to_data(),
-        mode=StartMode.RESET_STACK,
-    )
-    _recognize(publisher, dialog_manager, data)
-
-
-def _recognize(
-    publisher: TaskPublisher,
-    dialog_manager: DialogManager,
-    data: MeterPhotoData,
-) -> None:
-    publisher.publish(
-        TaskName.RECOGNIZE_METER_PHOTO,
-        user_id=dialog_user_id(dialog_manager),
-        data=data.to_data(),
-    )
+    await start_meter_photo(photo_url, dialog_manager, service, publisher)
 
 
 async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:
@@ -133,7 +96,11 @@ async def on_meter(
     with MeterPhotoData.proxy(dialog_manager) as data:
         data.meter_id = int(meter_id) if meter_id.isdecimal() else None
     await dialog_manager.switch_to(MeterPhoto.wait)
-    _recognize(publisher, dialog_manager, MeterPhotoData.load(dialog_manager))
+    publish_recognition(
+        publisher,
+        dialog_manager,
+        MeterPhotoData.load(dialog_manager),
+    )
 
 
 @inject
@@ -151,7 +118,11 @@ async def on_new_photo(
         data.anomaly_ack = False
         data.notice = None
     await dialog_manager.switch_to(MeterPhoto.wait)
-    _recognize(publisher, dialog_manager, MeterPhotoData.load(dialog_manager))
+    publish_recognition(
+        publisher,
+        dialog_manager,
+        MeterPhotoData.load(dialog_manager),
+    )
 
 
 @inject

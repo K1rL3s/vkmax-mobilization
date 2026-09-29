@@ -4822,3 +4822,24 @@ async def test_a_voice_outside_a_draft_never_transcribed_asks_for_text(
 
     assert notices.texts[-1] == VOICE_FAILED
     assert GREETING in _text(message_manager)
+
+
+async def test_a_meter_photo_with_no_dialog_open_waits_for_recognition(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    meter_id = await _meter_owner(bot_session, client, message_manager)
+    expired = BotClient(
+        client.dp,
+        user_id=client.user.id,
+        chat_id=_max_id(),
+        bot=client.bot,
+    )
+
+    await _send_photo(expired, None)
+
+    assert _text(message_manager) == METER_WAIT_TEXT
+    queued = bot_broker.enqueued(TaskName.RECOGNIZE_METER_PHOTO)[-1]
+    assert queued["data"]["meter_id"] == meter_id
