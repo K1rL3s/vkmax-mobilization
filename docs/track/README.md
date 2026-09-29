@@ -15,9 +15,9 @@
 5. [Формат сдачи](05-submission.md)
 6. [Критерии оценки](06-criteria.md)
 7. [Дополнительная информация](07-additional-info.md)
-8. [Сводный список требований и критериев](08-requirements-checklist.md)
-9. [Общий FAQ](09-faq.md)
+8. [Сводный список требований и критериев](08-requirements-checklist.md) (наш, со статусом проекта)
+9. [Общий FAQ](09-faq.md) (не из PDF)
 
-Расшифровки и саммари вебинаров: [Вводной](web-01-transcription.md), [Dive, Create, Impact](web-02-transcription.md), [Q&A](web-03-transcription.md), [Саммари](web-summary.md)
+Вебинары: расшифровки [вводного](web-01-transcription.md), [«Dive, Create, Impact»](web-02-transcription.md) и [«Как создавать продукты, которые решают реальные задачи»](web-03-transcription.md), [выжимка по трем](web-summary.md).
 
-Источник: `Умный-город.pdf` в этой папке
+Разделы 1-7 и аннотация - расшифровка `Умный-город.pdf` из этой папки.

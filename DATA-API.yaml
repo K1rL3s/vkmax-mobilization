@@ -14,7 +14,7 @@ checks:
     description: >-
       Согласие на обработку персональных данных, без него API не пускает дальше.
       Роли resident и staff - одна учетная запись «Проверяющий API» с тестовым токеном
-      в заголовке Authorization: Bearer <токен>, токен на служебном слайде презентации и в README.
+      в заголовке Authorization, он указан в каждой такой проверке.
       resident - житель демо-УК №5 с подтвержденной квартирой, начислениями и показаниями за полгода.
       staff - сотрудник демо-УК №5, видит заявки домов своей организации.
       Мини-приложение вместо токена передает подписанную initData из MAX в заголовке WebAppData
@@ -23,9 +23,10 @@ checks:
     role: resident
     request:
       headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json
       body:
-        version: "1.0"
+        version: "1.2"
     expected:
       statusCodes: [200]
       contentType: application/json
@@ -41,6 +42,7 @@ checks:
     dependsOn: [provision_consent]
     request:
       headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json
       body:
         number: 5
@@ -74,6 +76,9 @@ checks:
     path: /api/me
     role: resident
     dependsOn: [provision_demo]
+    request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
     expected:
       statusCodes: [200]
       contentType: application/json
@@ -103,6 +108,9 @@ checks:
     path: /api/request-categories
     role: resident
     dependsOn: [provision_demo]
+    request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
     expected:
       statusCodes: [200]
       contentType: application/json
@@ -119,6 +127,8 @@ checks:
     role: resident
     dependsOn: [provision_demo]
     request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       query:
         q: Ленинский проспект
         limit: 20
@@ -142,6 +152,8 @@ checks:
     role: resident
     dependsOn: [provision_demo]
     request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       path:
         house_id: 6
     expected:
@@ -159,6 +171,7 @@ checks:
     dependsOn: [provision_demo]
     request:
       headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json
         X-House-Id: "6"
       body:
@@ -180,6 +193,7 @@ checks:
     dependsOn: [provision_demo]
     request:
       headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         X-House-Id: "6"
       query:
         limit: 20
@@ -204,6 +218,8 @@ checks:
     role: resident
     dependsOn: [provision_demo]
     request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       path:
         request_id: 766
     expected:
@@ -220,6 +236,8 @@ checks:
     role: resident
     dependsOn: [provision_demo]
     request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       path:
         request_id: 1
     expected:
@@ -240,6 +258,8 @@ checks:
     role: resident
     dependsOn: [provision_demo]
     request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       path:
         flat_id: 1121
     expected:
@@ -258,6 +278,8 @@ checks:
     role: staff
     dependsOn: [provision_demo]
     request:
+      headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       query:
         limit: 20
         offset: 0
@@ -284,6 +306,7 @@ checks:
       path:
         request_id: 766
       headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json
       body:
         text: Приняли, мастер придет сегодня
@@ -306,6 +329,7 @@ checks:
       path:
         request_id: 766
       headers:
+        Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json
       body:
         status: accepted

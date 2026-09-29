@@ -7,6 +7,7 @@ import yaml
 from jsonschema import Draft202012Validator, FormatChecker
 
 from zheka.api.schemas.requests import CreateRequestRequest
+from zheka.core.consent import CONSENT_VERSION
 from zheka.core.enums import RequestPlace
 from zheka.core.services.requests import placed
 
@@ -52,3 +53,11 @@ def test_the_data_api_request_says_where_the_problem_is(
 
     assert placed(body.category, body.place) is RequestPlace.FLAT
     assert "place" in create["expected"]["requiredFields"]
+
+
+def test_the_data_api_consent_is_the_current_version(data_api: dict[str, Any]) -> None:
+    [consent] = [
+        check for check in data_api["checks"] if check["id"] == "provision_consent"
+    ]
+
+    assert consent["request"]["body"]["version"] == CONSENT_VERSION

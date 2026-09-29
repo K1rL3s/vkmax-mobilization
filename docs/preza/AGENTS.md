@@ -5,7 +5,7 @@ How to build and edit the "Жэка Коммуналкин" pitch deck. `CLAUDE.
 ## Commands
 
 ```
-npm ci        # pinned pptxgenjs, sharp, react-icons, jszip
+npm ci        # pinned pptxgenjs, sharp, react-icons (with react, react-dom), jszip
 npm run build # node build.js -> zheka.pptx
 ./render.sh   # build + zheka.pdf + build/slides/slide-NN.jpg
 ```
@@ -29,7 +29,7 @@ Fonts: Unbounded (headings) and Manrope (body) must be installed as static insta
 - Links must be clickable in the PDF. On light backgrounds use a text `hyperlink` run. On coloured shapes and dark slides use `link()`, a transparent image with a hyperlink laid over the text: LibreOffice repaints hyperlink text in its own blue.
 - No period after the last sentence of a phrase, bullet or bubble; periods stay between sentences.
 - Coordinates are inches on a 13.333 x 7.5 canvas. Keep 0.6 in margins.
-- Style follows `../zheka-brandbook.md`: brand palette only, orange `vest` as a single accent per slide, text in `navy`, sentence case, no caps kickers.
+- Style follows `../brandbook.md`: brand palette only, orange `vest` as a single accent per slide, text in `navy`, sentence case, no caps kickers.
 - Content follows `../track/05-submission.md` and `../track/06-criteria.md`. Slide 1 is the service slide for the technical check. Keep facts sourced from `docs/` and name the source on the slide. Unknowns stay as `[placeholders]` in square brackets, never invented numbers.
 
 ## Checking
