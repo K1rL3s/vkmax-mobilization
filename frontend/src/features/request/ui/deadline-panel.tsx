@@ -8,7 +8,6 @@ import { cn } from "@/shared/lib/css";
 import { formatDayTime } from "@/shared/lib/format";
 import { Chevron } from "@/shared/ui/chevron";
 
-import { NO_NORM } from "../domain/category";
 import { deadlineLeft, deadlineProgress } from "../domain/format";
 import type { RequestCard } from "../domain/types";
 import { refetchRequests } from "../model/use-repeat-request";
@@ -72,9 +71,11 @@ export const DeadlinePanel = ({ request }: { request: DeadlineSource }) => {
           `${left?.overdue ? "Срок истёк" : "Выполнить до"} ${formatDayTime(request.deadline_at)} · `}
         срок {request.deadline_text}
       </Typography.Text>
-      <Typography.Text variant="description" color="secondary">
-        {request.deadline_basis ?? NO_NORM}
-      </Typography.Text>
+      {request.deadline_basis && (
+        <Typography.Text variant="description" color="secondary">
+          {request.deadline_basis}
+        </Typography.Text>
+      )}
       {request.pp290_refs.length > 0 && <Pp290Refs refs={request.pp290_refs} />}
       {request.can_demo_expire && <DemoExpireButton requestId={request.id} />}
       {request.can_demo_neighbours && (
@@ -115,6 +116,64 @@ const DemoExpireButton = ({ requestId }: { requestId: number }) => {
         </Typography.Text>
       )}
     </>
+  );
+};
+
+const Pp290Refs = ({ refs }: { refs: string[] }) => {
+  const [open, setOpen] = useState(false);
+  const query = rqClient.useQuery(
+    "get",
+    "/api/pp290",
+    { params: authParams() },
+    { enabled: open, staleTime: Infinity },
+  );
+  const works = query.data?.items.filter((item) =>
+    refs.some((ref) => item.ref === ref || item.ref.startsWith(`${ref},`)),
+  );
+
+  return (
+    <details
+      className={styles.Works}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <Typography.Text asChild variant="description">
+        <summary className={styles.WorksTitle}>
+          Работы по минимальному перечню: ПП № 290, {refs.join(", ")}
+          <span className={styles.Chevron}>
+            <Chevron />
+          </span>
+        </summary>
+      </Typography.Text>
+      {query.isPending && (
+        <Typography.Text variant="description" color="secondary">
+          Загружаем пункты
+        </Typography.Text>
+      )}
+      {query.error && (
+        <Typography.Text variant="description" className={styles.Failed}>
+          {errorMessage(
+            query.error,
+            "Пункты не загрузились. Проверьте связь и откройте ещё раз",
+          )}
+        </Typography.Text>
+      )}
+      {works && (
+        <ul className={styles.WorksList}>
+          {works.map((work) => (
+            <Typography.Text
+              key={work.ref}
+              asChild
+              variant="description"
+              color="secondary"
+            >
+              <li>
+                {work.ref}: {work.text}
+              </li>
+            </Typography.Text>
+          ))}
+        </ul>
+      )}
+    </details>
   );
 };
 

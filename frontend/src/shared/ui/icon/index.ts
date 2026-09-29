@@ -1,6 +1,8 @@
 export { Icon } from "./icon";
 export { default as alertIcon } from "./alert.svg";
 export { default as arrowUpIcon } from "./arrow-up.svg";
+export { default as bellIcon } from "./bell.svg";
+export { default as boltIcon } from "./bolt.svg";
 export { default as buildingIcon } from "./building.svg";
 export { default as bulbIcon } from "./bulb.svg";
 export { default as cameraIcon } from "./camera.svg";
@@ -16,6 +18,7 @@ export { default as elevatorIcon } from "./elevator.svg";
 export { default as flameIcon } from "./flame.svg";
 export { default as geoPinIcon } from "./geo-pin.svg";
 export { default as globeIcon } from "./globe.svg";
+export { default as hardHatIcon } from "./hard-hat.svg";
 export { default as homeIcon } from "./home.svg";
 export { default as houseOutlineIcon } from "./house-outline.svg";
 export { default as infoIcon } from "./info.svg";

@@ -7,6 +7,7 @@ from zheka.base import ZhekaType
 from zheka.core.enums import (
     CANCEL_REASONS,
     CATEGORY_RULES,
+    CancelReason,
     DangerKind,
     PollAuthor,
     RequestCategory,
@@ -25,7 +26,6 @@ MY_APPOINTMENTS = "📅 Мои записи"
 OPEN_APP = "📱 Открыть приложение"
 CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
 MOMENT = "%H:%M %d.%m"
-NO_NORM = "Срок сервиса, норматива нет"
 
 REQUEST_STATUS_LABELS: Mapping[RequestStatus, str] = {
     RequestStatus.NEW: "Новая",
@@ -234,7 +234,7 @@ def request_created(request: Request, house: House) -> str:
         else f"🚨 Опасность: {DANGER_LABELS[request.danger]}\n"
     )
     return (
-        f"🆕 Заявка {_request(request.id, request.category)}\n"
+        f"{danger}🆕 Заявка {_request(request.id, request.category)}\n"
         f"🏢 {escape(house.address)}\n{REQUEST_PLACE_LINES[request.place]}\n"
         f"{deadline_lines(request, house)}"
     )
@@ -252,10 +252,9 @@ def verification_today(meter: str, serial: str) -> str:
 
 
 def deadline_lines(request: Request, house: House) -> str:
-    lines = [
-        f"⏰ Срок: до {house.local(request.deadline_at):{MOMENT}}",
-        f"📜 {CATEGORY_RULES[request.category].basis or NO_NORM}",
-    ]
+    lines = [f"⏰ Срок: до {house.local(request.deadline_at):{MOMENT}}"]
+    if basis := CATEGORY_RULES[request.category].basis:
+        lines.append(f"📜 {basis}")
     if request.status is RequestStatus.NEW and request.react_deadline_at is not None:
         lines.insert(
             0,
@@ -283,10 +282,13 @@ def request_overdue_staff(request: Request, house: House) -> str:
 
 
 def request_overdue_author(request: Request) -> str:
-    return (
-        f"🔴 Срок по заявке {_request(request.id, request.category)} истек\n"
-        f"📜 {CATEGORY_RULES[request.category].basis or NO_NORM}\n"
-        "📄 Можно подготовить жалобу в ГЖИ"
+    basis = CATEGORY_RULES[request.category].basis
+    return "\n".join(
+        [
+            f"🔴 Срок по заявке {_request(request.id, request.category)} истек",
+            *([f"📜 {basis}"] if basis else []),
+            "📄 Можно подготовить жалобу в ГЖИ",
+        ],
     )
 
 
@@ -545,6 +547,145 @@ def _quoted(text: str) -> str:
     if len(line) <= DIGEST_QUOTE_LIMIT:
         return escape(line)
     return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"
+
+
+def cancel_note(reason: CancelReason, comment: str) -> str:
+    parts = [CANCEL_REASONS[reason].lower()] if reason is not CancelReason.OTHER else []
+    if comment:
+        parts.append(comment)
+    return f"↩️ Отменена: {'. '.join(parts)}"
+
+
+def request_canceled(request: Request, reason: CancelReason, comment: str) -> str:
+    head = (
+        f"↩️ Житель отменил заявку {_request(request.id, request.category)}: "
+        f"{CANCEL_REASONS[reason].lower()}"
+    )
+    if not comment:
+        return head
+    head = f"{head}\n💬 "
+    return f"{head}{_fitted(comment, head)}"
+
+
+def request_card_canceled(request_id: RequestId) -> str:
+    return f"↩️ Заявка №{request_id} отменена автором"
+
+
+def group_card_canceled(category: RequestCategory) -> str:
+    return f"↩️ {CATEGORY_RULES[category].label}: жители отменили заявки"
+
+
+def resident_answered(request: Request, text: str) -> str:
+    head = f"💬 Житель ответил по заявке {_request(request.id, request.category)}\n\n"
+    return f"{head}{_fitted(text, head)}"
+
+
+def question_card(request_id: RequestId, category: RequestCategory, text: str) -> str:
+    head = (
+        f"❓ УК уточняет по заявке №{request_id} · {CATEGORY_RULES[category].label}\n\n"
+    )
+    return f"{head}{_fitted(text, head)}"
+
+
+NO_EMERGENCY_PHONE_TEXT = (
+    "🛠 Номер аварийной службы есть в квитанции и на доске объявлений в подъезде"
+)
+ORG_PHONE_TEXT = "🏢 Телефон УК: {org_phone}"
+DANGER_REQUEST_NOTE = "📝 Заявку можно оформить ниже, но сначала позвоните"
+DANGER_TEXTS: Mapping[DangerKind, str] = {
+    DangerKind.GAS: (
+        "🔥 Похоже, пахнет газом: не включайте свет и приборы, выйдите из квартиры "
+        "и звоните 104 или 112"
+    ),
+    DangerKind.FIRE: (
+        "🚨 Похоже на дым или пожар: звоните 112, уходите по лестнице, не на лифте"
+    ),
+    DangerKind.ELECTRIC: (
+        "⚡ Похоже, искрит проводка: не трогайте ее, отключите автомат в щитке, "
+        "если это безопасно, при дыме звоните 112"
+    ),
+    DangerKind.TRAPPED: (
+        "🛗 Похоже, в лифте застряли люди: нажмите кнопку связи в кабине и звоните "
+        "в аварийную службу, при угрозе здоровью - 112"
+    ),
+    DangerKind.FLOOD_ELECTRIC: (
+        "💧 Вода попала на проводку: не подходите к щиту и розеткам, звоните "
+        "в аварийную службу, при искрах - 112"
+    ),
+    DangerKind.LLM: "🚨 Похоже на аварию: при угрозе жизни и здоровью звоните 112",
+}
+DANGER_LABELS: Mapping[DangerKind, str] = {
+    DangerKind.GAS: "запах газа",
+    DangerKind.FIRE: "дым или огонь",
+    DangerKind.ELECTRIC: "искрит проводка",
+    DangerKind.TRAPPED: "застряли в лифте",
+    DangerKind.FLOOD_ELECTRIC: "вода на проводке",
+    DangerKind.LLM: "похоже на аварию",
+}
+
+
+def danger_warning(kind: DangerKind, org: Organization | None) -> str:
+    lines = [DANGER_TEXTS[kind]]
+    if org is not None and org.emergency_phone:
+        lines.append(f"🛠 Аварийная служба дома: {escape(org.emergency_phone)}")
+    else:
+        lines.append(NO_EMERGENCY_PHONE_TEXT)
+        if org is not None and org.phone.strip():
+            lines.append(ORG_PHONE_TEXT.format(org_phone=escape(org.phone.strip())))
+    return "\n".join(lines)
+
+
+def gji_pdf_sent(request_id: RequestId) -> str:
+    return (
+        f"📄 Жалоба по заявке №{request_id} для ГЖИ\n"
+        "✍️ Впишите ФИО и адрес, распечатайте и подпишите"
+    )
+
+
+def poll_notice(title: str, ends_at: datetime) -> str:
+    return f"🗳 Новый опрос «{title}», голосование до {ends_at:%d.%m.%Y}\n{POLL_NOT_OSS}"
+
+
+ANNOUNCEMENT_HASHTAG = "#объявление"
+
+DOCUMENTS_IN_APP = "📎 Документы в приложении"
+OPEN_DOCUMENTS = "📎 Открыть документы"
+
+
+def planned_works(
+    category: RequestCategory | None,
+    starts_at: datetime,
+    ends_at: datetime,
+) -> str:
+    until = (
+        f"{ends_at:%H:%M}"
+        if ends_at.date() == starts_at.date()
+        else f"{ends_at:%d.%m %H:%M}"
+    )
+    period = f"{starts_at:%d.%m %H:%M} - {until}"
+    if category is None:
+        return f"🚧 Плановые работы, {period}"
+    return f"🚧 Плановые работы: {CATEGORY_RULES[category].label}, {period}"
+
+
+def works_finished(category: RequestCategory | None) -> str:
+    if category is None:
+        return "✅ Плановые работы завершены"
+    return f"✅ Работы завершены: {CATEGORY_RULES[category].label}"
+
+
+def tenancy_ended(flat_number: str, address: str) -> str:
+    return (
+        f"🚪 Собственник завершил аренду кв. {escape(flat_number)}, "
+        f"{escape(address)}: доступ к квартире закрыт"
+    )
+
+
+def register_pdf_sent(created_at: datetime, address: str) -> str:
+    return (
+        f"📄 Реестр уведомлений по объявлению от {created_at:%d.%m.%Y}\n"
+        f"🏠 {escape(address)}"
+    )
 
 
 REQUEST_PLACE_LINES: Mapping[RequestPlace, str] = {

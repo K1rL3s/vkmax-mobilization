@@ -1,6 +1,8 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
+import { useBoolean } from "@siberiacancode/reactuse";
 import { Link } from "react-router-dom";
 
+import { cn } from "@/shared/lib/css";
 import { Routes } from "@/shared/model/routes";
 import { Card } from "@/shared/ui/card";
 import { Chevron } from "@/shared/ui/chevron";
@@ -221,7 +223,7 @@ const FaqPage = () => (
           ],
           [
             "Как настроить уведомления?",
-            "В профиле, раздел «Уведомления»: заявки, объявления и счётчики - со звуком, без звука или выключены. Важное по вашим заявкам и квартире приходит всегда",
+            "В профиле, «Уведомления и звук»: заявки, объявления и счётчики - со звуком, без звука или выключены. Важное по вашим заявкам и квартире приходит всегда",
           ],
           [
             "Что бот делает в чате дома?",
@@ -252,43 +254,13 @@ const FaqPage = () => (
           )}
           <div className={styles.Panel}>
             {section.items.map(([question, answer, basis, url]) => (
-              <details key={question} className={styles.Item}>
-                <summary className={styles.Question}>
-                  <Typography.Text
-                    variant="body-strong"
-                    color="primary"
-                    className={styles.Grow}
-                  >
-                    {question}
-                  </Typography.Text>
-                  <span className={styles.Chevron}>
-                    <Chevron />
-                  </span>
-                </summary>
-                <Typography.Text
-                  asChild
-                  variant="detail"
-                  color="secondary"
-                  className={styles.Answer}
-                >
-                  <p>{answer}</p>
-                </Typography.Text>
-                {basis && (
-                  <Typography.Text
-                    asChild
-                    variant="detail"
-                    color="secondary"
-                    className={styles.Answer}
-                  >
-                    <p>
-                      Основание:{" "}
-                      <a href={url} target="_blank" rel="noreferrer">
-                        {basis}
-                      </a>
-                    </p>
-                  </Typography.Text>
-                )}
-              </details>
+              <FaqItem
+                key={question}
+                question={question}
+                answer={answer}
+                basis={basis}
+                url={url}
+              />
             ))}
           </div>
         </section>
@@ -312,3 +284,66 @@ const FaqPage = () => (
 );
 
 export const Component = FaqPage;
+
+const FaqItem = ({
+  question,
+  answer,
+  basis,
+  url,
+}: {
+  question: string;
+  answer: string;
+  basis?: string;
+  url?: string;
+}) => {
+  const [open, toggle] = useBoolean();
+
+  return (
+    <div className={cn(styles.Item, open && styles.open)}>
+      <button
+        type="button"
+        aria-expanded={open}
+        className={styles.Question}
+        onClick={() => toggle()}
+      >
+        <Typography.Text
+          variant="body-strong"
+          color="primary"
+          className={styles.Grow}
+        >
+          {question}
+        </Typography.Text>
+        <span className={styles.Chevron}>
+          <Chevron />
+        </span>
+      </button>
+      <div className={styles.Body} inert={!open}>
+        <div className={styles.Clip}>
+          <Typography.Text
+            asChild
+            variant="detail"
+            color="secondary"
+            className={styles.Answer}
+          >
+            <p>{answer}</p>
+          </Typography.Text>
+          {basis && (
+            <Typography.Text
+              asChild
+              variant="detail"
+              color="secondary"
+              className={styles.Answer}
+            >
+              <p>
+                Основание:{" "}
+                <a href={url} target="_blank" rel="noreferrer">
+                  {basis}
+                </a>
+              </p>
+            </Typography.Text>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -1,20 +1,14 @@
 import { useEffect } from "react";
-import { useLocation, useNavigate, type To } from "react-router-dom";
-import { useLatest } from "@siberiacancode/reactuse";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { pushBackHandler } from "./back-button";
 
-export const useBackNavigation = (fallback: To) => {
+export const useBackNavigation = (active = true) => {
   const navigate = useNavigate();
   const { key } = useLocation();
-  const { ref: handler } = useLatest(() => {
-    if (key === "default") {
-      navigate(fallback, { replace: true });
-      return;
-    }
 
-    navigate(-1);
-  });
-
-  useEffect(() => pushBackHandler(() => handler.current()), [handler]);
+  useEffect(
+    () => (active ? pushBackHandler(() => void navigate(-1)) : undefined),
+    [active, navigate, key],
+  );
 };

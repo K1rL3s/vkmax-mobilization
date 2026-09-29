@@ -1,10 +1,12 @@
 import { useLayoutEffect } from "react";
 import { useMount } from "@siberiacancode/reactuse";
-import { Outlet, ScrollRestoration } from "react-router-dom";
+import { ScrollRestoration } from "react-router-dom";
 
 import { useTrack } from "@/shared/lib/analytics";
 import { getMaxLaunch } from "@/shared/lib/max";
 import { useTextSize } from "@/shared/model/session";
+
+import { ScreenTransition } from "./screen-transition";
 
 import "./globals.css";
 
@@ -28,7 +30,7 @@ export const App = () => {
   return (
     <div className={styles.Frame}>
       <div className={styles.App}>
-        <Outlet />
+        <ScreenTransition />
       </div>
       <ScrollRestoration />
     </div>

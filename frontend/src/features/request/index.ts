@@ -1,6 +1,5 @@
 export {
   CATEGORY_ICON,
-  NO_NORM,
   PLACE_LABEL,
   requestCategorySchema,
   ZONE_LABEL,

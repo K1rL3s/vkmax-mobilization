@@ -1,4 +1,4 @@
-import { redirect } from "react-router-dom";
+import { redirect, replace } from "react-router-dom";
 
 import { loadHouseCard } from "@/features/house";
 import {
@@ -36,13 +36,13 @@ export const welcomeLoader = async () => {
   const raw = getMaxLaunch().startParam;
 
   if (raw && parseStartParam(raw) && shouldHandleDeeplink(raw)) {
-    throw redirect(Routes.DEEPLINK);
+    throw replace(Routes.DEEPLINK);
   }
 
   const session = await loadSession();
 
   if (startTarget(session) !== "onboarding") {
-    throw redirect(defaultRouteForSession(session));
+    throw replace(defaultRouteForSession(session));
   }
 
   return null;

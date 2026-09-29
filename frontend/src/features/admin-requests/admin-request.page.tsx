@@ -99,22 +99,47 @@ const AdminRequestPage = () => {
           </Flex>
         </Flex>
 
-      <Flex align="center" wrap="wrap" gap={8}>
-        <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
-        <StatusPill tone="neutral">{request.category_label}</StatusPill>
-        <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
-        {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
-        {request.group_id != null && (
-          <Typography.Text asChild variant="description-strong">
-            <Link
-              className={styles.Link}
-              to={generatePath(Routes.ADMIN_REQUEST_GROUP, {
-                groupId: String(request.group_id),
-              })}
-            >
-              Коллективная · {request.group_size}{" "}
-              {plural(request.group_size, ["квартира", "квартиры", "квартир"])}
-            </Link>
+        <Flex align="center" wrap="wrap" gap={8}>
+          <StatusPill tone={tone}>{statusLabel(request, "staff")}</StatusPill>
+          <StatusPill tone="neutral">{request.category_label}</StatusPill>
+          <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
+          {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
+          {danger && <StatusPill tone="negative">{danger}</StatusPill>}
+          {thread && <StatusPill tone={thread.tone}>{thread.text}</StatusPill>}
+          {request.group_id != null && (
+            <Typography.Text asChild variant="description-strong">
+              <Link
+                className={styles.Link}
+                to={generatePath(Routes.ADMIN_REQUEST_GROUP, {
+                  groupId: String(request.group_id),
+                })}
+              >
+                Коллективная · {request.group_size}{" "}
+                {plural(request.group_size, [
+                  "квартира",
+                  "квартиры",
+                  "квартир",
+                ])}
+              </Link>
+            </Typography.Text>
+          )}
+          {request.parent_request_id != null && (
+            <Typography.Text asChild variant="description-strong">
+              <Link
+                className={styles.Link}
+                to={generatePath(Routes.ADMIN_REQUEST, {
+                  requestId: String(request.parent_request_id),
+                })}
+              >
+                Повторно по заявке №{request.parent_request_id}
+              </Link>
+            </Typography.Text>
+          )}
+        </Flex>
+
+        {danger && request.danger_phrase && (
+          <Typography.Text variant="description" color="secondary">
+            По словам «{request.danger_phrase}»
           </Typography.Text>
         )}
 
@@ -193,7 +218,10 @@ const AdminRequestPage = () => {
           <Typography.Text asChild variant="title" color="primary">
             <h2>Ход заявки</h2>
           </Typography.Text>
-          <RequestTimeline steps={buildTimeline(request, "staff")} />
+          <RequestTimeline
+            steps={buildTimeline(request, "staff")}
+            category={request.category}
+          />
         </section>
       </Flex>
 

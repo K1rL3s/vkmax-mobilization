@@ -31,16 +31,9 @@ const AdminPollsPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex align="stretch" direction="column" gapY={4}>
-        <Typography.Text asChild variant="header" color="primary">
-          <h1>Опросы</h1>
-        </Typography.Text>
-
-        <Typography.Text variant="description" color="secondary">
-          Предварительный сбор позиций собственников. Это не общее собрание
-          собственников (ОСС) по ЖК РФ
-        </Typography.Text>
-      </Flex>
+      <Typography.Text asChild variant="header" color="primary">
+        <h1>Опросы</h1>
+      </Typography.Text>
 
       {polls.isPending && <LoadingState fill title="Загружаем опросы" />}
 
@@ -97,6 +90,11 @@ const AdminPollsPage = () => {
           Показаны первые {items.length} из {total} опросов
         </Typography.Text>
       )}
+
+      <Typography.Text variant="description" color="secondary">
+        Предварительный сбор позиций собственников. Это не общее собрание
+        собственников (ОСС) по ЖК РФ
+      </Typography.Text>
     </Panel>
   );
 };

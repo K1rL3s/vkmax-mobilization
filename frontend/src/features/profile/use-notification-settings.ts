@@ -33,9 +33,6 @@ export const LEVEL_LABEL: Record<NotificationLevel, string> = {
   off: "Выключены",
 };
 
-export const ALWAYS_DELIVERED =
-  "Статусы ваших заявок, приёмка работ, записи на приём и запросы доступа в квартиру приходят всегда";
-
 export const settingsQueryOptions = () =>
   rqClient.queryOptions("get", "/api/me/notifications", {
     params: authParams(),

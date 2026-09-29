@@ -1,3 +1,4 @@
+import { canGoBack } from "./can-go-back";
 import { getWebApp } from "./web-app";
 
 type BackHandler = () => void;
@@ -18,14 +19,16 @@ const sync = () => {
     return;
   }
 
-  if (handlers.length > 0 && !dispatchAttached) {
+  const visible = canGoBack(handlers.length, window.history.state);
+
+  if (visible && !dispatchAttached) {
     backButton.onClick(dispatch);
     backButton.show();
     dispatchAttached = true;
     return;
   }
 
-  if (handlers.length === 0 && dispatchAttached) {
+  if (!visible && dispatchAttached) {
     backButton.offClick(dispatch);
     backButton.hide();
     dispatchAttached = false;

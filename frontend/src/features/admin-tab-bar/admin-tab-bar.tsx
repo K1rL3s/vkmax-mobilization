@@ -1,4 +1,4 @@
-import { Tappable, Typography } from "@maxhub/max-ui";
+import { Typography } from "@maxhub/max-ui";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import { cn } from "@/shared/lib/css";
@@ -14,6 +14,7 @@ import {
   navRequestsIcon,
   pollIcon,
 } from "@/shared/ui/icon";
+import { StripButton } from "@/shared/ui/strip-button";
 
 import styles from "./admin-tab-bar.module.css";
 
@@ -32,12 +33,7 @@ export const AdminTabBar = () => {
 
   return (
     <nav className={styles.AdminTabBar}>
-      <Tappable className={styles.Exit} onClick={leave}>
-        <Icon src={homeIcon} size={16} />
-        <Typography.Text variant="tag" color="primary">
-          {exit.label}
-        </Typography.Text>
-      </Tappable>
+      <StripButton icon={homeIcon} label={exit.label} onClick={leave} />
 
       <div className={styles.Tabs}>
         {[

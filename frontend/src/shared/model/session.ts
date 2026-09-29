@@ -146,6 +146,9 @@ export const useSession = () => {
     save: (next: Session) =>
       queryClient.setQueryData(sessionQueryOptions().queryKey, next),
     reload: reloadSession,
+    openedOrg: workingOrgs(session).find(
+      (org) => org.org_id === selection.orgId,
+    ),
   };
 };
 

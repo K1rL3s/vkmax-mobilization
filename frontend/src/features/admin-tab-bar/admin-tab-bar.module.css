@@ -9,15 +9,6 @@
   background-color: var(--background-primary);
 }
 
-.Exit {
-  display: flex;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: var(--text-primary);
-}
-
 .Tabs {
   display: flex;
   padding: 2px 0;

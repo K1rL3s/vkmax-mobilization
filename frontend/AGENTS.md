@@ -51,9 +51,12 @@ Knows every feature; nothing imports it.
   and each page keeps its own chunk.
 - Chrome lives in layout routes, never in pages: one renders `TabBar` under
   root tabs; `PushedPage` turns on the MAX header back button for screens
-  pushed over a root (`fallback` is where back goes without history). There
-  is no in-app back bar: the app opens only inside MAX, whose header always
-  has the back arrow. A screen never wires back itself: place it under the
+  pushed over a root, only while there is in-app history to go back to
+  (`canGoBack`: `history.state.idx > 0`); on the first entry the button
+  stays hidden and MAX shows its close cross. Launch loaders
+  (`welcomeLoader`, `deeplinkLoader`) redirect with `replace`, so a startapp
+  target is the first entry. There is no in-app back or close button: the
+  app opens only inside MAX, whose header always has one of them. A screen never wires back itself: place it under the
   right layout.
 - `protected-loader.ts`: `protectedLoader` on the pathless route wrapping
   every in-app screen redirects to `Routes.OUTSIDE_MAX` when `isInsideMax` is
@@ -65,6 +68,14 @@ Knows every feature; nothing imports it.
   so a step done outside the app shows up without a manual check button.
 - `app.tsx` renders `ScrollRestoration`: a pushed screen opens at the top and
   back restores the old position, so a page never scrolls itself on mount.
+- `screen-transition.tsx` wraps the root outlet with `motion`: a push slides
+  the new screen up from the bottom, back slides it down, a replace
+  crossfades; only transform and opacity animate, and reduced motion drops
+  the slide. The leaving screen keeps its own route through a frozen
+  `LocationContext` and router state (so its `useSearchParams` never sees the
+  next URL) and turns `position: fixed` at its old scroll offset. Tab switches
+  do not animate: a layout with a tab bar carries `handle: "tabs"` in
+  `router.tsx`, and its route id is the screen key.
 - `app.tsx` alone imports `globals.css`, the only global stylesheet: max-ui
   styles, `color-scheme: light dark` on `:root`, and two resets
   (`-webkit-tap-highlight-color: transparent`; `:where(:focus) { outline:

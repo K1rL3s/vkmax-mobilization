@@ -16,6 +16,7 @@ import { useSession, workingOrgs } from "@/shared/model/session";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   alertIcon,
+  bellIcon,
   buildingIcon,
   bulbIcon,
   clockIcon,
@@ -30,12 +31,7 @@ import { StatusPill } from "@/shared/ui/status-pill";
 
 import { PhonePanel } from "./phone-panel";
 import { useForgetMe } from "./use-forget-me";
-import {
-  ALWAYS_DELIVERED,
-  CATEGORIES,
-  LEVEL_LABEL,
-  settingsQueryOptions,
-} from "./use-notification-settings";
+import { settingsQueryOptions } from "./use-notification-settings";
 
 import styles from "./profile.module.css";
 
@@ -204,48 +200,25 @@ const ProfilePage = () => {
 
       <PhonePanel />
 
-      <Flex asChild align="stretch" direction="column" gap={8}>
-        <section>
-          <Typography.Text asChild variant="title" color="primary">
-            <h2>Уведомления</h2>
-          </Typography.Text>
-          <div className={styles.Panel}>
-            {CATEGORIES.map(({ category, title, icon }, index) => {
-              const level = notifications.data?.settings.find(
-                (item) => item.category === category,
-              )?.level;
-              const label = notifications.isError
-                ? "Не удалось загрузить"
-                : level && LEVEL_LABEL[level];
-
-              return (
-                <CellSimple
-                  key={category}
-                  separator={index > 0}
-                  before={<Icon src={icon} className={styles.CellIcon} />}
-                  title={title}
-                  after={
-                    label && (
-                      <Typography.Text
-                        variant="body"
-                        color="secondary"
-                        className={styles.Level}
-                      >
-                        {label}
-                      </Typography.Text>
-                    )
-                  }
-                  showChevron
-                  onClick={() => void navigate(Routes.NOTIFICATIONS)}
-                />
-              );
-            })}
-          </div>
-          <Typography.Text variant="description" color="tertiary">
-            {ALWAYS_DELIVERED}
-          </Typography.Text>
-        </section>
-      </Flex>
+      <div className={styles.Panel}>
+        <CellSimple
+          before={<Icon src={bellIcon} className={styles.CellIcon} />}
+          title="Уведомления и звук"
+          after={
+            notifications.isError && (
+              <span
+                role="img"
+                aria-label="Не удалось загрузить настройки"
+                className={styles.Attention}
+              >
+                !
+              </span>
+            )
+          }
+          showChevron
+          onClick={() => void navigate(Routes.NOTIFICATIONS)}
+        />
+      </div>
 
       <Flex asChild align="stretch" direction="column" gap={8}>
         <section>

@@ -3,6 +3,7 @@ import { Button, Flex, Textarea, Typography } from "@maxhub/max-ui";
 import { useWatch } from "react-hook-form";
 
 import { cn } from "@/shared/lib/css";
+import { endSentence } from "@/shared/lib/format";
 
 import { verificationFormConstraints } from "../domain/verification-form-constraints";
 import { useRejectForm } from "../model/use-reject-form";
@@ -70,8 +71,8 @@ export const RejectDialog = ({
           </Typography.Text>
 
           <Typography.Text variant="description" color="secondary">
-            Кв. {request.flat_number}, {request.user_name}. Причину житель
-            увидит в своей карточке подтверждения и получит сообщением.
+            Кв. {request.flat_number}, {endSentence(request.user_name)} Причину
+            житель увидит в своей карточке подтверждения и получит сообщением.
           </Typography.Text>
 
           <Flex align="center" gap={8} wrap="wrap">

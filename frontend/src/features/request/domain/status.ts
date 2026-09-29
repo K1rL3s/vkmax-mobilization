@@ -40,10 +40,7 @@ export const currentActor = (
     if (audience === "resident") return "Вы: проверьте работу";
     return author == null ? "УК проверяет работу" : "Житель проверяет работу";
   }
-  if (!executor) return "УК подбирает исполнителя";
-  return status === "accepted"
-    ? `${executor} готовится к выезду`
-    : `${executor} выполняет работы`;
+  return executor || audience === "staff" ? null : "УК подбирает исполнителя";
 };
 
 export const statusLabel = (

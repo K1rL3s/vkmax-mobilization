@@ -43,8 +43,6 @@ export const ZONE_LABEL: Record<ResponsibilityZone, string> = {
   municipality: "Муниципалитет",
 };
 
-export const NO_NORM = "Срок сервиса, норматива нет";
-
 export const PLACE_LABEL: Record<RequestPlace, string> = {
   flat: "Личная",
   house: "Общая",

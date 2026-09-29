@@ -4,7 +4,7 @@
   z-index: 2;
   margin-top: auto;
   display: flex;
-  padding: 4px 0;
+  flex-direction: column;
   border-top: 1px solid var(--divider-primary);
   background-color: var(--background-primary);
 }
@@ -23,4 +23,23 @@
 
 .TabActive {
   color: var(--button-primary);
+}
+
+.Tabs {
+  display: flex;
+  padding: 4px 0;
+
+  * + & {
+    border-top: 1px solid var(--divider-primary);
+  }
+}
+
+.SheetTitle {
+  margin: 0;
+}
+
+.Orgs {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-secondary);
 }

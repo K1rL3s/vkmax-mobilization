@@ -25,10 +25,15 @@ from zheka.core.enums import (
     ResidentStatus,
 )
 from zheka.core.errors import EntityNotFound
-from zheka.core.ids import HouseId, OrgId, UserId
-from zheka.core.models import Request
+from zheka.core.ids import HouseId, OrgId, RequestId, UserId
+from zheka.core.models import House, Request
 from zheka.core.services.requests import RequestDraft
-from zheka.core.texts import COMPLAINT_BUTTON, REQUEST_PLACE_LINES
+from zheka.core.texts import (
+    COMPLAINT_BUTTON,
+    REQUEST_PLACE_LINES,
+    deadline_lines,
+    request_overdue_author,
+)
 from zheka.infra.database.models import OrgMember
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
@@ -406,3 +411,41 @@ async def test_the_demo_button_keeps_a_missing_react_deadline(
 
     assert card.request.deadline_at == now - timedelta(minutes=1)
     assert card.request.react_deadline_at is None
+
+
+@pytest.mark.parametrize(
+    ("category", "basis"),
+    [
+        (RequestCategory.LEAK, "📜 ПП РФ № 416, п. 13"),
+        (RequestCategory.ELEVATOR, None),
+    ],
+    ids=["norm", "no-norm"],
+)
+def test_the_basis_line_goes_only_with_a_norm(
+    category: RequestCategory,
+    basis: str | None,
+) -> None:
+    request = Request(
+        id=RequestId(7),
+        created_at=datetime(2026, 9, 1, tzinfo=UTC),
+        deadline_at=datetime(2026, 9, 2, tzinfo=UTC),
+        house_id=HouseId(1),
+        category=category,
+        description="",
+        status=RequestStatus.IN_PROGRESS,
+        channel=RequestChannel.MINIAPP,
+    )
+    house = House(
+        region="Москва",
+        city="Москва",
+        street="ул. Тверская",
+        building="д. 1",
+        chat_binding_code="code",
+        timezone="Europe/Moscow",
+    )
+
+    for text in (deadline_lines(request, house), request_overdue_author(request)):
+        lines = text.split("\n")
+        assert [line for line in lines if line.startswith("📜")] == (
+            [basis] if basis else []
+        )

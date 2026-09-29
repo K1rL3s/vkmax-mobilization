@@ -1,11 +1,11 @@
 import { MaxUI } from "@maxhub/max-ui";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { useIsPresent } from "motion/react";
 import {
   createBrowserRouter,
   Outlet,
   redirect,
   RouterProvider,
-  type To,
 } from "react-router-dom";
 import { App } from "./app";
 import { Component as ErrorPage } from "@/features/error/error.page";
@@ -25,8 +25,8 @@ import { useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { LoadingState } from "@/shared/ui/state";
 
-const PushedPage = ({ fallback }: { fallback: To }) => {
-  useBackNavigation(fallback);
+const PushedPage = () => {
+  useBackNavigation(useIsPresent());
 
   return <Outlet />;
 };
@@ -57,7 +57,7 @@ const router = createBrowserRouter([
             lazy: () => import("@/features/deeplink/deeplink.page"),
           },
           {
-            element: <PushedPage fallback={Routes.WELCOME} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.PRIVACY,
@@ -77,7 +77,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
-            element: <PushedPage fallback={Routes.REQUESTS} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.REQUEST_NEW,
@@ -91,7 +91,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
-            element: <PushedPage fallback={Routes.MEETINGS} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.MEETING,
@@ -113,7 +113,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
-            element: <PushedPage fallback={Routes.HOME} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.FLAT,
@@ -149,7 +149,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
-            element: <PushedPage fallback={Routes.FLAT} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.CHARGES,
@@ -163,7 +163,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
-            element: <PushedPage fallback={Routes.PROFILE} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.HOUSE_CARD,
@@ -181,7 +181,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
-            element: <PushedPage fallback={Routes.HOUSE_CARD} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.APPOINTMENTS,
@@ -195,7 +195,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
-            element: <PushedPage fallback={Routes.APPOINTMENTS} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.APPOINTMENT,
@@ -204,7 +204,7 @@ const router = createBrowserRouter([
             ],
           },
           {
-            element: <PushedPage fallback={Routes.HOME} />,
+            element: <PushedPage />,
             children: [
               {
                 path: Routes.FLAT_CONFIRMATION,
@@ -222,6 +222,7 @@ const router = createBrowserRouter([
           },
           {
             loader: onboardedLoader,
+            handle: "tabs",
             element: (
               <>
                 <Outlet />
@@ -255,6 +256,7 @@ const router = createBrowserRouter([
                 loader: () => redirect(Routes.ADMIN_REQUESTS),
               },
               {
+                handle: "tabs",
                 element: (
                   <>
                     <Outlet />
@@ -295,7 +297,7 @@ const router = createBrowserRouter([
                 ],
               },
               {
-                element: <PushedPage fallback={Routes.ADMIN_REQUESTS} />,
+                element: <PushedPage />,
                 children: [
                   {
                     path: Routes.ADMIN_REQUEST,
@@ -315,7 +317,7 @@ const router = createBrowserRouter([
                 ],
               },
               {
-                element: <PushedPage fallback={Routes.ADMIN_ANNOUNCEMENTS} />,
+                element: <PushedPage />,
                 children: [
                   {
                     path: Routes.ADMIN_ANNOUNCEMENT_NEW,
@@ -330,7 +332,7 @@ const router = createBrowserRouter([
                 ],
               },
               {
-                element: <PushedPage fallback={Routes.ADMIN_POLLS} />,
+                element: <PushedPage />,
                 children: [
                   {
                     path: Routes.ADMIN_POLL,
@@ -345,7 +347,7 @@ const router = createBrowserRouter([
                 ],
               },
               {
-                element: <PushedPage fallback={Routes.ADMIN_RECEPTION} />,
+                element: <PushedPage />,
                 children: [
                   {
                     path: Routes.ADMIN_ACCESS,
@@ -360,7 +362,7 @@ const router = createBrowserRouter([
                 ],
               },
               {
-                element: <PushedPage fallback={Routes.ADMIN_HOUSES} />,
+                element: <PushedPage />,
                 children: [
                   {
                     path: Routes.ADMIN_HOUSE,
@@ -389,7 +391,7 @@ const router = createBrowserRouter([
                 ],
               },
               {
-                element: <PushedPage fallback={Routes.ADMIN_VERIFICATIONS} />,
+                element: <PushedPage />,
                 children: [
                   {
                     path: Routes.ADMIN_VERIFICATION,
@@ -399,7 +401,7 @@ const router = createBrowserRouter([
                 ],
               },
               {
-                element: <PushedPage fallback={Routes.ADMIN_ANALYTICS} />,
+                element: <PushedPage />,
                 children: [
                   {
                     path: Routes.ADMIN_BENCHMARK,

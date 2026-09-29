@@ -42,6 +42,12 @@ const PollPage = () => {
           <h1>{poll.title}</h1>
         </Typography.Text>
 
+        {poll.description && (
+          <Typography.Text variant="body" color="primary">
+            {poll.description}
+          </Typography.Text>
+        )}
+
         <Typography.Text variant="description" color="secondary">
           {authorCaption(poll.created_by_role)} · {deadlineLabel(poll)}
         </Typography.Text>
@@ -52,16 +58,6 @@ const PollPage = () => {
           </Typography.Text>
         )}
       </Flex>
-
-      {poll.description && (
-        <Typography.Text variant="body" color="primary">
-          {poll.description}
-        </Typography.Text>
-      )}
-
-      <Typography.Text className={styles.Disclaimer} variant="description">
-        Это {poll.disclaimer}
-      </Typography.Text>
 
       <Flex align="stretch" direction="column" gap={8}>
         {poll.options.map((option) => (
@@ -159,6 +155,10 @@ const PollPage = () => {
           Завершить опрос
         </Button>
       )}
+
+      <Typography.Text className={styles.Disclaimer} variant="description">
+        Это {poll.disclaimer}
+      </Typography.Text>
 
       <ConfirmDialog
         isOpen={closing.isOpen}

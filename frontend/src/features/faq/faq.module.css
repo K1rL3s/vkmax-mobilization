@@ -29,17 +29,17 @@
 
   .Question {
     display: flex;
+    width: 100%;
     align-items: center;
     gap: 12px;
     box-sizing: border-box;
     min-height: 56px;
     padding: 8px 12px;
-    list-style: none;
+    border: 0;
+    background: none;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
-
-    &::-webkit-details-marker {
-      display: none;
-    }
 
     &:focus-visible {
       border-radius: 16px;
@@ -59,16 +59,47 @@
     transition: transform 0.2s;
   }
 
-  .Item[open] .Chevron {
+  .open .Chevron {
     transform: rotate(-90deg);
   }
 
   .Answer {
-    margin: -8px 0 0;
+    margin: 0;
     padding: 0 12px 12px;
 
     a {
       color: var(--text-themed);
+    }
+  }
+
+  .Body {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 0.2s ease-out,
+      margin-top 0.2s ease-out,
+      opacity 0.2s ease-out;
+  }
+
+  .open .Body {
+    grid-template-rows: 1fr;
+    margin-top: -8px;
+    opacity: 1;
+  }
+
+  .Clip {
+    overflow: hidden;
+  }
+
+  .Answer + .Answer {
+    margin-top: -8px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .Chevron,
+    .Body {
+      transition: none;
     }
   }
 }

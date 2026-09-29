@@ -22,11 +22,11 @@ import {
 import { buildTimeline } from "./domain/timeline";
 import { useRequest } from "./model/use-request";
 import { ReviewPanel } from "./review";
-import { Answers } from "./ui/answers";
 import { CancelPanel } from "./ui/cancel-panel";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
 import { LetterPanel } from "./ui/letter-panel";
+import { MessageThread } from "./ui/message-thread";
 import { QuestionPanel } from "./ui/question-panel";
 import { RatePanel } from "./ui/rate-panel";
 import { ReplyForm } from "./ui/reply-form";
@@ -53,6 +53,7 @@ const RequestPage = () => {
   const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
   const actor = currentActor(request);
   const letter = house.data && requestLetter(request, house.data, zone);
+  const canWrite = !isFinished(request.status);
   const water =
     request.category === "water_supply"
       ? house.data?.services.find((service) => service.kind === "water")
@@ -102,8 +103,9 @@ const RequestPage = () => {
           </Flex>
         </Flex>
 
-        <Flex align="center" gap={8}>
+        <Flex align="center" wrap="wrap" gap={8}>
           <StatusPill tone={tone}>{statusLabel(request)}</StatusPill>
+          <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
           {request.group_size > 1 && (
             <StatusPill tone="neutral">
               {request.group_size}{" "}
@@ -113,15 +115,10 @@ const RequestPage = () => {
           )}
         </Flex>
 
-      <Flex align="center" wrap="wrap" gap={8}>
-        <StatusPill tone={tone}>{STATUS_LABEL[request.status]}</StatusPill>
-        <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
-        {request.group_size > 1 && (
-          <StatusPill tone="neutral">
-            {request.group_size}{" "}
-            {plural(request.group_size, ["квартира", "квартиры", "квартир"])} в
-            заявке
-          </StatusPill>
+        {actor && (
+          <Typography.Text variant="description" color="secondary">
+            Сейчас: {actor}
+          </Typography.Text>
         )}
       </Flex>
 
@@ -199,7 +196,10 @@ const RequestPage = () => {
           <Typography.Text asChild variant="title" color="primary">
             <h2>Ход заявки</h2>
           </Typography.Text>
-          <RequestTimeline steps={buildTimeline(request)} />
+          <RequestTimeline
+            steps={buildTimeline(request)}
+            category={request.category}
+          />
         </section>
       </Flex>
 
@@ -209,9 +209,7 @@ const RequestPage = () => {
             <Typography.Text asChild variant="title" color="primary">
               <h2>Переписка</h2>
             </Typography.Text>
-            {request.messages.length > 0 && (
-              <Answers messages={request.messages} />
-            )}
+            <MessageThread messages={request.messages} ownRole="resident" />
             {canWrite && !request.question_asked_at && (
               <ReplyForm requestId={request.id} />
             )}

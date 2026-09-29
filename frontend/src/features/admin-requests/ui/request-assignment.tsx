@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, CellSimple, Spinner, Typography } from "@maxhub/max-ui";
 
+import { endSentence } from "@/shared/lib/format";
 import { FieldError } from "@/shared/ui/field-error";
 import { checkIcon, Icon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
@@ -29,7 +30,7 @@ export const RequestAssignment = ({ request }: { request: AdminRequest }) => {
 
       <Typography.Text variant="description" color="secondary">
         {request.executor_name
-          ? `Работает ${request.executor_name}. Нажмите на другого, чтобы переназначить.`
+          ? `Работает ${endSentence(request.executor_name)} Нажмите на другого, чтобы переназначить.`
           : "Не назначен. Нажмите на сотрудника - заявка уйдёт ему."}
       </Typography.Text>
 

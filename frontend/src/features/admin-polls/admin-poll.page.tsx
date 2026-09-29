@@ -48,6 +48,12 @@ const AdminPollPage = () => {
             </StatusPill>
           </Flex>
 
+          {poll.description && (
+            <Typography.Text variant="body" color="primary">
+              {poll.description}
+            </Typography.Text>
+          )}
+
           {address && (
             <Typography.Text variant="body" color="secondary">
               {address}
@@ -59,16 +65,6 @@ const AdminPollPage = () => {
             {poll.is_multiple && " · можно выбрать несколько вариантов"}
           </Typography.Text>
         </Flex>
-
-        {poll.description && (
-          <Typography.Text variant="body" color="primary">
-            {poll.description}
-          </Typography.Text>
-        )}
-
-        <Typography.Text variant="description" color="secondary">
-          Это {poll.disclaimer}
-        </Typography.Text>
 
         <Flex align="stretch" direction="column" gap={8}>
           {poll.options.map((option) => (
@@ -100,6 +96,9 @@ const AdminPollPage = () => {
             </Link>
           </Button>
         )}
+        <Typography.Text variant="description" color="secondary">
+          Это {poll.disclaimer}
+        </Typography.Text>
       </div>
 
       {isActive && (

@@ -1,11 +1,7 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
 import type { EmergencyContact } from "@/features/emergency";
-import {
-  NO_NORM,
-  ZONE_LABEL,
-  type RequestCategoryItem,
-} from "@/features/request";
+import { ZONE_LABEL, type RequestCategoryItem } from "@/features/request";
 import { alertIcon, buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
 
 import styles from "./category-info.module.css";
@@ -51,9 +47,11 @@ export const CategoryInfo = ({
           <Typography.Text variant="body-strong" color="primary">
             Срок - {category.deadline_text}
           </Typography.Text>
-          <Typography.Text variant="description" color="secondary">
-            {category.deadline_basis ?? NO_NORM}
-          </Typography.Text>
+          {category.deadline_basis && (
+            <Typography.Text variant="description" color="secondary">
+              {category.deadline_basis}
+            </Typography.Text>
+          )}
         </Flex>
       </Flex>
 

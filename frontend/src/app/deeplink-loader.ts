@@ -1,4 +1,4 @@
-import { generatePath, redirect } from "react-router-dom";
+import { generatePath, replace } from "react-router-dom";
 
 import {
   defaultRouteForSession,
@@ -26,12 +26,12 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
   const session = await loadSession();
 
   if (!raw || !command) {
-    throw redirect(defaultRouteForSession(session));
+    throw replace(defaultRouteForSession(session));
   }
 
   if (command.kind === "path" && command.path === Routes.PRIVACY) {
     ignoreDeeplink(raw);
-    throw redirect(Routes.PRIVACY);
+    throw replace(Routes.PRIVACY);
   }
 
   if (session.consent_at === null) {
@@ -39,7 +39,7 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
   }
 
   if (!shouldHandleDeeplink(raw)) {
-    throw redirect(defaultRouteForSession(session));
+    throw replace(defaultRouteForSession(session));
   }
 
   if (command.kind === "invite") {
@@ -61,13 +61,13 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
       return { status: "no-access", route: defaultRouteForSession(session) };
     }
 
-    throw redirect(route);
+    throw replace(route);
   }
 
   const attempt = await runDeeplinkOnce(raw, () => executeDeeplink(command));
 
   if (attempt.status === "ignored") {
-    throw redirect(defaultRouteForSession(session));
+    throw replace(defaultRouteForSession(session));
   }
 
   if (attempt.status === "failed") {
@@ -80,14 +80,14 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
   }
 
   if (command.kind === "house" && command.category !== null) {
-    throw redirect(newRequestRoute(command.category));
+    throw replace(newRequestRoute(command.category));
   }
 
   if (command.kind === "obj") {
-    throw redirect(newRequestRoute(command.category, command.entrance));
+    throw replace(newRequestRoute(command.category, command.entrance));
   }
 
-  throw redirect(
+  throw replace(
     attempt.value.target === "resident" ? Routes.HOME : Routes.ADMIN_REQUESTS,
   );
 };

@@ -86,3 +86,6 @@ export const formatShortDay = (iso: string) =>
   shortDayFormat.format(new Date(iso));
 
 export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+
+export const endSentence = (text: string) =>
+  text.endsWith(".") ? text : `${text}.`;

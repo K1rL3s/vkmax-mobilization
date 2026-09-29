@@ -38,11 +38,6 @@
     white-space: nowrap;
   }
 
-  .Level {
-    margin-right: 4px;
-    white-space: nowrap;
-  }
-
   .CellIcon {
     color: var(--icon-primary);
   }
@@ -80,4 +75,18 @@
 
 .Failed {
   color: var(--text-negative);
+}
+
+.Attention {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  border-radius: 50%;
+  background-color: var(--counter-attention);
+  color: var(--text-primary-inverse-static);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label-strong);
 }
