@@ -29,7 +29,7 @@ from zheka.bot.handlers.requests.handlers import (
     on_start,
 )
 from zheka.bot.states import Menu, NewRequest, Onboarding
-from zheka.bot.voice import VOICE_PENDING
+from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
 from zheka.core.texts import OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
@@ -82,7 +82,7 @@ request_dialog = Dialog(
     ),
     Window(
         Multi(
-            Format("{error}", when=F["error"]),
+            Const(VOICE_FAILED, when=F["voice_failed"]),
             Const(DESCRIPTION_TEXT),
             Format(DESCRIPTION_PHOTOS_TEXT, when=F["photos"]),
             Const(VOICE_PENDING, when=F["voice_pending"]),

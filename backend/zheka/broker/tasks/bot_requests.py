@@ -56,7 +56,7 @@ async def transcribe_voice(
         data.description = text
         state = NewRequest.photo if in_draft else NewRequest.category
     elif in_draft:
-        data.error = VOICE_FAILED
+        data.voice_failed = True
         state = NewRequest.description
     else:
         await sender.send_message(VOICE_FAILED, user_id=user.max_user_id)

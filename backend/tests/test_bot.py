@@ -4311,6 +4311,10 @@ async def test_a_voice_never_transcribed_asks_for_text(
     text = _text(message_manager)
     assert text.startswith(VOICE_FAILED)
     assert DESCRIPTION_TEXT in text
+    await client.send(VOICE)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    assert _text(message_manager) == SENT_TEXT
 
 
 async def test_a_voice_in_the_menu_starts_a_request_or_waits_for_the_transcript(
@@ -4791,3 +4795,30 @@ async def test_a_meter_photo_past_the_yandex_quota_is_not_recognized(
     await _recognized_card(bot_session, client, task_broker, meter_id)
 
     assert METER_UNREADABLE_TEXT in _text(message_manager)
+
+
+@pytest.mark.usefixtures("instant_retries")
+async def test_a_voice_outside_a_draft_never_transcribed_asks_for_text(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    await client.send("/start")
+    _reread(fake_bot, monkeypatch, [None, None])
+
+    await _run(
+        task_broker,
+        transcribe_voice,
+        user_id=(await _user(bot_session, client)).id,
+        mid="voice-1",
+        draft=NewRequestData().to_data(),
+        in_draft=False,
+    )
+
+    assert notices.texts[-1] == VOICE_FAILED
+    assert GREETING in _text(message_manager)

@@ -67,7 +67,7 @@ async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
         "description": escape(data.description),
         "photos": len(data.photos),
         "voice_pending": data.voice_pending,
-        "error": data.error,
+        "voice_failed": data.voice_failed,
     }
 
 
@@ -116,7 +116,7 @@ async def on_description(
 async def _describe(dialog_manager: DialogManager, description: str) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
         data.description = description
-        data.error = None
+        data.voice_failed = False
         data.voice_pending = False
     await dialog_manager.switch_to(NewRequest.photo)
 
@@ -134,7 +134,7 @@ async def on_description_voice(
         return
     with NewRequestData.proxy(dialog_manager) as data:
         data.voice_pending = True
-        data.error = None
+        data.voice_failed = False
         draft = data.to_data()
     publish_transcription(
         publisher,

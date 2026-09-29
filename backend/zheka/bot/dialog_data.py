@@ -91,6 +91,7 @@ class NewRequestData(BaseDialogData):
     deadline: str | None = None
     error: str | None = None
     voice_pending: bool = False
+    voice_failed: bool = False
 
     def attach_photos(self, body: MessageBody) -> None:
         for attach in body.attachments or []:
