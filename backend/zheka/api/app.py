@@ -33,6 +33,7 @@ from zheka.api.routes import (
     meters,
     orgs,
     polls,
+    proposals,
     reception,
     requests,
 )
@@ -136,6 +137,7 @@ def app_factory(
         meters,
         charges,
         polls,
+        proposals,
         announcements,
         reception,
         orgs,

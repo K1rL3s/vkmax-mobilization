@@ -27,6 +27,7 @@ from zheka.infra.database.tables.polls import (
     poll_votes_table,
     polls_table,
 )
+from zheka.infra.database.tables.proposals import council_proposals_table
 from zheka.infra.database.tables.reception import (
     appointments_table,
     reception_windows_table,
@@ -72,6 +73,7 @@ mapper_registry.map_imperatively(models.Reading, readings_table)
 mapper_registry.map_imperatively(models.Poll, polls_table)
 mapper_registry.map_imperatively(models.PollOption, poll_options_table)
 mapper_registry.map_imperatively(models.PollVote, poll_votes_table)
+mapper_registry.map_imperatively(models.CouncilProposal, council_proposals_table)
 mapper_registry.map_imperatively(models.ReceptionWindow, reception_windows_table)
 mapper_registry.map_imperatively(models.Appointment, appointments_table)
 mapper_registry.map_imperatively(models.Request, requests_table)

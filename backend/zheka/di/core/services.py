@@ -25,6 +25,7 @@ from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.polls import PollsService
 from zheka.core.services.profile import ProfileService
+from zheka.core.services.proposals import ProposalsService
 from zheka.core.services.readings import ReadingsService
 from zheka.core.services.reception import ReceptionService
 from zheka.core.services.reminders import RemindersService
@@ -54,6 +55,7 @@ class ServicesProvider(Provider):
         MetersService,
         ChargesService,
         PollsService,
+        ProposalsService,
         AdminReadingsService,
         AdminRequestsService,
         AnnouncementsService,

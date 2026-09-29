@@ -116,6 +116,26 @@ def reading_window_closing(days: int) -> str:
     )
 
 
+def proposal_for_chairman(text: str) -> str:
+    return (
+        "💡 Новое предложение по дому\n"
+        f"🖊 {escape(text)}\n"
+        "👤 Автор скрыт: предложения анонимны"
+    )
+
+
+def proposal_answered(text: str, answer: str | None, *, accepted: bool) -> str:
+    head = (
+        "✅ Председатель принял ваше предложение"
+        if accepted
+        else "❌ Председатель отклонил ваше предложение"
+    )
+    lines = [head, f"🖊 {escape(text)}"]
+    if answer is not None:
+        lines.append(f"💬 {escape(answer)}")
+    return "\n".join(lines)
+
+
 def poll_reminder(title: str, ends_at: datetime) -> str:
     return (
         f"🗳 Идет опрос «{escape(title)}», голосование закончится "

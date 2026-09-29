@@ -9,6 +9,7 @@ from zheka.core.models.invites import FlatInvite, OrgInvite
 from zheka.core.models.meters import Meter, Reading
 from zheka.core.models.organizations import OrgMember, OrgSettings, Organization
 from zheka.core.models.polls import Poll, PollOption, PollVote
+from zheka.core.models.proposals import CouncilProposal
 from zheka.core.models.reception import Appointment, ReceptionWindow
 from zheka.core.models.requests import (
     Request,
@@ -37,6 +38,7 @@ __all__ = (
     "Chat",
     "ChatCard",
     "ChatPin",
+    "CouncilProposal",
     "DemandSignal",
     "Event",
     "Flat",

@@ -6,6 +6,7 @@ import { pollIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { usePollList } from "./model/use-poll-list";
+import { ProposalsSection } from "./proposals";
 import { PollRow } from "./ui/poll-row";
 
 import styles from "./meetings.module.css";
@@ -42,16 +43,15 @@ const MeetingsPage = () => {
       )}
 
       {list.isConnected && list.isPending && (
-        <LoadingState fill title="Загружаем опросы" />
+        <LoadingState title="Загружаем опросы" />
       )}
 
       {list.isConnected && list.isError && (
-        <ErrorState error={list.loadError} fill onRetry={list.retry} />
+        <ErrorState error={list.loadError} onRetry={list.retry} />
       )}
 
       {list.isConnected && !list.isPending && !list.isError && list.isEmpty && (
         <EmptyState
-          fill
           icon={pollIcon}
           title="Опросов пока нет"
           description="Здесь появятся опросы дома. Их заводит председатель совета дома или управляющая компания."
@@ -77,6 +77,8 @@ const MeetingsPage = () => {
           </section>
         </Flex>
       ))}
+
+      <ProposalsSection />
     </Panel>
   );
 };

@@ -13,6 +13,7 @@ from zheka.core.enums.meters import (
 from zheka.core.enums.notifications import NotificationCategory, NotificationLevel
 from zheka.core.enums.orgs import OrgRole
 from zheka.core.enums.polls import PollAuthor, PollStatus
+from zheka.core.enums.proposals import ProposalStatus
 from zheka.core.enums.requests import (
     CATEGORY_RULES,
     CategoryRule,
@@ -47,6 +48,7 @@ __all__ = (
     "OrgRole",
     "PollAuthor",
     "PollStatus",
+    "ProposalStatus",
     "RequestActorRole",
     "RequestAttachmentKind",
     "RequestCategory",
