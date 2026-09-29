@@ -141,7 +141,7 @@ const Org = ({ house }: { house: HouseCard }) => {
           separator
           before={<Icon src={alertIcon} className={styles.CellIcon} />}
           overline="Аварийная служба"
-          title={org.emergency_phone ?? "Что делать при аварии"}
+          title={org.emergency_phone ?? "Что делать при аварии?"}
           subtitle={
             org.emergency_phone
               ? undefined

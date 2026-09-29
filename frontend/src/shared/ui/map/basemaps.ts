@@ -1,8 +1,6 @@
 import type { StyleSpecification } from "maplibre-gl";
 
 const OFM = "https://tiles.openfreemap.org";
-const OSM_ATTRIBUTION =
-  '© <a href="https://www.openstreetmap.org/copyright" target="_blank">участники OpenStreetMap</a>';
 
 export const BASEMAPS = [
   {
@@ -46,7 +44,6 @@ export const BASEMAPS = [
     kind: "raster",
     tiles: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     maxzoom: 19,
-    attribution: OSM_ATTRIBUTION,
     swatch: ["#f2efe9", "#aad3df"],
   },
 ] as const;
@@ -77,7 +74,6 @@ export const styleOf = (basemap: Basemap): string | StyleSpecification =>
             tiles: [basemap.tiles],
             tileSize: 256,
             maxzoom: basemap.maxzoom,
-            attribution: basemap.attribution,
           },
         },
         layers: [{ id: "base", type: "raster", source: "base" }],

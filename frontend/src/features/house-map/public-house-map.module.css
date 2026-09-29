@@ -1,6 +1,4 @@
 .Root {
-  --map-bottom: 40px;
-
   position: relative;
   display: flex;
   flex: 1;
@@ -9,10 +7,6 @@
 
   .Map {
     flex: 1;
-  }
-
-  &:has(:global(.maplibregl-compact-show)) {
-    --map-bottom: 64px;
   }
 
   .Search {
@@ -30,22 +24,23 @@
   }
 
   .Cities {
-    position: absolute;
-    top: 70px;
-    left: 12px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0 8px;
-    margin-right: 12px;
+    flex-shrink: 0;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 0 16px 6px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 
   .Chip {
-    --MaxUi-Button_background: var(--background-card);
-
+    flex-shrink: 0;
     height: 44px;
     border-block: 2px solid transparent;
     background-clip: padding-box;
-    filter: drop-shadow(0 2px 4px rgb(0 0 0 / 16%));
   }
 
   .Tool {
@@ -65,7 +60,7 @@
 
   .Note {
     position: absolute;
-    top: 120px;
+    top: 76px;
     left: 12px;
     padding: 8px 12px;
     border-radius: 12px;
@@ -76,7 +71,7 @@
   .Bottom {
     position: absolute;
     right: 8px;
-    bottom: var(--map-bottom);
+    bottom: 8px;
     left: 8px;
     display: flex;
     flex-direction: column;

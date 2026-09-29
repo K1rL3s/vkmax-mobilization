@@ -520,11 +520,8 @@ export const MapViewComponent = ({
         container: container.current,
         center: [initial.view.lon, initial.view.lat],
         zoom: initial.view.zoom,
-        attributionControl: { compact: true },
-        locale: {
-          "Map.Title": "Карта",
-          "AttributionControl.ToggleAttribution": "Источники карты",
-        },
+        attributionControl: false,
+        locale: { "Map.Title": "Карта" },
         maxPitch: 60,
         interactive: initial.interactive,
         transformRequest: (url) => ({
@@ -664,13 +661,7 @@ export const MapViewComponent = ({
   if (!supported) return null;
 
   return (
-    <div
-      className={cn(
-        styles.MapView,
-        scheme === "dark" && styles.dark,
-        className,
-      )}
-    >
+    <div className={cn(styles.MapView, className)}>
       <div ref={container} className={styles.Canvas} />
       <div className={styles.Overlay}>{children}</div>
     </div>

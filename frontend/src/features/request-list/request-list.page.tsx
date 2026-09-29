@@ -1,7 +1,6 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
-import { DemandCard } from "@/features/home";
 import { useHouseCard } from "@/features/house";
 import { useSession } from "@/shared/model/session";
 import { Routes } from "@/shared/model/routes";
@@ -18,24 +17,25 @@ const RequestListPage = () => {
   const list = useRequestList();
   const { currentResidency: residency } = useSession();
   const card = useHouseCard(residency?.house_id);
-  const house = card.data;
-  const connected = house?.is_connected !== false;
+
+  if (card.data?.is_connected === false) {
+    return (
+      <Panel className={styles.Page} mode="secondary">
+        <EmptyState
+          fill
+          icon={wrenchIcon}
+          title="Заявки появятся вместе с УК"
+          description="Дом ещё не подключён к сервису. Пока с управляющей компанией можно связаться напрямую - её контакты на главной."
+        />
+      </Panel>
+    );
+  }
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      {house && !connected ? (
-        <DemandCard
-          houseId={house.id}
-          demandSent={house.demand_sent}
-          demandCount={house.demand_count}
-          orgEmail={house.org?.email ?? null}
-          onSent={() => void card.refetch()}
-        />
-      ) : (
-        <Button asChild size="large" stretched>
-          <Link to={Routes.REQUEST_NEW}>Новая заявка</Link>
-        </Button>
-      )}
+      <Button asChild size="large" stretched>
+        <Link to={Routes.REQUEST_NEW}>Новая заявка</Link>
+      </Button>
 
       <StatusFilter value={list.filter} onChange={list.setFilter} />
 
@@ -45,7 +45,7 @@ const RequestListPage = () => {
         <ErrorState error={list.loadError} fill onRetry={list.retry} />
       )}
 
-      {list.isEmpty && connected && (
+      {list.isEmpty && (
         <EmptyState
           fill
           icon={wrenchIcon}

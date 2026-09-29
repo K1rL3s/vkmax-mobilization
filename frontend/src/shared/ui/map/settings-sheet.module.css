@@ -60,3 +60,7 @@
   border: none;
   border-top: 1px solid var(--divider-primary);
 }
+
+.Link {
+  color: var(--text-themed);
+}

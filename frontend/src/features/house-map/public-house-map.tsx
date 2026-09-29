@@ -2,7 +2,6 @@ import { Suspense, useState } from "react";
 import { Button, IconButton, Typography } from "@maxhub/max-ui";
 
 import type { components } from "@/shared/api/schema/generated";
-import { plural } from "@/shared/lib/format";
 import { Autocomplete } from "@/shared/ui/autocomplete";
 import {
   geoPinIcon,
@@ -81,6 +80,20 @@ export const PublicHouseMap = ({
 
   return (
     <div className={styles.Root}>
+      <div className={styles.Cities}>
+        {CITIES.map((city) => (
+          <Button
+            key={city.name}
+            size="small"
+            variant="secondary"
+            className={styles.Chip}
+            onClick={() => map.flyTo({ ...city, zoom: CITY_ZOOM })}
+          >
+            {city.name}
+          </Button>
+        ))}
+      </div>
+
       <Suspense fallback={<LoadingState fill title="Загружаем карту" />}>
         <MapView
           className={styles.Map}
@@ -124,20 +137,6 @@ export const PublicHouseMap = ({
             />
           </div>
 
-          <div className={styles.Cities}>
-            {CITIES.map((city) => (
-              <Button
-                key={city.name}
-                size="small"
-                variant="secondary"
-                className={styles.Chip}
-                onClick={() => map.flyTo({ ...city, zoom: CITY_ZOOM })}
-              >
-                {city.name}
-              </Button>
-            ))}
-          </div>
-
           {map.isLocateFailed && (
             <Typography.Text variant="description" className={styles.Note}>
               Не получилось определить, где вы. Выберите город
@@ -178,29 +177,28 @@ export const PublicHouseMap = ({
                 onAdd={pick.addHouse}
                 onClose={pick.close}
               />
+            ) : map.isError ? (
+              <div className={styles.Total}>
+                <Typography.Text variant="body" color="primary">
+                  Дома не загрузились
+                </Typography.Text>
+                <Button size="small" variant="ghost" onClick={map.retry}>
+                  Повторить
+                </Button>
+              </div>
             ) : (
-              (map.total !== undefined || map.isError) && (
+              map.hasFilters && (
                 <div className={styles.Total}>
                   <Typography.Text variant="body" color="primary">
-                    {map.isError
-                      ? "Дома не загрузились"
-                      : `Показано ${map.total} ${plural(map.total ?? 0, ["дом", "дома", "домов"])}`}
+                    Включены фильтры
                   </Typography.Text>
-                  {map.isError ? (
-                    <Button size="small" variant="ghost" onClick={map.retry}>
-                      Повторить
-                    </Button>
-                  ) : (
-                    map.hasFilters && (
-                      <Button
-                        size="small"
-                        variant="ghost"
-                        onClick={map.resetFilters}
-                      >
-                        Сбросить
-                      </Button>
-                    )
-                  )}
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    onClick={map.resetFilters}
+                  >
+                    Сбросить
+                  </Button>
                 </div>
               )
             )}

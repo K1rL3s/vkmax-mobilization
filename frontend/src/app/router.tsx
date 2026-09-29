@@ -8,7 +8,6 @@ import {
   type To,
 } from "react-router-dom";
 import { App } from "./app";
-import { BackBar } from "./back-bar";
 import { Component as ErrorPage } from "@/features/error/error.page";
 
 import { protectedLoader } from "./protected-loader";
@@ -22,19 +21,14 @@ import {
 import { AdminTabBar } from "@/features/admin-tab-bar";
 import { TabBar } from "@/features/tab-bar";
 import { queryClient } from "@/shared/api/query-client";
-import { hasHeaderBackButton, useBackNavigation } from "@/shared/lib/max";
+import { useBackNavigation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { LoadingState } from "@/shared/ui/state";
 
 const PushedPage = ({ fallback }: { fallback: To }) => {
-  const back = useBackNavigation(fallback);
+  useBackNavigation(fallback);
 
-  return (
-    <>
-      {!hasHeaderBackButton() && <BackBar onBack={back} />}
-      <Outlet />
-    </>
-  );
+  return <Outlet />;
 };
 
 const router = createBrowserRouter([

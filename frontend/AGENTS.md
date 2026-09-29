@@ -51,10 +51,10 @@ Knows every feature; nothing imports it.
   and each page keeps its own chunk.
 - Chrome lives in layout routes, never in pages: one renders `TabBar` under
   root tabs; `PushedPage` turns on the MAX header back button for screens
-  pushed over a root (`fallback` is where back goes without history) and
-  renders the in-app `BackBar` where MAX draws none (web, desktop, no bridge
-  `BackButton`). A screen never wires back itself: place it under the right
-  layout.
+  pushed over a root (`fallback` is where back goes without history). There
+  is no in-app back bar: the app opens only inside MAX, whose header always
+  has the back arrow. A screen never wires back itself: place it under the
+  right layout.
 - `protected-loader.ts`: `protectedLoader` on the pathless route wrapping
   every in-app screen redirects to `Routes.OUTSIDE_MAX` when `isInsideMax` is
   false; the stub route sits outside it. `session-loader.ts` and

@@ -12,18 +12,18 @@ import { useHouseSelect } from "./model/use-house-select";
 
 import styles from "./house-select.module.css";
 
-const viewSchema = z.enum(["list", "map"]).catch("list");
+const viewSchema = z.enum(["map", "list"]).catch("map");
 
 const HouseSelectPage = () => {
   const form = useHouseSelect();
   const [searchParams, setSearchParams] = useSearchParams();
   const view = viewSchema.parse(searchParams.get("view") ?? undefined);
 
-  const switchTo = (next: "list" | "map") =>
+  const switchTo = (next: "map" | "list") =>
     setSearchParams(
       (previous) => {
         const params = new URLSearchParams(previous);
-        if (next === "map") params.set("view", "map");
+        if (next === "list") params.set("view", "list");
         else params.delete("view");
         return params;
       },
@@ -34,8 +34,8 @@ const HouseSelectPage = () => {
     <div className={styles.Views}>
       {(
         [
-          ["list", "Списком"],
           ["map", "На карте"],
+          ["list", "Списком"],
         ] as const
       ).map(([id, label]) => (
         <Button

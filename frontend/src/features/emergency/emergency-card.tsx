@@ -69,8 +69,8 @@ export const EmergencyCard = ({ org }: { org: HouseCard["org"] }) => {
           )}
         </Flex>
 
-        <Button asChild size="medium" variant="ghost" stretched>
-          <Link to={Routes.EMERGENCY}>Что делать при аварии</Link>
+        <Button asChild size="medium" variant="secondary" stretched>
+          <Link to={Routes.EMERGENCY}>Что делать при аварии?</Link>
         </Button>
       </Card>
     </Flex>

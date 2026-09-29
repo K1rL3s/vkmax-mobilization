@@ -44,10 +44,7 @@ export const settingsQueryOptions = () =>
 export const useNotificationSettings = () => {
   const settings = useQuery(settingsQueryOptions());
 
-  const update = rqClient.useMutation("put", "/api/me/notifications", {
-    onSuccess: (data) =>
-      queryClient.setQueryData(settingsQueryOptions().queryKey, data),
-  });
+  const update = rqClient.useMutation("put", "/api/me/notifications");
 
   const current: Setting[] =
     (update.isPending ? update.variables.body.settings : null) ??
@@ -59,16 +56,21 @@ export const useNotificationSettings = () => {
     levelOf: (category: NotificationCategory) =>
       current.find((item) => item.category === category)?.level,
     set: (category: NotificationCategory, level: NotificationLevel) =>
-      update.mutate({
-        params: authParams(),
-        body: {
-          settings: [
-            ...current.filter((item) => item.category !== category),
-            { category, level },
-          ],
+      update.mutate(
+        {
+          params: authParams(),
+          body: {
+            settings: [
+              ...current.filter((item) => item.category !== category),
+              { category, level },
+            ],
+          },
         },
-      }),
-    isSaving: update.isPending,
+        {
+          onSuccess: (data) =>
+            queryClient.setQueryData(settingsQueryOptions().queryKey, data),
+        },
+      ),
     isFailed: update.isError,
   };
 };

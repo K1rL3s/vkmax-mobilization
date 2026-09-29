@@ -114,6 +114,18 @@ export const MapSettingsSheet = ({
           </>
         )}
 
+        <Typography.Text variant="description" color="secondary">
+          Карта: OpenFreeMap, © OpenMapTiles, данные ©{" "}
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noreferrer"
+            className={styles.Link}
+          >
+            участники OpenStreetMap
+          </a>
+        </Typography.Text>
+
         <Button
           size="large"
           stretched

@@ -60,7 +60,6 @@ const NotificationsPage = () => {
                     <Radio
                       name={category}
                       checked={notifications.levelOf(category) === level}
-                      disabled={notifications.isSaving}
                       onChange={() => notifications.set(category, level)}
                     />
                   }

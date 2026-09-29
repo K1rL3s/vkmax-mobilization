@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDebounceState } from "@siberiacancode/reactuse";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
@@ -36,6 +36,12 @@ export const usePublicMap = () => {
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [isLocating, setLocating] = useState(false);
   const [isLocateFailed, setLocateFailed] = useState(false);
+
+  useEffect(() => {
+    if (!isLocateFailed) return;
+    const timer = setTimeout(() => setLocateFailed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [isLocateFailed]);
 
   const houses = rqClient.useQuery(
     "get",
@@ -87,7 +93,6 @@ export const usePublicMap = () => {
   return {
     points,
     houses: items ?? [],
-    total: houses.data?.total,
     orgs: houses.data?.orgs ?? [],
     isError: houses.isError && !houses.data,
     retry: () => void houses.refetch(),
