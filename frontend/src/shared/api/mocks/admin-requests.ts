@@ -17,7 +17,9 @@ import {
   findHouse,
   houseRequests,
   requestCard,
+  requestMessages,
   requestCategories,
+  user,
 } from "./state";
 
 type Schemas = components["schemas"];
@@ -50,6 +52,7 @@ const fromResident = (
   item: ReturnType<typeof houseRequests>[number],
 ): Request => ({
   ...structuredClone(requestCard(item)),
+  messages: requestMessages(item),
   is_staff_author: false,
   author_name: "Гульнара Ахметзяновна Сафиуллина-Валиева",
   caller_name: null,
@@ -247,7 +250,7 @@ const changeStatus = (
     request.messages.push({
       created_at: at,
       author_role: "staff",
-      author_name: "Диспетчер УК",
+      author_name: user.name,
       text: comment.trim(),
       is_internal: false,
     });
@@ -325,7 +328,7 @@ export const adminRequestsConfigs = [
     item.messages.push({
       created_at: new Date().toISOString(),
       author_role: "staff",
-      author_name: "Диспетчер УК",
+      author_name: user.name,
       text,
       is_internal: false,
     });

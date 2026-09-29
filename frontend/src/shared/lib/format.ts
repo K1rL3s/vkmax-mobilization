@@ -21,6 +21,21 @@ export const formatTime = (iso: string) => timeFormat.format(new Date(iso));
 export const formatDayTime = (iso: string) =>
   `${formatDay(iso)}, ${formatTime(iso)}`;
 
+const startOfDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+
+export const relativeDay = (iso: string) => {
+  const passed = Math.round(
+    (startOfDay(new Date()) - startOfDay(new Date(iso))) / DAY,
+  );
+
+  if (passed === 0) {
+    return null;
+  }
+
+  return passed === 1 ? "Вчера" : formatDay(iso);
+};
+
 export const formatArea = (area: number) =>
   `${(area / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} м²`;
 

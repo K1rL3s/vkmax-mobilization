@@ -22,10 +22,10 @@ import {
 import { buildTimeline } from "./domain/timeline";
 import { useRequest } from "./model/use-request";
 import { ReviewPanel } from "./review";
-import { Answers } from "./ui/answers";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
 import { LetterPanel } from "./ui/letter-panel";
+import { MessageThread } from "./ui/message-thread";
 import { RatePanel } from "./ui/rate-panel";
 import { RequestAttachments } from "./ui/request-attachments";
 import { RequestTimeline } from "./ui/request-timeline";
@@ -177,7 +177,7 @@ const RequestPage = () => {
             <Typography.Text asChild variant="title" color="primary">
               <h2>Ответы УК</h2>
             </Typography.Text>
-            <Answers messages={request.messages} />
+            <MessageThread messages={request.messages} />
           </section>
         </Flex>
       )}

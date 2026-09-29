@@ -16,3 +16,5 @@ export type RequestCompletionReason =
 export type ResponsibilityZone = components["schemas"]["ResponsibilityZone"];
 
 export type RequestCategoryItem = components["schemas"]["RequestCategoryItem"];
+
+export type RequestMessage = components["schemas"]["RequestMessageItem"];

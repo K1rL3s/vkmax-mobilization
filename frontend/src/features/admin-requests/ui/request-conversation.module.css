@@ -1,6 +1,5 @@
-.Text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.Reply {
+  margin-top: 8px;
 }
 
 .Composer {

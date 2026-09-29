@@ -28,7 +28,13 @@ type MockRequest = {
   parent_request_id: number | null;
   completion_reason: Schemas["RequestCompletionReason"] | null;
   attachment_names: string[];
-  messages: { after_minutes: number; text: string }[];
+  messages: {
+    after_minutes: number;
+    text: string;
+    author_role?: string;
+    author_name?: string;
+    is_internal?: boolean;
+  }[];
 };
 
 const request = (
@@ -78,6 +84,12 @@ const requests: MockRequest[] = [
         after_minutes: 26,
         text: "Авария на водоводе, работы ведёт Водоканал. Передали вашу заявку, следим за сроками.",
       },
+      {
+        after_minutes: 26 * 60,
+        author_role: "executor",
+        author_name: "Слесарь Ринат Хайруллин",
+        text: "Водоканал заменил задвижку, стояк заполняем. К вечеру вода должна пойти.",
+      },
     ],
   }),
   request({
@@ -94,6 +106,13 @@ const requests: MockRequest[] = [
       {
         after_minutes: 18,
         text: "Заявку приняли, передаём сантехнику. Напишем, когда назначим время.",
+      },
+      {
+        after_minutes: 62,
+        author_role: "executor",
+        author_name: "Сантехник Алексей Петров",
+        is_internal: true,
+        text: "Не смогу приехать сегодня: на Баумана, 7 прорыв, работаю там до конца смены.",
       },
       {
         after_minutes: 104,
@@ -375,6 +394,17 @@ const requestAttachments = (item: MockRequest): Schemas["FileRef"][] => {
   return item.has_attachments ? [PHOTO] : [];
 };
 
+export const requestMessages = (
+  item: MockRequest,
+): Schemas["RequestMessageItem"][] =>
+  item.messages.map((message) => ({
+    created_at: shift(item.created_at, message.after_minutes),
+    author_role: message.author_role ?? "staff",
+    author_name: message.author_name ?? "Диспетчер УК",
+    text: message.text,
+    is_internal: message.is_internal ?? false,
+  }));
+
 export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
   const timeline = requestTimeline(item);
   const react = shift(item.created_at, 30);
@@ -393,13 +423,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
         : react,
     photos: requestAttachments(item),
     result_photos: item.has_result_attachments ? [RESULT_PHOTO] : [],
-    messages: item.messages.map((message) => ({
-      created_at: shift(item.created_at, message.after_minutes),
-      author_role: "staff",
-      author_name: "Диспетчер УК",
-      text: message.text,
-      is_internal: false,
-    })),
+    messages: requestMessages(item).filter((message) => !message.is_internal),
     timeline,
     can_review: item.status === "on_review",
     can_rate:

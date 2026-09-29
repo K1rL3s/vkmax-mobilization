@@ -4,10 +4,12 @@ import { z } from "zod";
 
 import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
+import { queryClient } from "@/shared/api/query-client";
 import { useIdempotencyKey } from "@/shared/lib/idempotency";
-import { orgParams } from "@/shared/model/session";
+import { orgParams, useSession } from "@/shared/model/session";
 
 import { requestFormConstraints } from "../domain/request-form-constraints";
+import type { AdminRequest } from "../domain/request-workflow";
 import { refreshRequests } from "./refresh-requests";
 
 const replySchema = z.object({
@@ -24,20 +26,44 @@ export const useRequestReplyForm = (requestId: number) => {
     defaultValues: { text: "" },
   });
   const idempotency = useIdempotencyKey();
+  const { session } = useSession();
+
   const reply = rqClient.useMutation(
     "post",
     "/api/admin/requests/{request_id}/reply",
     {
-      onSuccess: async () => {
-        idempotency.renew();
+      onMutate: ({ body }) => {
         form.reset();
-        await refreshRequests();
+        idempotency.renew();
+        queryClient.setQueriesData<AdminRequest>(
+          { queryKey: ["get", "/api/admin/requests/{request_id}"] },
+          (card) =>
+            card?.id !== requestId
+              ? card
+              : {
+                  ...card,
+                  messages: [
+                    ...card.messages,
+                    {
+                      created_at: new Date().toISOString(),
+                      author_role: "staff",
+                      author_name: session?.name ?? "Вы",
+                      text: body.text,
+                      is_internal: false,
+                    },
+                  ],
+                },
+        );
       },
+      onError: (_error, { body }) => {
+        form.setValue("text", body.text);
+        return refreshRequests();
+      },
+      onSuccess: () => refreshRequests(),
     },
   );
 
-  const submit = form.handleSubmit((body) => {
-    if (reply.isPending) return;
+  const submit = form.handleSubmit((body) =>
     reply.mutate({
       params: {
         header: {
@@ -47,13 +73,11 @@ export const useRequestReplyForm = (requestId: number) => {
         path: { request_id: requestId },
       },
       body,
-    });
-  });
+    }),
+  );
 
   return {
     form,
-    isPending: reply.isPending,
-    isSuccess: reply.isSuccess,
     error: reply.isError
       ? errorMessage(
           reply.error,

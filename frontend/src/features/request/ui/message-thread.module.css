@@ -1,0 +1,80 @@
+.Thread,
+.Day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.DayLabel {
+  align-self: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background-color: var(--background-card);
+}
+
+.Message {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+.staff {
+  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+  color: var(--icon-themed);
+}
+
+.executor {
+  background-color: color-mix(in srgb, var(--icon-positive) 12%, transparent);
+  color: var(--icon-positive);
+}
+
+.resident {
+  background-color: color-mix(in srgb, var(--icon-tertiary) 24%, transparent);
+  color: var(--icon-tertiary);
+}
+
+.Author {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.Internal {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: #ffe7c2;
+  color: #b26a00;
+}
+
+:global([class*="MaxUI_colorScheme_dark"]) .Internal {
+  background-color: #5c3d00;
+  color: #ffd08a;
+}
+
+.Time {
+  flex-shrink: 0;
+}
+
+.Text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
