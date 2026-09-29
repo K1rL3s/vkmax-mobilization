@@ -204,8 +204,8 @@ export const requestsConfigs = [
       return notFound("Заявка не найдена");
     }
 
-    if (item.status === "done") {
-      return conflict("Закрытую заявку соседям уже не показать");
+    if (item.status === "done" || item.status === "on_review") {
+      return conflict("Заявку на приемке или закрытую соседям уже не показать");
     }
 
     const shared: Schemas["SharedRequestResponse"] = {

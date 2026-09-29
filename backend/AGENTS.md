@@ -334,8 +334,9 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   of its members; no flats, names or descriptions in it. `bot_added` and
   deleting the card message forget it. «✋ У меня тоже» is a startapp
   `house_<id>_<category>`. A request card goes to the chat only when its
-  author asks (`share_to_chat`, open request; grouped -> the group card; no
-  chat -> the client's native share), then every status move edits it; once
+  author asks (`share_to_chat`, only before `ON_REVIEW`, so a new card never
+  says done; grouped -> the group card; no chat -> the client's native
+  share), then every status move edits it; once
   grouped it says so and stays. A poll card is posted on create, edited on
   every vote, close and expiry, shows live counts by verified flats and area;
   a single-answer poll votes by `VotePayload` buttons (chat router,

@@ -75,7 +75,7 @@ REPEAT_NOT_DONE = "Повторную заявку подают после пр�
 REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано плохо"
 ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
 REJECT_NOT_ON_REVIEW = "Работу возвращают только с приемки"
-SHARE_DONE = "Закрытую заявку соседям уже не показать"
+SHARE_FINISHED = "Заявку на приемке или закрытую соседям уже не показать"
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
@@ -556,8 +556,8 @@ class RequestsService:
         request_id: RequestId,
     ) -> SharedRequest:
         request = await self._own_request(user_id, request_id)
-        if request.status is RequestStatus.DONE:
-            raise InvalidState(SHARE_DONE)
+        if request.status in {RequestStatus.ON_REVIEW, RequestStatus.DONE}:
+            raise InvalidState(SHARE_FINISHED)
         house = await self._get_house(request.house_id)
         posted = bool(await self._chats.list_for_houses([house.id]))
         if posted:

@@ -158,7 +158,7 @@ const RequestPage = () => {
 
       {overdue && <EscalationPanel request={request} />}
 
-      {!isFinished(request.status) && <SharePanel request={request} />}
+      {isRunning && <SharePanel request={request} />}
 
       {letter && <LetterPanel {...letter} />}
 

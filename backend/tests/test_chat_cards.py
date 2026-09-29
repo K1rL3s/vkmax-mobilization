@@ -284,6 +284,9 @@ async def test_only_the_author_shares_an_open_request(
 
     with pytest.raises(EntityNotFound):
         await service.share_to_chat(neighbour, request.id)
+    await _mark_on_review(session, request.id)
+    with pytest.raises(InvalidState):
+        await service.share_to_chat(own.user_id, request.id)
     await _mark_done(session, request.id)
     with pytest.raises(InvalidState):
         await service.share_to_chat(own.user_id, request.id)
