@@ -1,6 +1,5 @@
 import hmac
 import urllib.parse
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from dishka import FromDishka
@@ -19,7 +18,6 @@ from zheka.config import Config
 from zheka.core.errors import Unauthorized
 from zheka.core.ids import API_CHECKER_MAX_USER_ID
 
-INIT_DATA_TTL = timedelta(days=1)
 API_CHECKER = WebAppInitData(
     chat=WebAppChat(id=API_CHECKER_MAX_USER_ID, type="DIALOG"),
     user=WebAppUser(id=API_CHECKER_MAX_USER_ID, first_name="Проверяющий API"),
@@ -39,13 +37,9 @@ test_token_scheme = HTTPBearer(
 
 def parse_init_data(token: str, raw: str) -> WebAppInitData:
     try:
-        init_data = _signed_init_data(token, raw)
+        return _signed_init_data(token, raw)
     except (InvalidWebAppInitDataError, ValueError):
-        init_data = _signed_init_data(token, urllib.parse.unquote(raw))
-    signed_at = datetime.fromtimestamp(int(init_data.auth_date or 0), UTC)
-    if datetime.now(UTC) - signed_at > INIT_DATA_TTL:
-        raise InvalidWebAppInitDataError("initData старше суток")
-    return init_data
+        return _signed_init_data(token, urllib.parse.unquote(raw))
 
 
 @inject
@@ -70,7 +64,7 @@ async def get_current_user(
     try:
         return parse_init_data(config.max.token, raw_init_data)
     except (InvalidWebAppInitDataError, ValueError) as error:
-        raise Unauthorized("Невалидная или устаревшая initData") from error
+        raise Unauthorized("Невалидная initData") from error
 
 
 CurrentUserDep = Annotated[WebAppInitData, Depends(get_current_user)]

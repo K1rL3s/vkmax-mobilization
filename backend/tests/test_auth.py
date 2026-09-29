@@ -14,7 +14,7 @@ from tests.conftest import (
 )
 
 from zheka.api.app import app_factory
-from zheka.api.dependencies.current_user import INIT_DATA_TTL, parse_init_data
+from zheka.api.dependencies.current_user import parse_init_data
 from zheka.config import ApiConfig, DbConfig
 from zheka.core.consent import CONSENT_VERSION
 from zheka.core.services.demo import (
@@ -39,17 +39,10 @@ def test_signed_init_data_with_a_line_break_is_refused() -> None:
         parse_init_data(TOKEN, raw)
 
 
-async def test_day_old_init_data_is_401() -> None:
-    app = app_factory(make_config(), empty_bot_setup())
-    stale = signed_init_data(datetime.now(UTC) - INIT_DATA_TTL - timedelta(minutes=1))
+def test_week_old_init_data_passes() -> None:
+    raw = signed_init_data(datetime.now(UTC) - timedelta(days=7))
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-    ) as client:
-        response = await client.get("/api/me", headers={"WebAppData": stale})
-
-    assert response.status_code == 401
+    assert parse_init_data(TOKEN, raw).user.id == 42
 
 
 CHECKER_TOKEN = "checker-token"  # noqa: S105

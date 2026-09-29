@@ -88,12 +88,12 @@ export const ErrorState = ({
 }) => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const expired = isUnauthorized(error);
+  const unauthorized = isUnauthorized(error);
   const final = isClientError(error);
   const exit = pathname.startsWith(Routes.ADMIN) ? Routes.ADMIN : Routes.HOME;
 
   const action = () => {
-    if (expired) {
+    if (unauthorized) {
       const webApp = getWebApp();
       return (
         webApp && (
@@ -134,9 +134,9 @@ export const ErrorState = ({
   return (
     <StateMessage
       fill={fill}
-      title={expired ? "Сессия устарела" : title}
+      title={unauthorized ? "Не удалось войти" : title}
       description={
-        expired
+        unauthorized
           ? "Закройте приложение и откройте его заново из бота"
           : errorMessage(error, description)
       }

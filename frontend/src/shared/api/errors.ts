@@ -26,7 +26,7 @@ export const isUnauthorized = (error: unknown): boolean =>
 
 export const errorMessage = (error: unknown, fallback: string): string => {
   if (isUnauthorized(error)) {
-    return "Сессия устарела. Закройте приложение и откройте его заново из бота";
+    return "Не удалось войти. Закройте приложение и откройте его заново из бота";
   }
 
   return isApiError(error) &&
