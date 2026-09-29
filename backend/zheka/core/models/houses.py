@@ -28,6 +28,7 @@ class House(ZhekaMutableType, Zoned):
     timezone: str
     added_by_resident: bool = False
     digest_sent_on: date | None = None
+    passport: Any = field(default_factory=dict)
 
     @property
     def address(self) -> str:

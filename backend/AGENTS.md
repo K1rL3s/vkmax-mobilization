@@ -628,7 +628,20 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   cached in `backend/.cache/seed/`). New streets go after the existing ones,
   or the demo houses move. reformagkh.ru cards sit behind a captcha now: a
   card missing from the cache leaves its house without manager, entrances
-  estimated.
+  estimated. Registry org email and site come from the Reforma export; the
+  `fill_registry_org_contacts` migration copies them from
+  `organizations.csv` into unregistered orgs (a registered УК keeps its own),
+  so that CSV keeps its column names too.
+- The house passport: `fetch_seed_data.py` also reads the public
+  dom.gosuslugi.ru house card (one lookup per street by the export's FIAS
+  GUID, one card per house; cached as `gis-*.json`, about an hour cold) into
+  the passport columns of `houses.csv`. GIS never sets `org_inn` or
+  `entrances`, so a refresh keeps demo houses in place; its manager is left
+  unused for that reason. `load_directory` and the `add_house_passport`
+  migration (backfill for a base that is not reseeded) map those columns into
+  `houses.passport` the same way: change both together. Only the script talks
+  to GIS; the API never does. No passport (a resident-added house) means the
+  card hides entrances too.
 
 ## Tests
 

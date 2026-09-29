@@ -13950,12 +13950,11 @@ components:
           type: array
           title: Outages
           description: Текущие и плановые отключения по дому, сейчас демо-данные
-        services:
-          items:
-            $ref: '#/components/schemas/CityServiceItem'
-          type: array
-          title: Services
-          description: Городские службы и ГЖИ региона дома, сверены с их сайтами
+        passport:
+          anyOf:
+          - $ref: '#/components/schemas/HousePassport'
+          - type: 'null'
+          description: Паспорт дома из справочника, у дома от жителя его нет
       type: object
       required:
       - id
@@ -14038,30 +14037,54 @@ components:
       required:
       - works
       title: HouseOverhaul
-    HouseProblemsResponse:
+    HousePassport:
       properties:
-        open:
-          items:
-            $ref: '#/components/schemas/OpenProblemItem'
-          type: array
-          title: Open
-          description: 'Открытые проблемы: группа или заявки без группы одной категории'
-        resolved:
-          items:
-            $ref: '#/components/schemas/ResolvedProblemItem'
-          type: array
-          title: Resolved
-          description: Решенные за 30 дней, последние 20
-        resolved_total:
-          type: integer
-          title: Resolved Total
-          description: Сколько решено за 30 дней всего
+        reforma_on:
+          type: string
+          format: date
+          title: Reforma On
+          description: 'Дата выгрузки Реформы ЖКХ: год, этажи, подъезды, площадь'
+        entrances_estimated:
+          type: boolean
+          title: Entrances Estimated
+          description: Подъездов нет в источнике, число оценено по квартирам и этажам
+        energy_class:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Energy Class
+          description: 'Класс энергоэффективности: ГИС ЖКХ, иначе Реформа ЖКХ'
+        wear:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Wear
+          description: Износ по ГИС ЖКХ в сотых долях процента, 30% это 3000
+        wear_on:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Wear On
+          description: На какую дату износ
+        condition:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Condition
+          description: Состояние по ГИС ЖКХ, только если дом не исправный
+        gis_on:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Gis On
+          description: Когда запись дома обновлена в ГИС ЖКХ; нет - данных ГИС нет
       type: object
       required:
-      - open
-      - resolved
-      - resolved_total
-      title: HouseProblemsResponse
+      - reforma_on
+      - entrances_estimated
+      title: HousePassport
     HouseResidentItem:
       properties:
         resident_id:

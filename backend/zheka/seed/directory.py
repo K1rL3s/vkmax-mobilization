@@ -60,6 +60,7 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
                 city=row["city"],
                 street=row["street"],
                 building=row["building"],
+                cadastral_no=row["cadastral_no"] or None,
                 built_year=int(row["built_year"]) if row["built_year"] else None,
                 floors=int(row["floors"]),
                 area=int(row["area"]),
@@ -68,6 +69,7 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
                 lon=Decimal(row["lon"]) if row["lon"] else None,
                 chat_binding_code=secrets.token_hex(4),
                 timezone=row["timezone"],
+                passport=passport(row),
             )
             directory.append(
                 DirectoryHouse(
@@ -80,3 +82,15 @@ async def load_directory(session: AsyncSession) -> list[DirectoryHouse]:
     session.add_all(item.house for item in directory)
     await session.flush()
     return directory
+
+
+def passport(row: dict[str, str]) -> dict[str, object]:
+    return {
+        "reforma_on": row["reforma_on"],
+        "entrances_estimated": row["entrances_estimated"] == "1",
+        "energy_class": row["energy_class"] or None,
+        "wear": int(row["wear"]) if row["wear"] else None,
+        "wear_on": row["wear_on"] or None,
+        "condition": row["condition"] or None,
+        "gis_on": row["gis_on"] or None,
+    }

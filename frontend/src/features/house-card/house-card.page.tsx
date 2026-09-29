@@ -11,6 +11,7 @@ import {
 } from "@/features/house";
 import { HouseMapPreview } from "@/features/house-map";
 import { cn } from "@/shared/lib/css";
+import { maskedFromIso } from "@/shared/lib/date-mask";
 import {
   duration,
   formatArea,
@@ -66,7 +67,17 @@ const Section = ({
 );
 
 const Facts = ({ house }: { house: HouseCard }) => {
+  const { passport } = house;
   const facts: { label: string; value: string; wide?: boolean }[] = [];
+  const passportFact = (
+    label: string,
+    value: string | null | undefined,
+    wide?: boolean,
+  ) => {
+    if (value != null || passport?.gis_on != null) {
+      facts.push({ label, value: value ?? "Нет данных", wide });
+    }
+  };
 
   if (house.built_year != null) {
     facts.push({ label: "Год постройки", value: String(house.built_year) });
@@ -76,18 +87,37 @@ const Facts = ({ house }: { house: HouseCard }) => {
     facts.push({ label: "Этажей", value: String(house.floors) });
   }
 
-  facts.push({ label: "Подъездов", value: String(house.entrances) });
+  if (passport) {
+    facts.push({
+      label: "Подъездов",
+      value: passport.entrances_estimated
+        ? `${house.entrances} (оценка)`
+        : String(house.entrances),
+    });
+  }
 
   if (house.area != null) {
     facts.push({ label: "Площадь дома", value: formatArea(house.area) });
   }
 
-  if (house.cadastral_no) {
-    facts.push({
-      label: "Кадастровый номер",
-      value: house.cadastral_no,
-      wide: true,
-    });
+  if (passport) {
+    passportFact(
+      passport.wear_on
+        ? `Износ на ${maskedFromIso(passport.wear_on)}`
+        : "Износ",
+      passport.wear == null ? null : formatPercent(passport.wear),
+    );
+    passportFact("Класс энерго\u00ADэффективности", passport.energy_class);
+
+    if (passport.condition) {
+      facts.push({ label: "Состояние", value: passport.condition });
+    }
+  }
+
+  passportFact("Кадастровый номер", house.cadastral_no, true);
+
+  if (facts.length === 0) {
+    return null;
   }
 
   return (
@@ -107,6 +137,18 @@ const Facts = ({ house }: { house: HouseCard }) => {
           </Typography.Text>
         </Flex>
       ))}
+      {passport && (
+        <Flex direction="column" className={styles.wide}>
+          <Typography.Text variant="description" color="secondary">
+            Реформа ЖКХ, выгрузка от {maskedFromIso(passport.reforma_on)}
+          </Typography.Text>
+          {passport.gis_on && (
+            <Typography.Text variant="description" color="secondary">
+              ГИС ЖКХ, обновлено {maskedFromIso(passport.gis_on)}
+            </Typography.Text>
+          )}
+        </Flex>
+      )}
     </div>
   );
 };

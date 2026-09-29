@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Self
 
 from pydantic import Field
@@ -137,6 +137,32 @@ class HouseOverhaul(BaseSchema):
     works: list[OverhaulWork]
 
 
+class HousePassport(BaseSchema):
+    reforma_on: date = Field(
+        description="Дата выгрузки Реформы ЖКХ: год, этажи, подъезды, площадь",
+    )
+    entrances_estimated: bool = Field(
+        description="Подъездов нет в источнике, число оценено по квартирам и этажам",
+    )
+    energy_class: str | None = Field(
+        default=None,
+        description="Класс энергоэффективности: ГИС ЖКХ, иначе Реформа ЖКХ",
+    )
+    wear: int | None = Field(
+        default=None,
+        description="Износ по ГИС ЖКХ в сотых долях процента, 30% это 3000",
+    )
+    wear_on: date | None = Field(default=None, description="На какую дату износ")
+    condition: str | None = Field(
+        default=None,
+        description="Состояние по ГИС ЖКХ, только если дом не исправный",
+    )
+    gis_on: date | None = Field(
+        default=None,
+        description="Когда запись дома обновлена в ГИС ЖКХ; нет - данных ГИС нет",
+    )
+
+
 class OrgPublicStats(BaseSchema):
     closed: int = Field(description="Заявок сдано на приемку, по всем домам УК")
     on_time: int = Field(description="Из них сдано в нормативный срок")
@@ -213,6 +239,10 @@ class HouseCard(BaseSchema):
     services: list[CityServiceItem] = Field(
         description="Городские службы и ГЖИ региона дома, сверены с их сайтами",
     )
+    passport: HousePassport | None = Field(
+        default=None,
+        description="Паспорт дома из справочника, у дома от жителя его нет",
+    )
 
     @classmethod
     def of(cls, card: HouseCardData, documents: list[FileRef]) -> Self:
@@ -253,6 +283,9 @@ class HouseCard(BaseSchema):
             ),
             outages=[OutageItem.model_validate(item) for item in card.outages],
             services=[CityServiceItem.model_validate(item) for item in card.services],
+            passport=(
+                HousePassport.model_validate(house.passport) if house.passport else None
+            ),
         )
 
 

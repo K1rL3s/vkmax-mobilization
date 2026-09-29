@@ -3718,11 +3718,8 @@ export interface components {
        * @description Текущие и плановые отключения по дому, сейчас демо-данные
        */
       outages: components["schemas"]["OutageItem"][];
-      /**
-       * Services
-       * @description Городские службы и ГЖИ региона дома, сверены с их сайтами
-       */
-      services: components["schemas"]["CityServiceItem"][];
+      /** @description Паспорт дома из справочника, у дома от жителя его нет */
+      passport?: components["schemas"]["HousePassport"] | null;
     };
     /** HouseListItem */
     HouseListItem: {
@@ -3754,23 +3751,44 @@ export interface components {
       /** Works */
       works: components["schemas"]["OverhaulWork"][];
     };
-    /** HouseProblemsResponse */
-    HouseProblemsResponse: {
+    /** HousePassport */
+    HousePassport: {
       /**
-       * Open
-       * @description Открытые проблемы: группа или заявки без группы одной категории
+       * Reforma On
+       * Format: date
+       * @description Дата выгрузки Реформы ЖКХ: год, этажи, подъезды, площадь
        */
-      open: components["schemas"]["OpenProblemItem"][];
+      reforma_on: string;
       /**
-       * Resolved
-       * @description Решенные за 30 дней, последние 20
+       * Entrances Estimated
+       * @description Подъездов нет в источнике, число оценено по квартирам и этажам
        */
-      resolved: components["schemas"]["ResolvedProblemItem"][];
+      entrances_estimated: boolean;
       /**
-       * Resolved Total
-       * @description Сколько решено за 30 дней всего
+       * Energy Class
+       * @description Класс энергоэффективности: ГИС ЖКХ, иначе Реформа ЖКХ
        */
-      resolved_total: number;
+      energy_class?: string | null;
+      /**
+       * Wear
+       * @description Износ по ГИС ЖКХ в сотых долях процента, 30% это 3000
+       */
+      wear?: number | null;
+      /**
+       * Wear On
+       * @description На какую дату износ
+       */
+      wear_on?: string | null;
+      /**
+       * Condition
+       * @description Состояние по ГИС ЖКХ, только если дом не исправный
+       */
+      condition?: string | null;
+      /**
+       * Gis On
+       * @description Когда запись дома обновлена в ГИС ЖКХ; нет - данных ГИС нет
+       */
+      gis_on?: string | null;
     };
     /** HouseResidentItem */
     HouseResidentItem: {

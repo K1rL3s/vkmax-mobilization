@@ -11,10 +11,11 @@ import urllib.request
 import zipfile
 from collections import defaultdict
 from collections.abc import Iterator
+from datetime import datetime
 from decimal import Decimal
 from math import ceil
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = BACKEND_ROOT / ".cache" / "seed"
@@ -23,6 +24,7 @@ DATA_DIR = BACKEND_ROOT / "zheka" / "seed" / "data"
 REFORMA = "https://www.reformagkh.ru"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 OVERPASS = "https://overpass-api.de/api/interpreter"
+GIS = "https://dom.gosuslugi.ru/homemanagement/api/rest/services/houses/public"
 USER_AGENT = "zheka-seed-fetch/1.0 (MAX hackathon demo seed, one-off run)"
 REQUEST_INTERVAL = 1.1
 RETRIES = 5
@@ -428,7 +430,18 @@ HOUSE_FIELDS = (
     "org_inn",
     "source_id",
     "timezone",
+    "fias_guid",
+    "entrances_estimated",
+    "reforma_on",
+    "energy_class",
+    "cadastral_no",
+    "wear",
+    "wear_on",
+    "condition",
+    "gis_on",
 )
+NO_ENERGY_CLASS = {"", "не присвоен", "нет"}
+LATIN_CLASSES = str.maketrans("АВСЕ", "ABCE")
 ORG_FIELDS = ("inn", "name", "phone", "address", "email", "site", "timezone")
 FULL_DIGITS = 11
 LOCAL_DIGITS = 7
@@ -436,6 +449,7 @@ AREA_CODES = {"город Санкт-Петербург": "812", "Республ
 
 _last_request = 0.0
 _cards_blocked = False
+_gis_blocked = False
 
 
 def _get(url: str) -> bytes:
@@ -478,7 +492,9 @@ def _export_rows(export_id: int) -> Iterator[dict[str, str]]:
     with zipfile.ZipFile(io.BytesIO(raw)) as archive:
         (name,) = archive.namelist()
         text = archive.read(name).decode("utf-8-sig")
-    yield from csv.DictReader(io.StringIO(text), delimiter=";")
+    exported_on = iso_date(name.removesuffix(".csv")[-8:], "%Y%m%d")
+    for row in csv.DictReader(io.StringIO(text), delimiter=";"):
+        yield {**row, "exported_on": exported_on}
 
 
 def _clean(value: str) -> str:
@@ -593,20 +609,22 @@ def _org(row: dict[str, str], timezone: str) -> dict[str, str]:
 
 def email(value: str) -> str:
     first = _clean(re.split(r"[,;\s]", value, maxsplit=1)[0]).lower()
-    return first if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", first) else ""
+    return first if re.fullmatch(r"(?!net@)[^@\s]+@[^@\s]+\.[^@\s]+", first) else ""
 
 
 def site(value: str) -> str:
-    first = _clean(re.split(r"[,;\s]", value, maxsplit=1)[0])
+    first = _clean(re.split(r"[;\s]", value, maxsplit=1)[0]).rstrip(",")
     if not first:
         return ""
     if not re.match(r"https?://", first, re.IGNORECASE):
         first = f"https://{first}"
     parts = urllib.parse.urlsplit(first.replace(" ", ""))
     host = parts.netloc.lower()
-    known = ("reformagkh.ru", "dom.mos.ru", "dom.gosuslugi.ru")
-    if not host or any(
-        host == domain or host.endswith(f".{domain}") for domain in known
+    known = ("reformagkh.ru", "dom.mos.ru", "dom.gosuslugi.ru", "bars-monjf.tatar.ru")
+    if (
+        "." not in host
+        or re.search(r"[@,]", host)
+        or any(host == domain or host.endswith(f".{domain}") for domain in known)
     ):
         return ""
     return urllib.parse.urlunsplit(
@@ -624,7 +642,9 @@ def main() -> None:
     orgs: dict[str, dict[str, str]] = {}
     for street in STREETS:
         street_houses: list[dict[str, str | int]] = []
-        for row in _pick(street):
+        picked = _pick(street)
+        found = _gis_lookup(street, [row["houseguid"] for row in picked])
+        for row in picked:
             building = _clean(row["address"][len(street.prefix) :])
             building = building.replace(", корп.", " корп.").replace(
                 ", литера",
@@ -633,6 +653,7 @@ def main() -> None:
             entrances, manager = _card(row["house_id"])
             floors = int(row["number_floors_max"])
             living_flats = int(row["living_rooms_amount"])
+            entrances_estimated = not entrances
             if not entrances:
                 entrances = max(1, ceil(living_flats / (floors * 4)))
                 log.info("нет подъездов в карточке %s, оценка %s", building, entrances)
@@ -656,6 +677,7 @@ def main() -> None:
                         len(matches),
                     )
             lat, lon = _geocode(street, building)
+            gis = _gis(found.get(row["houseguid"]))
             street_houses.append(
                 {
                     "region": street.region,
@@ -674,6 +696,12 @@ def main() -> None:
                     "org_inn": org_inn,
                     "source_id": row["house_id"],
                     "timezone": street.timezone,
+                    "fias_guid": row["houseguid"],
+                    "entrances_estimated": int(entrances_estimated),
+                    "reforma_on": row["exported_on"],
+                    **gis,
+                    "energy_class": gis.get("energy_class")
+                    or energy_class(row["energy_efficiency"]),
                 },
             )
         _fill_from_osm(street, street_houses)
@@ -692,10 +720,11 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(sorted(orgs.values(), key=lambda org: org["inn"]))
     log.info(
-        "домов %s, с координатами %s, с УК %s, организаций %s",
+        "домов %s, с координатами %s, с УК %s, из ГИС ЖКХ %s, организаций %s",
         len(houses),
         sum(1 for house in houses if house["lat"]),
         sum(1 for house in houses if house["org_inn"]),
+        sum(1 for house in houses if house.get("gis_on")),
         len(orgs),
     )
 
@@ -757,6 +786,72 @@ def osm_match(number: str, addresses: dict[str, tuple[str, str]]) -> tuple[str, 
         if candidate in addresses:
             return addresses[candidate]
     return "", ""
+
+
+def energy_class(value: str) -> str:
+    value = _clean(value).split(" (")[0].translate(LATIN_CLASSES)
+    return "" if value.lower() in NO_ENERGY_CLASS else value
+
+
+def iso_date(value: str | None, pattern: str = "%d.%m.%Y") -> str:
+    return datetime.strptime(value, pattern).date().isoformat() if value else ""
+
+
+def _gis_lookup(street: Street, guids: list[str]) -> dict[str, dict[str, Any]]:
+    codes = ",".join(guid for guid in guids if guid)
+    return gis_houses(
+        _gis_json(
+            f"gis-{street.export_id}-{street.street}.json",
+            f"{GIS}/houses/searchByFiasHouseCodeList/{codes}"
+            "?useReadOnlyDataSource=true",
+        ),
+    )
+
+
+def _gis(found: dict[str, Any] | None) -> dict[str, str | int]:
+    if found is None:
+        return {}
+    detail = _gis_json(
+        f"gis-{found['guid']}.json",
+        f"{GIS}/{found['houseType']['code']}/{found['guid']}",
+    )
+    return {} if detail is None else parse_gis(found, detail)
+
+
+def _gis_json(name: str, url: str) -> Any:
+    global _gis_blocked  # noqa: PLW0603
+    if _gis_blocked and not (CACHE_DIR / name).exists():
+        return None
+    try:
+        return json.loads(_cached(name, url))
+    except (OSError, ValueError) as error:
+        log.info("ГИС ЖКХ недоступна до конца прогона: %s", error)
+        (CACHE_DIR / name).unlink(missing_ok=True)
+        _gis_blocked = True
+        return None
+
+
+def parse_gis(found: dict[str, Any], detail: dict[str, Any]) -> dict[str, str | int]:
+    condition = (detail.get("houseCondition") or {}).get("houseCondition") or ""
+    wear = _scaled(detail.get("deterioration") or "0", 100)
+    wear_on = iso_date(detail.get("deteriorationDate")) if wear else ""
+    updated_on = iso_date(found.get("lastUpdateDate"))
+    return {
+        "cadastral_no": _clean(detail.get("cadastreNumber") or ""),
+        "wear": wear or "",
+        "wear_on": wear_on if wear_on <= updated_on else "",
+        "condition": "" if condition == "Исправный" else condition,
+        "energy_class": energy_class(detail.get("houseEnergyEfficiency") or ""),
+        "gis_on": updated_on,
+    }
+
+
+def gis_houses(raw: Any) -> dict[str, dict[str, Any]]:
+    found: dict[str, dict[str, Any]] = {}
+    for item in (raw or {}).get("houseList") or []:
+        if item.get("status") != "CANCELLED":
+            found.setdefault(item["house"]["code"], item)
+    return found
 
 
 if __name__ == "__main__":

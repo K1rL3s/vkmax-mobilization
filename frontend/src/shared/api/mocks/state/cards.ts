@@ -117,6 +117,15 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
           ratings_count: 22,
         }
       : null,
+    passport: {
+      reforma_on: "2026-09-01",
+      entrances_estimated: false,
+      energy_class: "B",
+      wear: 3000,
+      wear_on: "2021-08-01",
+      condition: null,
+      gis_on: "2026-09-28",
+    },
   };
 };
 

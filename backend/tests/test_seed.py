@@ -2,7 +2,7 @@ import csv
 import secrets
 import tempfile
 from collections.abc import AsyncGenerator, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from math import cos, radians
 from pathlib import Path
 from typing import Any
@@ -13,13 +13,15 @@ import pytest_asyncio
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
-from sqlalchemy import Connection, Row, String, cast, func, select, update
+from sqlalchemy import Connection, Row, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from tests.conftest import alembic_config, make_config, requests_service
 from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
+from tests.test_houses import _make_service as houses_service
 
+from zheka.api.schemas.houses import HouseCard
 from zheka.core.charges import parse_lines
 from zheka.core.enums import (
     NoticeStatus,
@@ -29,7 +31,14 @@ from zheka.core.enums import (
     RequestStatus,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
-from zheka.core.ids import API_CHECKER_MAX_USER_ID, FlatId, MaxUserId, OrgId, UserId
+from zheka.core.ids import (
+    API_CHECKER_MAX_USER_ID,
+    FlatId,
+    HouseId,
+    MaxUserId,
+    OrgId,
+    UserId,
+)
 from zheka.core.services.demo import (
     API_CHECKER_DEMO_NUMBER,
     CHECKER_RESERVED,
@@ -708,28 +717,121 @@ def _map_state(rows: Sequence[Row[Any]], now: datetime) -> str:
     return "calm"
 
 
-async def test_a_reviewer_gathers_model_neighbours_in_the_demo_house(
+async def test_a_directory_house_card_names_its_passport_sources(
     db: AsyncSession,
 ) -> None:
-    user_id = await _positive_user(db)
-    _org, residency = await _demo(db).settle(user_id, 1)
-    service = requests_service(db)
-    card = await service.create(
-        user_id,
-        residency.house.id,
-        RequestDraft(
-            category=RequestCategory.ELEVATOR,
-            description="Лифт стоит",
-            flat_id=residency.resident.flat_id,
+    with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
+        row = next(
+            row
+            for row in csv.DictReader(file)
+            if row["gis_on"] and row["entrances_estimated"] == "1"
+        )
+    stmt = select(houses_table.c.id).where(
+        houses_table.c.city == row["city"],
+        houses_table.c.street == row["street"],
+        houses_table.c.building == row["building"],
+    )
+    house_id = HouseId((await db.execute(stmt)).scalar_one())
+
+    card = HouseCard.of(
+        await houses_service(db).house_card(house_id, UserId(0), NOW),
+        [],
+    )
+
+    assert card.cadastral_no == row["cadastral_no"]
+    assert card.passport is not None
+    assert card.passport.reforma_on == date(2026, 9, 1)
+    assert card.passport.gis_on == date.fromisoformat(row["gis_on"])
+    assert card.passport.entrances_estimated
+
+
+async def test_the_passport_migration_fills_every_directory_house_as_the_seed(
+    seeded: AsyncConnection,
+) -> None:
+    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
+        "5c1e8a7d3f20",
+    )
+    assert migration is not None
+
+    def rerun(connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.module.downgrade()
+            connection.execute(update(houses_table).values(cadastral_no=None))
+            migration.module.upgrade()
+
+    first = (
+        select(houses_table)
+        .where(~houses_table.c.added_by_resident)
+        .order_by(houses_table.c.id)
+        .limit(1)
+    )
+    stmt = select(
+        houses_table.c.added_by_resident,
+        houses_table.c.cadastral_no,
+        houses_table.c.passport,
+    ).order_by(houses_table.c.id)
+    savepoint = await seeded.begin_nested()
+    house = (await seeded.execute(first)).one()
+    await seeded.execute(
+        insert(houses_table).values(
+            region=house.region,
+            city=house.city,
+            street=house.street,
+            building=house.building,
+            timezone=house.timezone,
+            chat_binding_code="passport",
+            added_by_resident=True,
         ),
     )
-    assert card.request.group_id is None
-    assert card.can_demo_neighbours
+    seeded_houses = (await seeded.execute(stmt)).tuples().all()
+    await seeded.run_sync(rerun)
+    migrated = (await seeded.execute(stmt)).tuples().all()
+    await savepoint.rollback()
 
-    grouped = await service.demo_neighbours(
-        user_id,
-        card.request.id,
-        datetime.now(UTC),
+    assert all(passport for resident, _, passport in migrated if not resident)
+    assert migrated == seeded_houses
+
+
+async def test_the_contacts_migration_fills_every_registry_org_as_the_seed(
+    seeded: AsyncConnection,
+) -> None:
+    migration = ScriptDirectory.from_config(alembic_config()).get_revision(
+        "3f9d6b2e8a41",
     )
+    assert migration is not None
+    unregistered = organizations_table.c.registered_at.is_(None)
 
-    assert grouped.group_size >= 1 + DEMO_NEIGHBOURS
+    def rerun(connection: Connection) -> None:
+        with Operations.context(MigrationContext.configure(connection)):
+            connection.execute(
+                update(organizations_table)
+                .where(unregistered)
+                .values(email=None, site=None),
+            )
+            migration.module.upgrade()
+
+    stmt = select(
+        unregistered,
+        organizations_table.c.email,
+        organizations_table.c.site,
+    ).order_by(organizations_table.c.id)
+    savepoint = await seeded.begin_nested()
+    registered = (
+        select(organizations_table.c.id)
+        .where(unregistered, organizations_table.c.email.is_not(None))
+        .order_by(organizations_table.c.id)
+        .limit(1)
+        .scalar_subquery()
+    )
+    await seeded.execute(
+        update(organizations_table)
+        .where(organizations_table.c.id == registered)
+        .values(registered_at=func.now(), email="priem@uk.ru", site=None),
+    )
+    seeded_orgs = (await seeded.execute(stmt)).tuples().all()
+    await seeded.run_sync(rerun)
+    migrated = (await seeded.execute(stmt)).tuples().all()
+    await savepoint.rollback()
+
+    assert any(email for free, email, _ in migrated if free)
+    assert migrated == seeded_orgs

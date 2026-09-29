@@ -323,10 +323,8 @@ const HomePage = () => {
 
       {!connected && (
         <DemandCard
-          houseId={house.id}
-          demandSent={house.demand_sent}
-          demandCount={house.demand_count}
-          orgEmail={house.org?.email ?? null}
+          house={house}
+          flat={residency?.flat_number}
           onSent={() => void card.refetch()}
         />
       )}

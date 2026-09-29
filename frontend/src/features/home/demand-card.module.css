@@ -2,3 +2,14 @@
   flex: 1;
   min-width: 0;
 }
+
+.Letter {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background-color: var(--background-tertiary);
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

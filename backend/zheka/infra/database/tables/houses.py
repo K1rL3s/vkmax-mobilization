@@ -11,6 +11,7 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     false,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -46,6 +47,13 @@ houses_table = Table(
         nullable=False,
     ),
     Column("digest_sent_on", Date, nullable=True),
+    Column(
+        "passport",
+        JSONB,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+        nullable=False,
+    ),
     Index(None, "city", "street"),
 )
 
