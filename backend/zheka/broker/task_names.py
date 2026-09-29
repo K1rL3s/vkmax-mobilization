@@ -26,3 +26,4 @@ class TaskName(StrEnum):
     KEEP_WEBHOOK = "keep_webhook"
     WATCH_REQUEST_DEADLINES = "watch_request_deadlines"
     PURGE_FILES = "purge_files"
+    PURGE_IDEMPOTENCY_KEYS = "purge_idempotency_keys"

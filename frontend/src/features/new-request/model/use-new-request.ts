@@ -17,6 +17,7 @@ import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import type { components } from "@/shared/api/schema/generated";
+import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { haptic, useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { houseParams, useSession } from "@/shared/model/session";
@@ -64,6 +65,7 @@ export const useNewRequest = () => {
     dispute?.category ?? preset,
   );
   const photos = usePhotos();
+  const idempotency = useIdempotencyKey();
 
   useClosingConfirmation(
     description.trim() !== prefill.trim() || photos.names.length > 0,
@@ -145,7 +147,13 @@ export const useNewRequest = () => {
 
     if (dispute) {
       disputeCharge.mutate({
-        params: { ...authParams(), path: { charge_id: dispute.chargeId } },
+        params: {
+          header: {
+            ...authParams().header,
+            "Idempotency-Key": idempotency.key,
+          },
+          path: { charge_id: dispute.chargeId },
+        },
         body: { comment: description.trim(), service: dispute.service },
       });
 
@@ -153,7 +161,12 @@ export const useNewRequest = () => {
     }
 
     create.mutate({
-      params: houseParams(),
+      params: {
+        header: {
+          ...houseParams().header,
+          "Idempotency-Key": idempotency.key,
+        },
+      },
       body: {
         category,
         description: description.trim(),

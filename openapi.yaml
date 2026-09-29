@@ -2415,6 +2415,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -2722,6 +2731,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -4076,6 +4094,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -4308,6 +4335,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -7700,6 +7736,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -8032,6 +8077,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -8416,6 +8470,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -8606,6 +8669,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:

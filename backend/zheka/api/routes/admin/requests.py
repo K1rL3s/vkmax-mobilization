@@ -2,7 +2,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import CurrentOrgDep, CurrentUserDep
+from zheka.api.dependencies import CurrentOrgDep, CurrentUserDep, IdempotencyDep
 from zheka.api.routes.requests import signed
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.requests import (
@@ -120,15 +120,21 @@ async def reply_to_request(
     current_org: CurrentOrgDep,
     admin_requests_service: FromDishka[AdminRequestsService],
     files_service: FromDishka[FilesService],
+    idempotency: IdempotencyDep,
     body: ReplyToRequestRequest,
 ) -> AdminRequestCard:
+    saved = await idempotency.replay(AdminRequestCard)
+    if saved is not None:
+        return saved
     data = await admin_requests_service.reply(
         current_org.org_id,
         request_id,
         body.text,
         current_org.user_id,
     )
-    return _card(data, files_service)
+    response = _card(data, files_service)
+    await idempotency.save(response)
+    return response
 
 
 @router.post("/admin/requests/{request_id}/assign", summary="Назначить исполнителя")
@@ -183,14 +189,20 @@ async def create_phone_request(
     current_org: CurrentOrgDep,
     admin_requests_service: FromDishka[AdminRequestsService],
     files_service: FromDishka[FilesService],
+    idempotency: IdempotencyDep,
     body: CreatePhoneRequestRequest,
 ) -> AdminRequestCard:
+    saved = await idempotency.replay(AdminRequestCard)
+    if saved is not None:
+        return saved
     data = await admin_requests_service.create_phone(
         current_org.org_id,
         PhoneRequestDraft(**body.model_dump()),
         current_org.user_id,
     )
-    return _card(data, files_service)
+    response = _card(data, files_service)
+    await idempotency.save(response)
+    return response
 
 
 @router.get("/admin/executors", summary="Исполнители организации")

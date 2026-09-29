@@ -4,6 +4,7 @@ from zheka.core.models.charges import Charge, Tariff
 from zheka.core.models.chats import Chat, ChatCard, ChatPin
 from zheka.core.models.events import Event
 from zheka.core.models.houses import Flat, House
+from zheka.core.models.idempotency import IdempotencyKey
 from zheka.core.models.invites import FlatInvite, OrgInvite
 from zheka.core.models.meters import Meter, Reading
 from zheka.core.models.organizations import OrgMember, OrgSettings, Organization
@@ -41,6 +42,7 @@ __all__ = (
     "Flat",
     "FlatInvite",
     "House",
+    "IdempotencyKey",
     "Meter",
     "NotificationSetting",
     "OrgInvite",

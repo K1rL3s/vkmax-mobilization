@@ -2,7 +2,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import CurrentOrgDep
+from zheka.api.dependencies import CurrentOrgDep, IdempotencyDep
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.polls import AdminPollListItem, CreateOrgPollRequest, PollCard
 from zheka.core.enums import PollStatus
@@ -37,11 +37,17 @@ async def create_org_poll(
     current_org: CurrentOrgDep,
     body: CreateOrgPollRequest,
     polls_service: FromDishka[PollsService],
+    idempotency: IdempotencyDep,
 ) -> PollCard:
+    saved = await idempotency.replay(PollCard)
+    if saved is not None:
+        return saved
     card = await polls_service.create(
         current_org.user_id,
         body.house_id,
         body.draft(),
         org_id=current_org.org_id,
     )
-    return PollCard.of_card(card)
+    response = PollCard.of_card(card)
+    await idempotency.save(response)
+    return response

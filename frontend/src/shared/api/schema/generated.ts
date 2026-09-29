@@ -7368,6 +7368,7 @@ export interface operations {
       header?: {
         "X-House-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -7723,6 +7724,7 @@ export interface operations {
       query?: never;
       header?: {
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         request_id: number;
@@ -9314,6 +9316,7 @@ export interface operations {
       query?: never;
       header?: {
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         charge_id: number;
@@ -9581,6 +9584,7 @@ export interface operations {
       query?: never;
       header?: {
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         house_id: number;
@@ -13237,6 +13241,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         request_id: number;
@@ -13601,6 +13606,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -13965,6 +13971,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -14148,6 +14155,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;

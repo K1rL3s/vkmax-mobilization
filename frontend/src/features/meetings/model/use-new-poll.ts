@@ -6,6 +6,7 @@ import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import { useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
+import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { useSession } from "@/shared/model/session";
 
 import {
@@ -34,6 +35,7 @@ export const useNewPoll = () => {
 
   const options = useFieldArray({ control: form.control, name: "options" });
 
+  const idempotency = useIdempotencyKey();
   const create = rqClient.useMutation("post", "/api/houses/{house_id}/polls", {
     onSuccess: async (poll) => {
       await invalidatePaths("/api/houses/{house_id}/polls");
@@ -52,7 +54,13 @@ export const useNewPoll = () => {
     }
 
     create.mutate({
-      params: { ...authParams(), path: { house_id: residency.house_id } },
+      params: {
+        header: {
+          ...authParams().header,
+          "Idempotency-Key": idempotency.key,
+        },
+        path: { house_id: residency.house_id },
+      },
       body: {
         title: draft.title,
         description: draft.description.trim() || null,

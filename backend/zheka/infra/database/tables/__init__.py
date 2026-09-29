@@ -14,6 +14,7 @@ from zheka.infra.database.tables.chats import (
 )
 from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.houses import flats_table, houses_table
+from zheka.infra.database.tables.idempotency import idempotency_keys_table
 from zheka.infra.database.tables.invites import flat_invites_table, org_invites_table
 from zheka.infra.database.tables.meters import meters_table, readings_table
 from zheka.infra.database.tables.organizations import (
@@ -63,6 +64,7 @@ mapper_registry.map_imperatively(models.ChatCard, chat_cards_table)
 mapper_registry.map_imperatively(models.Event, events_table)
 mapper_registry.map_imperatively(models.House, houses_table)
 mapper_registry.map_imperatively(models.Flat, flats_table)
+mapper_registry.map_imperatively(models.IdempotencyKey, idempotency_keys_table)
 mapper_registry.map_imperatively(models.OrgInvite, org_invites_table)
 mapper_registry.map_imperatively(models.FlatInvite, flat_invites_table)
 mapper_registry.map_imperatively(models.Meter, meters_table)
