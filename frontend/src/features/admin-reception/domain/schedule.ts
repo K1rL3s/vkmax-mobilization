@@ -1,6 +1,6 @@
 import type { components } from "@/shared/api/schema/generated";
 
-import { minuteOfDay } from "./day";
+import { minuteOfDay, slotLabels } from "./day";
 
 export type ReceptionWindow = components["schemas"]["ReceptionWindowItem"];
 
@@ -177,24 +177,18 @@ export const gridWithDay = (
   ...windowsOfDraft(draft, weekday),
 ];
 
-export const slotsPerDay = (draft: DayDraft): number => {
-  if (!draft.enabled || draft.slotMinutes < 1) {
-    return 0;
-  }
-
-  const spans: [string, string][] = draft.hasBreak
-    ? [
-        [draft.timeFrom, draft.breakFrom],
-        [draft.breakTo, draft.timeTo],
-      ]
-    : [[draft.timeFrom, draft.timeTo]];
-
-  return spans.reduce((total, [from, to]) => {
-    const span = minuteOfDay(to) - minuteOfDay(from);
-
-    return total + Math.max(0, Math.floor(span / draft.slotMinutes));
-  }, 0);
-};
+export const daySlots = (draft: DayDraft): string[] =>
+  draft.enabled
+    ? slotLabels(
+        draft.hasBreak
+          ? [
+              [draft.timeFrom, draft.breakFrom],
+              [draft.breakTo, draft.timeTo],
+            ]
+          : [[draft.timeFrom, draft.timeTo]],
+        draft.slotMinutes,
+      )
+    : [];
 
 export const dayError = (draft: DayDraft): string | null => {
   if (!draft.enabled) {

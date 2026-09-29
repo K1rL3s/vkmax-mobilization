@@ -22,6 +22,7 @@ import {
 } from "../domain/access-form";
 import { useAccessForm } from "../model/use-access-form";
 import { FlatPicker } from "./flat-picker";
+import { TimeChips } from "./time-chips";
 
 import styles from "./access-form.module.css";
 
@@ -46,12 +47,12 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
       <form className={styles.Form} noValidate onSubmit={form.submit}>
         <Flex align="stretch" direction="column" gapY={4}>
           <Typography.Text asChild variant="header" color="primary">
-            <h1 className={styles.Title}>Сбор доступа</h1>
+            <h1 className={styles.Title}>Новый запрос доступа</h1>
           </Typography.Text>
 
           <Typography.Text variant="description" color="secondary">
             Жители выберут окно сами. Уведомление уйдёт им сразу после создания
-            сбора
+            запроса
           </Typography.Text>
         </Flex>
 
@@ -184,24 +185,11 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
           <FieldError message={form.errors.perWindow?.message} />
 
           {form.windows.length > 0 && (
-            <>
-              <div className={styles.Chips}>
-                {form.windows.map((startsAt) => (
-                  <Typography.Text
-                    key={startsAt}
-                    className={styles.Chip}
-                    variant="body"
-                    color="primary"
-                  >
-                    {windowLabel(startsAt, form.windowMinutes)}
-                  </Typography.Text>
-                ))}
-              </div>
-
-              <Typography.Text variant="detail" color="secondary">
-                Столько окон увидят жители. Каждый выберет одно
-              </Typography.Text>
-            </>
+            <TimeChips
+              labels={form.windows.map((startsAt) =>
+                windowLabel(startsAt, form.windowMinutes),
+              )}
+            />
           )}
         </section>
 
@@ -227,15 +215,15 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
         </section>
 
         <Button type="submit" size="large" stretched>
-          Собрать доступ
+          Запросить доступ
         </Button>
       </form>
 
       <ConfirmDialog
         isOpen={form.isOpen}
-        title="Отправить сбор жителям?"
-        description={`Жители ${form.draft?.flats.length ?? 0} ${plural(form.draft?.flats.length ?? 0, ["квартиры", "квартир", "квартир"])} получат уведомление. Отменить сбор и поменять окна потом нельзя`}
-        confirmLabel="Собрать доступ"
+        title="Отправить запрос жителям?"
+        description={`Жители ${form.draft?.flats.length ?? 0} ${plural(form.draft?.flats.length ?? 0, ["квартиры", "квартир", "квартир"])} получат уведомление. Отменить запрос и поменять окна потом нельзя`}
+        confirmLabel="Запросить доступ"
         isPending={form.isSending}
         error={form.sendError}
         onConfirm={form.send}

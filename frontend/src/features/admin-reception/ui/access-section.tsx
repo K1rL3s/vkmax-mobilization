@@ -56,11 +56,11 @@ const List = ({ items }: { items: AccessRequest[] }) => (
 const CreateAction = ({ canCreate }: { canCreate: boolean }) =>
   canCreate ? (
     <Button asChild size="medium" iconBefore={<Icon src={plusIcon} />}>
-      <Link to={Routes.ADMIN_ACCESS_NEW}>Собрать доступ</Link>
+      <Link to={Routes.ADMIN_ACCESS_NEW}>Запросить доступ</Link>
     </Button>
   ) : (
     <Typography.Text variant="description" color="secondary">
-      Собрать доступ может администратор организации
+      Запросить доступ может администратор организации
     </Typography.Text>
   );
 
@@ -73,21 +73,21 @@ export const AccessSection = () => {
   return (
     <section className={styles.Section}>
       <Typography.Text asChild variant="title" color="primary">
-        <h2>Сбор доступа</h2>
+        <h2>Доступ в квартиры</h2>
       </Typography.Text>
 
       {requests.isPending ? (
-        <LoadingState title="Загружаем сборы доступа" />
+        <LoadingState title="Загружаем запросы доступа" />
       ) : requests.isError ? (
         <ErrorState
           error={requests.error}
-          description="Не получилось загрузить сборы доступа"
+          description="Не получилось загрузить запросы доступа"
           onRetry={() => void requests.refetch()}
         />
       ) : requests.data.length === 0 ? (
         <EmptyState
-          title="Сборов доступа ещё не было"
-          description="Соберите доступ, когда нужно попасть сразу в несколько квартир: жители сами выберут удобное время"
+          title="Запросов доступа ещё не было"
+          description="Когда нужно попасть в несколько квартир, например к стоякам или счётчикам: жители сами выберут удобное время"
           action={<CreateAction canCreate={canCreate} />}
         />
       ) : (
@@ -103,7 +103,7 @@ export const AccessSection = () => {
             </>
           ) : (
             <Typography.Text variant="description" color="secondary">
-              Идущих сборов нет - все прошли
+              Идущих запросов нет - все прошли
             </Typography.Text>
           )}
 

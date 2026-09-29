@@ -8,7 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { FILTERS } from "./domain/request-filters";
 import { useAdminRequestList } from "./model/use-admin-request-list";
-import { ChipRow } from "./ui/chip-row";
+import { FilterBar } from "./ui/filter-bar";
 import { NoOrgAccess } from "./ui/no-org-access";
 import { RequestRow } from "./ui/request-row";
 
@@ -43,36 +43,40 @@ const AdminRequestsPage = () => {
             Дом: {list.houseAddress ?? "выбран на карте"}
           </FilterChip>
         )}
-        <ChipRow
-          label="Заявки"
-          options={FILTERS}
-          value={list.filters.filter}
-          onChange={(id) => list.updateFilter("filter", id)}
-        />
-        <ChipRow
-          label="Где проблема"
-          options={[
-            { id: "all", label: "Личные и общие" },
-            { id: "flat", label: "Личные" },
-            { id: "house", label: "Общие" },
+        <FilterBar
+          groups={[
+            {
+              name: "filter",
+              label: "Статус",
+              options: FILTERS,
+              value: list.filters.filter,
+            },
+            {
+              name: "category",
+              label: "Категория",
+              options: [
+                { id: "all", label: "Все" },
+                ...list.categories.map(({ category, label }) => ({
+                  id: category,
+                  label,
+                })),
+              ],
+              value: list.filters.category ?? "all",
+            },
+            {
+              name: "place",
+              label: "Место",
+              options: [
+                { id: "all", label: "Все" },
+                { id: "flat", label: "Личные" },
+                { id: "house", label: "Общие" },
+              ],
+              value: list.filters.place ?? "all",
+            },
           ]}
-          value={list.filters.place ?? "all"}
-          onChange={(id) => list.updateFilter("place", id)}
+          onChange={list.updateFilter}
+          onReset={list.hasFilters ? list.clearFilters : undefined}
         />
-        {list.categories.length > 0 && (
-          <ChipRow
-            label="Категория"
-            options={[
-              { id: "all", label: "Все категории" },
-              ...list.categories.map(({ category, label }) => ({
-                id: category,
-                label,
-              })),
-            ]}
-            value={list.filters.category ?? "all"}
-            onChange={(id) => list.updateFilter("category", id)}
-          />
-        )}
       </Flex>
 
       {list.isPending && <LoadingState fill title="Загружаем заявки…" />}

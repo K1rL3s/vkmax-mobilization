@@ -51,15 +51,3 @@
 .Field > * {
   min-width: 0;
 }
-
-.Chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.Chip {
-  padding: 6px 12px;
-  border-radius: 12px;
-  background-color: var(--background-card);
-}

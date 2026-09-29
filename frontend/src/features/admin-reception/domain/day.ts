@@ -41,3 +41,26 @@ export const minuteOfDay = (time: string) => {
 
   return Number(hours) * 60 + Number(rest);
 };
+
+export const clock = (total: number) =>
+  `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+
+export const slotLabels = (
+  spans: [string, string][],
+  minutes: number,
+): string[] =>
+  minutes < 1
+    ? []
+    : spans.flatMap(([from, to]) => {
+        const labels: string[] = [];
+
+        for (
+          let start = minuteOfDay(from);
+          start + minutes <= minuteOfDay(to);
+          start += minutes
+        ) {
+          labels.push(`${clock(start)}-${clock(start + minutes)}`);
+        }
+
+        return labels;
+      });

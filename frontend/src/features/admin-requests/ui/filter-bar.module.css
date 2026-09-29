@@ -1,0 +1,17 @@
+.FilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  > * {
+    max-width: 100%;
+  }
+}
+
+.Down {
+  transform: rotate(90deg);
+}
+
+.Title {
+  margin: 0;
+}

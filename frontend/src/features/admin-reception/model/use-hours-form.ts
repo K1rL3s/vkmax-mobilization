@@ -11,7 +11,7 @@ import {
   draftOfDay,
   gridWithDay,
   receptionFormConstraints as limits,
-  slotsPerDay,
+  daySlots,
   type DayDraft,
   type ReceptionWindow,
 } from "../domain/schedule";
@@ -83,7 +83,7 @@ export const useHoursForm = (windows: ReceptionWindow[]) => {
     errors: form.formState.errors,
     draft,
     spansError: spans,
-    slots: slotsPerDay(draft),
+    slots: daySlots(draft),
     isTurningOff: !draft.enabled && windows.some((w) => w.weekday === weekday),
     canSave: form.formState.isDirty && form.formState.isValid && spans === null,
     isSaving: save.isPending,

@@ -9,7 +9,6 @@ import {
 } from "@maxhub/max-ui";
 
 import { cn } from "@/shared/lib/css";
-import { plural } from "@/shared/lib/format";
 import { useSession } from "@/shared/model/session";
 import { ConfirmDialog, useConfirm } from "@/shared/ui/confirm-dialog";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
@@ -23,6 +22,8 @@ import {
 } from "../domain/schedule";
 import { useHoursForm } from "../model/use-hours-form";
 import { useIsOrgAdmin, useReceptionWindows } from "../model/use-reception";
+
+import { TimeChips } from "./time-chips";
 
 import styles from "./hours-section.module.css";
 
@@ -177,11 +178,14 @@ const HoursEditor = ({ windows }: { windows: ReceptionWindow[] }) => {
             {form.spansError}
           </Typography.Text>
         ) : (
-          <Typography.Text variant="description" color="secondary">
-            {draft.enabled
-              ? `Житель увидит ${form.slots} ${plural(form.slots, ["слот", "слота", "слотов"])} на этот день`
-              : "В этот день житель записаться не сможет"}
-          </Typography.Text>
+          <>
+            {draft.enabled && <TimeChips labels={form.slots} inCard />}
+            {(!draft.enabled || form.slots.length === 0) && (
+              <Typography.Text variant="description" color="secondary">
+                В этот день житель записаться не сможет
+              </Typography.Text>
+            )}
+          </>
         )}
 
         {form.saveError && (

@@ -20,7 +20,7 @@ import { dayKey } from "../domain/day";
 
 const accessSchema = z
   .object({
-    houseId: z.number().int().positive("Выберите дом сбора"),
+    houseId: z.number().int().positive("Выберите дом"),
     reason: z
       .string()
       .trim()
@@ -31,7 +31,7 @@ const accessSchema = z
       ),
     date: z
       .string()
-      .min(1, "Выберите день сбора")
+      .min(1, "Выберите день")
       .refine((date) => date >= dayKey(new Date()), "День доступа уже прошёл"),
     timeFrom: z.string().min(1),
     timeTo: z.string().min(1),
@@ -159,7 +159,7 @@ export const useAccessForm = (houseIds: number[]) => {
       create.isError &&
       errorMessage(
         create.error,
-        "Не получилось собрать доступ. Проверьте связь и попробуйте ещё раз",
+        "Не получилось отправить запрос. Проверьте связь и попробуйте ещё раз",
       ),
     send: () => {
       const draft = confirm.target;

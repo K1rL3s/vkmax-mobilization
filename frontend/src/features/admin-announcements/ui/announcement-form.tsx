@@ -258,11 +258,6 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
                     checked={form.channels.includes("chat")}
                     onChange={(checked) => form.toggleChannel("chat", checked)}
                     label="Чат дома"
-                    caption={
-                      form.scope === "entrances"
-                        ? "Одно сообщение на весь чат с пометкой подъезда"
-                        : "Одно сообщение в чат, который бот привязал к дому"
-                    }
                   />
                 )}
 
@@ -273,7 +268,7 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
                   label="Личные сообщения"
                   caption={
                     form.scope === "house"
-                      ? "Каждому жителю от бота. Для срочного: в обычных объявлениях создаёт дубль тем, кто состоит в чате"
+                      ? undefined
                       : "Адресное объявление всегда уходит в личные сообщения"
                   }
                 />
@@ -288,7 +283,7 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
               checked={form.urgent}
               onChange={form.setUrgent}
               label="Срочное"
-              caption="Для аварий и отключений. Житель увидит объявление выделенным, бот пришлёт его с заголовком «🚨 Срочное объявление». Куда отправить, решают галочки выше"
+              caption="Для аварий и отключений"
             />
           </Card>
 

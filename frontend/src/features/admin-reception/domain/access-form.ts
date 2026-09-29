@@ -1,6 +1,6 @@
 import type { components } from "@/shared/api/schema/generated";
 
-import { minuteOfDay, pad } from "./day";
+import { clock, minuteOfDay } from "./day";
 
 export type AccessFlat = { flat_id: number; flat_number: string };
 
@@ -11,9 +11,6 @@ export const accessFormConstraints = {
   perWindowMin: 1,
   perWindowMax: 50,
 };
-
-const clock = (total: number) =>
-  `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
 
 export const generateWindows = (rule: {
   date: string;

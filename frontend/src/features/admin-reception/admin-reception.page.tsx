@@ -14,7 +14,7 @@ const AdminReceptionPage = () => (
       </Typography.Text>
 
       <Typography.Text variant="description" color="secondary">
-        Часы приёма организации, записи жителей по дням и сборы доступа в
+        Часы приёма организации, записи жителей по дням и запросы доступа в
         квартиры
       </Typography.Text>
     </Flex>

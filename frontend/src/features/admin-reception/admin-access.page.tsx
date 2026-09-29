@@ -45,14 +45,14 @@ const AdminAccessPage = () => {
       <ErrorState
         error={grid.error}
         fill
-        description="Не получилось загрузить сбор доступа"
+        description="Не получилось загрузить запрос доступа"
         onRetry={() => void grid.refetch()}
       />
     );
   }
 
   if (grid.isPending) {
-    return <LoadingState fill title="Загружаем сбор доступа" />;
+    return <LoadingState fill title="Загружаем запрос доступа" />;
   }
 
   const item = grid.data.access_request;
@@ -87,8 +87,8 @@ const AdminAccessPage = () => {
 
         {windows.length === 0 ? (
           <EmptyState
-            title="У сбора нет окон"
-            description="Жителям нечего выбирать: заведите сбор заново с окнами доступа"
+            title="У запроса нет окон"
+            description="Жителям нечего выбирать: создайте запрос заново с окнами доступа"
           />
         ) : (
           windows.map((window) => (
@@ -135,7 +135,7 @@ const AdminAccessPage = () => {
 
             <Typography.Text variant="description" color="secondary">
               Открыть в них некому: подтверждённого жителя нет или он
-              заблокирован. В сборе этих квартир нет - договоритесь с ними
+              заблокирован. В запросе этих квартир нет - договоритесь с ними
               отдельно
             </Typography.Text>
 
