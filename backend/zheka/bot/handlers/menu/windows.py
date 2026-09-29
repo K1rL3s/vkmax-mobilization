@@ -29,7 +29,9 @@ from zheka.core.texts import (
     DIGEST_EMPTY,
     DIGEST_SUBSCRIBE,
     DIGEST_SUBSCRIBED,
+    NO_EMERGENCY_PHONE_TEXT,
     OPEN_APP,
+    ORG_PHONE_TEXT,
 )
 
 GREETING = "👋 Жэка Коммуналкин на связи"
@@ -58,10 +60,6 @@ EMERGENCY_PHONE_TEXT = (
     "🛠 Затем звоните в аварийную службу дома: {emergency_phone}. "
     "Оператор обязан ответить за 5 минут (ПП 416 п. 13)"
 )
-NO_EMERGENCY_PHONE_TEXT = (
-    "🛠 Номер аварийной службы есть в квитанции и на доске объявлений в подъезде"
-)
-ORG_PHONE_TEXT = "🏢 Телефон УК: {org_phone}"
 CALL_NOTE_TEXT = "📝 Запишите время звонка и номер заявки, который назовет диспетчер"
 
 

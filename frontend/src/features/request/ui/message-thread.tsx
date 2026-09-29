@@ -20,7 +20,13 @@ const AUTHOR_ROLE: Record<string, { icon: string; tone: string }> = {
   staff: { icon: buildingIcon, tone: styles.staff },
 };
 
-export const MessageThread = ({ messages }: { messages: RequestMessage[] }) => {
+export const MessageThread = ({
+  messages,
+  ownRole,
+}: {
+  messages: RequestMessage[];
+  ownRole?: string;
+}) => {
   if (messages.length === 0) return null;
 
   return (
@@ -56,7 +62,9 @@ export const MessageThread = ({ messages }: { messages: RequestMessage[] }) => {
                     variant="body-strong"
                     color="primary"
                   >
-                    {message.author_name}
+                    {message.author_role === ownRole
+                      ? "Вы"
+                      : message.author_name}
                   </Typography.Text>
                   {message.is_internal && (
                     <Typography.Text

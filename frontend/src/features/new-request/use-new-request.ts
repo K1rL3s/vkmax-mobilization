@@ -73,14 +73,15 @@ export const useNewRequest = () => {
   const categories = useRequestCategories();
 
   const text = useDebounceValue(description.trim(), 800);
-  const isClassifiable = !dispute && text.length >= 15;
+  const isCheckable = !dispute && text.length >= 6;
+  const isClassifiable = isCheckable && text.length >= 15;
 
   const classify = rqClient.useQuery(
     "post",
     "/api/requests/classify",
     { params: authParams(), body: { text } },
     {
-      enabled: isClassifiable,
+      enabled: isCheckable,
       staleTime: Infinity,
       retry: 0,
       placeholderData: (previous) => previous,
@@ -187,6 +188,7 @@ export const useNewRequest = () => {
       setDescription(next.slice(0, DESCRIPTION_LIMIT)),
     category,
     suggested,
+    danger: isCheckable ? (classify.data?.danger ?? null) : null,
     setCategory: setPicked,
     categories: categories.data ?? [],
     isCategoriesFailed: categories.isError,

@@ -24,6 +24,7 @@ import {
   requestListItem,
   similarRequests,
   uploads,
+  user,
 } from "./state";
 
 type Schemas = components["schemas"];
@@ -68,6 +69,7 @@ export const requestsConfigs = [
       zone:
         requestCategories().find((item) => item.category === category)?.zone ??
         null,
+      danger: /пахнет газом/i.test(text) ? "gas" : null,
     } satisfies Schemas["ClassifyRequestResponse"]);
   }),
   endpoint("get", "/requests", (request) => {
@@ -287,5 +289,100 @@ export const requestsConfigs = [
     uploads.set(name, url);
 
     return ok({ name, url, is_video } satisfies Schemas["FileRef"]);
+  }),
+  endpoint("get", "/pp290", () => {
+    const lift =
+      "Работы, выполняемые в целях надлежащего содержания и ремонта лифта (лифтов) в многоквартирном доме";
+    const emergency =
+      "Обеспечение устранения аварий в соответствии с установленными предельными сроками на внутридомовых инженерных системах в многоквартирном доме, выполнения заявок населения";
+
+    return ok({
+      source: "pp_290",
+      edition: "в ред. постановления Правительства РФ от 07.03.2025 № 293",
+      checked_at: "2026-09-29",
+      note: "Мок: два пункта из backend/zheka/core/pp290.json",
+      items: [
+        {
+          ref: "п. 22, абз. 2",
+          section: lift,
+          text: "организация системы диспетчерского контроля и обеспечение диспетчерской связи с кабиной лифта",
+        },
+        {
+          ref: "п. 22, абз. 3",
+          section: lift,
+          text: "обеспечение проведения осмотров, технического обслуживания и ремонт лифта (лифтов)",
+        },
+        {
+          ref: "п. 22, абз. 4",
+          section: lift,
+          text: "обеспечение проведения аварийного обслуживания лифта (лифтов)",
+        },
+        {
+          ref: "п. 22, абз. 5",
+          section: lift,
+          text: "обеспечение проведения технического освидетельствования лифта (лифтов), в том числе после замены элементов оборудования",
+        },
+        { ref: "п. 28", section: emergency, text: emergency },
+      ],
+    } satisfies Schemas["Pp290Catalog"]);
+  }),
+  endpoint("post", "/requests/:request_id/gji-pdf", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
+
+    if (
+      !["new", "accepted", "in_progress"].includes(item.status) ||
+      item.deadline_at === null ||
+      new Date(item.deadline_at).getTime() > Date.now()
+    ) {
+      return conflict(
+        "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек",
+      );
+    }
+
+    return ok({ ok: true } satisfies Schemas["OkResponse"]);
+  }),
+  endpoint("post", "/requests/:request_id/demo/neighbours", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item || !canDemoNeighbours(item)) {
+      return notFound("Заявка не найдена");
+    }
+
+    item.group_id = item.id;
+    item.group_size = 5;
+
+    return ok(requestCard(item));
+  }),
+  endpoint("post", "/requests/:request_id/messages", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
+
+    if (item.status === "done") {
+      return conflict("Заявка закрыта, подайте новую");
+    }
+
+    const text =
+      typeof request.body.text === "string" ? request.body.text.trim() : "";
+    if (!text) {
+      return badRequest("Напишите сообщение для УК");
+    }
+
+    item.messages.push({
+      after_minutes: (Date.now() - Date.parse(item.created_at)) / 60_000,
+      author_role: "resident",
+      author_name: user.name,
+      text,
+    });
+    item.question_asked_at = null;
+    item.resident_answered_at = new Date().toISOString();
+
+    return ok(requestCard(item));
   }),
 ];

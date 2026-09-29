@@ -8,8 +8,8 @@ from maxo.dialogs import Data, ShowMode
 from maxo.fsm import State
 from taskiq import async_shared_broker
 
-from zheka.bot.dialog_data import ExecutorCardData, ReviewData
-from zheka.bot.states import ExecutorCard, Review
+from zheka.bot.dialog_data import ExecutorCardData, QuestionData, ReviewData
+from zheka.bot.states import ExecutorCard, Question, Review
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.bot_requests import save_photos
 from zheka.core.enums import NotificationCategory, RequestStatus
@@ -162,3 +162,27 @@ async def watch_request_deadlines(
     requests_service: FromDishka[RequestsService],
 ) -> int:
     return await requests_service.watch_deadlines(datetime.now(UTC))
+
+
+@async_shared_broker.task(task_name=TaskName.SEND_QUESTION_CARD.value)
+@inject(patch_module=True)
+async def send_question_card(
+    request_id: RequestId,
+    requests_repo: FromDishka[RequestsRepo],
+    users_repo: FromDishka[UsersRepo],
+    notifications_service: FromDishka[NotificationsService],
+    sender: FromDishka[MaxSender],
+) -> None:
+    request = await requests_repo.get(request_id)
+    if request is None or request.author_user_id is None:
+        return
+    await open_card(
+        users_repo,
+        notifications_service,
+        sender,
+        request.author_user_id,
+        Question.card,
+        f"question-{request_id}",
+        QuestionData(request_id=request_id).to_data(),
+        ShowMode.SEND,
+    )

@@ -65,6 +65,8 @@ async def list_org_requests(
     executor_user_id: UserId | None = None,
     overdue: bool = False,
     grouped: bool = False,
+    question_asked: bool = False,
+    resident_answered: bool = False,
     limit: Limit = 20,
     offset: Offset = 0,
 ) -> Page[AdminRequestListItem]:
@@ -78,6 +80,8 @@ async def list_org_requests(
             executor_user_id=executor_user_id,
             overdue=overdue,
             grouped=grouped,
+            question_asked=question_asked,
+            resident_answered=resident_answered,
         ),
         limit,
         offset,
@@ -144,6 +148,7 @@ async def reply_to_request(
         request_id,
         body.text,
         current_org.user_id,
+        question=body.question,
     )
     response = _card(data, files_service, current_org)
     await idempotency.save(response)

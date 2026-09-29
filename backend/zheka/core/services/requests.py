@@ -59,7 +59,7 @@ from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import OPEN_STATUSES, RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
-from zheka.infra.yandex import YandexClassifier
+from zheka.infra.yandex import Classification, YandexClassifier
 
 MAX_ATTACHMENTS = 12
 MAX_VIDEOS = 2
@@ -83,9 +83,8 @@ SHARE_FINISHED = "Заявку на приемке или закрытую со�
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
 ESCALATE_NOT_OVERDUE = "Руководство зовут, только когда срок открытой заявки истек"
-CANCEL_TOO_LATE = "Отменить можно, пока работу не сдали на приемку"
-CANCEL_COMMENT_REQUIRED = "Расскажите, почему отменяете заявку"
-REJECTION_PHOTO_REQUIRED = "Приложите фото: так УК увидит, что не так"
+EMPTY_MESSAGE = "Напишите сообщение для УК"
+WRITE_CLOSED = "Заявка закрыта, подайте новую"
 
 
 class RequestDraft(ZhekaType):
@@ -594,15 +593,15 @@ class RequestsService:
         )
         return card
 
-    async def classify(self, user_id: UserId, text: str) -> RequestCategory | None:
-        category = await self._classifier.classify(text)
-        if category is not None:
+    async def classify(self, user_id: UserId, text: str) -> Classification:
+        classification = await self._classifier.classify(text)
+        if classification.category is not None:
             await self._events.record(
                 EventType.LLM_SUGGESTED,
                 user_id=user_id,
-                category=category.value,
+                category=classification.category.value,
             )
-        return category
+        return classification
 
     async def _notify_staff(self, request: Request, house: House, text: str) -> None:
         if house.org_id is None:
@@ -735,76 +734,47 @@ class RequestsService:
         )
         return await self._built_card(request, house)
 
-    async def cancel(
+    async def write(
         self,
         user_id: UserId,
         request_id: RequestId,
-        reason: CancelReason,
-        comment: str | None,
+        text: str,
+        channel: RequestChannel,
     ) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
         await self._active_resident(user_id, request.house_id)
+        message = stated(text, EMPTY_MESSAGE)
         await self._requests.lock(request)
-        current = request.status
-        if current not in OPEN_STATUSES:
-            raise InvalidState(CANCEL_TOO_LATE)
-        note = (comment or "").strip()
-        if reason is CancelReason.OTHER and not note:
-            raise InvalidRequest(CANCEL_COMMENT_REQUIRED)
+        if request.status is RequestStatus.DONE:
+            raise InvalidState(WRITE_CLOSED)
 
-        at = datetime.now(UTC)
-        role = RequestActorRole.RESIDENT.value
-        await self._requests.set_status(
-            request,
-            RequestStatus.DONE,
-            at,
-            completion_reason=RequestCompletionReason.RESIDENT_CANCELED,
-        )
-        await self._requests.add_log(
-            request.id,
-            current,
-            RequestStatus.DONE,
-            user_id,
-            role,
-            at,
-        )
+        answer = request.question_asked_at is not None
         await self._requests.add_message(
             request.id,
             user_id,
-            role,
-            texts.cancel_note(reason, note),
+            RequestActorRole.RESIDENT.value,
+            message,
+        )
+        await self._requests.stamp_thread(
+            request,
+            question_asked_at=None,
+            resident_answered_at=datetime.now(UTC),
         )
         await self._events.record(
-            EventType.REQUEST_STATUS_CHANGED,
+            EventType.REQUEST_MESSAGE_SENT,
             user_id=user_id,
             request_id=request.id,
-            **{"from": current.value, "to": RequestStatus.DONE.value},
-            by_role=role,
-        )
-        await self._events.record(
-            EventType.REQUEST_CANCELED,
-            user_id=user_id,
-            request_id=request.id,
-            reason=reason.value,
-            status=current.value,
+            by_role=RequestActorRole.RESIDENT.value,
+            answer=answer,
+            channel=channel.value,
         )
         house = await self._get_house(request.house_id)
         await self._notify_crew(
             request,
             house,
-            texts.request_canceled(request, reason, note),
+            texts.resident_answered(request, message),
         )
-        self._sync_cards(request)
         return await self._built_card(request, house)
-
-    def _sync_cards(self, request: Request) -> None:
-        self._notifications.sync_chat_card(ChatCardKind.REQUEST, request.id, post=False)
-        if request.group_id is not None:
-            self._notifications.sync_chat_card(
-                ChatCardKind.GROUP,
-                request.group_id,
-                post=False,
-            )
 
 
 async def build_rows(

@@ -21,7 +21,14 @@ from tests.test_analytics import _service as analytics_service
 from tests.test_charges import _make_service as charges_service
 
 from zheka.core.charges import parse_lines
-from zheka.core.enums import OrgRole, PollStatus, RequestCategory, RequestStatus
+from zheka.core.danger import detect_danger
+from zheka.core.enums import (
+    DangerKind,
+    OrgRole,
+    PollStatus,
+    RequestCategory,
+    RequestStatus,
+)
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import API_CHECKER_MAX_USER_ID, FlatId, MaxUserId, OrgId, UserId
 from zheka.core.services.demo import (
@@ -694,3 +701,26 @@ def _map_state(rows: Sequence[Row[Any]], now: datetime) -> str:
     if any(row.status is not RequestStatus.DONE for row in rows):
         return "open"
     return "calm"
+
+
+async def test_a_seeded_sparking_socket_is_marked_dangerous(db: AsyncSession) -> None:
+    stmt = select(requests_table.c.description, requests_table.c.danger).distinct()
+
+    marks = dict((await db.execute(stmt)).tuples().all())
+
+    assert marks["Искрит розетка в щитке на этаже"] == DangerKind.ELECTRIC
+    assert marks["Течет стояк в санузле"] is None
+
+
+async def test_every_seeded_request_is_marked_by_its_own_words(
+    db: AsyncSession,
+) -> None:
+    stmt = select(requests_table.c.description, requests_table.c.danger).distinct()
+
+    marks = set((await db.execute(stmt)).tuples().all())
+
+    assert marks == {
+        (description, None if found is None else found.kind)
+        for description, _ in marks
+        for found in [detect_danger(description)]
+    }

@@ -27,6 +27,8 @@ type MockRequest = {
   escalated_at: string | null;
   parent_request_id: number | null;
   completion_reason: Schemas["RequestCompletionReason"] | null;
+  question_asked_at: string | null;
+  resident_answered_at: string | null;
   attachment_names: string[];
   messages: {
     after_minutes: number;
@@ -59,6 +61,8 @@ const request = (
     escalated_at: null,
     parent_request_id: null,
     completion_reason: null,
+    question_asked_at: null,
+    resident_answered_at: null,
     attachment_names: [],
     messages: [],
     ...fields,
@@ -90,7 +94,12 @@ const requests: MockRequest[] = [
         author_name: "Слесарь Ринат Хайруллин",
         text: "Водоканал заменил задвижку, стояк заполняем. К вечеру вода должна пойти.",
       },
+      {
+        after_minutes: 27 * 60,
+        text: "Уточните, пожалуйста: воды нет только на кухне или во всей квартире?",
+      },
     ],
+    question_asked_at: minutes(-21 * 60),
   }),
   request({
     id: 142,
@@ -340,6 +349,8 @@ export const requestListItem = (
   deadline_at: item.deadline_at,
   completion_reason: item.completion_reason,
   escalated_at: item.escalated_at,
+  question_asked_at: item.question_asked_at,
+  resident_answered_at: item.resident_answered_at,
 });
 
 const STEP: {

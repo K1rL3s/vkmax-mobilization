@@ -16,7 +16,7 @@ from zheka.api.dependencies import (
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.requests import (
-    CancelRequestRequest,
+    MIN_CLASSIFY_TEXT,
     ClassifyRequestRequest,
     ClassifyRequestResponse,
     CreateRequestRequest,
@@ -28,16 +28,21 @@ from zheka.api.schemas.requests import (
     RequestListItem,
     SharedRequestResponse,
     SimilarRequestsResponse,
+    WriteToRequestRequest,
 )
 from zheka.core.deeplinks import house_category_payload
-from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
-from zheka.core.errors import NotEnoughRights
-from zheka.core.ids import API_CHECKER_MAX_USER_ID, RequestId
+from zheka.core.enums import (
+    CATEGORY_RULES,
+    RequestCategory,
+    RequestChannel,
+    RequestStatus,
+)
+from zheka.core.ids import RequestId
 from zheka.core.models import RequestAttachment
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER, request_share_text
-from zheka.infra.yandex import YandexQuota
+from zheka.infra.yandex import Classification, YandexQuota
 
 router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
 
@@ -236,10 +241,18 @@ async def classify_request_text(
     body: ClassifyRequestRequest,
     quota: FromDishka[YandexQuota],
 ) -> ClassifyRequestResponse:
-    if not quota.take(current_account.user_id):
-        return ClassifyRequestResponse.of(None)
-    category = await requests_service.classify(current_account.user_id, body.text)
-    return ClassifyRequestResponse.of(category)
+    classification = Classification()
+    if len(body.text.strip()) >= MIN_CLASSIFY_TEXT and quota.take(
+        current_account.user_id,
+    ):
+        classification = await requests_service.classify(
+            current_account.user_id,
+            body.text,
+        )
+    return ClassifyRequestResponse.of(
+        classification.category,
+        classification.danger(body.text),
+    )
 
 
 @router.post(
@@ -290,33 +303,31 @@ async def escalate_request(
 
 
 @router.post(
-    "/requests/{request_id}/cancel",
-    summary="Отменить свою заявку",
+    "/requests/{request_id}/messages",
+    summary="Написать в УК по заявке",
     description=(
-        "Только автор и только открытая заявка (новая, принятая или в работе): "
-        "она закрывается с итогом resident_canceled, причина уходит в переписку, "
-        "сотрудники УК и исполнитель получают сообщение. Заявка на приемке или "
-        "закрытая - 409, причина other без комментария - 400, чужая - 404, "
-        "тестовый токен - 403"
+        "Только автор незакрытой заявки: сообщение уходит сотрудникам УК и "
+        "исполнителю, снимает вопрос УК и отмечает, что житель ответил. "
+        "Закрытая заявка - 409, чужая - 404"
     ),
 )
-async def cancel_request(
+async def write_to_request(
     request_id: RequestId,
-    current_user: CurrentUserDep,
     current_account: RequireConsentDep,
     requests_service: FromDishka[RequestsService],
     files_service: FromDishka[FilesService],
-    body: CancelRequestRequest,
+    idempotency: IdempotencyDep,
+    body: WriteToRequestRequest,
 ) -> RequestCard:
-    if current_user.user.id == API_CHECKER_MAX_USER_ID:
-        raise NotEnoughRights(
-            "Тестовый токен не отменяет свои заявки: "
-            "на них держатся обязательные проверки API",
-        )
-    card = await requests_service.cancel(
+    saved = await idempotency.replay(RequestCard)
+    if saved is not None:
+        return saved
+    card = await requests_service.write(
         current_account.user_id,
         request_id,
-        body.reason,
-        body.comment,
+        body.text,
+        RequestChannel.MINIAPP,
     )
-    return _card(card, files_service)
+    response = _card(card, files_service)
+    await idempotency.save(response)
+    return response

@@ -40,7 +40,7 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
     CATEGORY_RULES,
-    CancelReason,
+    DangerKind,
     EventType,
     OrgRole,
     RequestActorRole,
@@ -1110,263 +1110,225 @@ async def test_request_accepts_two_videos_but_refuses_a_third_on_create_and_repe
         await service.repeat(own.user_id, card.request.id, "Снова течёт", videos)
 
 
-@pytest.mark.parametrize(
-    "status",
-    [RequestStatus.NEW, RequestStatus.ACCEPTED, RequestStatus.IN_PROGRESS],
-)
-async def test_the_author_cancels_an_open_request_with_a_reason(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-    status: RequestStatus,
-) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    request_id = created.request.id
-    created.request.status = status
-    await session.flush()
-
-    card = await service.cancel(
-        own.user_id,
-        request_id,
-        CancelReason.RESOLVED,
-        "  Сосед перекрыл кран  ",
-    )
-
-    request = card.request
-    assert request.status is RequestStatus.DONE
-    assert request.completion_reason is RequestCompletionReason.RESIDENT_CANCELED
-    assert request.done_at is not None
-    assert request.reviewed_at is None
-    last = (await _logs(session, request_id))[-1]
-    assert (last.from_status, last.to_status) == (status, RequestStatus.DONE)
-    assert (last.by_role, last.by_user_id) == (RequestActorRole.RESIDENT, own.user_id)
-    [message] = card.messages
-    assert message.message.text == (
-        "↩️ Отменена: проблема решилась сама. Сосед перекрыл кран"
-    )
-    assert message.message.author_user_id == own.user_id
-    [canceled] = await events_of(session, EventType.REQUEST_CANCELED)
-    assert canceled.payload == {
-        "request_id": request_id,
-        "reason": "resolved",
-        "status": status.value,
-    }
-    [changed] = await events_of(session, EventType.REQUEST_STATUS_CHANGED)
-    assert changed.payload["from"] == status.value
-    assert changed.payload["to"] == RequestStatus.DONE.value
-
-
-@pytest.mark.parametrize("status", [RequestStatus.ON_REVIEW, RequestStatus.DONE])
-async def test_a_request_past_the_work_is_not_canceled(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-    status: RequestStatus,
-) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    created.request.status = status
-    await session.flush()
-
-    with pytest.raises(InvalidState, match="на приемку"):
-        await service.cancel(
-            own.user_id,
-            created.request.id,
-            CancelReason.MISTAKE,
-            None,
-        )
-    assert created.request.completion_reason is None
-
-
-async def test_cancel_rereads_a_request_sent_to_review_meanwhile(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    request_id = created.request.id
-    await _close_behind_the_session(session, request_id)
-
-    with pytest.raises(InvalidState, match="на приемку"):
-        await service.cancel(own.user_id, request_id, CancelReason.MISTAKE, None)
-
-
-async def test_only_the_author_cancels_a_request(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    neighbour = await _neighbour(session, own.house_id, "77")
-
-    with pytest.raises(EntityNotFound):
-        await service.cancel(neighbour, created.request.id, CancelReason.MISTAKE, None)
-    assert created.request.status is RequestStatus.NEW
-
-
-async def test_a_blocked_author_does_not_cancel(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    await _block(session, own.user_id, own.house_id)
-
-    with pytest.raises(NotEnoughRights):
-        await service.cancel(
-            own.user_id,
-            created.request.id,
-            CancelReason.MISTAKE,
-            None,
-        )
-    assert created.request.status is RequestStatus.NEW
-
-
-@pytest.mark.parametrize("comment", [None, "   "])
-async def test_another_reason_needs_a_comment(
-    session: AsyncSession,
-    own: OrgHouseFlatUser,
-    comment: str | None,
-) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    request_id = created.request.id
-
-    with pytest.raises(InvalidRequest, match="почему отменяете"):
-        await service.cancel(own.user_id, request_id, CancelReason.OTHER, comment)
-
-    card = await service.cancel(
-        own.user_id,
-        request_id,
-        CancelReason.OTHER,
-        "Переехал",
-    )
-    assert card.messages[0].message.text == "↩️ Отменена: Переехал"
-
-
-async def test_a_cancel_tells_the_staff_and_the_executor(
+async def test_an_answer_lifts_the_question_and_reaches_the_crew(
     session: AsyncSession,
     own: OrgHouseFlatUser,
     broker: RecordingBroker,
     publisher: TaskPublisher,
 ) -> None:
-    admin = await _member(session, own.org_id, OrgRole.ADMIN)
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
     executor = await _member(session, own.org_id, OrgRole.EXECUTOR)
-    service = requests_service(session, publisher)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    request_id = created.request.id
-    created.request.executor_user_id = executor
+    request = await _complain(session, own.user_id, own.house_id)
+    request.executor_user_id = executor
     await session.flush()
-    await publisher.flush()
-    broker.messages.clear()
+    await admin_requests_service(session).reply(
+        own.org_id,
+        request.id,
+        "Под вами 45 или 47 квартира?",
+        staff,
+        question=True,
+    )
 
-    await service.cancel(
+    card = await requests_service(session, publisher).write(
         own.user_id,
-        request_id,
-        CancelReason.FIXED_MYSELF,
-        "Вызвал частного <мастера>",
+        request.id,
+        "  47  ",
+        RequestChannel.MINIAPP,
     )
 
-    await publisher.flush()
-    [staff] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
-    assert staff["user_ids"] == [admin]
-    assert staff["text"] == (
-        f"↩️ Житель отменил заявку №{request_id} «💧 Протечка»: "
-        "починили сами или вызвали мастера\n💬 Вызвал частного &lt;мастера&gt;"
-    )
-    assert staff["app_path"] == f"/admin/requests/{request_id}"
-    [crew] = broker.enqueued(TaskName.SEND_TO_USER)
-    assert crew["user_id"] == executor
-    assert crew["text"] == staff["text"]
-    assert broker.enqueued(TaskName.SYNC_CHAT_CARD) == [
-        {"kind": "request", "ref_id": request_id, "post": False},
+    assert [
+        (view.message.author_role, view.message.text) for view in card.messages
+    ] == [
+        (RequestActorRole.STAFF, "Под вами 45 или 47 квартира?"),
+        (RequestActorRole.RESIDENT, "47"),
     ]
+    assert card.request.question_asked_at is None
+    assert card.request.resident_answered_at is not None
+    assert card.request.status is RequestStatus.NEW
+    [answer] = [
+        event
+        for event in await events_of(session, EventType.REQUEST_MESSAGE_SENT)
+        if event.user_id == own.user_id
+    ]
+    assert answer.payload == {
+        "request_id": request.id,
+        "by_role": "resident",
+        "answer": True,
+        "channel": "miniapp",
+    }
+    await publisher.flush()
+    [crew] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
+    assert crew["user_ids"] == [staff]
+    assert crew["text"] == (
+        f"💬 Житель ответил по заявке №{request.id} «💧 Протечка»\n\n47"
+    )
+    assert crew["app_path"] == f"/admin/requests/{request.id}"
+    [notice] = broker.enqueued(TaskName.SEND_TO_USER)
+    assert (notice["user_id"], notice["text"]) == (executor, crew["text"])
 
 
-@pytest.mark.parametrize(
-    ("user", "canceled"),
-    [
-        (API_CHECKER, False),
-        (
-            WebAppInitData(
-                chat=WebAppChat(id=7, type="DIALOG"),
-                user=WebAppUser(id=7, first_name="Житель"),
-                hash="",
-            ),
-            True,
-        ),
-    ],
-    ids=["checker", "resident"],
-)
-async def test_the_checker_cancels_none_of_its_requests(
+async def test_only_the_author_writes_to_a_request(
     session: AsyncSession,
     own: OrgHouseFlatUser,
-    user: WebAppInitData,
-    canceled: bool,
 ) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
+    request = await _complain(session, own.user_id, own.house_id)
+    neighbour = await _neighbour(session, own.house_id, "2")
 
-    async def cancel() -> RequestCard:
-        return await cancel_request(
-            created.request.id,
-            user,
-            _account(own.user_id),
-            service,
-            FilesService(make_config().files, "test-token"),
-            CancelRequestRequest(reason=CancelReason.MISTAKE),
+    with pytest.raises(EntityNotFound):
+        await requests_service(session).write(
+            neighbour,
+            request.id,
+            "Это не моя заявка",
+            RequestChannel.MINIAPP,
         )
 
-    if canceled:
-        card = await cancel()
-        assert card.completion_reason is RequestCompletionReason.RESIDENT_CANCELED
-    else:
-        with pytest.raises(NotEnoughRights):
-            await cancel()
-        assert created.request.status is RequestStatus.NEW
 
-
-async def test_a_rejection_on_review_without_a_photo_changes_nothing(
+async def test_a_blocked_author_cannot_write(
     session: AsyncSession,
     own: OrgHouseFlatUser,
 ) -> None:
-    service = requests_service(session)
-    created = await service.create(own.user_id, own.house_id, _draft())
-    request_id = created.request.id
-    await _mark_on_review(session, request_id)
+    request = await _complain(session, own.user_id, own.house_id)
+    await _block(session, own.user_id, own.house_id)
 
-    with pytest.raises(InvalidRequest, match=REJECTION_PHOTO_REQUIRED):
-        await service.repeat(own.user_id, request_id, "Не устранили протечку", [])
-
-    request = await RequestsRepo(session).get(request_id)
-    assert request is not None
-    assert request.status is RequestStatus.ON_REVIEW
-    _, total = await service.list_mine(own.user_id, own.house_id, None, 20, 0)
-    assert total == 1
+    with pytest.raises(NotEnoughRights):
+        await requests_service(session).write(
+            own.user_id,
+            request.id,
+            "47",
+            RequestChannel.MINIAPP,
+        )
 
 
-@pytest.mark.parametrize(
-    "category",
-    [RequestCategory.METER_ERROR, RequestCategory.CHARGE_DISPUTE],
-)
-async def test_a_rejection_of_paperwork_needs_no_photo(
+async def test_a_message_to_a_request_closed_meanwhile_is_refused(
     session: AsyncSession,
     own: OrgHouseFlatUser,
-    category: RequestCategory,
 ) -> None:
-    service = requests_service(session)
-    created = await service.create(
+    request = await _complain(session, own.user_id, own.house_id)
+    await _close_behind_the_session(session, request.id)
+
+    with pytest.raises(InvalidState, match="подайте новую"):
+        await requests_service(session).write(
+            own.user_id,
+            request.id,
+            "47",
+            RequestChannel.MINIAPP,
+        )
+
+    assert await RequestsRepo(session).list_messages(request.id) == []
+
+
+async def test_an_empty_message_is_refused(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request = await _complain(session, own.user_id, own.house_id)
+
+    with pytest.raises(InvalidRequest, match="Напишите сообщение"):
+        await requests_service(session).write(
+            own.user_id,
+            request.id,
+            "   ",
+            RequestChannel.MINIAPP,
+        )
+
+
+async def test_closing_a_request_drops_its_question_marks(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request = await _complain(session, own.user_id, own.house_id)
+    await _mark_on_review(session, request.id)
+    request.question_asked_at = datetime.now(UTC)
+    request.resident_answered_at = datetime.now(UTC)
+    await session.flush()
+
+    card = await requests_service(session).accept(own.user_id, request.id)
+
+    assert card.request.question_asked_at is None
+    assert card.request.resident_answered_at is None
+
+
+async def test_classify_names_the_danger_of_a_short_text_without_the_model(
+    session: AsyncSession,
+) -> None:
+    user_id = await add_user(session)
+    classifier = StubClassifier(RequestCategory.HEATING, 90)
+    service = requests_service(session, classifier=classifier)
+
+    response = await classify_request_text(
+        _account(user_id),
+        service,
+        ClassifyRequestRequest(text="Пахнет газом"),
+        YandexQuota(),
+    )
+
+    assert (response.category, response.danger) == (None, DangerKind.GAS)
+    assert await events_of(session, EventType.LLM_SUGGESTED) == []
+
+
+async def test_classify_names_the_danger_past_the_quota(session: AsyncSession) -> None:
+    user_id = await add_user(session)
+    service = requests_service(
+        session,
+        classifier=StubClassifier(RequestCategory.HEATING),
+    )
+    quota = YandexQuota()
+    for _ in range(QUOTA_CALLS):
+        quota.take(user_id)
+
+    response = await classify_request_text(
+        _account(user_id),
+        service,
+        ClassifyRequestRequest(text="Искрит щиток на площадке у лифта"),
+        quota,
+    )
+
+    assert (response.category, response.danger) == (None, DangerKind.ELECTRIC)
+
+
+async def test_classify_takes_the_alarm_from_the_model_when_the_rules_are_silent(
+    session: AsyncSession,
+) -> None:
+    user_id = await add_user(session)
+    classifier = StubClassifier(RequestCategory.ELEVATOR, 80)
+    service = requests_service(session, classifier=classifier)
+
+    response = await classify_request_text(
+        _account(user_id),
+        service,
+        ClassifyRequestRequest(text="Лифт завис между этажами, в нем бабушка"),
+        YandexQuota(),
+    )
+
+    assert (response.category, response.danger) == (
+        RequestCategory.ELEVATOR,
+        DangerKind.LLM,
+    )
+
+
+async def test_a_dangerous_request_is_marked_for_the_staff_with_its_words(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    await _member(session, own.org_id, OrgRole.ADMIN)
+    service = requests_service(session, publisher)
+
+    dangerous = await service.create(
         own.user_id,
         own.house_id,
-        _draft(category=category),
+        _draft(description="Пахнет газом в подъезде у лифта"),
     )
-    await _mark_on_review(session, created.request.id)
+    calm = await service.create(own.user_id, own.house_id, _draft())
 
-    repeated = await service.repeat(
-        own.user_id,
-        created.request.id,
-        "Перерасчет так и не сделали",
-        [],
+    await publisher.flush()
+    assert (dangerous.request.danger, calm.request.danger) == (DangerKind.GAS, None)
+    texts = [task["text"] for task in broker.enqueued(TaskName.BROADCAST_TO_USERS)]
+    assert texts[0].startswith(
+        f"🚨 Опасность: запах газа\n🆕 Заявка №{dangerous.request.id}",
     )
-
-    assert repeated.request.parent_request_id == created.request.id
-    assert repeated.issue_attachments == []
+    assert texts[1].startswith(f"🆕 Заявка №{calm.request.id}")
+    card = RequestCard.of(dangerous, [], [])
+    assert (card.danger, card.danger_phrase) == (DangerKind.GAS, "пахнет газом")
+    assert RequestCard.of(calm, [], []).danger_phrase is None

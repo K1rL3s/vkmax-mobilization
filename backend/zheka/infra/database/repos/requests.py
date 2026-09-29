@@ -6,8 +6,10 @@ from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.expression import FromClause
 
 from zheka.base import ZhekaType
+from zheka.core.danger import detect_danger
 from zheka.core.enums import (
     CATEGORY_RULES,
+    DangerKind,
     RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
@@ -52,6 +54,8 @@ class RequestFilters(ZhekaType):
     executor_user_id: UserId | None = None
     overdue: bool = False
     grouped: bool = False
+    question_asked: bool = False
+    resident_answered: bool = False
 
 
 def overdue_at(
@@ -85,6 +89,7 @@ class RequestsRepo(BaseAlchemyRepo):
             now,
             house.zone,
         )
+        danger = detect_danger(description)
         request = Request(
             created_at=now,
             house_id=house.id,
@@ -101,6 +106,7 @@ class RequestsRepo(BaseAlchemyRepo):
             caller_phone=caller_phone,
             deadline_at=deadline_at,
             react_deadline_at=react_deadline_at,
+            danger=None if danger is None else danger.kind,
         )
         self._session.add(request)
         await self._session.flush()
@@ -284,8 +290,13 @@ class RequestsRepo(BaseAlchemyRepo):
                 stmt = stmt.where(requests_table.c[name] == value)
         overdue = overdue_at(now)
         escalated = escalation_active(now, requests_table)
+        dangerous = open_danger(requests_table)
         if filters.overdue:
             stmt = stmt.where(overdue)
+        if filters.question_asked:
+            stmt = stmt.where(requests_table.c.question_asked_at.is_not(None))
+        if filters.resident_answered:
+            stmt = stmt.where(requests_table.c.resident_answered_at.is_not(None))
         if filters.grouped:
             members = requests_table.alias()
             escalated = or_(
@@ -297,9 +308,14 @@ class RequestsRepo(BaseAlchemyRepo):
                 )
                 .exists(),
             )
-            first = func.min(requests_table.c.id)
-            live = requests_table.c.completion_reason.is_distinct_from(
-                RequestCompletionReason.RESIDENT_CANCELED,
+            dangerous = or_(
+                dangerous,
+                select(members.c.id)
+                .where(
+                    members.c.group_id == requests_table.c.group_id,
+                    open_danger(members),
+                )
+                .exists(),
             )
             leaders = (
                 select(func.coalesce(first.filter(live), first))
@@ -315,6 +331,7 @@ class RequestsRepo(BaseAlchemyRepo):
 
         stmt = stmt.order_by(
             escalated.desc(),
+            dangerous.desc(),
             overdue.desc(),
             requests_table.c.created_at.desc(),
         )
@@ -331,6 +348,8 @@ class RequestsRepo(BaseAlchemyRepo):
         request.status = status
         if status is RequestStatus.DONE:
             request.completion_reason = completion_reason
+            request.question_asked_at = None
+            request.resident_answered_at = None
         stamp = _STAMP_BY_STATUS.get(status)
         if stamp is not None:
             setattr(request, stamp, at)
@@ -559,6 +578,38 @@ class RequestsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return {RequestGroupId(group_id): at for group_id, at in result.tuples()}
 
+    async def stamp_thread(
+        self,
+        request: Request,
+        *,
+        question_asked_at: datetime | None,
+        resident_answered_at: datetime | None,
+    ) -> None:
+        request.question_asked_at = question_asked_at
+        request.resident_answered_at = resident_answered_at
+        await self._session.flush()
+
+    async def group_dangers(
+        self,
+        group_ids: Collection[RequestGroupId],
+    ) -> dict[RequestGroupId, DangerKind]:
+        if not group_ids:
+            return {}
+        stmt = (
+            select(requests_table.c.group_id, func.min(requests_table.c.danger))
+            .where(
+                requests_table.c.group_id.in_(group_ids),
+                requests_table.c.danger.is_not(None),
+            )
+            .group_by(requests_table.c.group_id)
+        )
+        result = await self._session.execute(stmt)
+        return {RequestGroupId(group_id): kind for group_id, kind in result.tuples()}
+
 
 def escalation_active(now: datetime, table: FromClause) -> ColumnElement[bool]:
     return and_(table.c.escalated_at.is_not(None), overdue_at(now, table))
+
+
+def open_danger(table: FromClause) -> ColumnElement[bool]:
+    return and_(table.c.danger.is_not(None), table.c.status.in_(OPEN_STATUSES))

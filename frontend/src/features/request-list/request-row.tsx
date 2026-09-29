@@ -31,6 +31,10 @@ const CLOSED_NOTE: Record<RequestCompletionReason, Note> = {
 };
 
 const note = (request: RequestListItem): Note | null => {
+  if (request.question_asked_at) {
+    return { text: "Ответьте УК", tone: "action" };
+  }
+
   if (isOnReview(request.status)) {
     return { text: "Проверьте работу", tone: "action" };
   }

@@ -10,9 +10,14 @@ from aiohttp.test_utils import TestServer
 from yarl import URL
 
 from zheka.config import YandexConfig
-from zheka.core.enums import RequestCategory
+from zheka.core.enums import DangerKind, RequestCategory
 from zheka.infra.yandex import classifier as classifier_module
-from zheka.infra.yandex.classifier import COMPLETION_URL, YandexClassifier
+from zheka.infra.yandex.classifier import (
+    COMPLETION_URL,
+    LLM_DANGER_PERCENT,
+    Classification,
+    YandexClassifier,
+)
 
 KEY = "b22-secret-api-key"
 FOLDER = "b1gfolder"
@@ -94,14 +99,14 @@ async def test_without_credentials_no_request_is_made(
 ) -> None:
     classifier, sent = await serve(_answer("leak"), api_key, folder_id)
 
-    assert await classifier.classify(TEXT) is None
+    assert await classifier.classify(TEXT) == Classification()
     assert sent == []
 
 
 async def test_a_valid_answer_is_the_category_after_trimming(serve: Serve) -> None:
     classifier, sent = await serve(_answer("  elevator\n"))
 
-    assert await classifier.classify(TEXT) is RequestCategory.ELEVATOR
+    assert (await classifier.classify(TEXT)).category is RequestCategory.ELEVATOR
     [request] = sent
     assert request.headers["Authorization"] == f"Api-Key {KEY}"
     body = await request.json()
@@ -117,15 +122,15 @@ async def test_an_answer_outside_the_enum_is_no_answer(
 ) -> None:
     classifier, _ = await serve(_answer(answer))
 
-    assert await classifier.classify(TEXT) is None
+    assert await classifier.classify(TEXT) == Classification()
 
 
 @pytest.mark.parametrize("code", [401, 403])
 async def test_a_refused_key_turns_the_classifier_off(serve: Serve, code: int) -> None:
     classifier, sent = await serve(_status(code))
 
-    assert await classifier.classify(TEXT) is None
-    assert await classifier.classify(TEXT) is None
+    assert await classifier.classify(TEXT) == Classification()
+    assert await classifier.classify(TEXT) == Classification()
     assert len(sent) == 1
 
 
@@ -136,8 +141,8 @@ async def test_a_failed_call_leaves_the_classifier_on(
 ) -> None:
     classifier, sent = await serve(reply)
 
-    assert await classifier.classify(TEXT) is None
-    assert await classifier.classify(TEXT) is None
+    assert await classifier.classify(TEXT) == Classification()
+    assert await classifier.classify(TEXT) == Classification()
     assert len(sent) == 2
 
 
@@ -148,7 +153,7 @@ async def test_an_error_status_is_logged_with_its_code(
     classifier, _ = await serve(_answer("leak", status=503))
 
     with caplog.at_level(logging.WARNING, logger="zheka.infra.yandex.classifier"):
-        assert await classifier.classify(TEXT) is None
+        assert await classifier.classify(TEXT) == Classification()
 
     assert [record.args for record in caplog.records] == [(503,)]
 
@@ -176,7 +181,7 @@ async def test_the_key_never_reaches_a_log_record(
 async def test_an_unwrapped_answer_is_read_too(serve: Serve) -> None:
     classifier, _ = await serve(_answer("heating", wrapped=False))
 
-    assert await classifier.classify(TEXT) is RequestCategory.HEATING
+    assert (await classifier.classify(TEXT)).category is RequestCategory.HEATING
 
 
 @pytest.mark.parametrize("key", [f"{KEY}ё", f"{KEY}\n"])
@@ -188,8 +193,8 @@ async def test_a_key_that_cannot_be_a_header_turns_the_classifier_off(
     classifier, sent = await serve(_answer("leak"), api_key=key)
 
     with caplog.at_level(logging.DEBUG):
-        assert await classifier.classify(TEXT) is None
-        assert await classifier.classify(TEXT) is None
+        assert await classifier.classify(TEXT) == Classification()
+        assert await classifier.classify(TEXT) == Classification()
 
     assert sent == []
     [record] = caplog.records
@@ -208,3 +213,47 @@ async def test_the_model_gets_the_text_without_phone_and_flat(serve: Serve) -> N
         "role": "user",
         "text": "Течет стояк в [КВАРТИРА], звоните [ТЕЛЕФОН]",
     }
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        (
+            '```json\n{"category": "elevator", "emergency_probability": 0.85}\n```',
+            Classification(category=RequestCategory.ELEVATOR, emergency_probability=85),
+        ),
+        (
+            '{"category": "Протечка", "emergency_probability": 0.2}',
+            Classification(emergency_probability=20),
+        ),
+        (
+            '{"category": "leak", "emergency_probability": 85}',
+            Classification(category=RequestCategory.LEAK),
+        ),
+    ],
+)
+async def test_a_json_answer_gives_the_category_and_the_emergency_percent(
+    serve: Serve,
+    answer: str,
+    expected: Classification,
+) -> None:
+    classifier, _ = await serve(_answer(answer))
+
+    assert await classifier.classify(TEXT) == expected
+
+
+@pytest.mark.parametrize(
+    ("probability", "text", "danger"),
+    [
+        (0, "Пахнет газом", DangerKind.GAS),
+        (95, "Пахнет газом", DangerKind.GAS),
+        (LLM_DANGER_PERCENT, "Лифт завис между этажами, в нем бабушка", DangerKind.LLM),
+        (LLM_DANGER_PERCENT - 1, "Лифт завис между этажами, в нем бабушка", None),
+    ],
+)
+def test_the_model_only_raises_the_alarm(
+    probability: int,
+    text: str,
+    danger: DangerKind | None,
+) -> None:
+    assert Classification(emergency_probability=probability).danger(text) is danger

@@ -198,3 +198,6 @@ class NotificationsService:
                 app_button=texts.OPEN_REQUEST,
                 app_path=request_app_path(request.id),
             )
+
+    def open_question_card(self, request_id: RequestId) -> None:
+        self._publisher.publish(TaskName.SEND_QUESTION_CARD, request_id=request_id)

@@ -32,7 +32,7 @@ from zheka.bot.handlers.requests.handlers import (
 )
 from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
-from zheka.core.texts import OPEN_REQUEST
+from zheka.core.texts import DANGER_REQUEST_NOTE, OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
 CATEGORY_TEXT = "🏢 {address}\n\n🛠 Что случилось?"
@@ -63,10 +63,18 @@ CANCEL_TEXT = (
 
 request_dialog = Dialog(
     Window(
-        Const(NO_HOUSE_TEXT, when=~F["address"]),
-        Format(NOT_CONNECTED_TEXT, when=F["address"] & ~F["connected"]),
-        Format(CATEGORY_TEXT, when=F["connected"] & ~F["description"]),
-        Format(PROBLEM_TEXT, when=F["connected"] & F["description"]),
+        Multi(
+            Multi(
+                Format("{danger}"),
+                Const(DANGER_REQUEST_NOTE, when=F["connected"]),
+                when=F["danger"],
+            ),
+            Const(NO_HOUSE_TEXT, when=~F["address"]),
+            Format(NOT_CONNECTED_TEXT, when=F["address"] & ~F["connected"]),
+            Format(CATEGORY_TEXT, when=F["connected"] & ~F["description"]),
+            Format(PROBLEM_TEXT, when=F["connected"] & F["description"]),
+            sep="\n\n",
+        ),
         Start(EMERGENCY, id="emergency", state=Menu.emergency),
         Column(
             Select(

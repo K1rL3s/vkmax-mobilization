@@ -11,6 +11,7 @@ from zheka.bot.handlers.lifecycle import router as lifecycle_router
 from zheka.bot.handlers.menu import menu_dialog
 from zheka.bot.handlers.meter_photo import meter_photo_dialog
 from zheka.bot.handlers.onboarding import onboarding_dialog
+from zheka.bot.handlers.question import question_dialog
 from zheka.bot.handlers.requests import request_dialog
 from zheka.bot.handlers.review import review_dialog
 
@@ -30,6 +31,7 @@ __all__ = (
     "menu_dialog",
     "meter_photo_dialog",
     "onboarding_dialog",
+    "question_dialog",
     "request_dialog",
     "review_dialog",
 )

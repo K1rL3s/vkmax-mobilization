@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.dependencies.models import Dependant
@@ -21,6 +22,7 @@ from tests.conftest import (
 from tests.test_orgs import make_orgs_service
 from tests.test_requests import (
     _age,
+    _close_behind_the_session,
     _complain,
     _group_of_three,
     _member,
@@ -65,7 +67,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestDraft
 from zheka.infra.database.models import Flat, Request
 from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.infra.database.repos.requests import RequestFilters
+from zheka.infra.database.repos.requests import RequestFilters, RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.tables.requests import (
     request_status_log_table,
@@ -1186,35 +1188,146 @@ def test_a_quoted_free_text_is_cut_to_fit_a_max_message(
     assert "…" not in build("Уехал на другой вызов")
 
 
-async def test_a_group_stays_in_the_inbox_by_a_member_who_did_not_cancel(
+async def test_a_question_waits_for_the_author_and_opens_the_question_card(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request = await _complain(session, own.user_id, own.house_id)
+    request.resident_answered_at = datetime.now(UTC)
+    await session.flush()
+
+    card = await admin_requests_service(session, publisher).reply(
+        own.org_id,
+        request.id,
+        "Под вами 45 или 47 квартира?",
+        staff,
+        question=True,
+    )
+
+    assert card.card.request.question_asked_at is not None
+    assert card.card.request.resident_answered_at is None
+    assert card.card.request.status is RequestStatus.NEW
+    [event] = await events_of(session, EventType.REQUEST_MESSAGE_SENT)
+    assert (event.user_id, event.payload) == (
+        staff,
+        {"request_id": request.id, "by_role": "staff", "question": True},
+    )
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_QUESTION_CARD) == [{"request_id": request.id}]
+    assert broker.enqueued(TaskName.SEND_TO_USER) == []
+
+
+async def test_a_plain_reply_keeps_the_question_and_clears_the_answer_mark(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request = await _complain(session, own.user_id, own.house_id)
+    asked = datetime.now(UTC) - timedelta(hours=1)
+    request.question_asked_at = asked
+    request.resident_answered_at = datetime.now(UTC)
+    await session.flush()
+
+    card = await admin_requests_service(session, publisher).reply(
+        own.org_id,
+        request.id,
+        "Мастер придет завтра",
+        staff,
+    )
+
+    assert card.card.request.question_asked_at == asked
+    assert card.card.request.resident_answered_at is None
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_QUESTION_CARD) == []
+    [notice] = broker.enqueued(TaskName.SEND_TO_USER)
+    assert notice["user_id"] == own.user_id
+    assert notice["text"].endswith("\n\n📱 Ответить можно в приложении")
+
+
+async def test_a_question_rereads_a_request_closed_meanwhile_and_writes_nothing(
     session: AsyncSession,
     own: OrgHouseFlatUser,
 ) -> None:
-    members, _ = await _group_of_three(session, own)
-    residents = requests_service(session)
-    service = admin_requests_service(session)
-    grouped = RequestFilters(grouped=True)
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request = await _complain(session, own.user_id, own.house_id)
+    await _close_behind_the_session(session, request.id)
 
-    async def cancel(member: Request) -> None:
-        assert member.author_user_id is not None
-        await residents.cancel(
-            member.author_user_id,
-            member.id,
-            CancelReason.MISTAKE,
-            None,
+    with pytest.raises(InvalidState, match="житель не сможет ответить"):
+        await admin_requests_service(session).reply(
+            own.org_id,
+            request.id,
+            "Когда вы будете дома?",
+            staff,
+            question=True,
         )
 
-    await cancel(members[0])
-    rows, total = await service.inbox(own.org_id, grouped, 20, 0)
+    assert await RequestsRepo(session).list_messages(request.id) == []
 
-    assert total == 1
-    assert [(row.request.id, row.request.status) for row in rows] == [
-        (members[1].id, RequestStatus.NEW),
+
+async def test_a_question_on_a_request_without_an_author_stays_a_note(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    service = admin_requests_service(session, publisher)
+    phone = await service.create_phone(
+        own.org_id,
+        _phone_draft(own, caller_name="Мария Ивановна", caller_phone="+70000000000"),
+        staff,
+    )
+
+    card = await service.reply(
+        own.org_id,
+        phone.card.request.id,
+        "Перезвонить в 18:00",
+        staff,
+        question=True,
+    )
+
+    assert card.card.request.question_asked_at is None
+    assert [view.message.text for view in card.card.messages] == [
+        "Перезвонить в 18:00",
     ]
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_QUESTION_CARD) == []
 
-    for member in members[1:]:
-        await cancel(member)
-    rows, total = await service.inbox(own.org_id, grouped, 20, 0)
 
-    assert total == 1
-    assert [row.request.id for row in rows] == [members[0].id]
+async def test_the_inbox_filters_open_questions_and_fresh_answers(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    asked, answered, _ = [
+        await _complain(session, own.user_id, own.house_id, category)
+        for category in (
+            RequestCategory.LEAK,
+            RequestCategory.HEATING,
+            RequestCategory.ELEVATOR,
+        )
+    ]
+    asked.question_asked_at = datetime.now(UTC)
+    answered.resident_answered_at = datetime.now(UTC)
+    await session.flush()
+    service = admin_requests_service(session)
+
+    waiting, _ = await service.inbox(
+        own.org_id,
+        RequestFilters(question_asked=True),
+        20,
+        0,
+    )
+    replied, _ = await service.inbox(
+        own.org_id,
+        RequestFilters(resident_answered=True),
+        20,
+        0,
+    )
+
+    assert [row.request.id for row in waiting] == [asked.id]
+    assert [row.request.id for row in replied] == [answered.id]

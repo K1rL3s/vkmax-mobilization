@@ -18,12 +18,13 @@ const replySchema = z.object({
     .trim()
     .min(1, "Напишите ответ жителю")
     .max(requestFormConstraints.reply, "Сократите ответ"),
+  question: z.boolean(),
 });
 
 export const useRequestReplyForm = (requestId: number) => {
   const form = useForm<z.infer<typeof replySchema>>({
     resolver: zodResolver(replySchema),
-    defaultValues: { text: "" },
+    defaultValues: { text: "", question: false },
   });
   const idempotency = useIdempotencyKey();
   const { session } = useSession();
@@ -56,7 +57,7 @@ export const useRequestReplyForm = (requestId: number) => {
         );
       },
       onError: (_error, { body }) => {
-        form.setValue("text", body.text);
+        form.reset({ text: body.text, question: body.question ?? false });
         return refreshRequests();
       },
       onSuccess: () => refreshRequests(),

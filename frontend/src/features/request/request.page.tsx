@@ -27,8 +27,9 @@ import { CancelPanel } from "./ui/cancel-panel";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
 import { LetterPanel } from "./ui/letter-panel";
-import { MessageThread } from "./ui/message-thread";
+import { QuestionPanel } from "./ui/question-panel";
 import { RatePanel } from "./ui/rate-panel";
+import { ReplyForm } from "./ui/reply-form";
 import { RequestAttachments } from "./ui/request-attachments";
 import { RequestTimeline } from "./ui/request-timeline";
 import { SharePanel } from "./ui/share-panel";
@@ -52,6 +53,7 @@ const RequestPage = () => {
   const overdue = isRunning && deadlineLeft(request.deadline_at)?.overdue;
   const actor = currentActor(request);
   const letter = house.data && requestLetter(request, house.data, zone);
+  const canWrite = !isFinished(request.status);
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -113,6 +115,8 @@ const RequestPage = () => {
         </Typography.Text>
       )}
 
+      {request.question_asked_at && <QuestionPanel request={request} />}
+
       {isRunning && <DeadlinePanel request={request} />}
 
       {request.can_review && <ReviewPanel request={request} />}
@@ -173,13 +177,18 @@ const RequestPage = () => {
         </section>
       </Flex>
 
-      {request.messages.length > 0 && (
+      {(request.messages.length > 0 || canWrite) && (
         <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
               <h2>Переписка</h2>
             </Typography.Text>
-            <MessageThread messages={request.messages} />
+            {request.messages.length > 0 && (
+              <Answers messages={request.messages} />
+            )}
+            {canWrite && !request.question_asked_at && (
+              <ReplyForm requestId={request.id} />
+            )}
           </section>
         </Flex>
       )}

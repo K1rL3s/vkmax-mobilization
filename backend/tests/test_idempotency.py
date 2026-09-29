@@ -247,3 +247,39 @@ async def test_purge_drops_keys_older_than_a_day(
     assert removed == 1
     assert await repo.claim(user_id, stale, "/api/requests") is None
     assert await repo.claim(user_id, fresh, "/api/requests") == {"id": 1}
+
+
+async def test_the_same_key_sends_one_answer_to_a_question_from_the_cabinet(
+    cabinet: Cabinet,
+) -> None:
+    created = await _create(cabinet, uuid4())
+    request_id = created.json()["id"]
+    asked = await cabinet.client.post(
+        f"/api/admin/requests/{request_id}/reply",
+        headers=cabinet.headers,
+        json={"text": "Под вами 45 или 47 квартира?", "question": True},
+    )
+    key = uuid4()
+    answers = [
+        await cabinet.client.post(
+            f"/api/requests/{request_id}/messages",
+            headers={**cabinet.headers, "Idempotency-Key": str(key)},
+            json={"text": "47"},
+        )
+        for _ in range(2)
+    ]
+    card = await cabinet.client.get(
+        f"/api/requests/{request_id}",
+        headers=cabinet.headers,
+    )
+
+    assert asked.status_code == 200, asked.text
+    assert asked.json()["question_asked_at"] is not None
+    assert [answer.status_code for answer in answers] == [200, 200]
+    assert answers[0].json() == answers[1].json()
+    assert [message["text"] for message in card.json()["messages"]] == [
+        "Под вами 45 или 47 квартира?",
+        "47",
+    ]
+    assert card.json()["question_asked_at"] is None
+    assert card.json()["resident_answered_at"] is not None

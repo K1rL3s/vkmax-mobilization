@@ -31,3 +31,11 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.Switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}

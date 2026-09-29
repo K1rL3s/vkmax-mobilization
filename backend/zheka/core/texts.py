@@ -7,13 +7,13 @@ from zheka.base import ZhekaType
 from zheka.core.enums import (
     CANCEL_REASONS,
     CATEGORY_RULES,
-    CancelReason,
+    DangerKind,
     PollAuthor,
     RequestCategory,
     RequestStatus,
 )
 from zheka.core.ids import RequestId
-from zheka.core.models import House, Request
+from zheka.core.models import House, Organization, Request
 
 BLOCKED = "УК закрыла вам доступ к этому дому"
 OPEN_REQUEST = "📱 Открыть заявку"
@@ -62,7 +62,7 @@ def request_status_changed(
 
 def request_reply(request_id: RequestId, category: RequestCategory, text: str) -> str:
     head = f"💬 Ответ УК по заявке {_request(request_id, category)}\n\n"
-    tail = "\n\n↩️ Ответить можно в приложении"
+    tail = "\n\n📱 Ответить можно в приложении"
     return f"{head}{_fitted(text, head + tail)}{tail}"
 
 
@@ -206,8 +206,13 @@ def flat_verification_revoked(address: str, reason: str, contact: str) -> str:
 
 
 def request_created(request: Request, house: House) -> str:
+    danger = (
+        ""
+        if request.danger is None
+        else f"🚨 Опасность: {DANGER_LABELS[request.danger]}\n"
+    )
     return (
-        f"🆕 Заявка {_request(request.id, request.category)}\n"
+        f"{danger}🆕 Заявка {_request(request.id, request.category)}\n"
         f"🏢 {escape(house.address)}\n{deadline_lines(request, house)}"
     )
 
@@ -517,27 +522,61 @@ def _quoted(text: str) -> str:
     return f"{escape(line[: DIGEST_QUOTE_LIMIT - 1])}…"
 
 
-def cancel_note(reason: CancelReason, comment: str) -> str:
-    parts = [CANCEL_REASONS[reason].lower()] if reason is not CancelReason.OTHER else []
-    if comment:
-        parts.append(comment)
-    return f"↩️ Отменена: {'. '.join(parts)}"
+def resident_answered(request: Request, text: str) -> str:
+    head = f"💬 Житель ответил по заявке {_request(request.id, request.category)}\n\n"
+    return f"{head}{_fitted(text, head)}"
 
 
-def request_canceled(request: Request, reason: CancelReason, comment: str) -> str:
+def question_card(request_id: RequestId, category: RequestCategory, text: str) -> str:
     head = (
-        f"↩️ Житель отменил заявку {_request(request.id, request.category)}: "
-        f"{CANCEL_REASONS[reason].lower()}"
+        f"❓ УК уточняет по заявке №{request_id} · {CATEGORY_RULES[category].label}\n\n"
     )
-    if not comment:
-        return head
-    head = f"{head}\n💬 "
-    return f"{head}{_fitted(comment, head)}"
+    return f"{head}{_fitted(text, head)}"
 
 
-def request_card_canceled(request_id: RequestId) -> str:
-    return f"↩️ Заявка №{request_id} отменена автором"
+NO_EMERGENCY_PHONE_TEXT = (
+    "🛠 Номер аварийной службы есть в квитанции и на доске объявлений в подъезде"
+)
+ORG_PHONE_TEXT = "🏢 Телефон УК: {org_phone}"
+DANGER_REQUEST_NOTE = "📝 Заявку можно оформить ниже, но сначала позвоните"
+DANGER_TEXTS: Mapping[DangerKind, str] = {
+    DangerKind.GAS: (
+        "🔥 Похоже, пахнет газом: не включайте свет и приборы, выйдите из квартиры "
+        "и звоните 104 или 112"
+    ),
+    DangerKind.FIRE: (
+        "🚨 Похоже на дым или пожар: звоните 112, уходите по лестнице, не на лифте"
+    ),
+    DangerKind.ELECTRIC: (
+        "⚡ Похоже, искрит проводка: не трогайте ее, отключите автомат в щитке, "
+        "если это безопасно, при дыме звоните 112"
+    ),
+    DangerKind.TRAPPED: (
+        "🛗 Похоже, в лифте застряли люди: нажмите кнопку связи в кабине и звоните "
+        "в аварийную службу, при угрозе здоровью - 112"
+    ),
+    DangerKind.FLOOD_ELECTRIC: (
+        "💧 Вода попала на проводку: не подходите к щиту и розеткам, звоните "
+        "в аварийную службу, при искрах - 112"
+    ),
+    DangerKind.LLM: "🚨 Похоже на аварию: при угрозе жизни и здоровью звоните 112",
+}
+DANGER_LABELS: Mapping[DangerKind, str] = {
+    DangerKind.GAS: "запах газа",
+    DangerKind.FIRE: "дым или огонь",
+    DangerKind.ELECTRIC: "искрит проводка",
+    DangerKind.TRAPPED: "застряли в лифте",
+    DangerKind.FLOOD_ELECTRIC: "вода на проводке",
+    DangerKind.LLM: "похоже на аварию",
+}
 
 
-def group_card_canceled(category: RequestCategory) -> str:
-    return f"↩️ {CATEGORY_RULES[category].label}: жители отменили заявки"
+def danger_warning(kind: DangerKind, org: Organization | None) -> str:
+    lines = [DANGER_TEXTS[kind]]
+    if org is not None and org.emergency_phone:
+        lines.append(f"🛠 Аварийная служба дома: {escape(org.emergency_phone)}")
+    else:
+        lines.append(NO_EMERGENCY_PHONE_TEXT)
+        if org is not None and org.phone.strip():
+            lines.append(ORG_PHONE_TEXT.format(org_phone=escape(org.phone.strip())))
+    return "\n".join(lines)

@@ -333,6 +333,9 @@ export const adminRequestsConfigs = [
       text,
       is_internal: false,
     });
+    if (request.body.question === true && item.author_name != null)
+      item.question_asked_at = new Date().toISOString();
+    item.resident_answered_at = null;
     return ok(item);
   }),
   endpoint("post", "/admin/requests/:request_id/assign", (request) => {

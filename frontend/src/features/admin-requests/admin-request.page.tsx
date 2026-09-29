@@ -22,7 +22,11 @@ import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
-import { escalationNote } from "./domain/request-filters";
+import {
+  dangerNote,
+  escalationNote,
+  threadNote,
+} from "./domain/request-filters";
 import { CHANNEL_LABEL } from "./domain/request-workflow";
 import { useAdminRequest } from "./model/use-admin-request";
 import { NoOrgAccess } from "./ui/no-org-access";
@@ -63,6 +67,8 @@ const AdminRequestPage = () => {
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
   const actor = currentActor(request, "staff");
   const escalation = escalationNote(request);
+  const thread = threadNote(request);
+  const danger = dangerNote(request);
   const isAssignable =
     request.status === "accepted" ||
     request.status === "in_progress" ||
@@ -95,6 +101,8 @@ const AdminRequestPage = () => {
         <StatusPill tone={tone}>{statusLabel(request, "staff")}</StatusPill>
         <StatusPill tone="neutral">{request.category_label}</StatusPill>
         {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
+        {danger && <StatusPill tone="negative">{danger}</StatusPill>}
+        {thread && <StatusPill tone={thread.tone}>{thread.text}</StatusPill>}
         {request.group_id != null && (
           <Typography.Text asChild variant="description-strong">
             <Link
@@ -121,6 +129,12 @@ const AdminRequestPage = () => {
           </Typography.Text>
         )}
       </Flex>
+
+      {danger && request.danger_phrase && (
+        <Typography.Text variant="description" color="secondary">
+          По словам «{request.danger_phrase}»
+        </Typography.Text>
+      )}
 
       {actor && (
         <Typography.Text variant="description" color="secondary">

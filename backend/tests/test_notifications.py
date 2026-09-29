@@ -366,7 +366,7 @@ async def test_reply_reaches_the_author(
     assert enqueued[0]["user_id"] == data.user_id
     assert enqueued[0]["mandatory"] is True
     assert answer in enqueued[0]["text"]
-    assert enqueued[0]["text"].endswith("↩️ Ответить можно в приложении")
+    assert enqueued[0]["text"].endswith("📱 Ответить можно в приложении")
     assert enqueued[0]["app_path"] == f"/requests/{request.id}"
 
 

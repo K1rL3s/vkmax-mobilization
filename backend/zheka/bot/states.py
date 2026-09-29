@@ -72,3 +72,8 @@ class MeterPhoto(StatesGroup):
 
 class Chairman(StatesGroup):
     accept = State()
+
+
+class Question(StatesGroup):
+    card = State()
+    answer = State()

@@ -11,7 +11,13 @@ import { emergencyContact } from "./emergency-contact";
 
 import styles from "./emergency-card.module.css";
 
-export const EmergencyCard = ({ org }: { org: HouseCard["org"] }) => {
+export const EmergencyCard = ({
+  org,
+  hint,
+}: {
+  org: HouseCard["org"];
+  hint?: string;
+}) => {
   const contact = emergencyContact(org);
 
   return (
@@ -29,7 +35,8 @@ export const EmergencyCard = ({ org }: { org: HouseCard["org"] }) => {
               Авария
             </Typography.Text>
             <Typography.Text variant="description" color="secondary">
-              Пожар, газ, потоп или искрит проводка - сначала позвоните
+              {hint ??
+                "Пожар, газ, потоп или искрит проводка - сначала позвоните"}
             </Typography.Text>
           </Flex>
         </Flex>

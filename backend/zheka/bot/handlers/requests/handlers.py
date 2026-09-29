@@ -16,6 +16,7 @@ from zheka.bot.states import NewRequest
 from zheka.bot.voice import publish_transcription
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
+from zheka.core.danger import detect_danger
 from zheka.core.deeplinks import request_app_path
 from zheka.core.enums import (
     CANCEL_REASONS,
@@ -27,8 +28,7 @@ from zheka.core.enums import (
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import RequestId
 from zheka.core.services.profile import ProfileService
-from zheka.core.services.requests import RequestsService
-from zheka.core.texts import OPEN_REQUEST
+from zheka.core.texts import danger_warning
 
 SENT_TEXT = "⏳ Принял, оформляю"
 NOT_CREATED = "😔 Заявку не удалось оформить: {reason}"
@@ -44,12 +44,28 @@ async def get_category(
 ) -> dict[str, Any]:
     me = await profile_service.me(dialog_user_id(dialog_manager))
     residency = me.latest_residency
+    danger = detect_danger(NewRequestData.load(dialog_manager).description)
+    warning = (
+        None
+        if danger is None
+        else danger_warning(danger.kind, None if residency is None else residency.org)
+    )
     if residency is None:
-        return {"address": None, "connected": False, "categories": []}
+        return {
+            "address": None,
+            "connected": False,
+            "categories": [],
+            "danger": warning,
+        }
 
     address = escape(residency.house.address)
     if not residency.is_connected:
-        return {"address": address, "connected": False, "categories": []}
+        return {
+            "address": address,
+            "connected": False,
+            "categories": [],
+            "danger": warning,
+        }
     with NewRequestData.proxy(dialog_manager) as data:
         data.house_id = residency.house.id
         data.flat_id = None if residency.flat is None else residency.flat.id
@@ -60,6 +76,7 @@ async def get_category(
         "address": address,
         "connected": True,
         "description": escape(description),
+        "danger": warning,
         "categories": [
             {"id": category.value, "label": CATEGORY_RULES[category].caption}
             for category in RequestCategory

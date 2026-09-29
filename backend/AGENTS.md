@@ -242,6 +242,12 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   with it as the description from the menu, its emergency and digest windows,
   `NewRequest.category` and `NewRequest.sent` (`on_free_text`, consent checked
   first) and the fallback; `on_category` then skips to the photo.
+- A danger phrase (`detect_danger`, `core/danger.py`: text or transcript, any
+  length) goes first there: short -> `Menu.emergency`, long ->
+  `NewRequest.category`, whose getter itself puts `danger_warning` (the
+  kind's lines, the house's emergency line or the #06 fallback) above the
+  quote; without consent the lines go as their own message before the
+  consent window. It never blocks the request.
 - A voice counts as free text by MAX's `transcription` (`transcript`, any
   length). Without one, `transcribe_voice` rereads the message once after 5 s
   (`get_message_by_id`); still none, it downloads the audio into memory (never
@@ -305,25 +311,21 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - `RequestsService.escalate`: the author of an overdue open request, once
   (`escalated_at`). Staff and the executor hear via `_notify_crew`, the author
   gets a confirmation, each user once. Escalated overdue requests lead
-  `list_for_org`; a finished one drops back. Grouped, any member's active
-  escalation lifts the group and `AdminRequestRow.escalated_at` carries the
-  earliest one.
-- `RequestsService.cancel`: the author of an open request (`OPEN_STATUSES`),
-  with a `CancelReason`; `other` also needs a comment. A cancel is a
-  completion reason, not a status: `DONE` + `resident_canceled`, no
-  `reviewed_at`, so every "not `DONE` = open" query holds as is. What counts
-  `DONE` as work done skips it (`_WORKED` in `repos/analytics.py`: auto-closed
-  share, "closed" of an executor and of the digest); a new metric over `DONE`
-  must too. The reason is the author's message in the conversation, staff and
-  the executor hear via `_notify_crew`; the request stays in its group, whose
-  card counts flats and status without canceled members and whose cabinet
-  row (`list_for_org`, `grouped`) is its first member not canceled.
-- A rejection on review (`repeat` from `ON_REVIEW`, `reject`) needs a comment
-  and an attachment unless `CategoryRule.rejection_needs_photo` is off (meter
-  error, charge dispute); `RequestCard` carries the flag. The bot's review
-  dialog collects the text, then photos, and `reject_bot_request` downloads
-  them and rejects; its outcome, a refusal of a stale draft included, reaches
-  the author as a notification.
+  `list_for_org`, open ones with `requests.danger` come next; a finished one
+  drops back. Grouped, any member's active escalation or open danger lifts
+  the group; `AdminRequestRow.escalated_at` carries the earliest escalation,
+  `AdminRequestRow.danger` a member's mark.
+- `requests.danger` is written only by `RequestsRepo.create` from
+  `detect_danger(description)` (app, bot, repeat, phone, dispute; the seed
+  sets it itself), never from the client; the staff text then opens with
+  «🚨», and `danger_phrase` is recomputed from the description on read.
+  Rows older than the column stay unmarked (no backfill).
+- A staff question (`reply(question=True)`, author and not DONE) stamps
+  `question_asked_at` and queues `Question.card` (`question-{id}` stack)
+  instead of `request_reply`; a resident message (`RequestsService.write`,
+  bot «✍️ Ответить» or the app, not DONE) clears it, stamps
+  `resident_answered_at` and tells staff and executor; any staff reply
+  clears that; DONE clears both. A question never moves status or deadline.
 - A house not `is_connected` takes no request and no flat verification
   (`InvalidState(NOT_CONNECTED)`); the bot's category window says so first.
 - A phone request with `resident_id` is wholly that resident's (author, flat,
@@ -331,10 +333,15 @@ ignore it. zsh: quote globs (`--include='*.py'`).
 - LLM hint (`YandexClassifier`) is optional: no call without `YANDEX_API_KEY`
   / `YANDEX_FOLDER_ID`; 401, 403 or a non-header key disables it per process;
   other failures or answers outside `RequestCategory` -> `category: null`.
-  Key never logged. The model picks only the category (`CATEGORY_RULES` give
-  the zone), the resident's text is its own `user` message, masked by
-  `mask_pii` (`core/masking.py`: phones, e-mails, 8+ digit runs, flat numbers;
-  names and street addresses stay). `YandexQuota`
+  Key never logged. The model picks the category (`CATEGORY_RULES` give
+  the zone) and an emergency probability in one JSON answer (a bare code is
+  read too); it only raises the alarm (`llm`, from `LLM_DANGER_PERCENT`)
+  when `detect_danger` is silent. `/requests/classify` answers the rules'
+  `danger` for any length before the quota; the model runs only from
+  `MIN_CLASSIFY_TEXT` (15, the app asks from 6). The resident's text is its
+  own `user` message, masked by `mask_pii` (`core/masking.py`: phones,
+  e-mails, 8+ digit runs, flat numbers; names and street addresses stay).
+  `YandexQuota`
   caps classify, OCR and speech together per user per api worker
   (`QUOTA_CALLS` an hour; the bot's `recognize_meter_photo` and
   `transcribe_voice` count per taskiq worker); past it

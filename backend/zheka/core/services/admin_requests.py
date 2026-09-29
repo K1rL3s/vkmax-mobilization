@@ -6,6 +6,7 @@ from zheka.core import texts
 from zheka.core.deeplinks import admin_request_app_path
 from zheka.core.enums import (
     ChatCardKind,
+    DangerKind,
     EventType,
     NotificationCategory,
     OrgRole,
@@ -66,7 +67,8 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 EMPTY_REPLY = "Напишите ответ жителю"
-GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе или дальше"
+QUESTION_CLOSED = "Заявка закрыта: житель не сможет ответить"
+GROUP_ALREADY_THERE = "Все заявки группы уже в этом статусе"
 NO_CALLER_IDENTIFICATION = "Укажите квартиру или имя и телефон звонившего"
 NOT_YOUR_REQUEST = "Эту заявку ведет другой исполнитель"
 RESULT_PHOTO_REQUIRED = "Пришлите фото результата"
@@ -84,6 +86,7 @@ class AdminRequestRow(RequestRow):
     house: House
     author: User | None
     escalated_at: datetime | None = None
+    danger: DangerKind | None = None
 
 
 class AdminRequestCardData(ZhekaType):
@@ -165,11 +168,12 @@ class AdminRequestsService:
         )
         if not filters.grouped:
             return await self._rows(requests), total
-        escalations = await self._requests.group_escalations(
-            {request.group_id for request in requests if request.group_id is not None},
-            now,
-        )
-        return await self._rows(requests, escalations), total
+        group_ids = {
+            request.group_id for request in requests if request.group_id is not None
+        }
+        escalations = await self._requests.group_escalations(group_ids, now)
+        dangers = await self._requests.group_dangers(group_ids)
+        return await self._rows(requests, escalations, dangers), total
 
     async def card(self, org_id: OrgId, request_id: RequestId) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
@@ -193,9 +197,15 @@ class AdminRequestsService:
         request_id: RequestId,
         text: str,
         actor: UserId,
+        *,
+        question: bool = False,
     ) -> AdminRequestCardData:
         request = await self._org_request(org_id, request_id)
         reply = stated(text, EMPTY_REPLY)
+        await self._requests.lock(request)
+        asks = question and request.author_user_id is not None
+        if asks and request.status is RequestStatus.DONE:
+            raise InvalidState(QUESTION_CLOSED)
 
         await self._requests.add_message(
             request.id,
@@ -203,10 +213,27 @@ class AdminRequestsService:
             RequestActorRole.STAFF.value,
             reply,
         )
-        self._notifications.notify_author(
+        await self._requests.stamp_thread(
             request,
-            texts.request_reply(request.id, request.category, reply),
+            question_asked_at=(
+                datetime.now(UTC) if asks else request.question_asked_at
+            ),
+            resident_answered_at=None,
         )
+        await self._events.record(
+            EventType.REQUEST_MESSAGE_SENT,
+            user_id=actor,
+            request_id=request.id,
+            by_role=RequestActorRole.STAFF.value,
+            question=asks,
+        )
+        if asks:
+            self._notifications.open_question_card(request.id)
+        else:
+            self._notifications.notify_author(
+                request,
+                texts.request_reply(request.id, request.category, reply),
+            )
         return await self._card(request)
 
     async def assign(
@@ -431,6 +458,7 @@ class AdminRequestsService:
         self,
         requests: Sequence[Request],
         group_escalations: Mapping[RequestGroupId, datetime] | None = None,
+        group_dangers: Mapping[RequestGroupId, DangerKind] | None = None,
     ) -> list[AdminRequestRow]:
         base_rows = await build_rows(
             self._requests,
@@ -467,6 +495,11 @@ class AdminRequestsService:
                     row.request.escalated_at
                     if group_escalations is None or row.request.group_id is None
                     else group_escalations.get(row.request.group_id)
+                ),
+                danger=(
+                    row.request.danger
+                    if group_dangers is None or row.request.group_id is None
+                    else group_dangers.get(row.request.group_id)
                 ),
             )
             for row in base_rows

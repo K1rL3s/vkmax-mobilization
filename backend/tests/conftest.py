@@ -100,7 +100,7 @@ from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.events import events_table
-from zheka.infra.yandex import YandexClassifier
+from zheka.infra.yandex import Classification, YandexClassifier
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -501,13 +501,20 @@ async def events_of(session: AsyncSession, type_: EventType) -> list[Event]:
 
 
 class StubClassifier(YandexClassifier):
-    __slots__ = ("_category",)
+    __slots__ = ("_classification",)
 
-    def __init__(self, category: RequestCategory | None) -> None:
-        self._category = category
+    def __init__(
+        self,
+        category: RequestCategory | None,
+        emergency_probability: int = 0,
+    ) -> None:
+        self._classification = Classification(
+            category=category,
+            emergency_probability=emergency_probability,
+        )
 
-    async def classify(self, text: str) -> RequestCategory | None:  # noqa: ARG002
-        return self._category
+    async def classify(self, text: str) -> Classification:  # noqa: ARG002
+        return self._classification
 
 
 def grouping_service(

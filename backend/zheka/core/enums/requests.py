@@ -207,18 +207,10 @@ def _amount(count: int, forms: tuple[str, str, str]) -> str:
     return f"{count} {form}"
 
 
-class CancelReason(StrEnum):
-    MISTAKE = "mistake"
-    RESOLVED = "resolved"
-    FIXED_MYSELF = "fixed_myself"
-    DUPLICATE = "duplicate"
-    OTHER = "other"
-
-
-CANCEL_REASONS: Mapping[CancelReason, str] = {
-    CancelReason.MISTAKE: "Подана по ошибке",
-    CancelReason.RESOLVED: "Проблема решилась сама",
-    CancelReason.FIXED_MYSELF: "Починили сами или вызвали мастера",
-    CancelReason.DUPLICATE: "Уже есть другая заявка",
-    CancelReason.OTHER: "Другое",
-}
+class DangerKind(StrEnum):
+    GAS = "gas"
+    FIRE = "fire"
+    ELECTRIC = "electric"
+    TRAPPED = "trapped"
+    FLOOD_ELECTRIC = "flood_electric"
+    LLM = "llm"

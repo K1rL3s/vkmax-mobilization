@@ -29,6 +29,7 @@ from zheka.bot.handlers import (
     menu_dialog,
     meter_photo_dialog,
     onboarding_dialog,
+    question_dialog,
     request_dialog,
     review_dialog,
 )
@@ -97,6 +98,7 @@ def make_dispatcher(
         request_dialog,
         executor_dialog,
         review_dialog,
+        question_dialog,
         chat_binding_dialog,
         chairman_dialog,
         access_dialog,

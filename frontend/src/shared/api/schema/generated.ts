@@ -653,7 +653,7 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/requests/{request_id}/cancel": {
+  "/api/requests/{request_id}/messages": {
     parameters: {
       query?: never;
       header?: never;
@@ -663,10 +663,10 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Отменить свою заявку
-     * @description Только автор и только открытая заявка (новая, принятая или в работе): она закрывается с итогом resident_canceled, причина уходит в переписку, сотрудники УК и исполнитель получают сообщение. Заявка на приемке или закрытая - 409, причина other без комментария - 400, чужая - 404, тестовый токен - 403
+     * Написать в УК по заявке
+     * @description Только автор незакрытой заявки: сообщение уходит сотрудникам УК и исполнителю, снимает вопрос УК и отмечает, что житель ответил. Закрытая заявка - 409, чужая - 404
      */
-    post: operations["cancel_request"];
+    post: operations["write_to_request"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2400,6 +2400,23 @@ export interface components {
        * @description Когда автор попросил руководство УК вмешаться
        */
       escalated_at?: string | null;
+      /**
+       * Question Asked At
+       * @description Когда УК задала вопрос; пусто - УК не ждет ответа жителя
+       */
+      question_asked_at?: string | null;
+      /**
+       * Resident Answered At
+       * @description Когда житель написал; пусто - УК уже ответила или он не писал
+       */
+      resident_answered_at?: string | null;
+      /** @description Похоже на аварию по описанию: вид опасности; пусто - нет */
+      danger?: components["schemas"]["DangerKind"] | null;
+      /**
+       * Danger Phrase
+       * @description Слова из описания, по которым заявка отмечена опасной
+       */
+      danger_phrase?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -2516,6 +2533,23 @@ export interface components {
        * @description Когда автор попросил руководство УК вмешаться
        */
       escalated_at?: string | null;
+      /**
+       * Question Asked At
+       * @description Когда УК задала вопрос; пусто - УК не ждет ответа жителя
+       */
+      question_asked_at?: string | null;
+      /**
+       * Resident Answered At
+       * @description Когда житель написал; пусто - УК уже ответила или он не писал
+       */
+      resident_answered_at?: string | null;
+      /** @description Похоже на аварию по описанию: вид опасности; пусто - нет */
+      danger?: components["schemas"]["DangerKind"] | null;
+      /**
+       * Danger Phrase
+       * @description Слова из описания, по которым заявка отмечена опасной
+       */
+      danger_phrase?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -2992,6 +3026,8 @@ export interface components {
     ClassifyRequestResponse: {
       category: components["schemas"]["RequestCategory"] | null;
       zone: components["schemas"]["ResponsibilityZone"] | null;
+      /** @description Похоже на аварию: сначала 112, 104 и аварийная служба, потом заявка; llm - по оценке модели, когда правила молчат */
+      danger: components["schemas"]["DangerKind"] | null;
     };
     /** ConsentRequest */
     ConsentRequest: {
@@ -3168,6 +3204,12 @@ export interface components {
        */
       llm_accepted: boolean;
     };
+    /**
+     * DangerKind
+     * @enum {string}
+     */
+    DangerKind:
+      "gas" | "fire" | "electric" | "trapped" | "flood_electric" | "llm";
     /** DashboardResponse */
     DashboardResponse: {
       /**
@@ -4539,6 +4581,12 @@ export interface components {
     ReplyToRequestRequest: {
       /** Text */
       text: string;
+      /**
+       * Question
+       * @description Нужен ответ жителя: автор получает в боте карточку с вопросом и кнопкой «Ответить», заявка ждет его ответа. Статус и срок не меняются. У заявки без автора флаг не действует, у закрытой - 409
+       * @default false
+       */
+      question: boolean;
     };
     /** RequestCard */
     RequestCard: {
@@ -4583,6 +4631,23 @@ export interface components {
        * @description Когда автор попросил руководство УК вмешаться
        */
       escalated_at?: string | null;
+      /**
+       * Question Asked At
+       * @description Когда УК задала вопрос; пусто - УК не ждет ответа жителя
+       */
+      question_asked_at?: string | null;
+      /**
+       * Resident Answered At
+       * @description Когда житель написал; пусто - УК уже ответила или он не писал
+       */
+      resident_answered_at?: string | null;
+      /** @description Похоже на аварию по описанию: вид опасности; пусто - нет */
+      danger?: components["schemas"]["DangerKind"] | null;
+      /**
+       * Danger Phrase
+       * @description Слова из описания, по которым заявка отмечена опасной
+       */
+      danger_phrase?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -4772,6 +4837,23 @@ export interface components {
        * @description Когда автор попросил руководство УК вмешаться
        */
       escalated_at?: string | null;
+      /**
+       * Question Asked At
+       * @description Когда УК задала вопрос; пусто - УК не ждет ответа жителя
+       */
+      question_asked_at?: string | null;
+      /**
+       * Resident Answered At
+       * @description Когда житель написал; пусто - УК уже ответила или он не писал
+       */
+      resident_answered_at?: string | null;
+      /** @description Похоже на аварию по описанию: вид опасности; пусто - нет */
+      danger?: components["schemas"]["DangerKind"] | null;
+      /**
+       * Danger Phrase
+       * @description Слова из описания, по которым заявка отмечена опасной
+       */
+      danger_phrase?: string | null;
     };
     /** RequestMessageItem */
     RequestMessageItem: {
@@ -5125,6 +5207,11 @@ export interface components {
     VoteRequest: {
       /** Option Ids */
       option_ids: number[];
+    };
+    /** WriteToRequestRequest */
+    WriteToRequestRequest: {
+      /** Text */
+      text: string;
     };
   };
   responses: never;
@@ -9115,11 +9202,12 @@ export interface operations {
       };
     };
   };
-  cancel_request: {
+  write_to_request: {
     parameters: {
       query?: never;
       header?: {
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         request_id: number;
@@ -9128,7 +9216,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": components["schemas"]["CancelRequestRequest"];
+        "application/json": components["schemas"]["WriteToRequestRequest"];
       };
     };
     responses: {
@@ -14383,6 +14471,8 @@ export interface operations {
         executor_user_id?: number | null;
         overdue?: boolean;
         grouped?: boolean;
+        question_asked?: boolean;
+        resident_answered?: boolean;
         /** @description Размер страницы */
         limit?: number;
         /** @description Сдвиг от начала списка */

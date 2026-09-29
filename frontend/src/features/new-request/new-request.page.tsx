@@ -1,8 +1,9 @@
 import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
-import { emergencyContact } from "@/features/emergency";
+import { EmergencyCard, emergencyContact } from "@/features/emergency";
 import { outageForCategory, outageTitle, useHouseCard } from "@/features/house";
+import type { components } from "@/shared/api/schema/generated";
 import { Routes } from "@/shared/model/routes";
 import { useSession } from "@/shared/model/session";
 import {
@@ -20,6 +21,18 @@ import { SimilarPanel } from "./similar-panel";
 import { DESCRIPTION_LIMIT, useNewRequest } from "./use-new-request";
 
 import styles from "./new-request.module.css";
+
+const DANGER_HINTS: Record<components["schemas"]["DangerKind"], string> = {
+  gas: "Похоже, пахнет газом: не включайте свет и приборы, выйдите из квартиры и звоните 104 или 112",
+  fire: "Похоже на дым или пожар: звоните 112, уходите по лестнице, не на лифте",
+  electric:
+    "Похоже, искрит проводка: не трогайте ее, отключите автомат в щитке, если это безопасно, при дыме звоните 112",
+  trapped:
+    "Похоже, в лифте застряли люди: нажмите кнопку связи в кабине и звоните в аварийную службу, при угрозе здоровью - 112",
+  flood_electric:
+    "Вода попала на проводку: не подходите к щиту и розеткам, звоните в аварийную службу, при искрах - 112",
+  llm: "Похоже на аварию: при угрозе жизни и здоровью звоните 112",
+};
 
 const NewRequestPage = () => {
   const form = useNewRequest();
@@ -48,6 +61,13 @@ const NewRequestPage = () => {
   return (
     <Panel className={styles.Page} mode="secondary">
       <div className={styles.Content}>
+        {form.danger && (
+          <EmergencyCard
+            org={house.data?.org}
+            hint={DANGER_HINTS[form.danger]}
+          />
+        )}
+
         {!form.isDispute &&
           form.description === "" &&
           form.attachments.attachments.length === 0 && (

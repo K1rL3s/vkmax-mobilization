@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import (
+    DangerKind,
     RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
@@ -52,6 +53,9 @@ class Request(ZhekaMutableType):
     deadline_warned_at: datetime | None = None
     overdue_notified_at: datetime | None = None
     escalated_at: datetime | None = None
+    question_asked_at: datetime | None = None
+    resident_answered_at: datetime | None = None
+    danger: DangerKind | None = None
 
     @property
     def warn_at(self) -> datetime:

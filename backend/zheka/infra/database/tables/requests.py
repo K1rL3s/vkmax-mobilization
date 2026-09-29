@@ -3,6 +3,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Integer,
@@ -13,6 +14,7 @@ from sqlalchemy import (
 )
 
 from zheka.core.enums import (
+    DangerKind,
     RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
@@ -63,6 +65,18 @@ requests_table = Table(
     Column("deadline_warned_at", DateTime(timezone=True), nullable=True),
     Column("overdue_notified_at", DateTime(timezone=True), nullable=True),
     Column("escalated_at", DateTime(timezone=True), nullable=True),
+    Column("question_asked_at", DateTime(timezone=True), nullable=True),
+    Column("resident_answered_at", DateTime(timezone=True), nullable=True),
+    Column(
+        "danger",
+        Enum(
+            DangerKind,
+            native_enum=False,
+            length=16,
+            values_callable=lambda kinds: [kind.value for kind in kinds],
+        ),
+        nullable=True,
+    ),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),

@@ -182,3 +182,7 @@ def voice_url(body: MessageBody) -> str | None:
         if isinstance(item, AudioAttachment):
             return item.payload.url
     return None
+
+
+class QuestionData(BaseDialogData):
+    request_id: int

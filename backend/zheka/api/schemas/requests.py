@@ -6,10 +6,12 @@ from pydantic import Field
 from zheka.api.dependencies import CurrentOrg
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FILES_DESCRIPTION, FileRef
+from zheka.core.danger import detect_danger
 from zheka.core.enums import (
     CATEGORY_RULES,
     CancelReason,
     CategoryRule,
+    DangerKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
@@ -43,6 +45,7 @@ from zheka.core.services.requests import (
 UNKNOWN_AUTHOR = "Пользователь"
 DEADLINE_TEXT = "Срок устранения, например «3 суток»"
 DEADLINE_BASIS = "Норма права под сроком; пусто - срок сервиса, норматива нет"
+MIN_CLASSIFY_TEXT = 15
 
 
 class RequestCategoryItem(BaseSchema):
@@ -88,11 +91,28 @@ class RequestListItem(BaseSchema):
         default=None,
         description="Когда автор попросил руководство УК вмешаться",
     )
+    question_asked_at: datetime | None = Field(
+        default=None,
+        description="Когда УК задала вопрос; пусто - УК не ждет ответа жителя",
+    )
+    resident_answered_at: datetime | None = Field(
+        default=None,
+        description="Когда житель написал; пусто - УК уже ответила или он не писал",
+    )
+    danger: DangerKind | None = Field(
+        default=None,
+        description="Похоже на аварию по описанию: вид опасности; пусто - нет",
+    )
+    danger_phrase: str | None = Field(
+        default=None,
+        description="Слова из описания, по которым заявка отмечена опасной",
+    )
 
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
         request = row.request
         rule = CATEGORY_RULES[request.category]
+        found = None if request.danger is None else detect_danger(request.description)
         return cls(
             id=request.id,
             created_at=request.created_at,
@@ -110,6 +130,10 @@ class RequestListItem(BaseSchema):
             deadline_at=request.deadline_at,
             completion_reason=request.completion_reason,
             escalated_at=request.escalated_at,
+            question_asked_at=request.question_asked_at,
+            resident_answered_at=request.resident_answered_at,
+            danger=request.danger,
+            danger_phrase=None if found is None else found.phrase,
         )
 
 
@@ -281,8 +305,9 @@ class AdminRequestListItem(RequestListItem):
         base = RequestListItem.of_row(row)
         request = row.request
         return cls(
-            **base.model_dump(exclude={"escalated_at"}),
+            **base.model_dump(exclude={"escalated_at", "danger"}),
             escalated_at=row.escalated_at,
+            danger=row.danger,
             house_id=request.house_id,
             address=row.house.address,
             is_staff_author=request.is_staff_author,
@@ -329,6 +354,14 @@ class ChangeRequestStatusRequest(BaseSchema):
 
 class ReplyToRequestRequest(BaseSchema):
     text: FreeText
+    question: bool = Field(
+        default=False,
+        description=(
+            "Нужен ответ жителя: автор получает в боте карточку с вопросом и "
+            "кнопкой «Ответить», заявка ждет его ответа. Статус и срок не "
+            "меняются. У заявки без автора флаг не действует, у закрытой - 409"
+        ),
+    )
 
 
 class AssignExecutorRequest(BaseSchema):
@@ -407,18 +440,21 @@ class ClassifyRequestRequest(BaseSchema):
 class ClassifyRequestResponse(BaseSchema):
     category: RequestCategory | None
     zone: ResponsibilityZone | None
+    danger: DangerKind | None = Field(
+        description=(
+            "Похоже на аварию: сначала 112, 104 и аварийная служба, потом заявка; "
+            "llm - по оценке модели, когда правила молчат"
+        ),
+    )
 
     @classmethod
-    def of(cls, category: RequestCategory | None) -> Self:
+    def of(cls, category: RequestCategory | None, danger: DangerKind | None) -> Self:
         return cls(
             category=category,
             zone=None if category is None else CATEGORY_RULES[category].zone,
+            danger=danger,
         )
 
 
-class CancelRequestRequest(BaseSchema):
-    reason: CancelReason
-    comment: FreeText | None = Field(
-        default=None,
-        description="Пояснение жителя; обязательно для причины other",
-    )
+class WriteToRequestRequest(BaseSchema):
+    text: FreeText

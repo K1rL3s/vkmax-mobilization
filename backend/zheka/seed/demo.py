@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from zheka.base import ZhekaType
 from zheka.core.charges import previous_period
+from zheka.core.danger import detect_danger
 from zheka.core.enums import (
     CATEGORY_RULES,
     AnnouncementChannel,
@@ -1063,6 +1064,7 @@ class Seeder:
             )
             repeat.request.parent_request_id = request.id
             repeat.request.description = f"Повторно: {request.description}"
+            repeat.request.danger = request.danger
             repeats.append(repeat)
         self._session.add_all(plan.request for plan in repeats)
         await self._session.flush()
@@ -1253,6 +1255,8 @@ class Seeder:
             created,
             house.zone,
         )
+        description = rng.choice(DESCRIPTIONS[category])
+        danger = detect_danger(description)
         request = Request(
             created_at=created,
             deadline_at=deadline_at,
@@ -1261,7 +1265,8 @@ class Seeder:
             flat_id=None if author is None else author.flat_id,
             author_user_id=None if author is None else author.user_id,
             category=category,
-            description=rng.choice(DESCRIPTIONS[category]),
+            description=description,
+            danger=None if danger is None else danger.kind,
             status=steps[-1].status,
             completion_reason=reason if is_done else None,
             channel=(
