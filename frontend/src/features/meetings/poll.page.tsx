@@ -5,7 +5,13 @@ import { Routes } from "@/shared/model/routes";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
-import { authorCaption, deadlineLabel, voteNote } from "./domain/poll";
+import {
+  authorCaption,
+  deadlineLabel,
+  isInitiative,
+  supportLine,
+  voteNote,
+} from "./domain/poll";
 import { useClosePoll } from "./model/use-close-poll";
 import { usePoll } from "./model/use-poll";
 import { PollOption } from "./ui/poll-option";
@@ -39,6 +45,12 @@ const PollPage = () => {
         <Typography.Text variant="description" color="secondary">
           {authorCaption(poll.created_by_role)} · {deadlineLabel(poll)}
         </Typography.Text>
+
+        {isInitiative(poll) && (
+          <Typography.Text variant="body-strong" color="primary">
+            {supportLine(results.options[0]?.flats_count ?? 0)}
+          </Typography.Text>
+        )}
       </Flex>
 
       {poll.description && (
@@ -126,7 +138,11 @@ const PollPage = () => {
           <CellSimple
             asChild
             title="Непроголосовавшие квартиры"
-            subtitle="Видно организатору опроса"
+            subtitle={
+              isInitiative(poll)
+                ? "Видно председателю совета дома"
+                : "Видно организатору опроса"
+            }
             showChevron
           >
             <Link

@@ -2742,6 +2742,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -3049,6 +3058,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -4403,6 +4421,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -4635,12 +4662,108 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreatePollRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/initiatives:
+    post:
+      tags:
+      - Опросы
+      summary: Предложить инициативу
+      operationId: create_initiative
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInitiativeRequest'
       responses:
         '200':
           description: Successful Response
@@ -5017,6 +5140,317 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PollCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/proposals:
+    post:
+      tags:
+      - Предложения совету дома
+      summary: Предложить совету дома
+      operationId: create_proposal
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProposalRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalItem'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+    get:
+      tags:
+      - Предложения совету дома
+      summary: Предложения дома
+      operationId: list_house_proposals
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProposalItem'
+                title: Response List House Proposals
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/proposals/my:
+    get:
+      tags:
+      - Предложения совету дома
+      summary: Мои предложения
+      operationId: list_my_proposals
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyProposalsResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/proposals/{proposal_id}/answer:
+    post:
+      tags:
+      - Предложения совету дома
+      summary: Ответить на предложение
+      operationId: answer_proposal
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: proposal_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Proposal Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerProposalRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposalItem'
         '400':
           description: Некорректный запрос
           content:
@@ -8165,6 +8599,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -8497,6 +8940,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -8881,6 +9333,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -9071,6 +9532,15 @@ paths:
           - type: string
           - type: 'null'
           title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         required: true
         content:
@@ -10154,7 +10624,7 @@ paths:
     post:
       tags:
       - Файлы
-      summary: Загрузить фото
+      summary: Загрузить фото или видео
       operationId: upload_file
       security:
       - ApiTestToken: []
@@ -10798,6 +11268,9 @@ components:
         title:
           type: string
           title: Title
+        created_by_role:
+          type: string
+          title: Created By Role
         status:
           $ref: '#/components/schemas/PollStatus'
         starts_at:
@@ -10827,6 +11300,7 @@ components:
       required:
       - id
       - title
+      - created_by_role
       - status
       - starts_at
       - ends_at
@@ -10934,6 +11408,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size
@@ -11008,11 +11483,13 @@ components:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Photos
+          description: 'Вложения проблемы: фото или видео'
         result_photos:
           items:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Result Photos
+          description: 'Вложения результата: фото или видео'
         messages:
           items:
             $ref: '#/components/schemas/RequestMessageItem'
@@ -11131,6 +11608,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size
@@ -11280,6 +11758,26 @@ components:
       - channels
       - delivered_count
       title: AnnouncementItem
+    AnswerProposalRequest:
+      properties:
+        accepted:
+          type: boolean
+          title: Accepted
+        answer:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Answer
+        poll_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Poll Id
+      type: object
+      required:
+      - accepted
+      title: AnswerProposalRequest
     ApiError_BaseError_:
       properties:
         status:
@@ -12020,6 +12518,22 @@ components:
           default: 1
       type: object
       title: CreateFlatInviteRequest
+    CreateInitiativeRequest:
+      properties:
+        title:
+          type: string
+          maxLength: 4000
+          title: Title
+        description:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Description
+      type: object
+      required:
+      - title
+      title: CreateInitiativeRequest
     CreateOrgInviteRequest:
       properties:
         role:
@@ -12144,6 +12658,17 @@ components:
       - options
       - ends_at
       title: CreatePollRequest
+    CreateProposalRequest:
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          minLength: 10
+          title: Text
+      type: object
+      required:
+      - text
+      title: CreateProposalRequest
     CreateRequestRequest:
       properties:
         category:
@@ -12394,10 +12919,14 @@ components:
         url:
           type: string
           title: Url
+        is_video:
+          type: boolean
+          title: Is Video
       type: object
       required:
       - name
       - url
+      - is_video
       title: FileRef
     FlatCard:
       properties:
@@ -13218,12 +13747,28 @@ components:
       - kopeck
       - points
       title: MetricUnit
+    MyProposalsResponse:
+      properties:
+        has_chairman:
+          type: boolean
+          title: Has Chairman
+        items:
+          items:
+            $ref: '#/components/schemas/ProposalItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - has_chairman
+      - items
+      title: MyProposalsResponse
     NotificationCategory:
       type: string
       enum:
       - requests
       - announcements
       - meters
+      - digest
       title: NotificationCategory
     NotificationLevel:
       type: string
@@ -13918,6 +14463,9 @@ components:
         title:
           type: string
           title: Title
+        created_by_role:
+          type: string
+          title: Created By Role
         status:
           $ref: '#/components/schemas/PollStatus'
         starts_at:
@@ -13940,9 +14488,6 @@ components:
         house_id:
           type: integer
           title: House Id
-        created_by_role:
-          type: string
-          title: Created By Role
         can_vote:
           type: boolean
           title: Can Vote
@@ -13976,6 +14521,7 @@ components:
       required:
       - id
       - title
+      - created_by_role
       - status
       - starts_at
       - ends_at
@@ -13983,7 +14529,6 @@ components:
       - voted
       - voted_flats
       - house_id
-      - created_by_role
       - can_vote
       - can_manage
       - options
@@ -13997,6 +14542,9 @@ components:
         title:
           type: string
           title: Title
+        created_by_role:
+          type: string
+          title: Created By Role
         status:
           $ref: '#/components/schemas/PollStatus'
         starts_at:
@@ -14020,6 +14568,7 @@ components:
       required:
       - id
       - title
+      - created_by_role
       - status
       - starts_at
       - ends_at
@@ -14161,6 +14710,53 @@ components:
       - active
       - closed
       title: PollStatus
+    ProposalItem:
+      properties:
+        id:
+          type: integer
+          title: Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        text:
+          type: string
+          title: Text
+        status:
+          $ref: '#/components/schemas/ProposalStatus'
+        answer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Answer
+        answered_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Answered At
+        poll_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Poll Id
+      type: object
+      required:
+      - id
+      - created_at
+      - text
+      - status
+      - answer
+      - answered_at
+      - poll_id
+      title: ProposalItem
+    ProposalStatus:
+      type: string
+      enum:
+      - new
+      - accepted
+      - declined
+      title: ProposalStatus
     RateRequestRequest:
       properties:
         rating:
@@ -14482,6 +15078,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size
@@ -14556,11 +15153,13 @@ components:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Photos
+          description: 'Вложения проблемы: фото или видео'
         result_photos:
           items:
             $ref: '#/components/schemas/FileRef'
           type: array
           title: Result Photos
+          description: 'Вложения результата: фото или видео'
         messages:
           items:
             $ref: '#/components/schemas/RequestMessageItem'
@@ -14772,6 +15371,7 @@ components:
         has_photos:
           type: boolean
           title: Has Photos
+          description: 'Есть вложения: фото или видео'
         group_size:
           type: integer
           title: Group Size

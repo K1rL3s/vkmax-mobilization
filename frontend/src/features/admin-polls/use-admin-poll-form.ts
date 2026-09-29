@@ -11,6 +11,7 @@ import {
 import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
+import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { orgParams } from "@/shared/model/session";
 
 const draftSchema = pollDraftSchema.extend({
@@ -42,6 +43,7 @@ export const useAdminPollForm = () => {
 
   const options = useFieldArray({ control: form.control, name: "options" });
 
+  const idempotency = useIdempotencyKey();
   const create = rqClient.useMutation("post", "/api/admin/polls", {
     onSuccess: (poll) =>
       navigate(generatePath(Routes.ADMIN_POLL, { pollId: String(poll.id) }), {
@@ -80,7 +82,12 @@ export const useAdminPollForm = () => {
       ),
     submit: form.handleSubmit((draft) =>
       create.mutate({
-        params: orgParams(),
+        params: {
+          header: {
+            ...orgParams().header,
+            "Idempotency-Key": idempotency.key,
+          },
+        },
         body: {
           house_id: Number(draft.houseId),
           title: draft.title,

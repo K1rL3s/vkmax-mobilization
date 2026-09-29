@@ -2,6 +2,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    Date,
     ForeignKey,
     Index,
     Integer,
@@ -44,6 +45,7 @@ houses_table = Table(
         server_default=false(),
         nullable=False,
     ),
+    Column("digest_sent_on", Date, nullable=True),
     Index(None, "city", "street"),
 )
 

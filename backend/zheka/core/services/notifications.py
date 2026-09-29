@@ -19,7 +19,7 @@ from zheka.core.ids import (
     UserId,
 )
 from zheka.core.models import Request
-from zheka.core.notifications import DEFAULT_LEVEL
+from zheka.core.notifications import default_level
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
 
@@ -43,7 +43,7 @@ class NotificationsService:
     ) -> dict[NotificationCategory, NotificationLevel]:
         stored = await self._notifications.get_levels(user_id)
         return {
-            category: stored.get(category, DEFAULT_LEVEL)
+            category: stored.get(category, default_level(category))
             for category in NotificationCategory
         }
 

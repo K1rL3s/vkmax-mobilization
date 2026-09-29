@@ -41,6 +41,6 @@ export const useReview = (requestId: number) => {
     canAccept: !isSending,
     canReject: text.length > 0 && !isSending,
     accept: () => accept.mutate({ params }),
-    reject: () => repeat.mutate({ params, body: { description: text } }),
+    reject: () => repeat.send(requestId, text),
   };
 };

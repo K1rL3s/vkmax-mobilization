@@ -286,7 +286,7 @@ async def test_dispute_creates_a_charge_dispute_request_with_period_photos(
     assert request.category is RequestCategory.CHARGE_DISPUTE
     assert "Почему так много?" in request.description
     assert request.flat_id == own.flat_id
-    photos = await requests_repo.list_photos(request_id)
+    photos = await requests_repo.list_attachments(request_id)
     [reading] = await MetersRepo(session).list_readings(meter_id, 1)
     assert [p.path for p in photos] == reading.photo_paths
     events = await events_of(session, EventType.CHARGE_DISPUTED)

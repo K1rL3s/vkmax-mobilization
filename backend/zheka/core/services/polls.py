@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
@@ -7,6 +7,7 @@ from zheka.core.enums import (
     ChatCardKind,
     EventSource,
     EventType,
+    PollAuthor,
     PollStatus,
     ResidentStatus,
 )
@@ -30,6 +31,8 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 
 _ALL_FLATS_LIMIT = 10_000
 MIN_POLL_OPTIONS = 2
+INITIATIVE_DAYS = 14
+INITIATIVE_OPTIONS = ("👍 Поддерживаю", "👎 Против")
 
 POLL_NOT_FOUND = "Опрос не найден"
 NOT_A_CHAIRMAN = "Опрос дома может создать только председатель"
@@ -42,6 +45,8 @@ SINGLE_CHOICE_ONLY = "В этом опросе можно выбрать тол�
 NEED_TWO_OPTIONS = "Добавьте минимум два разных варианта ответа"
 ENDS_IN_PAST = "Дата окончания опроса должна быть в будущем"
 NOT_INITIATOR = "Доступно только организатору опроса"
+NOT_AN_OWNER = "Инициативу дома предлагает собственник подтвержденной квартиры"
+INITIATIVE_IS_OPEN = "Ваша инициатива еще идет, дождитесь ее завершения"
 
 
 class PollDraft(ZhekaType):
@@ -154,34 +159,90 @@ class PollsService:
         *,
         org_id: OrgId | None,
     ) -> PollCardData:
-        options = _clean_options(draft.options)
-
+        now = datetime.now(UTC)
         if org_id is not None:
             house = await self._houses.get_for_org(house_id, org_id)
             if house is None:
                 raise EntityNotFound(HOUSE_NOT_FOUND)
-            role = "staff"
-        else:
-            house = await self._houses.get(house_id)
-            resident = await self._residents.get_for_house(user_id, house_id)
-            if house is None or resident is None:
-                raise EntityNotFound(HOUSE_NOT_FOUND)
-            if resident.status is ResidentStatus.BLOCKED:
-                raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
-            if not resident.is_chairman:
-                raise NotEnoughRights(NOT_A_CHAIRMAN)
-            role = "chairman"
-            org_id = house.org_id
+            return await self._create(
+                user_id,
+                house,
+                org_id,
+                PollAuthor.STAFF,
+                draft,
+                now,
+            )
 
+        house, resident = await self._house_of_resident(user_id, house_id)
+        if not resident.is_chairman:
+            raise NotEnoughRights(NOT_A_CHAIRMAN)
+        return await self._create(
+            user_id,
+            house,
+            house.org_id,
+            PollAuthor.CHAIRMAN,
+            draft,
+            now,
+        )
+
+    async def create_initiative(
+        self,
+        user_id: UserId,
+        house_id: HouseId,
+        title: str,
+        description: str | None,
+    ) -> PollCardData:
+        house, resident = await self._house_of_resident(user_id, house_id)
+        if resident.verified_at is None or not resident.can_vote:
+            raise NotEnoughRights(NOT_AN_OWNER)
         now = datetime.now(UTC)
+        if await self._polls.has_open_initiative(house_id, user_id, now):
+            raise InvalidState(INITIATIVE_IS_OPEN)
+        return await self._create(
+            user_id,
+            house,
+            house.org_id,
+            PollAuthor.RESIDENT,
+            PollDraft(
+                title=title,
+                description=description,
+                options=INITIATIVE_OPTIONS,
+                ends_at=now + timedelta(days=INITIATIVE_DAYS),
+            ),
+            now,
+        )
+
+    async def _house_of_resident(
+        self,
+        user_id: UserId,
+        house_id: HouseId,
+    ) -> tuple[House, Resident]:
+        house = await self._houses.get(house_id)
+        resident = await self._residents.get_for_house(user_id, house_id)
+        if house is None or resident is None:
+            raise EntityNotFound(HOUSE_NOT_FOUND)
+        if resident.status is ResidentStatus.BLOCKED:
+            raise NotEnoughRights(texts.blocked_detail(resident.block_reason))
+        return house, resident
+
+    async def _create(
+        self,
+        user_id: UserId,
+        house: House,
+        org_id: OrgId | None,
+        role: PollAuthor,
+        draft: PollDraft,
+        now: datetime,
+    ) -> PollCardData:
+        options = _clean_options(draft.options)
         ends_at = house.to_utc(draft.ends_at)
         if ends_at <= now:
             raise InvalidValue(ENDS_IN_PAST)
         poll = await self._polls.create(
-            house_id,
+            house.id,
             org_id,
             user_id,
-            role,
+            role.value,
             draft.title,
             draft.description,
             draft.is_multiple,
@@ -193,7 +254,7 @@ class PollsService:
             EventType.POLL_CREATED,
             user_id=user_id,
             poll_id=poll.id,
-            by_role=role,
+            by_role=role.value,
         )
         self._notifications.sync_chat_card(ChatCardKind.POLL, poll.id, post=True)
         return await self._card(poll, user_id)
@@ -465,7 +526,8 @@ class PollsService:
         return poll
 
     async def _can_manage(self, poll: Poll, user_id: UserId) -> bool:
-        if poll.created_by_user_id == user_id:
+        own = poll.created_by_user_id == user_id
+        if own or poll.created_by_role == PollAuthor.RESIDENT:
             resident = await self._residents.get_for_house(user_id, poll.house_id)
             if (
                 resident is not None

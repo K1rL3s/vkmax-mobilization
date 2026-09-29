@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import Select, select, update
 
@@ -48,6 +49,25 @@ class AnnouncementsRepo(BaseAlchemyRepo):
             announcements_table.c.house_ids.contains([house_id]),
         )
         return await self._newest_first(stmt, limit, offset)
+
+    async def list_for_house_since(
+        self,
+        house_id: HouseId,
+        since: datetime,
+    ) -> Sequence[Announcement]:
+        stmt = (
+            select(Announcement)
+            .where(
+                announcements_table.c.house_ids.contains([house_id]),
+                announcements_table.c.created_at >= since,
+            )
+            .order_by(
+                announcements_table.c.created_at.desc(),
+                announcements_table.c.id.desc(),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
 
     async def list_for_org(
         self,

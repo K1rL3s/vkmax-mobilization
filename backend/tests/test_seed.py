@@ -58,7 +58,10 @@ from zheka.infra.database.tables.organizations import (
     organizations_table,
 )
 from zheka.infra.database.tables.polls import polls_table
-from zheka.infra.database.tables.requests import request_photos_table, requests_table
+from zheka.infra.database.tables.requests import (
+    request_attachments_table,
+    requests_table,
+)
 from zheka.infra.database.tables.residents import (
     flat_verification_requests_table,
     residents_table,
@@ -340,9 +343,9 @@ async def test_a_reviewer_account_never_equals_a_seeded_one(db: AsyncSession) ->
 
 
 async def test_a_result_photo_shows_the_work_of_its_request(db: AsyncSession) -> None:
-    stmt = select(request_photos_table.c.path, requests_table.c.category).join(
+    stmt = select(request_attachments_table.c.path, requests_table.c.category).join(
         requests_table,
-        requests_table.c.id == request_photos_table.c.request_id,
+        requests_table.c.id == request_attachments_table.c.request_id,
     )
     rows = (await db.execute(stmt)).all()
 

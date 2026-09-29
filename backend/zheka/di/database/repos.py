@@ -11,12 +11,14 @@ from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.files import FilesRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
+from zheka.infra.database.repos.idempotency import IdempotencyRepo
 from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.map import MapRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.polls import PollsRepo
+from zheka.infra.database.repos.proposals import ProposalsRepo
 from zheka.infra.database.repos.reception import ReceptionRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
@@ -39,6 +41,7 @@ class ReposProvider(Provider):
         MetersRepo,
         ChargesRepo,
         PollsRepo,
+        ProposalsRepo,
         NotificationsRepo,
         ChatsRepo,
         AnnouncementsRepo,
@@ -48,4 +51,5 @@ class ReposProvider(Provider):
         FilesRepo,
         MapRepo,
         AdminMapRepo,
+        IdempotencyRepo,
     )

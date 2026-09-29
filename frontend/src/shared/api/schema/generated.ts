@@ -860,6 +860,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/houses/{house_id}/initiatives": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Предложить инициативу */
+    post: operations["create_initiative"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/polls/{poll_id}": {
     parameters: {
       query?: never;
@@ -939,6 +956,58 @@ export interface paths {
     put?: never;
     /** Закрыть опрос */
     post: operations["close_poll"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/houses/{house_id}/proposals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Предложения дома */
+    get: operations["list_house_proposals"];
+    put?: never;
+    /** Предложить совету дома */
+    post: operations["create_proposal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/houses/{house_id}/proposals/my": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Мои предложения */
+    get: operations["list_my_proposals"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/proposals/{proposal_id}/answer": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Ответить на предложение */
+    post: operations["answer_proposal"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1850,7 +1919,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Загрузить фото */
+    /** Загрузить фото или видео */
     post: operations["upload_file"];
     delete?: never;
     options?: never;
@@ -2183,6 +2252,8 @@ export interface components {
       id: number;
       /** Title */
       title: string;
+      /** Created By Role */
+      created_by_role: string;
       status: components["schemas"]["PollStatus"];
       /**
        * Starts At
@@ -2267,7 +2338,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;
@@ -2312,9 +2386,15 @@ export interface components {
        * @description Срок реакции (принять заявку); пусто - не нормирован
        */
       react_deadline_at?: string | null;
-      /** Photos */
+      /**
+       * Photos
+       * @description Вложения проблемы: фото или видео
+       */
       photos: components["schemas"]["FileRef"][];
-      /** Result Photos */
+      /**
+       * Result Photos
+       * @description Вложения результата: фото или видео
+       */
       result_photos: components["schemas"]["FileRef"][];
       /** Messages */
       messages: components["schemas"]["RequestMessageItem"][];
@@ -2369,7 +2449,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;
@@ -2452,6 +2535,15 @@ export interface components {
        * @default false
        */
       urgent: boolean;
+    };
+    /** AnswerProposalRequest */
+    AnswerProposalRequest: {
+      /** Accepted */
+      accepted: boolean;
+      /** Answer */
+      answer?: string | null;
+      /** Poll Id */
+      poll_id?: number | null;
     };
     /** ApiError[BaseError] */
     ApiError_BaseError_: {
@@ -2911,6 +3003,13 @@ export interface components {
        */
       max_activations: number;
     };
+    /** CreateInitiativeRequest */
+    CreateInitiativeRequest: {
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
+    };
     /** CreateOrgInviteRequest */
     CreateOrgInviteRequest: {
       role: components["schemas"]["OrgRole"];
@@ -2983,6 +3082,11 @@ export interface components {
        * @default false
        */
       is_multiple: boolean;
+    };
+    /** CreateProposalRequest */
+    CreateProposalRequest: {
+      /** Text */
+      text: string;
     };
     /** CreateRequestRequest */
     CreateRequestRequest: {
@@ -3142,6 +3246,8 @@ export interface components {
       name: string;
       /** Url */
       url: string;
+      /** Is Video */
+      is_video: boolean;
     };
     /** FlatCard */
     FlatCard: {
@@ -3586,11 +3692,18 @@ export interface components {
      * @enum {string}
      */
     MetricUnit: "count" | "percent" | "minutes" | "kopeck" | "points";
+    /** MyProposalsResponse */
+    MyProposalsResponse: {
+      /** Has Chairman */
+      has_chairman: boolean;
+      /** Items */
+      items: components["schemas"]["ProposalItem"][];
+    };
     /**
      * NotificationCategory
      * @enum {string}
      */
-    NotificationCategory: "requests" | "announcements" | "meters";
+    NotificationCategory: "requests" | "announcements" | "meters" | "digest";
     /**
      * NotificationLevel
      * @enum {string}
@@ -3985,6 +4098,8 @@ export interface components {
       id: number;
       /** Title */
       title: string;
+      /** Created By Role */
+      created_by_role: string;
       status: components["schemas"]["PollStatus"];
       /**
        * Starts At
@@ -4004,8 +4119,6 @@ export interface components {
       voted_flats: number;
       /** House Id */
       house_id: number;
-      /** Created By Role */
-      created_by_role: string;
       /** Can Vote */
       can_vote: boolean;
       /** Can Manage */
@@ -4033,6 +4146,8 @@ export interface components {
       id: number;
       /** Title */
       title: string;
+      /** Created By Role */
+      created_by_role: string;
       status: components["schemas"]["PollStatus"];
       /**
        * Starts At
@@ -4142,6 +4257,30 @@ export interface components {
      * @enum {string}
      */
     PollStatus: "active" | "closed";
+    /** ProposalItem */
+    ProposalItem: {
+      /** Id */
+      id: number;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Text */
+      text: string;
+      status: components["schemas"]["ProposalStatus"];
+      /** Answer */
+      answer: string | null;
+      /** Answered At */
+      answered_at: string | null;
+      /** Poll Id */
+      poll_id: number | null;
+    };
+    /**
+     * ProposalStatus
+     * @enum {string}
+     */
+    ProposalStatus: "new" | "accepted" | "declined";
     /** RateRequestRequest */
     RateRequestRequest: {
       /** Rating */
@@ -4357,7 +4496,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;
@@ -4402,9 +4544,15 @@ export interface components {
        * @description Срок реакции (принять заявку); пусто - не нормирован
        */
       react_deadline_at?: string | null;
-      /** Photos */
+      /**
+       * Photos
+       * @description Вложения проблемы: фото или видео
+       */
       photos: components["schemas"]["FileRef"][];
-      /** Result Photos */
+      /**
+       * Result Photos
+       * @description Вложения результата: фото или видео
+       */
       result_photos: components["schemas"]["FileRef"][];
       /** Messages */
       messages: components["schemas"]["RequestMessageItem"][];
@@ -4529,7 +4677,10 @@ export interface components {
       description: string;
       status: components["schemas"]["RequestStatus"];
       channel: components["schemas"]["RequestChannel"];
-      /** Has Photos */
+      /**
+       * Has Photos
+       * @description Есть вложения: фото или видео
+       */
       has_photos: boolean;
       /** Group Size */
       group_size: number;
@@ -7929,6 +8080,7 @@ export interface operations {
       header?: {
         "X-House-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -8284,6 +8436,7 @@ export interface operations {
       query?: never;
       header?: {
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         request_id: number;
@@ -9875,6 +10028,7 @@ export interface operations {
       query?: never;
       header?: {
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         charge_id: number;
@@ -10142,6 +10296,7 @@ export interface operations {
       query?: never;
       header?: {
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         house_id: number;
@@ -10151,6 +10306,98 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": components["schemas"]["CreatePollRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PollCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  create_initiative: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateInitiativeRequest"];
       };
     };
     responses: {
@@ -10600,6 +10847,363 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PollCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  list_house_proposals: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProposalItem"][];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  create_proposal: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateProposalRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProposalItem"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  list_my_proposals: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MyProposalsResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  answer_proposal: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        proposal_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AnswerProposalRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ProposalItem"];
         };
       };
       /** @description Некорректный запрос */
@@ -13894,6 +14498,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path: {
         request_id: number;
@@ -14258,6 +14863,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -14622,6 +15228,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -14805,6 +15412,7 @@ export interface operations {
       header?: {
         "X-Org-Id"?: number | null;
         WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
       };
       path?: never;
       cookie?: never;

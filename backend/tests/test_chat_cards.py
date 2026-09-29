@@ -27,6 +27,7 @@ from zheka.core.enums import (
     ChatStatus,
     EventType,
     OrgRole,
+    PollAuthor,
     RequestCategory,
     RequestStatus,
 )
@@ -509,6 +510,6 @@ def test_the_poll_card_counts_voters_out_of_flats_in_russian(
     total: int,
     words: str,
 ) -> None:
-    text = texts.poll_card("Шлагбаум?", True, [], 0, total, None)
+    text = texts.poll_card("Шлагбаум?", PollAuthor.CHAIRMAN, [], 0, total, None)
 
     assert f"Проголосовало 0 {words}\n" in text

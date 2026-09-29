@@ -1,7 +1,3 @@
-import hashlib
-import hmac
-import json
-import urllib.parse
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -10,7 +6,12 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from maxo.errors import InvalidWebAppInitDataError
 
-from tests.conftest import empty_bot_setup, make_bot_config, make_config
+from tests.conftest import (
+    empty_bot_setup,
+    make_bot_config,
+    make_config,
+    signed_init_data,
+)
 
 from zheka.api.app import app_factory
 from zheka.api.dependencies.current_user import INIT_DATA_TTL, parse_init_data
@@ -23,19 +24,6 @@ from zheka.core.services.demo import (
 )
 
 TOKEN = make_config().max.token
-
-
-def signed_init_data(auth_date: datetime, **extra: str) -> str:
-    fields = {
-        "auth_date": str(int(auth_date.timestamp())),
-        "chat": json.dumps({"id": 1, "type": "DIALOG"}),
-        "user": json.dumps({"id": 42, "first_name": "Жека"}),
-        **extra,
-    }
-    check = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
-    secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
-    fields["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
-    return urllib.parse.urlencode(fields)
 
 
 def test_fresh_init_data_passes() -> None:

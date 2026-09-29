@@ -1,8 +1,8 @@
 """add house added_by_resident
 
 Revision ID: 8d2f4b61c7a9
-Revises: 3f8d2a71c5e9
-Create Date: 2026-09-30 12:01:00.000000
+Revises: 4e7a91c3b528
+Create Date: 2026-09-30 15:01:00.000000
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "8d2f4b61c7a9"
-down_revision: str | None = "3f8d2a71c5e9"
+down_revision: str | None = "4e7a91c3b528"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

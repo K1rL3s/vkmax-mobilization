@@ -1,7 +1,15 @@
-.Photos {
+.Attachments {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+
+  .Video {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-height: 360px;
+    border-radius: 12px;
+    background-color: var(--background-secondary);
+  }
 
   img {
     width: 100%;

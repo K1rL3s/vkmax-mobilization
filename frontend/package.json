@@ -10,7 +10,7 @@
     "format": "prettier --write ./src",
     "preview": "vite preview",
     "pre-commit": "pnpm lint && pnpm format && tsc -b",
-    "api": "npx openapi-typescript http://localhost/api/openapi.json -o ./src/shared/api/schema/generated.ts",
+    "api": "npx openapi-typescript ../openapi.yaml -o ./src/shared/api/schema/generated.ts",
     "tunnel": "node ./scripts/tunnel.ts",
     "test": "node --test",
     "mock": "mcs"

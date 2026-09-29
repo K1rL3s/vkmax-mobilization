@@ -14,7 +14,7 @@ from zheka.infra.quota import UploadQuota
 router = APIRouter(tags=["Файлы"], route_class=DishkaRoute)
 
 
-@router.post("/api/files", summary="Загрузить фото")
+@router.post("/api/files", summary="Загрузить фото или видео")
 async def upload_file(
     current_account: RequireConsentDep,
     file: UploadFile,

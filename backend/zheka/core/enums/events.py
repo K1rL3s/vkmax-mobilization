@@ -28,6 +28,9 @@ class EventType(StrEnum):
     POLL_CREATED = "poll_created"
     POLL_VOTED = "poll_voted"
 
+    PROPOSAL_SENT = "proposal_sent"
+    PROPOSAL_ANSWERED = "proposal_answered"
+
     ANNOUNCEMENT_SENT = "announcement_sent"
     ANNOUNCEMENT_CLICK = "announcement_click"
 

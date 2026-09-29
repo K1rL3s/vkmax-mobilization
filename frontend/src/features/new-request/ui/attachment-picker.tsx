@@ -3,23 +3,23 @@ import { Icon16CloseIos, IconButton, Typography } from "@maxhub/max-ui";
 
 import { cameraIcon, Icon } from "@/shared/ui/icon";
 
-import styles from "./photo-picker.module.css";
+import styles from "./attachment-picker.module.css";
 
-type PhotoPickerProps = {
-  photos: { name: string; preview: string }[];
+type AttachmentPickerProps = {
+  attachments: { name: string; preview: string; isVideo: boolean }[];
   isFull: boolean;
   isUploading: boolean;
   onAdd: (files: File[]) => void;
   onRemove: (name: string) => void;
 };
 
-export const PhotoPicker = ({
-  photos,
+export const AttachmentPicker = ({
+  attachments,
   isFull,
   isUploading,
   onAdd,
   onRemove,
-}: PhotoPickerProps) => {
+}: AttachmentPickerProps) => {
   const pick = (event: ChangeEvent<HTMLInputElement>) => {
     onAdd([...(event.target.files ?? [])]);
     event.target.value = "";
@@ -27,15 +27,24 @@ export const PhotoPicker = ({
 
   return (
     <div className={styles.Picker}>
-      {photos.map((photo) => (
-        <div key={photo.name} className={styles.Thumb}>
-          <img src={photo.preview} alt="" />
+      {attachments.map((attachment) => (
+        <div key={attachment.name} className={styles.Thumb}>
+          {attachment.isVideo ? (
+            <video
+              src={attachment.preview}
+              muted
+              playsInline
+              preload="metadata"
+            />
+          ) : (
+            <img src={attachment.preview} alt="" />
+          )}
           <IconButton
             className={styles.Remove}
             variant="overlay"
             size="small"
-            aria-label="Убрать фото"
-            onClick={() => onRemove(photo.name)}
+            aria-label="Убрать вложение"
+            onClick={() => onRemove(attachment.name)}
           >
             <Icon16CloseIos />
           </IconButton>
@@ -46,7 +55,7 @@ export const PhotoPicker = ({
         <label className={styles.Add}>
           <input
             type="file"
-            accept="image/*"
+            accept="image/*,video/mp4,video/quicktime"
             multiple
             hidden
             onChange={pick}

@@ -1,7 +1,7 @@
 import type { components } from "../../schema/generated";
 
 import { FLATS } from "./houses";
-import { residencyForHouse } from "./profile";
+import { isChairman, residencyForHouse } from "./profile";
 import { days } from "./time";
 
 type Schemas = components["schemas"];
@@ -27,6 +27,8 @@ type MockPoll = {
   options: { id: number; text: string }[];
   votes: MockPollVote[];
 };
+
+const INITIATIVE_OPTIONS = ["👍 Поддерживаю", "👎 Против"];
 
 const options = (firstId: number, texts: string[]) =>
   texts.map((text, index) => ({ id: firstId + index, text }));
@@ -139,6 +141,17 @@ const polls: MockPoll[] = [
     ],
   }),
   poll({
+    id: 307,
+    title: "Велопарковка у второго подъезда",
+    description:
+      "Велосипеды стоят на лестничной клетке и мешают проходу. Предлагаю поставить стойки у второго подъезда.",
+    created_by_role: "resident",
+    created_at: days(-1),
+    ends_at: days(13),
+    options: options(571, INITIATIVE_OPTIONS),
+    votes: [vote(102, [571]), vote(107, [571]), vote(110, [572])],
+  }),
+  poll({
     id: 306,
     title: "Смена подрядчика по уборке двора",
     created_by_me: true,
@@ -187,6 +200,7 @@ export const housePolls = (houseId: number): MockPoll[] =>
 export const pollListItem = (poll: MockPoll): Schemas["PollListItem"] => ({
   id: poll.id,
   title: poll.title,
+  created_by_role: poll.created_by_role,
   status: pollStatus(poll),
   starts_at: poll.created_at,
   ends_at: poll.ends_at,
@@ -204,12 +218,14 @@ export const pollCard = (poll: MockPoll): Schemas["PollCard"] => {
   return {
     ...pollListItem(poll),
     house_id: poll.house_id,
-    created_by_role: poll.created_by_role,
     can_vote:
       residency !== undefined &&
       residency.role === "owner" &&
       pollStatus(poll) === "active",
-    can_manage: poll.created_by_me,
+    can_manage:
+      (poll.created_by_me || poll.created_by_role === "resident") &&
+      residency !== undefined &&
+      isChairman(residency),
     options: poll.options.map((option, index) => ({
       id: option.id,
       text: option.text,
@@ -329,3 +345,26 @@ export const createPoll = (
 
   return created;
 };
+
+export const hasOpenInitiative = (houseId: number): boolean =>
+  polls.some(
+    (poll) =>
+      poll.house_id === houseId &&
+      poll.created_by_role === "resident" &&
+      poll.created_by_me &&
+      pollStatus(poll) === "active",
+  );
+
+export const createInitiative = (
+  houseId: number,
+  title: string,
+  description: string | null,
+): MockPoll =>
+  createPoll(houseId, {
+    title,
+    description,
+    options: INITIATIVE_OPTIONS,
+    ends_at: days(14),
+    is_multiple: false,
+    created_by_role: "resident",
+  });

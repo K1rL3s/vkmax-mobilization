@@ -37,7 +37,7 @@ class RequestChannel(StrEnum):
     PHONE = "phone"
 
 
-class RequestPhotoKind(StrEnum):
+class RequestAttachmentKind(StrEnum):
     ISSUE = "issue"
     RESULT = "result"
 

@@ -1,11 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm } from "react-hook-form";
-import { generatePath, useNavigate } from "react-router-dom";
+import { generatePath, useLocation, useNavigate } from "react-router-dom";
 
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import { useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
+import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { useSession } from "@/shared/model/session";
 
 import {
@@ -14,16 +15,19 @@ import {
   pollFormConstraints,
   type PollDraft,
 } from "../domain/poll-draft";
+import { carriedProposal, useCarryProposalToPoll } from "../proposals";
 
 export const useNewPoll = () => {
   const navigate = useNavigate();
   const { currentResidency: residency } = useSession();
+  const carried = carriedProposal(useLocation().state);
+  const carryToPoll = useCarryProposalToPoll();
 
   const form = useForm<PollDraft>({
     resolver: zodResolver(pollDraftSchema),
     mode: "onChange",
     defaultValues: {
-      title: "",
+      title: carried?.text.slice(0, pollFormConstraints.title) ?? "",
       description: "",
       endsAt: "",
       options: [{ text: "" }, { text: "" }],
@@ -34,8 +38,12 @@ export const useNewPoll = () => {
 
   const options = useFieldArray({ control: form.control, name: "options" });
 
+  const idempotency = useIdempotencyKey();
   const create = rqClient.useMutation("post", "/api/houses/{house_id}/polls", {
     onSuccess: async (poll) => {
+      if (carried !== null) {
+        carryToPoll(carried.proposalId, poll.id);
+      }
       await invalidatePaths("/api/houses/{house_id}/polls");
       await navigate(
         generatePath(Routes.MEETING, { pollId: String(poll.id) }),
@@ -52,7 +60,13 @@ export const useNewPoll = () => {
     }
 
     create.mutate({
-      params: { ...authParams(), path: { house_id: residency.house_id } },
+      params: {
+        header: {
+          ...authParams().header,
+          "Idempotency-Key": idempotency.key,
+        },
+        path: { house_id: residency.house_id },
+      },
       body: {
         title: draft.title,
         description: draft.description.trim() || null,

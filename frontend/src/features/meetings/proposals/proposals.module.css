@@ -1,0 +1,11 @@
+.Section {
+  display: flex;
+  flex: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.Error {
+  color: var(--text-negative);
+}

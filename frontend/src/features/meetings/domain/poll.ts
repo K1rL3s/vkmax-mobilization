@@ -33,8 +33,21 @@ export const authorCaption = (role: string) => {
     return "Опрос председателя совета дома";
   }
 
+  if (role === "resident") {
+    return "Инициатива жителя";
+  }
+
   return role === "staff" ? "Опрос управляющей компании" : "Опрос дома";
 };
+
+export const isInitiative = (poll: PollListItem) =>
+  poll.created_by_role === "resident";
+
+export const canProposeInitiative = (residency: Residency | undefined) =>
+  residency !== undefined &&
+  residency.is_connected &&
+  residency.can_vote &&
+  residency.verified;
 
 export const deadlineLabel = (poll: PollListItem) => {
   if (poll.status === "active") {
@@ -58,6 +71,11 @@ export const votedLine = (poll: PollListItem) => {
     ? "Пока никто не проголосовал"
     : `${flatsCount(poll.voted_flats)} ${plural(poll.voted_flats, ["проголосовала", "проголосовали", "проголосовали"])}`;
 };
+
+export const supportLine = (count: number) =>
+  count === 0
+    ? "Пока никто не поддержал"
+    : `${plural(count, ["Поддерживает", "Поддерживают", "Поддерживают"])} ${flatsCount(count)}`;
 
 export const voteNote = (
   poll: PollCard,

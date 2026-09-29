@@ -1,3 +1,7 @@
-from zheka.core.enums import NotificationLevel
+from zheka.core.enums import NotificationCategory, NotificationLevel
 
-DEFAULT_LEVEL = NotificationLevel.SILENT
+
+def default_level(category: NotificationCategory) -> NotificationLevel:
+    if category is NotificationCategory.DIGEST:
+        return NotificationLevel.OFF
+    return NotificationLevel.SILENT

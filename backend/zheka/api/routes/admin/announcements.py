@@ -2,7 +2,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import CurrentOrgDep
+from zheka.api.dependencies import CurrentOrgDep, IdempotencyDep
 from zheka.api.schemas.announcements import AnnouncementItem, CreateAnnouncementRequest
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.core.ids import HouseId
@@ -33,7 +33,11 @@ async def create_announcement(
     current_org: CurrentOrgDep,
     body: CreateAnnouncementRequest,
     announcements_service: FromDishka[AnnouncementsService],
+    idempotency: IdempotencyDep,
 ) -> AnnouncementItem:
+    saved = await idempotency.replay(AnnouncementItem)
+    if saved is not None:
+        return saved
     data = await announcements_service.create(
         current_org.org_id,
         current_org.user_id,
@@ -42,4 +46,6 @@ async def create_announcement(
         body.channels,
         urgent=body.urgent,
     )
-    return AnnouncementItem.of(data)
+    response = AnnouncementItem.of(data)
+    await idempotency.save(response)
+    return response

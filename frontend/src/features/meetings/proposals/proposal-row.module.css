@@ -1,0 +1,17 @@
+.Head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.Answer {
+  padding-left: 8px;
+  border-left: 2px solid var(--background-secondary);
+}
+
+.Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

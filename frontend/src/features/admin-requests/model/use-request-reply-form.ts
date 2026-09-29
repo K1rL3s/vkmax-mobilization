@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
+import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { orgParams } from "@/shared/model/session";
 
 import { requestFormConstraints } from "../domain/request-form-constraints";
@@ -22,11 +23,13 @@ export const useRequestReplyForm = (requestId: number) => {
     resolver: zodResolver(replySchema),
     defaultValues: { text: "" },
   });
+  const idempotency = useIdempotencyKey();
   const reply = rqClient.useMutation(
     "post",
     "/api/admin/requests/{request_id}/reply",
     {
       onSuccess: async () => {
+        idempotency.renew();
         form.reset();
         await refreshRequests();
       },
@@ -36,7 +39,13 @@ export const useRequestReplyForm = (requestId: number) => {
   const submit = form.handleSubmit((body) => {
     if (reply.isPending) return;
     reply.mutate({
-      params: { ...orgParams(), path: { request_id: requestId } },
+      params: {
+        header: {
+          ...orgParams().header,
+          "Idempotency-Key": idempotency.key,
+        },
+        path: { request_id: requestId },
+      },
       body,
     });
   });

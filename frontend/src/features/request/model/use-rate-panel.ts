@@ -48,6 +48,6 @@ export const useRatePanel = (request: RequestCard) => {
     canRepeat: text.length > 0 && !isSending,
     rate: () =>
       rate.mutate({ params, body: { rating, feedback: text || null } }),
-    repeat: () => repeat.mutate({ params, body: { description: text } }),
+    repeat: () => repeat.send(request.id, text),
   };
 };

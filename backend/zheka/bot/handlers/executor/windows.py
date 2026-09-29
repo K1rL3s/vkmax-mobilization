@@ -30,6 +30,7 @@ executor_dialog = Dialog(
     Window(
         Multi(
             Format(CARD_TEXT, when=F["mine"]),
+            Format("🎬 Видео: {videos}", when=F["mine"] & F["videos"]),
             Format(NOT_YOURS_TEXT, when=~F["mine"]),
         ),
         DynamicMedia("photos"),

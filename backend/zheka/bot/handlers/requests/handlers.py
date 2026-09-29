@@ -65,7 +65,8 @@ async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
             None if data.category is None else CATEGORY_RULES[data.category].caption
         ),
         "description": escape(data.description),
-        "photos": len(data.photos),
+        "attachments": len(data.photos) + len(data.videos),
+        "videos": len(data.videos),
         "voice_pending": data.voice_pending,
         "voice_failed": data.voice_failed,
     }
@@ -100,7 +101,7 @@ async def on_category(
         data.category = RequestCategory(category)
         described = bool(data.description)
     await dialog_manager.switch_to(
-        NewRequest.photo if described else NewRequest.description,
+        NewRequest.attachments if described else NewRequest.description,
     )
 
 
@@ -118,7 +119,7 @@ async def _describe(dialog_manager: DialogManager, description: str) -> None:
         data.description = description
         data.voice_failed = False
         data.voice_pending = False
-    await dialog_manager.switch_to(NewRequest.photo)
+    await dialog_manager.switch_to(NewRequest.attachments)
 
 
 @inject
@@ -145,13 +146,13 @@ async def on_description_voice(
     )
 
 
-async def on_photo(
+async def on_attachment(
     update: MessageCreated,
     _widget: MessageInput,
     dialog_manager: DialogManager,
 ) -> None:
     with NewRequestData.proxy(dialog_manager) as data:
-        data.attach_photos(update.message.body)
+        data.attach_attachments(update.message.body)
 
 
 @inject
@@ -170,24 +171,25 @@ async def on_send(
         category=data.category,
         description=data.description,
         photo_urls=data.photos,
+        video_tokens=data.videos,
         channel=RequestChannel.BOT.value,
         stack_id=dialog_manager.current_stack().id,
     )
     await dialog_manager.switch_to(NewRequest.sent)
 
 
-async def on_description_photo(
+async def on_description_attachment(
     update: MessageCreated,
     widget: MessageInput,
     dialog_manager: DialogManager,
 ) -> None:
-    await on_photo(update, widget, dialog_manager)
+    await on_attachment(update, widget, dialog_manager)
     caption = (update.message.body.text or "").strip()
     if not caption:
         return
     with NewRequestData.proxy(dialog_manager) as data:
         data.description = caption
-    await dialog_manager.switch_to(NewRequest.photo)
+    await dialog_manager.switch_to(NewRequest.attachments)
 
 
 async def on_start(_start_data: Any, dialog_manager: DialogManager) -> None:

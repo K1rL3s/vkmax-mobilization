@@ -20,11 +20,11 @@ from zheka.bot.handlers.requests.handlers import (
     get_category,
     get_draft,
     get_sent,
+    on_attachment,
     on_category,
     on_description,
-    on_description_photo,
+    on_description_attachment,
     on_description_voice,
-    on_photo,
     on_send,
     on_start,
 )
@@ -44,9 +44,11 @@ NOT_CONNECTED_TEXT = (
     "приложении - так УК узнает, что сервис здесь ждут"
 )
 DESCRIPTION_TEXT = "✍️ Опишите проблему одним сообщением"
-DESCRIPTION_PHOTOS_TEXT = "📷 Фото приложено: {photos}"
-PHOTO_TEXT = "📷 Пришлите фото, если есть. Приложено: {photos}"
-CONFIRM_TEXT = "📋 Проверьте заявку\n\n{category}\n\n{description}\n\nФото: {photos}"
+DESCRIPTION_ATTACHMENTS_TEXT = "📎 Вложений приложено: {attachments}"
+ATTACHMENTS_TEXT = "📷 Пришлите фото или видео проблемы. Вложений: {attachments}"
+CONFIRM_TEXT = (
+    "📋 Проверьте заявку\n\n{category}\n\n{description}\n\nВложений: {attachments}"
+)
 CREATED_TEXT = (
     "✅ Заявка №{request_id} отправлена в УК\n"
     "{deadline}\n"
@@ -84,11 +86,15 @@ request_dialog = Dialog(
         Multi(
             Const(VOICE_FAILED, when=F["voice_failed"]),
             Const(DESCRIPTION_TEXT),
-            Format(DESCRIPTION_PHOTOS_TEXT, when=F["photos"]),
+            Format(DESCRIPTION_ATTACHMENTS_TEXT, when=F["attachments"]),
+            Format("🎬 Видео: {videos}", when=F["videos"]),
             Const(VOICE_PENDING, when=F["voice_pending"]),
             sep="\n\n",
         ),
-        MessageInput(on_description_photo, content_types=[AttachmentType.IMAGE]),
+        MessageInput(
+            on_description_attachment,
+            content_types=[AttachmentType.IMAGE, AttachmentType.VIDEO],
+        ),
         MessageInput(on_description_voice, content_types=[AttachmentType.AUDIO]),
         TextInput(id="description", on_success=on_description),
         Row(SwitchTo(BACK, id="to_category", state=NewRequest.category), TO_MENU),
@@ -96,17 +102,23 @@ request_dialog = Dialog(
         getter=get_draft,
     ),
     Window(
-        Format(PHOTO_TEXT),
-        MessageInput(on_photo, content_types=[AttachmentType.IMAGE]),
+        Format("{error}", when=F["error"]),
+        Format(ATTACHMENTS_TEXT),
+        Format("🎬 Видео: {videos}", when=F["videos"]),
+        MessageInput(
+            on_attachment,
+            content_types=[AttachmentType.IMAGE, AttachmentType.VIDEO],
+        ),
         SwitchTo(Const("➡️ Дальше"), id="to_confirm", state=NewRequest.confirm),
         Row(SwitchTo(BACK, id="photo_back", state=NewRequest.description), TO_MENU),
-        state=NewRequest.photo,
+        state=NewRequest.attachments,
         getter=get_draft,
     ),
     Window(
         Format(CONFIRM_TEXT),
+        Format("🎬 Видео: {videos}", when=F["videos"]),
         Button(Const("📨 Отправить"), id="send", on_click=on_send),
-        Row(SwitchTo(BACK, id="to_photo", state=NewRequest.photo), TO_MENU),
+        Row(SwitchTo(BACK, id="to_photo", state=NewRequest.attachments), TO_MENU),
         state=NewRequest.confirm,
         getter=get_draft,
     ),

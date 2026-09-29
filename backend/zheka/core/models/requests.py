@@ -2,20 +2,20 @@ from datetime import datetime, timedelta
 
 from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import (
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
-    RequestPhotoKind,
     RequestStatus,
 )
 from zheka.core.ids import (
     FlatId,
     HouseId,
+    RequestAttachmentId,
     RequestGroupId,
     RequestId,
     RequestMessageId,
-    RequestPhotoId,
     RequestStatusLogId,
     UserId,
 )
@@ -67,12 +67,12 @@ class RequestGroup(ZhekaMutableType):
     status: RequestGroupStatus
 
 
-class RequestPhoto(ZhekaMutableType):
-    id: RequestPhotoId = UNSET
+class RequestAttachment(ZhekaMutableType):
+    id: RequestAttachmentId = UNSET
     created_at: datetime = UNSET
     request_id: RequestId
     path: str
-    kind: RequestPhotoKind
+    kind: RequestAttachmentKind
     uploaded_by: UserId
 
 

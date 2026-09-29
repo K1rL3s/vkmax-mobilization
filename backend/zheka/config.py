@@ -71,6 +71,7 @@ class MaxConfig(ZhekaType):
 class FilesConfig(ZhekaType):
     dir: str
     max_size_mb: int
+    max_video_mb: int = 50
 
 
 class DeeplinksConfig(ZhekaType):
@@ -135,6 +136,7 @@ def load_config(env_path: str | None = None) -> Config:
         files=FilesConfig(
             dir=env.str("FILES_DIR", "/data/files"),
             max_size_mb=env.int("FILES_MAX_SIZE_MB", 10),
+            max_video_mb=env.int("FILES_MAX_VIDEO_MB", 50),
         ),
         deeplinks=DeeplinksConfig(org_register=org_register),
         yandex=YandexConfig(

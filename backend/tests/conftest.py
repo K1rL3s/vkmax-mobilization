@@ -1,7 +1,11 @@
+import hashlib
+import hmac
+import json
 import os
 import secrets
 import tempfile
 import time
+import urllib.parse
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -340,6 +344,20 @@ async def bot_engine(bot_database_url: str) -> AsyncGenerator[AsyncEngine]:
 async def bot_session(bot_engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
     async with AsyncSession(bind=bot_engine) as db_session:
         yield db_session
+
+
+def signed_init_data(auth_date: datetime, **extra: str) -> str:
+    token = make_config().max.token
+    fields = {
+        "auth_date": str(int(auth_date.timestamp())),
+        "chat": json.dumps({"id": 1, "type": "DIALOG"}),
+        "user": json.dumps({"id": 42, "first_name": "Жека"}),
+        **extra,
+    }
+    check = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
+    secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+    fields["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    return urllib.parse.urlencode(fields)
 
 
 def empty_bot_setup() -> BotSetup:

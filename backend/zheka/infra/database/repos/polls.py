@@ -1,10 +1,10 @@
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, exists, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from zheka.core.enums import PollStatus
+from zheka.core.enums import PollAuthor, PollStatus
 from zheka.core.ids import (
     FlatId,
     HouseId,
@@ -74,6 +74,23 @@ class PollsRepo(BaseAlchemyRepo):
         stmt = select(Poll).where(polls_table.c.house_id == house_id)
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+    async def has_open_initiative(
+        self,
+        house_id: HouseId,
+        user_id: UserId,
+        now: datetime,
+    ) -> bool:
+        stmt = select(
+            exists().where(
+                polls_table.c.house_id == house_id,
+                polls_table.c.created_by_user_id == user_id,
+                polls_table.c.created_by_role == PollAuthor.RESIDENT,
+                polls_table.c.status == PollStatus.ACTIVE,
+                polls_table.c.ends_at > now,
+            ),
+        )
+        return bool(await self._session.scalar(stmt))
 
     async def list_for_org(
         self,

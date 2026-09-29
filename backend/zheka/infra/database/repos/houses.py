@@ -1,5 +1,6 @@
 import math
 from collections.abc import Collection, Sequence
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import exists, func, or_, select
@@ -320,6 +321,10 @@ class HousesRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return result.tuples().all()
+
+    async def mark_digest_sent(self, house: House, on: date) -> None:
+        house.digest_sent_on = on
+        await self._session.flush()
 
     async def add_flat_or_get(
         self,

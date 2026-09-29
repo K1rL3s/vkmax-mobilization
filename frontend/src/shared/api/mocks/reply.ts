@@ -43,6 +43,36 @@ export const conflict = (detail: string): Reply =>
 export const isReply = (value: unknown): value is Reply =>
   typeof value === "object" && value !== null && "status" in value;
 
+const replays = new Map<string, { path: string; reply: Reply }>();
+
+const idempotent = async (
+  path: string,
+  request: MockHttpRequest,
+  handler: (request: MockHttpRequest) => Reply | Promise<Reply>,
+): Promise<Reply> => {
+  const key = request.headers["idempotency-key"];
+
+  if (key === undefined) {
+    return handler(request);
+  }
+
+  const replay = replays.get(key);
+
+  if (replay !== undefined) {
+    return replay.path === path
+      ? replay.reply
+      : badRequest("Ключ уже использован для другого действия");
+  }
+
+  const reply = await handler(request);
+
+  if (reply.status < 400) {
+    replays.set(key, { path, reply });
+  }
+
+  return reply;
+};
+
 export const endpoint = <Method extends RestMethod>(
   method: Method,
   path: `/${string}`,
@@ -55,9 +85,13 @@ export const endpoint = <Method extends RestMethod>(
       data: (request: unknown) => {
         const mockRequest = request as MockHttpRequest;
 
-        return mockRequest.headers.webappdata
-          ? handler(mockRequest)
-          : fail(401, "Требуется авторизация", "Нет заголовка WebAppData");
+        if (!mockRequest.headers.webappdata) {
+          return fail(401, "Требуется авторизация", "Нет заголовка WebAppData");
+        }
+
+        return method === "post"
+          ? idempotent(path, mockRequest, handler)
+          : handler(mockRequest);
       },
       interceptors: {
         response: (

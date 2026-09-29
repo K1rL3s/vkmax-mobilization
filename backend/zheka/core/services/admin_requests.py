@@ -10,10 +10,10 @@ from zheka.core.enums import (
     NotificationCategory,
     OrgRole,
     RequestActorRole,
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestGroupStatus,
-    RequestPhotoKind,
     RequestStatus,
     ResidentStatus,
 )
@@ -324,7 +324,7 @@ class AdminRequestsService:
             house_id=draft.house_id,
             category=draft.category.value,
             channel=RequestChannel.PHONE.value,
-            has_photo=False,
+            has_attachments=False,
             is_repeat=False,
         )
         await self._category_executors.assign_default(request, org_id)
@@ -461,7 +461,7 @@ class AdminRequestsService:
                 flat=row.flat,
                 author=authors.get(row.request.author_user_id),
                 executor=row.executor,
-                has_photos=row.has_photos,
+                has_attachments=row.has_attachments,
                 group_size=row.group_size,
                 escalated_at=(
                     row.request.escalated_at
@@ -495,7 +495,7 @@ class AdminRequestsService:
         user_id: UserId,
         request_id: RequestId,
         target: RequestStatus,
-        photo_names: Sequence[str],
+        attachment_names: Sequence[str],
     ) -> None:
         request = await self._requests.get(request_id)
         if request is None:
@@ -508,16 +508,19 @@ class AdminRequestsService:
             RequestActorRole.EXECUTOR,
             has_author=request.author_user_id is not None,
         )
-        if target is RequestStatus.ON_REVIEW and not photo_names:
-            photos = await self._requests.list_photos(request_id)
-            if not any(photo.kind is RequestPhotoKind.RESULT for photo in photos):
+        if target is RequestStatus.ON_REVIEW and not attachment_names:
+            attachments = await self._requests.list_attachments(request_id)
+            if not any(
+                attachment.kind is RequestAttachmentKind.RESULT
+                for attachment in attachments
+            ):
                 raise InvalidState(RESULT_PHOTO_REQUIRED)
 
-        for name in photo_names:
-            await self._requests.add_photo(
+        for name in attachment_names:
+            await self._requests.add_attachment(
                 request_id,
                 name,
-                RequestPhotoKind.RESULT,
+                RequestAttachmentKind.RESULT,
                 user_id,
             )
         await self._move(request, target, None, user_id, RequestActorRole.EXECUTOR)

@@ -14,8 +14,8 @@ from tests.conftest import (
     add_user,
     empty_bot_setup,
     make_bot_config,
+    signed_init_data,
 )
-from tests.test_auth import signed_init_data
 from tests.test_requests import _add_group
 
 from zheka.api.app import app_factory

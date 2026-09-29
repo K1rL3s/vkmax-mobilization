@@ -7,7 +7,7 @@ export {
 export { deadlineLeft, deadlineProgress } from "./domain/format";
 export { buildTimeline } from "./domain/timeline";
 export { DeadlinePanel } from "./ui/deadline-panel";
-export { RequestPhotos } from "./ui/request-photos";
+export { RequestAttachments } from "./ui/request-attachments";
 export { RequestTimeline } from "./ui/request-timeline";
 export {
   currentActor,

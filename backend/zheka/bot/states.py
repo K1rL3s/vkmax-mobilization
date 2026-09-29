@@ -10,6 +10,7 @@ class Consent(StatesGroup):
 class Menu(StatesGroup):
     main = State()
     emergency = State()
+    digest = State()
 
 
 def entry_state(user: User) -> State:
@@ -27,7 +28,7 @@ class Onboarding(StatesGroup):
 class NewRequest(StatesGroup):
     category = State()
     description = State()
-    photo = State()
+    attachments = State("photo")
     confirm = State()
     sent = State()
 

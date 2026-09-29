@@ -36,11 +36,11 @@ from zheka.core.enums import (
     EventType,
     OrgRole,
     RequestActorRole,
+    RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
     RequestGroupStatus,
-    RequestPhotoKind,
     RequestStatus,
     ResidentRole,
     ResidentStatus,
@@ -64,7 +64,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.houses import NOT_CONNECTED
 from zheka.core.services.requests import (
     AUTO_CLOSE_AFTER,
-    MAX_PHOTOS,
+    MAX_ATTACHMENTS,
     RequestDraft,
 )
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
@@ -102,14 +102,14 @@ def _draft(
     category: RequestCategory = RequestCategory.LEAK,
     description: str = DESCRIPTION,
     flat_id: FlatId | None = None,
-    photos: Sequence[str] = (),
+    attachments: Sequence[str] = (),
     group_id: RequestGroupId | None = None,
 ) -> RequestDraft:
     return RequestDraft(
         category=category,
         description=description,
         flat_id=flat_id,
-        photos=photos,
+        attachments=attachments,
         group_id=group_id,
     )
 
@@ -237,7 +237,7 @@ async def test_create_writes_the_request_its_photos_the_log_and_the_event(
     card = await requests_service(session).create(
         own.user_id,
         own.house_id,
-        _draft(flat_id=own.flat_id, photos=names),
+        _draft(flat_id=own.flat_id, attachments=names),
     )
 
     request_id = card.request.id
@@ -245,14 +245,14 @@ async def test_create_writes_the_request_its_photos_the_log_and_the_event(
     assert card.request.channel is RequestChannel.MINIAPP
     assert card.request.flat_id == own.flat_id
     assert card.request.is_staff_author is False
-    assert [photo.path for photo in card.issue_photos] == names
+    assert [photo.path for photo in card.issue_attachments] == names
     [log] = await _logs(session, request_id)
     assert log.from_status is None
     assert log.to_status is RequestStatus.NEW
     assert log.by_role == RequestActorRole.RESIDENT
     assert log.by_user_id == own.user_id
     [event] = await events_of(session, EventType.REQUEST_CREATED)
-    assert event.payload["has_photo"] is True
+    assert event.payload["has_attachments"] is True
     assert event.payload["is_repeat"] is False
     assert event.payload["category"] == RequestCategory.LEAK.value
 
@@ -296,8 +296,11 @@ async def test_create_refuses_a_flat_that_is_not_the_authors(
 @pytest.mark.parametrize(
     ("draft", "error"),
     [
-        (_draft(photos=[photo_name() for _ in range(MAX_PHOTOS + 1)]), InvalidRequest),
-        (_draft(photos=["../../etc/passwd"]), EntityNotFound),
+        (
+            _draft(attachments=[photo_name() for _ in range(MAX_ATTACHMENTS + 1)]),
+            InvalidRequest,
+        ),
+        (_draft(attachments=["../../etc/passwd"]), EntityNotFound),
         (_draft(description="   "), InvalidRequest),
     ],
 )
@@ -439,7 +442,7 @@ async def test_list_mine_shows_own_requests_of_the_current_house_by_status(
     done = await service.create(
         own.user_id,
         own.house_id,
-        _draft(photos=[photo_name()]),
+        _draft(attachments=[photo_name()]),
     )
     fresh = await service.create(own.user_id, own.house_id, _draft())
     await service.create(own.user_id, other_house.house_id, _draft())
@@ -456,7 +459,7 @@ async def test_list_mine_shows_own_requests_of_the_current_house_by_status(
     )
 
     assert total == 2
-    assert [(row.request.id, row.has_photos) for row in rows] == [
+    assert [(row.request.id, row.has_attachments) for row in rows] == [
         (fresh.request.id, False),
         (done.request.id, True),
     ]
@@ -672,7 +675,7 @@ async def test_repeat_copies_the_parent_and_starts_from_scratch(
     created = await service.create(
         own.user_id,
         own.house_id,
-        _draft(flat_id=own.flat_id, photos=[photo_name()]),
+        _draft(flat_id=own.flat_id, attachments=[photo_name()]),
     )
     parent_id = created.request.id
     await _mark_done(session, parent_id)
@@ -689,7 +692,7 @@ async def test_repeat_copies_the_parent_and_starts_from_scratch(
     assert repeated.request.category is RequestCategory.LEAK
     assert repeated.request.flat_id == own.flat_id
     assert repeated.request.description == "Течет снова, хуже прежнего"
-    assert len(repeated.issue_photos) == 1
+    assert len(repeated.issue_attachments) == 1
     events = await events_of(session, EventType.REQUEST_CREATED)
     assert [event.payload["is_repeat"] for event in events] == [False, True]
     again = await service.repeat(own.user_id, parent_id, None, [])
@@ -721,7 +724,11 @@ async def test_export_prints_the_whole_life_of_the_request(
     admin = admin_requests_service(session)
     issue = photo_name()
     result = photo_name()
-    created = await service.create(own.user_id, own.house_id, _draft(photos=[issue]))
+    created = await service.create(
+        own.user_id,
+        own.house_id,
+        _draft(attachments=[issue]),
+    )
     request_id = created.request.id
     await admin.reply(own.org_id, request_id, "Сантехник будет завтра", staff)
     for target in (
@@ -730,10 +737,10 @@ async def test_export_prints_the_whole_life_of_the_request(
         RequestStatus.ON_REVIEW,
     ):
         await admin.change_status(own.org_id, request_id, target, None, staff)
-    await RequestsRepo(session).add_photo(
+    await RequestsRepo(session).add_attachment(
         request_id,
         result,
-        RequestPhotoKind.RESULT,
+        RequestAttachmentKind.RESULT,
         staff,
     )
     await service.accept(own.user_id, request_id)
@@ -1067,3 +1074,25 @@ def test_an_answer_is_due_by_the_end_of_the_tenth_working_day(
     assert rule.basis is not None
     assert "ПП РФ № 416, п. 36" in rule.basis
     assert "п. 31 «д»" in rule.basis
+
+
+async def test_request_accepts_two_videos_but_refuses_a_third_on_create_and_repeat(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service = requests_service(session)
+    videos = [
+        photo_name().replace(".jpg", suffix) for suffix in (".mp4", ".mov", ".mp4")
+    ]
+    card = await service.create(
+        own.user_id,
+        own.house_id,
+        _draft(attachments=videos[:2]),
+    )
+    assert [photo.path for photo in card.issue_attachments] == videos[:2]
+    with pytest.raises(InvalidRequest, match="не больше 2 видео"):
+        await service.create(own.user_id, own.house_id, _draft(attachments=videos))
+    card.request.status = RequestStatus.DONE
+    await session.flush()
+    with pytest.raises(InvalidRequest, match="не больше 2 видео"):
+        await service.repeat(own.user_id, card.request.id, "Снова течёт", videos)

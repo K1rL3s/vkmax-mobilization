@@ -20,8 +20,9 @@ from tests.conftest import (
     events_of,
     make_bot_config,
     photo_name,
+    signed_init_data,
 )
-from tests.test_auth import CHECKER_TOKEN, _app, signed_init_data
+from tests.test_auth import CHECKER_TOKEN, _app
 from tests.test_requests import _complain
 from tests.test_residency import _profile_service
 
@@ -32,7 +33,7 @@ from zheka.core.enums import (
     EventType,
     NotificationCategory,
     OrgRole,
-    RequestPhotoKind,
+    RequestAttachmentKind,
     ResidentStatus,
     TariffZone,
 )
@@ -40,8 +41,9 @@ from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import API_CHECKER_MAX_USER_ID
 from zheka.core.services.files import FilesService
 from zheka.core.services.profile import CHECKER_CANNOT_FORGET, CREATOR_CANNOT_FORGET
-from zheka.core.services.retention import PHOTO_TTL, RetentionService
+from zheka.core.services.retention import ATTACHMENT_TTL, RetentionService
 from zheka.infra.database.repos.files import FilesRepo
+from zheka.infra.database.repos.idempotency import IdempotencyRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -152,7 +154,7 @@ async def test_the_purge_drops_old_photos_and_then_their_orphaned_files(
 ) -> None:
     own = await make_org_house_flat_user()
     await add_resident(session, own.user_id, own.house_id, own.flat_id)
-    old = PHOTO_TTL + timedelta(days=30)
+    old = ATTACHMENT_TTL + timedelta(days=30)
     _file(tmp_path, timedelta(days=2))
     fresh = _file(tmp_path, timedelta(hours=1))
     open_photo = _file(tmp_path, old)
@@ -160,12 +162,17 @@ async def test_the_purge_drops_old_photos_and_then_their_orphaned_files(
     reading_photo = _file(tmp_path, old)
     requests = RequestsRepo(session)
     opened = await _complain(session, own.user_id, own.house_id)
-    await requests.add_photo(opened.id, open_photo, RequestPhotoKind.ISSUE, own.user_id)
+    await requests.add_attachment(
+        opened.id,
+        open_photo,
+        RequestAttachmentKind.ISSUE,
+        own.user_id,
+    )
     closed = await _complain(session, own.user_id, own.house_id)
-    await requests.add_photo(
+    await requests.add_attachment(
         closed.id,
         closed_photo,
-        RequestPhotoKind.ISSUE,
+        RequestAttachmentKind.ISSUE,
         own.user_id,
     )
     stmt = (
@@ -188,6 +195,7 @@ async def test_the_purge_drops_old_photos_and_then_their_orphaned_files(
     service = RetentionService(
         FilesRepo(session),
         FilesService(FilesConfig(dir=str(tmp_path), max_size_mb=1), "test-token"),
+        IdempotencyRepo(session),
     )
 
     first = await service.purge(datetime.now(UTC))
@@ -197,7 +205,7 @@ async def test_the_purge_drops_old_photos_and_then_their_orphaned_files(
     assert first == 1
     assert second == 2
     assert reading.photo_paths == []
-    assert await requests.list_photos(closed.id) == []
+    assert await requests.list_attachments(closed.id) == []
     left = {path.name for path in tmp_path.iterdir()}  # noqa: ASYNC240
     assert left == {fresh, open_photo}
 
@@ -208,7 +216,7 @@ async def test_the_purge_keeps_documents_recent_readings_and_foreign_files(
     tmp_path: Path,
 ) -> None:
     own = await make_org_house_flat_user()
-    old = PHOTO_TTL + timedelta(days=30)
+    old = ATTACHMENT_TTL + timedelta(days=30)
     house_document = _file(tmp_path, old)
     tariff_document = _file(tmp_path, old)
     reading_photo = _file(tmp_path, old)
@@ -229,12 +237,13 @@ async def test_the_purge_keeps_documents_recent_readings_and_foreign_files(
         ocr_used=False,
         ocr_accepted=False,
         is_below_previous=False,
-        submitted_at=datetime.now(UTC) - PHOTO_TTL + timedelta(days=1),
+        submitted_at=datetime.now(UTC) - ATTACHMENT_TTL + timedelta(days=1),
         submitted_by=own.user_id,
     )
     service = RetentionService(
         FilesRepo(session),
         FilesService(FilesConfig(dir=str(tmp_path), max_size_mb=1), "test-token"),
+        IdempotencyRepo(session),
     )
 
     first = await service.purge(datetime.now(UTC))

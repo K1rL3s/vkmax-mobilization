@@ -4,7 +4,7 @@ from typing import Self
 from pydantic import Field
 
 from zheka.api.schemas.base import BaseSchema
-from zheka.api.schemas.files import PHOTOS_DESCRIPTION, FileRef
+from zheka.api.schemas.files import FILES_DESCRIPTION, FileRef
 from zheka.core.enums import MeterType, RequestCategory, TariffZone
 from zheka.core.ids import FlatId, MeterId, ReadingId
 from zheka.core.services.meter_access import MeterCard
@@ -86,7 +86,7 @@ class ReadingItem(BaseSchema):
 class SubmitReadingRequest(BaseSchema):
     period: date
     values: dict[TariffZone, int] = Field(description=_READING)
-    photos: list[str] = Field(default_factory=list, description=PHOTOS_DESCRIPTION)
+    photos: list[str] = Field(default_factory=list, description=FILES_DESCRIPTION)
     ocr_used: bool = False
     ocr_accepted: bool = False
 

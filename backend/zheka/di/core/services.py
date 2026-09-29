@@ -13,6 +13,7 @@ from zheka.core.services.charges import ChargesService
 from zheka.core.services.chat_cards import ChatCardsService
 from zheka.core.services.chats import ChatsService
 from zheka.core.services.demo import DemoService
+from zheka.core.services.digest import DigestService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
@@ -27,6 +28,7 @@ from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.polls import PollsService
 from zheka.core.services.profile import ProfileService
+from zheka.core.services.proposals import ProposalsService
 from zheka.core.services.readings import ReadingsService
 from zheka.core.services.reception import ReceptionService
 from zheka.core.services.reminders import RemindersService
@@ -56,6 +58,7 @@ class ServicesProvider(Provider):
         MetersService,
         ChargesService,
         PollsService,
+        ProposalsService,
         AdminReadingsService,
         AdminRequestsService,
         AnnouncementsService,
@@ -65,6 +68,7 @@ class ServicesProvider(Provider):
         ChatCardsService,
         MeterPhotoService,
         RemindersService,
+        DigestService,
         AnalyticsService,
         DemoService,
         RetentionService,

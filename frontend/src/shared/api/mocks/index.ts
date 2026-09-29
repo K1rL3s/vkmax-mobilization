@@ -18,6 +18,7 @@ import { metersConfigs } from "./meters";
 import { notificationsConfigs } from "./notifications";
 import { orgsConfigs } from "./orgs";
 import { pollsConfigs } from "./polls";
+import { proposalsConfigs } from "./proposals";
 import { requestsConfigs } from "./requests";
 
 export const mockConfigs = [
@@ -27,6 +28,7 @@ export const mockConfigs = [
   ...metersConfigs,
   ...requestsConfigs,
   ...pollsConfigs,
+  ...proposalsConfigs,
   ...chargesConfigs,
   ...flatInvitesConfigs,
   ...chairmanHandoverConfigs,

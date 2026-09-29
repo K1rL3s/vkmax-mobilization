@@ -7,7 +7,11 @@ from fastapi import APIRouter
 from maxo import Bot
 from maxo.utils.deeplink import create_startapp_link
 
-from zheka.api.dependencies import CurrentResidencyDep, RequireConsentDep
+from zheka.api.dependencies import (
+    CurrentResidencyDep,
+    IdempotencyDep,
+    RequireConsentDep,
+)
 from zheka.api.schemas.base import Limit, Offset, Page
 from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.requests import (
@@ -26,7 +30,7 @@ from zheka.api.schemas.requests import (
 from zheka.core.deeplinks import house_category_payload
 from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
 from zheka.core.ids import RequestId
-from zheka.core.models import RequestPhoto
+from zheka.core.models import RequestAttachment
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER, request_share_text
@@ -36,17 +40,19 @@ router = APIRouter(tags=["Заявки"], route_class=DishkaRoute)
 
 
 def signed(
-    photos: Sequence[RequestPhoto],
+    attachments: Sequence[RequestAttachment],
     files_service: FilesService,
 ) -> list[FileRef]:
-    return [FileRef.signed(photo.path, files_service) for photo in photos]
+    return [
+        FileRef.signed(attachment.path, files_service) for attachment in attachments
+    ]
 
 
 def _card(card: RequestCardData, files_service: FilesService) -> RequestCard:
     return RequestCard.of(
         card,
-        signed(card.issue_photos, files_service),
-        signed(card.result_photos, files_service),
+        signed(card.issue_attachments, files_service),
+        signed(card.result_attachments, files_service),
     )
 
 
@@ -97,17 +103,24 @@ async def create_request(
     residency: CurrentResidencyDep,
     requests_service: FromDishka[RequestsService],
     files_service: FromDishka[FilesService],
+    idempotency: IdempotencyDep,
     body: CreateRequestRequest,
 ) -> RequestCard:
+    saved = await idempotency.replay(RequestCard)
+    if saved is not None:
+        return saved
     card = await requests_service.create(
         residency.user_id,
         residency.house_id,
         RequestDraft(
-            **body.model_dump(exclude={"join_group_id"}),
+            **body.model_dump(exclude={"join_group_id", "photos"}),
             group_id=body.join_group_id,
+            attachments=body.photos,
         ),
     )
-    return _card(card, files_service)
+    response = _card(card, files_service)
+    await idempotency.save(response)
+    return response
 
 
 @router.get("/requests/{request_id}", summary="Карточка заявки")
@@ -144,15 +157,21 @@ async def create_repeat_request(
     current_account: RequireConsentDep,
     requests_service: FromDishka[RequestsService],
     files_service: FromDishka[FilesService],
+    idempotency: IdempotencyDep,
     body: RepeatRequestRequest,
 ) -> RequestCard:
+    saved = await idempotency.replay(RequestCard)
+    if saved is not None:
+        return saved
     card = await requests_service.repeat(
         current_account.user_id,
         request_id,
         body.description,
         body.photos,
     )
-    return _card(card, files_service)
+    response = _card(card, files_service)
+    await idempotency.save(response)
+    return response
 
 
 @router.post("/requests/{request_id}/accept", summary="Принять работу")

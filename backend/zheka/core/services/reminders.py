@@ -18,6 +18,7 @@ from zheka.core.enums import (
     EventType,
     MeterType,
     NotificationCategory,
+    PollAuthor,
     PollStatus,
     ResidentStatus,
 )
@@ -161,7 +162,11 @@ class RemindersService:
         reminded = 0
         for poll in polls:
             house = await self._houses.get(poll.house_id)
-            if house is None or house.local(now).hour < POLL_HOUR:
+            if (
+                house is None
+                or house.local(now).hour < POLL_HOUR
+                or poll.created_by_role == PollAuthor.RESIDENT
+            ):
                 continue
             ends_at = house.local(poll.ends_at)
             voted = set(await self._polls.voted_flat_ids(poll.id))

@@ -19,6 +19,7 @@ class TaskName(StrEnum):
     CLOSE_EXPIRED_POLLS = "close_expired_polls"
     WARN_VERIFICATION = "warn_verification"
     REMIND_APPOINTMENTS = "remind_appointments"
+    SEND_WEEKLY_DIGESTS = "send_weekly_digests"
     BROADCAST_ACCESS_REQUEST = "broadcast_access_request"
     SEED_DEMO = "seed_demo"
     SYNC_CHAT_PINS = "sync_chat_pins"
@@ -26,3 +27,4 @@ class TaskName(StrEnum):
     KEEP_WEBHOOK = "keep_webhook"
     WATCH_REQUEST_DEADLINES = "watch_request_deadlines"
     PURGE_FILES = "purge_files"
+    PURGE_IDEMPOTENCY_KEYS = "purge_idempotency_keys"

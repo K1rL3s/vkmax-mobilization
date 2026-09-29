@@ -17,11 +17,12 @@ import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import type { components } from "@/shared/api/schema/generated";
+import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { haptic, useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
 import { houseParams, useSession } from "@/shared/model/session";
 
-import { usePhotos } from "./use-photos";
+import { useAttachments } from "./use-attachments";
 
 export const DESCRIPTION_LIMIT = 1000;
 
@@ -63,10 +64,11 @@ export const useNewRequest = () => {
   const [picked, setPicked] = useState<RequestCategory | null>(
     dispute?.category ?? preset,
   );
-  const photos = usePhotos();
+  const attachments = useAttachments();
+  const idempotency = useIdempotencyKey();
 
   useClosingConfirmation(
-    description.trim() !== prefill.trim() || photos.names.length > 0,
+    description.trim() !== prefill.trim() || attachments.names.length > 0,
   );
 
   const categories = useRequestCategories();
@@ -145,7 +147,13 @@ export const useNewRequest = () => {
 
     if (dispute) {
       disputeCharge.mutate({
-        params: { ...authParams(), path: { charge_id: dispute.chargeId } },
+        params: {
+          header: {
+            ...authParams().header,
+            "Idempotency-Key": idempotency.key,
+          },
+          path: { charge_id: dispute.chargeId },
+        },
         body: { comment: description.trim(), service: dispute.service },
       });
 
@@ -153,12 +161,17 @@ export const useNewRequest = () => {
     }
 
     create.mutate({
-      params: houseParams(),
+      params: {
+        header: {
+          ...houseParams().header,
+          "Idempotency-Key": idempotency.key,
+        },
+      },
       body: {
         category,
         description: description.trim(),
         flat_id: residency?.flat_id ?? null,
-        photos: photos.names,
+        photos: attachments.names,
         join_group_id: joinGroupId,
         llm_suggested: suggested !== null,
         llm_accepted: suggested !== null && category === suggested,
@@ -180,7 +193,7 @@ export const useNewRequest = () => {
     isCategoriesFailed: categories.isError,
     categoriesError: categories.error,
     retryCategories: () => void categories.refetch(),
-    photos,
+    attachments,
     neighbours,
     isDispute: dispute !== null,
     subject: dispute?.subject ?? null,
@@ -193,8 +206,10 @@ export const useNewRequest = () => {
         "Заявка не ушла. Проверьте связь и попробуйте ещё раз",
       ),
     canSubmit:
-      description.trim().length > 0 && category !== null && !photos.isUploading,
-    missing: missingPart(description, category, photos.isUploading),
+      description.trim().length > 0 &&
+      category !== null &&
+      !attachments.isUploading,
+    missing: missingPart(description, category, attachments.isUploading),
     submit,
   };
 };
@@ -212,5 +227,5 @@ const missingPart = (
     return "Выберите категорию";
   }
 
-  return isUploading ? "Дождитесь загрузки фото" : null;
+  return isUploading ? "Дождитесь загрузки вложений" : null;
 };

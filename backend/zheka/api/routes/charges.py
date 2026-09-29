@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from zheka.api.dependencies import (
     CurrentResidency,
+    IdempotencyDep,
     RequireConsentDep,
     ResidencyForFlatDep,
     ResidencyForHouseDep,
@@ -96,15 +97,21 @@ async def dispute_charge(
     charge_id: ChargeId,
     current_account: RequireConsentDep,
     charges_service: FromDishka[ChargesService],
+    idempotency: IdempotencyDep,
     body: DisputeChargeRequest,
 ) -> DisputeChargeResponse:
+    saved = await idempotency.replay(DisputeChargeResponse)
+    if saved is not None:
+        return saved
     request_id = await charges_service.dispute(
         charge_id,
         current_account.user_id,
         body.comment,
         body.service,
     )
-    return DisputeChargeResponse(request_id=request_id)
+    response = DisputeChargeResponse(request_id=request_id)
+    await idempotency.save(response)
+    return response
 
 
 @router.post("/charges/{charge_id}/pay", summary="Демо-оплата квитанции")

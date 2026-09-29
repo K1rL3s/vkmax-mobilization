@@ -108,6 +108,14 @@ def _created_in(since: datetime, until: datetime) -> ColumnElement[bool]:
     return and_(_R.created_at >= since, _R.created_at < until)
 
 
+def _closed_in(since: datetime, until: datetime) -> ColumnElement[bool]:
+    return and_(
+        _R.status == RequestStatus.DONE,
+        _R.done_at >= since,
+        _R.done_at < until,
+    )
+
+
 def _org_requests[SelectT: Select[Any]](
     stmt: SelectT,
     org_id: OrgId,
@@ -125,6 +133,12 @@ class Tiles(ZhekaType):
     accept_time: int | None
     accept_time_median: int | None
     repeat_share: int | None
+
+
+class DigestCounts(ZhekaType):
+    created: int
+    closed: int
+    overdue: int
 
 
 class SeasonCount(ZhekaType):
@@ -210,6 +224,27 @@ class AnalyticsRepo(BaseAlchemyRepo):
             repeat_share=repeat_share,
         )
 
+    async def digest_counts(
+        self,
+        org_id: OrgId,
+        house_id: HouseId | None,
+        since: datetime,
+        until: datetime,
+        now: datetime,
+    ) -> DigestCounts:
+        stmt = _org_requests(
+            select(
+                func.count().filter(_created_in(since, until)),
+                func.count().filter(_closed_in(since, until)),
+                func.count().filter(overdue_at(now)),
+            ).select_from(requests_table),
+            org_id,
+            house_id,
+        )
+        result = await self._session.execute(stmt)
+        created, closed, overdue = result.tuples().one()
+        return DigestCounts(created=created, closed=closed, overdue=overdue)
+
     async def by_category(
         self,
         org_id: OrgId,
@@ -289,11 +324,7 @@ class AnalyticsRepo(BaseAlchemyRepo):
             )
             .scalar_subquery()
         )
-        closed = and_(
-            _R.status == RequestStatus.DONE,
-            _R.done_at >= since,
-            _R.done_at < until,
-        )
+        closed = _closed_in(since, until)
         child = aliased(requests_table)
         repeated = exists().where(child.c.parent_request_id == _R.id)
         closed_count = func.count().filter(closed)

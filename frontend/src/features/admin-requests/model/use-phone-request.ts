@@ -8,6 +8,7 @@ import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { useClosingConfirmation } from "@/shared/lib/max";
 import { Routes } from "@/shared/model/routes";
+import { useIdempotencyKey } from "@/shared/lib/idempotency";
 import { orgParams } from "@/shared/model/session";
 
 import { requestFormConstraints } from "../domain/request-form-constraints";
@@ -78,6 +79,7 @@ export const usePhoneRequest = () => {
   });
   const flats = useRequestFlats(houseId);
   const residents = useRequestResidents(houseId, flatId);
+  const idempotency = useIdempotencyKey();
   const create = rqClient.useMutation("post", "/api/admin/requests/phone", {
     onSuccess: async (request) => {
       await refreshRequests();
@@ -131,7 +133,12 @@ export const usePhoneRequest = () => {
       return;
     }
     create.mutate({
-      params: orgParams(),
+      params: {
+        header: {
+          ...orgParams().header,
+          "Idempotency-Key": idempotency.key,
+        },
+      },
       body: {
         house_id: draft.houseId,
         category: draft.category,
