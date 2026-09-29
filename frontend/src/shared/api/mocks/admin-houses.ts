@@ -421,6 +421,12 @@ export const adminHousesConfigs = [
         );
       }
 
+      if (resident.role !== "owner") {
+        return conflict(
+          "Председателем может стать только собственник квартиры",
+        );
+      }
+
       for (const neighbour of houseResidents(
         Math.floor(resident.resident_id / 1000),
       )) {

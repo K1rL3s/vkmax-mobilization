@@ -2,7 +2,12 @@ from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
-from zheka.core.enums import EventType, NotificationCategory, ResidentStatus
+from zheka.core.enums import (
+    EventType,
+    NotificationCategory,
+    ResidentRole,
+    ResidentStatus,
+)
 from zheka.core.errors import (
     HOUSE_NOT_FOUND,
     EntityNotFound,
@@ -28,6 +33,7 @@ ISSUER_GONE = "Выдавший ссылку больше не председа�
 NOT_A_NEIGHBOUR = "Принять роль может только житель этого дома"
 VERIFY_FIRST = "Сначала подтвердите свою квартиру"
 SELF_HANDOVER = "Вы уже председатель этого дома"
+OWNERS_ONLY = "Председателем может стать только собственник квартиры"
 
 
 class ChairmanOffer(ZhekaType):
@@ -187,6 +193,8 @@ class ChairmanService:
             raise NotEnoughRights(NOT_A_NEIGHBOUR)
         if taker.status is ResidentStatus.BLOCKED:
             raise NotEnoughRights(texts.blocked_detail(taker.block_reason))
+        if taker.role is not ResidentRole.OWNER:
+            raise NotEnoughRights(OWNERS_ONLY)
         if taker.verified_at is None:
             raise NotEnoughRights(VERIFY_FIRST)
         return taker

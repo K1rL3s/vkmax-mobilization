@@ -39,9 +39,11 @@ export const residentActions = (resident: Resident): ResidentAction[] => [
         destructive: false,
         refusal: !resident.verified
           ? "Председателем становится житель с подтверждённой квартирой"
-          : resident.status === "blocked"
-            ? "Житель заблокирован: сначала разблокируйте его"
-            : null,
+          : resident.role !== "owner"
+            ? "Председателем может стать только собственник квартиры"
+            : resident.status === "blocked"
+              ? "Житель заблокирован: сначала разблокируйте его"
+              : null,
       },
   {
     kind: "revoke",

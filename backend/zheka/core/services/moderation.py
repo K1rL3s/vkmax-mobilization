@@ -1,5 +1,10 @@
 from zheka.core import texts
-from zheka.core.enums import EventType, NotificationCategory, ResidentStatus
+from zheka.core.enums import (
+    EventType,
+    NotificationCategory,
+    ResidentRole,
+    ResidentStatus,
+)
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
@@ -8,6 +13,7 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import OrgId, ResidentId, UserId
 from zheka.core.models import Resident
+from zheka.core.services.chairman import OWNERS_ONLY
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseResidentView
 from zheka.core.services.notifications import NotificationsService
@@ -132,6 +138,8 @@ class ModerationService:
                 raise InvalidState(
                     "Председателем становится житель с подтвержденной квартирой",
                 )
+            if resident.role is not ResidentRole.OWNER:
+                raise InvalidState(OWNERS_ONLY)
             await self._residents.clear_chairman(resident.house_id)
         await self._residents.set_chairman(resident, value)
         return await self._view(resident)

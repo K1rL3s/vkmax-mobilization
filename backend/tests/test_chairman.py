@@ -48,6 +48,7 @@ async def _neighbour(
     *,
     verified: bool = True,
     status: ResidentStatus = ResidentStatus.ACTIVE,
+    role: ResidentRole = ResidentRole.OWNER,
 ) -> UserId:
     user_id = await add_user(session, "Сосед")
     await add_resident(
@@ -55,6 +56,7 @@ async def _neighbour(
         user_id,
         house_id,
         None,
+        role=role,
         verified=verified,
         status=status,
         block_reason="долг" if status is ResidentStatus.BLOCKED else None,
@@ -201,10 +203,11 @@ async def test_link_is_refused_to_a_stranger_house(
     [
         {"verified": False},
         {"status": ResidentStatus.BLOCKED},
+        {"role": ResidentRole.TENANT},
     ],
-    ids=["unverified", "blocked"],
+    ids=["unverified", "blocked", "tenant"],
 )
-async def test_link_is_refused_to_an_unverified_or_blocked_resident(
+async def test_link_is_refused_to_an_unverified_blocked_or_tenant_resident(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
     taker: dict[str, object],
@@ -215,6 +218,8 @@ async def test_link_is_refused_to_an_unverified_or_blocked_resident(
 
     handover = await service.create_handover(chairman_id, base.house_id)
 
+    with pytest.raises(NotEnoughRights):
+        await service.offer(neighbour_id, handover.code)
     with pytest.raises(NotEnoughRights):
         await service.accept(neighbour_id, handover.code)
     assert await _chairman_user_id(session, base.house_id) == chairman_id
@@ -389,3 +394,21 @@ async def test_a_new_chairman_does_not_see_the_link_of_the_previous_one(
     )
 
     assert await service.open_handover(successor_id, base.house_id) is None
+
+
+async def test_the_org_cannot_appoint_a_tenant(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base, chairman_id = await _house_with_chairman(session, make_org_house_flat_user)
+    tenant_id = await _neighbour(session, base.house_id, role=ResidentRole.TENANT)
+    tenant = await ResidentsRepo(session).get_for_house(tenant_id, base.house_id)
+    assert tenant is not None
+
+    with pytest.raises(InvalidState, match="собственник"):
+        await moderation_service(session).set_chairman(
+            base.org_id,
+            tenant.id,
+            value=True,
+        )
+    assert await _chairman_user_id(session, base.house_id) == chairman_id

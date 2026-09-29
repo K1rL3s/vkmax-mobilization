@@ -53,8 +53,9 @@ export const HandoverDialog = ({
             <h2 className={styles.Title}>Передать роль председателя</h2>
           </Typography.Text>
           <Typography.Text variant="description" color="secondary">
-            Отправьте ссылку соседу с подтверждённой квартирой в доме {address}.
-            Роль перейдёт к нему, когда он откроет ссылку и нажмёт «Принять»
+            Отправьте ссылку соседу-собственнику с подтверждённой квартирой в
+            доме {address}. Роль перейдёт к нему, когда он откроет ссылку и
+            нажмёт «Принять»
           </Typography.Text>
         </Flex>
 
