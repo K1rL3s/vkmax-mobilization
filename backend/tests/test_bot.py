@@ -284,6 +284,7 @@ from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
 from zheka.infra.max.sender import _chat_rate_limit, dialog_notify, is_chat_admin
+from zheka.infra.yandex import YandexQuota
 from zheka.infra.yandex.vision import VisionClient
 
 
@@ -4438,7 +4439,7 @@ async def _recognized_card(
     task_broker: InMemoryBroker,
     meter_id: MeterId,
 ) -> None:
-    choice_period = datetime.now(UTC).date().replace(day=1)
+    choice_period = datetime.now(ZoneInfo("Europe/Moscow")).date().replace(day=1)
     await _run(
         task_broker,
         recognize_meter_photo,
@@ -4774,3 +4775,19 @@ async def test_a_shared_request_card_reaches_the_chat_without_the_flat(
     assert sent["text"].startswith(f"🛗 Заявка №{request_id} · Лифт\nСтатус: принята")
     assert "987" not in sent["text"]
     assert await _cards(bot_session, chat_id) == ["list-1"]
+
+
+@pytest.mark.usefixtures("recognized")
+async def test_a_meter_photo_past_the_yandex_quota_is_not_recognized(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(YandexQuota, "take", lambda _self, _user_id: False)
+    meter_id = await _meter_owner(bot_session, client, message_manager)
+
+    await _recognized_card(bot_session, client, task_broker, meter_id)
+
+    assert METER_UNREADABLE_TEXT in _text(message_manager)

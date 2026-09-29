@@ -14,7 +14,7 @@ from zheka.core.ids import UserId
 from zheka.core.services.files import FilesService
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
-from zheka.infra.yandex.vision import VisionClient
+from zheka.infra.yandex import VisionClient, YandexQuota
 
 
 @async_shared_broker.task(task_name=TaskName.RECOGNIZE_METER_PHOTO.value)
@@ -25,6 +25,7 @@ async def recognize_meter_photo(
     bot: FromDishka[Bot],
     files_service: FromDishka[FilesService],
     vision: FromDishka[VisionClient],
+    quota: FromDishka[YandexQuota],
     users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
 ) -> int | None:
@@ -36,7 +37,9 @@ async def recognize_meter_photo(
     names = await save_photos(bot, files_service, urls)
     draft.photo_name = names[0] if names else None
     values = (
-        None if draft.photo_name is None else await vision.recognize(draft.photo_name)
+        None
+        if draft.photo_name is None or not quota.take(user_id)
+        else await vision.recognize(draft.photo_name)
     )
     draft.recognized = None if values is None else values.get(TariffZone.SINGLE)
     draft.value = draft.recognized

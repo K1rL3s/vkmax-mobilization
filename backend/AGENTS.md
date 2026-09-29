@@ -298,7 +298,8 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `mask_pii` (`core/masking.py`: phones, e-mails, 8+ digit runs, flat numbers;
   names and street addresses stay). `YandexQuota`
   caps classify and OCR together per user per api worker (`QUOTA_CALLS` an
-  hour); past it the route answers as if Yandex were off. The bot does not
+  hour; the bot's `recognize_meter_photo` counts per taskiq worker); past it
+  the route answers as if Yandex were off. The bot does not
   classify. OCR gets the photo's real type and skips types it can't read.
 - Object QRs (`obj_<house>_<entrance>_<category>`, lift, light, entrance
   cleaning) are startapp links only the mini-app parses: it links the house

@@ -4,10 +4,15 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import Fixture, add_meter, add_resident, events_of, photo_name
-from tests.test_readings import _make_service, _owner_with_meter
+from tests.test_readings import (
+    _close_window,
+    _make_service,
+    _owner_with_meter,
+    _period_back,
+)
 from tests.test_residency import _profile_service
 
-from zheka.core.enums import EventType, MeterType, TariffZone
+from zheka.core.enums import EventType, MeterType, ResidentStatus, TariffZone
 from zheka.core.errors import InvalidRequest
 from zheka.core.ids import FlatId, MeterId
 from zheka.core.services.meter_access import MeterCard
@@ -18,12 +23,14 @@ from zheka.core.services.meter_photo import (
     NO_METERS,
     TWO_TARIFF,
     UNKNOWN_METER,
+    WINDOW_CLOSED,
     MeterPhotoService,
     anomaly,
     format_volume,
     parse_volume,
 )
-from zheka.infra.database.models import Meter
+from zheka.core.services.readings import PERIODS_BACK
+from zheka.infra.database.models import Charge, Meter
 from zheka.infra.database.repos.meters import MetersRepo
 
 
@@ -52,8 +59,11 @@ async def test_a_verified_flat_offers_its_single_tariff_meters(
         ("no_house", NO_HOUSE),
         ("not_connected", NOT_CONNECTED),
         ("unverified", NOT_VERIFIED),
+        ("blocked", NOT_VERIFIED),
         ("two_tariff", TWO_TARIFF),
+        ("expired", NO_METERS),
         ("no_meters", NO_METERS),
+        ("window_closed", WINDOW_CLOSED),
     ],
 )
 async def test_a_photo_is_refused_with_its_reason(
@@ -70,9 +80,33 @@ async def test_a_photo_is_refused_with_its_reason(
             own.house_id,
             own.flat_id,
             verified=setup != "unverified",
+            status=(
+                ResidentStatus.BLOCKED if setup == "blocked" else ResidentStatus.ACTIVE
+            ),
         )
+    if setup in {"blocked", "window_closed"}:
+        await add_meter(session, own.flat_id)
     if setup == "two_tariff":
         await add_meter(session, own.flat_id, tariff_zones=2)
+    if setup == "expired":
+        await add_meter(
+            session,
+            own.flat_id,
+            next_verification_date=_period_back(1),
+        )
+    if setup == "window_closed":
+        await _close_window(session, own.org_id)
+        for months_back in range(PERIODS_BACK):
+            session.add(
+                Charge(
+                    flat_id=own.flat_id,
+                    period=_period_back(months_back),
+                    lines={},
+                    total=0,
+                    is_closed=True,
+                ),
+            )
+        await session.flush()
 
     choice = await _service(session).meters(own.user_id)
 
