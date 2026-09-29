@@ -14,6 +14,7 @@ export const Routes = {
   METERS: "/meters",
   MEETINGS: "/meetings",
   MEETING_NEW: "/meetings/new",
+  MEETING_INITIATIVE_NEW: "/meetings/initiatives/new",
   MEETING: "/meetings/:pollId",
   MEETING_NON_VOTERS: "/meetings/:pollId/non-voters",
   PROFILE: "/profile",

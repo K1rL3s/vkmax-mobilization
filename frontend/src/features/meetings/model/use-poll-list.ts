@@ -1,6 +1,8 @@
 import { authParams, rqClient } from "@/shared/api/instance";
 import { useSession } from "@/shared/model/session";
 
+import { canProposeInitiative } from "../domain/poll";
+
 const usePolls = () => {
   const { currentResidency: residency } = useSession();
   const isConnected = residency?.is_connected === true;
@@ -28,6 +30,7 @@ export const usePollList = () => {
   return {
     isConnected,
     isChairman: residency?.is_chairman === true,
+    canPropose: canProposeInitiative(residency),
     isPending: polls.isPending,
     isError: polls.isError,
     loadError: polls.error,

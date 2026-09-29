@@ -35,6 +35,7 @@ class PollOptionItem(BaseSchema):
 class PollListItem(BaseSchema):
     id: PollId
     title: str
+    created_by_role: str
     status: PollStatus
     starts_at: datetime
     ends_at: datetime
@@ -48,6 +49,7 @@ class PollListItem(BaseSchema):
         return cls(
             id=poll.id,
             title=poll.title,
+            created_by_role=poll.created_by_role,
             status=data.status,
             starts_at=poll.starts_at,
             ends_at=poll.ends_at,
@@ -59,7 +61,6 @@ class PollListItem(BaseSchema):
 
 class PollCard(PollListItem):
     house_id: HouseId
-    created_by_role: str
     can_vote: bool
     can_manage: bool
     options: list[PollOptionItem]
@@ -74,7 +75,6 @@ class PollCard(PollListItem):
         return cls(
             **PollListItem.of(data).model_dump(),
             house_id=poll.house_id,
-            created_by_role=poll.created_by_role,
             can_vote=data.can_vote,
             can_manage=data.can_manage,
             options=[PollOptionItem.model_validate(option) for option in data.options],
@@ -98,6 +98,11 @@ class CreatePollRequest(BaseSchema):
             ends_at=self.ends_at,
             is_multiple=self.is_multiple,
         )
+
+
+class CreateInitiativeRequest(BaseSchema):
+    title: FreeText
+    description: FreeText | None = None
 
 
 class CreateOrgPollRequest(CreatePollRequest):

@@ -111,6 +111,10 @@ const router = createBrowserRouter([
                 path: Routes.MEETING_NEW,
                 lazy: () => import("@/features/meetings/new-poll.page"),
               },
+              {
+                path: Routes.MEETING_INITIATIVE_NEW,
+                lazy: () => import("@/features/meetings/new-initiative.page"),
+              },
             ],
           },
           {

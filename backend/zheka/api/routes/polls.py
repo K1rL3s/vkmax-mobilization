@@ -8,6 +8,7 @@ from zheka.api.dependencies import (
     ResidencyForHouseDep,
 )
 from zheka.api.schemas.polls import (
+    CreateInitiativeRequest,
     CreatePollRequest,
     PollCard,
     PollListItem,
@@ -49,6 +50,28 @@ async def create_poll(
         house_id,
         body.draft(),
         org_id=None,
+    )
+    response = PollCard.of_card(card)
+    await idempotency.save(response)
+    return response
+
+
+@router.post("/houses/{house_id}/initiatives", summary="Предложить инициативу")
+async def create_initiative(
+    house_id: HouseId,
+    residency: ResidencyForHouseDep,
+    body: CreateInitiativeRequest,
+    polls_service: FromDishka[PollsService],
+    idempotency: IdempotencyDep,
+) -> PollCard:
+    saved = await idempotency.replay(PollCard)
+    if saved is not None:
+        return saved
+    card = await polls_service.create_initiative(
+        residency.user_id,
+        house_id,
+        body.title,
+        body.description,
     )
     response = PollCard.of_card(card)
     await idempotency.save(response)

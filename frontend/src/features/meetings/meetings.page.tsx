@@ -21,6 +21,17 @@ const MeetingsPage = () => {
         </Button>
       )}
 
+      {list.canPropose && (
+        <Button
+          asChild
+          size="large"
+          stretched
+          variant={list.isChairman ? "secondary" : "primary"}
+        >
+          <Link to={Routes.MEETING_INITIATIVE_NEW}>Предложить инициативу</Link>
+        </Button>
+      )}
+
       {!list.isConnected && (
         <EmptyState
           fill

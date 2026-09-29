@@ -4,7 +4,12 @@ from html import escape
 from math import ceil
 
 from zheka.base import ZhekaType
-from zheka.core.enums import CATEGORY_RULES, RequestCategory, RequestStatus
+from zheka.core.enums import (
+    CATEGORY_RULES,
+    PollAuthor,
+    RequestCategory,
+    RequestStatus,
+)
 from zheka.core.ids import RequestId
 from zheka.core.models import House, Request
 
@@ -372,15 +377,22 @@ class PollCardRow(ZhekaType):
     percent: int
 
 
+POLL_AUTHORS: Mapping[PollAuthor, str] = {
+    PollAuthor.STAFF: "Опрос УК",
+    PollAuthor.CHAIRMAN: "Опрос председателя",
+    PollAuthor.RESIDENT: "Инициатива жителя",
+}
+
+
 def poll_card(
     title: str,
-    by_staff: bool,
+    role: str,
     rows: Sequence[PollCardRow],
     voted: int,
     total: int,
     ends_at: datetime | None,
 ) -> str:
-    author = "Опрос УК" if by_staff else "Опрос председателя"
+    author = POLL_AUTHORS[PollAuthor(role)]
     head = (
         f"🗳 {author}: {escape(title)}"
         if ends_at is not None

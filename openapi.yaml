@@ -4399,6 +4399,93 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/initiatives:
+    post:
+      tags:
+      - Опросы
+      summary: Предложить инициативу
+      operationId: create_initiative
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Idempotency-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInitiativeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PollCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/polls/{poll_id}:
     get:
       tags:
@@ -10211,6 +10298,9 @@ components:
         title:
           type: string
           title: Title
+        created_by_role:
+          type: string
+          title: Created By Role
         status:
           $ref: '#/components/schemas/PollStatus'
         starts_at:
@@ -10240,6 +10330,7 @@ components:
       required:
       - id
       - title
+      - created_by_role
       - status
       - starts_at
       - ends_at
@@ -11437,6 +11528,22 @@ components:
           default: 1
       type: object
       title: CreateFlatInviteRequest
+    CreateInitiativeRequest:
+      properties:
+        title:
+          type: string
+          maxLength: 4000
+          title: Title
+        description:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Description
+      type: object
+      required:
+      - title
+      title: CreateInitiativeRequest
     CreateOrgInviteRequest:
       properties:
         role:
@@ -13160,6 +13267,9 @@ components:
         title:
           type: string
           title: Title
+        created_by_role:
+          type: string
+          title: Created By Role
         status:
           $ref: '#/components/schemas/PollStatus'
         starts_at:
@@ -13182,9 +13292,6 @@ components:
         house_id:
           type: integer
           title: House Id
-        created_by_role:
-          type: string
-          title: Created By Role
         can_vote:
           type: boolean
           title: Can Vote
@@ -13218,6 +13325,7 @@ components:
       required:
       - id
       - title
+      - created_by_role
       - status
       - starts_at
       - ends_at
@@ -13225,7 +13333,6 @@ components:
       - voted
       - voted_flats
       - house_id
-      - created_by_role
       - can_vote
       - can_manage
       - options
@@ -13239,6 +13346,9 @@ components:
         title:
           type: string
           title: Title
+        created_by_role:
+          type: string
+          title: Created By Role
         status:
           $ref: '#/components/schemas/PollStatus'
         starts_at:
@@ -13262,6 +13372,7 @@ components:
       required:
       - id
       - title
+      - created_by_role
       - status
       - starts_at
       - ends_at

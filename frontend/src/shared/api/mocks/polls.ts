@@ -10,8 +10,10 @@ import {
 } from "./reply";
 import {
   addPollVote,
+  createInitiative,
   createPoll,
   findPoll,
+  hasOpenInitiative,
   housePolls,
   isChairman,
   isOrgStaff,
@@ -92,6 +94,42 @@ export const pollsConfigs = [
           is_multiple: request.body.is_multiple === true,
           created_by_role: "chairman",
         }),
+      ),
+    );
+  }),
+  endpoint("post", "/houses/:house_id/initiatives", (request) => {
+    const houseId = Number(request.params.house_id);
+    const residency = residencyForHouse(houseId);
+
+    if (!residency) {
+      return notFound("Дом не найден");
+    }
+
+    if (residency.role !== "owner" || !residency.verified) {
+      return forbidden(
+        "Инициативу дома предлагает собственник подтвержденной квартиры",
+      );
+    }
+
+    const title = String(request.body.title ?? "").trim();
+
+    if (!title) {
+      return badRequest("Укажите заголовок опроса");
+    }
+
+    if (hasOpenInitiative(houseId)) {
+      return conflict("Ваша инициатива еще идет, дождитесь ее завершения");
+    }
+
+    const description = request.body.description;
+
+    return ok(
+      pollCard(
+        createInitiative(
+          houseId,
+          title,
+          description == null ? null : String(description),
+        ),
       ),
     );
   }),

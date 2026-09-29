@@ -594,3 +594,100 @@ async def test_a_racing_weighted_ballot_of_a_co_owner_is_not_stored(
     )
 
     assert inserted == []
+
+
+async def _initiator(
+    session: AsyncSession,
+    base: OrgHouseFlatUser,
+    *,
+    role: ResidentRole = ResidentRole.OWNER,
+    verified: bool = True,
+) -> UserId:
+    user_id = await add_user(session, "Инициатор")
+    flat = Flat(house_id=base.house_id, number="77")
+    session.add(flat)
+    await session.flush()
+    await add_resident(
+        session,
+        user_id,
+        base.house_id,
+        flat.id,
+        role=role,
+        verified=verified,
+    )
+    return user_id
+
+
+async def test_an_owner_initiative_is_a_poll_of_the_house(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base = await make_org_house_flat_user()
+    author = await _initiator(session, base)
+    service = _make_service(session)
+
+    card = await service.create_initiative(
+        author,
+        base.house_id,
+        "Велопарковка у 2-го подъезда",
+        "Ставить негде",
+    )
+
+    assert card.poll.created_by_role == "resident"
+    assert card.poll.org_id == base.org_id
+    assert [option.text for option in card.options] == [
+        "👍 Поддерживаю",
+        "👎 Против",
+    ]
+    assert card.poll.ends_at - card.poll.starts_at == timedelta(days=14)
+    assert card.can_manage is False
+
+
+@pytest.mark.parametrize(
+    ("role", "verified"),
+    [(ResidentRole.TENANT, True), (ResidentRole.OWNER, False)],
+)
+async def test_only_a_verified_owner_proposes_an_initiative(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    role: ResidentRole,
+    verified: bool,
+) -> None:
+    base = await make_org_house_flat_user()
+    author = await _initiator(session, base, role=role, verified=verified)
+    service = _make_service(session)
+
+    with pytest.raises(NotEnoughRights):
+        await service.create_initiative(author, base.house_id, "Велопарковка", None)
+
+
+async def test_the_second_initiative_of_one_author_waits_for_the_first(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base = await make_org_house_flat_user()
+    author = await _initiator(session, base)
+    service = _make_service(session)
+    card = await service.create_initiative(author, base.house_id, "Велопарковка", None)
+
+    with pytest.raises(InvalidState):
+        await service.create_initiative(author, base.house_id, "Шлагбаум", None)
+
+    await PollsRepo(session).close(card.poll)
+    again = await service.create_initiative(author, base.house_id, "Шлагбаум", None)
+    assert again.poll.id != card.poll.id
+
+
+async def test_the_chairman_manages_an_initiative_of_a_resident(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    base, chairman_id = await _chairman_setup(session, make_org_house_flat_user)
+    author = await _initiator(session, base)
+    service = _make_service(session)
+    card = await service.create_initiative(author, base.house_id, "Велопарковка", None)
+
+    closed = await service.close(card.poll.id, chairman_id)
+
+    assert closed.status is PollStatus.CLOSED
+    assert (await service.get_card(card.poll.id, author)).can_manage is False

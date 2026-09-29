@@ -57,3 +57,10 @@ export const pollDraftSchema = z.object({
 });
 
 export type PollDraft = z.infer<typeof pollDraftSchema>;
+
+export const initiativeDraftSchema = pollDraftSchema.pick({
+  title: true,
+  description: true,
+});
+
+export type InitiativeDraft = z.infer<typeof initiativeDraftSchema>;

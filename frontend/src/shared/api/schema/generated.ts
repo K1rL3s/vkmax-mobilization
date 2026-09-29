@@ -825,6 +825,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/houses/{house_id}/initiatives": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Предложить инициативу */
+    post: operations["create_initiative"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/polls/{poll_id}": {
     parameters: {
       query?: never;
@@ -2000,6 +2017,8 @@ export interface components {
       id: number;
       /** Title */
       title: string;
+      /** Created By Role */
+      created_by_role: string;
       status: components["schemas"]["PollStatus"];
       /**
        * Starts At
@@ -2739,6 +2758,13 @@ export interface components {
        * @default 1
        */
       max_activations: number;
+    };
+    /** CreateInitiativeRequest */
+    CreateInitiativeRequest: {
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
     };
     /** CreateOrgInviteRequest */
     CreateOrgInviteRequest: {
@@ -3713,6 +3739,8 @@ export interface components {
       id: number;
       /** Title */
       title: string;
+      /** Created By Role */
+      created_by_role: string;
       status: components["schemas"]["PollStatus"];
       /**
        * Starts At
@@ -3732,8 +3760,6 @@ export interface components {
       voted_flats: number;
       /** House Id */
       house_id: number;
-      /** Created By Role */
-      created_by_role: string;
       /** Can Vote */
       can_vote: boolean;
       /** Can Manage */
@@ -3761,6 +3787,8 @@ export interface components {
       id: number;
       /** Title */
       title: string;
+      /** Created By Role */
+      created_by_role: string;
       status: components["schemas"]["PollStatus"];
       /**
        * Starts At
@@ -9620,6 +9648,98 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": components["schemas"]["CreatePollRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PollCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  create_initiative: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+        "Idempotency-Key"?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateInitiativeRequest"];
       };
     };
     responses: {

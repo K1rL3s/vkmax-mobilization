@@ -30,6 +30,7 @@ from zheka.core.enums import (
     EventType,
     MeterType,
     NotificationCategory,
+    PollAuthor,
     PollStatus,
     ResidentRole,
     ResidentStatus,
@@ -295,6 +296,7 @@ async def _poll(
     house_id: HouseId,
     ends_in: timedelta,
     status: PollStatus = PollStatus.ACTIVE,
+    role: PollAuthor = PollAuthor.CHAIRMAN,
 ) -> PollId:
     author = User(max_user_id=MaxUserId(secrets.randbits(40)), name="Председатель")
     session.add(author)
@@ -302,7 +304,7 @@ async def _poll(
     poll = Poll(
         house_id=house_id,
         created_by_user_id=author.id,
-        created_by_role="chairman",
+        created_by_role=role.value,
         title="Ремонт подъезда",
         starts_at=NOW + ends_in - timedelta(days=7),
         ends_at=NOW + ends_in,
@@ -339,12 +341,13 @@ async def _vote(
 
 
 @pytest.mark.parametrize(
-    ("ends_in", "status", "reminded"),
+    ("ends_in", "status", "role", "reminded"),
     [
-        (timedelta(hours=24), PollStatus.ACTIVE, True),
-        (timedelta(hours=72), PollStatus.ACTIVE, False),
-        (timedelta(hours=-1), PollStatus.ACTIVE, False),
-        (timedelta(hours=24), PollStatus.CLOSED, False),
+        (timedelta(hours=24), PollStatus.ACTIVE, PollAuthor.CHAIRMAN, True),
+        (timedelta(hours=72), PollStatus.ACTIVE, PollAuthor.CHAIRMAN, False),
+        (timedelta(hours=-1), PollStatus.ACTIVE, PollAuthor.CHAIRMAN, False),
+        (timedelta(hours=24), PollStatus.CLOSED, PollAuthor.CHAIRMAN, False),
+        (timedelta(hours=24), PollStatus.ACTIVE, PollAuthor.RESIDENT, False),
     ],
 )
 async def test_a_poll_is_reminded_in_its_last_two_days(
@@ -353,11 +356,12 @@ async def test_a_poll_is_reminded_in_its_last_two_days(
     bot_broker: RecordingBroker,
     ends_in: timedelta,
     status: PollStatus,
+    role: PollAuthor,
     reminded: bool,
 ) -> None:
     house_id = await _house(bot_session)
     _, user_id = await _resident(bot_session, house_id)
-    await _poll(bot_session, house_id, ends_in, status)
+    await _poll(bot_session, house_id, ends_in, status, role)
 
     await _run(task_broker, remind_polls)
 

@@ -6,7 +6,13 @@ import { Chevron } from "@/shared/ui/chevron";
 import { pollIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
-import { deadlineLabel, votedLine, type PollListItem } from "../domain/poll";
+import {
+  authorCaption,
+  deadlineLabel,
+  isInitiative,
+  votedLine,
+  type PollListItem,
+} from "../domain/poll";
 
 import styles from "./poll-row.module.css";
 
@@ -25,6 +31,7 @@ export const PollRow = ({ poll }: { poll: PollListItem }) => {
 
       <Flex className={styles.Grow} align="stretch" direction="column" gapY={4}>
         <Typography.Text variant="description" color="secondary">
+          {isInitiative(poll) && `${authorCaption(poll.created_by_role)} · `}
           {deadlineLabel(poll)}
         </Typography.Text>
 

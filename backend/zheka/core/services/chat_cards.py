@@ -67,7 +67,7 @@ class ChatCardsService:
         ]
         text = texts.poll_card(
             poll.title,
-            poll.created_by_role == "staff",
+            poll.created_by_role,
             rows,
             data.voted_flats,
             data.total_flats,
