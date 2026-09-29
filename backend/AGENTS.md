@@ -142,8 +142,15 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   verified flat.
 - `UploadQuota` (`infra/quota.py`, like `YandexQuota`) caps `POST /api/files`
   per user per api worker (`UPLOAD_CALLS` an hour, then 429): the host nginx
-  hides client IPs, so no per-IP limit. Free text in request bodies is
-  `FreeText` (4000 chars).
+  hides client IPs, so no per-IP limit. `VerifyQuota` caps
+  `POST /api/flats/{id}/verify` the same way (`VERIFY_CALLS` an hour, every
+  attempt counts), so a resident cannot brute-force an account number. Free
+  text in request bodies is `FreeText` (4000 chars).
+- `FilesService.save_download` names a file by its first 12 bytes (JPEG,
+  PNG, WEBP, HEIC brands, other `ftyp` as MP4 or MOV), not by the client
+  Content-Type: that only picks the size cap and refuses early. Unknown
+  content or a photo sent as video and back is deleted with 400. A polyglot
+  behind a valid header still passes: no decoding, no Pillow.
 - A poll ballot's rows carry `choice_index` 0..n-1: unique `(poll, user,
   choice_index)` and `(poll, flat, choice_index) WHERE counted_by_area` make a
   racing second ballot insert nothing (`add_vote` -> `ALREADY_VOTED`).
@@ -508,10 +515,13 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   `EntityNotFound`; no `consent_at` -> `NotEnoughRights`. A reviewer's flat
   account is random (seeded ones are the zero-padded number), so no other
   reviewer can verify into it.
-- Demo orgs are shared by strangers: block and revoke-verification refuse a
-  real user (positive `max_user_id`) other than the actor, a DIRECT
-  announcement reaches only its author, and staff see a phone only if it is
-  their own.
+- Demo orgs are shared by strangers: block, revoke-verification and
+  displacing a chairman refuse a real user (positive `max_user_id`) other
+  than the actor, a DIRECT announcement reaches only its author, and staff
+  see a phone only if it is their own. Org settings, category executors,
+  reception windows and member removal sit behind `LiveAdminOrgDep` (403
+  `DEMO_LOCKED` in a demo org), and there only its author revokes an invite.
+  Changing a demo org's setup takes SQL or a reseed.
 - Reseeding (`docker compose down -v`, `just migrate`, `just seed`) wipes
   reviewers' flats; the dashboard's rolling 30 days start at the seed, so seed
   on the deploy closest to judging. `scripts/fetch_seed_data.py` rewrites

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { errorDetail, isConflict } from "@/shared/api/errors";
+import { errorDetail, errorMessage, isConflict } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import { orgParams } from "@/shared/model/session";
@@ -18,7 +18,10 @@ const refresh = () =>
 const actionError = (error: unknown) =>
   isConflict(error)
     ? (errorDetail(error) ?? "Житель уже изменился, список перечитан")
-    : "Не получилось. Проверьте связь и попробуйте ещё раз";
+    : errorMessage(
+        error,
+        "Не получилось. Проверьте связь и попробуйте ещё раз",
+      );
 
 export const useResidentActions = () => {
   const [state, setState] = useState<{ resident: Resident; step: Step }>();

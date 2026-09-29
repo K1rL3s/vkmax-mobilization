@@ -22,8 +22,10 @@ from zheka.api.schemas.flats import (
 )
 from zheka.api.schemas.houses import ResidencySummary
 from zheka.core.deeplinks import flat_invite_payload
+from zheka.core.errors import TooManyRequests
 from zheka.core.ids import FlatId
 from zheka.core.services.flats import FlatsService
+from zheka.infra.quota import VerifyQuota
 
 router = APIRouter(tags=["Квартиры"], route_class=DishkaRoute)
 
@@ -43,7 +45,10 @@ async def verify_flat(
     residency: ResidencyForFlatHouseDep,
     flats_service: FromDishka[FlatsService],
     body: VerifyFlatRequest,
+    quota: FromDishka[VerifyQuota],
 ) -> VerifyFlatResponse:
+    if not quota.take(residency.user_id):
+        raise TooManyRequests
     result = await flats_service.verify(residency.user_id, flat_id, body.account_no)
     return VerifyFlatResponse.model_validate(result)
 

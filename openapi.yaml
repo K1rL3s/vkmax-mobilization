@@ -7,7 +7,7 @@ paths:
     get:
       tags:
       - Healthcheck
-      summary: Проверка связи с базой
+      summary: Проверка связи с базой и версия сборки
       operationId: healthcheck
       responses:
         '200':
@@ -6501,6 +6501,7 @@ paths:
       tags:
       - 'Админка: организация'
       summary: Изменить настройки организации
+      description: В демо-УК - 403
       operationId: update_org_settings
       security:
       - ApiTestToken: []
@@ -6658,6 +6659,7 @@ paths:
       tags:
       - 'Админка: организация'
       summary: Исключить сотрудника
+      description: В демо-УК - 403
       operationId: remove_org_member
       security:
       - ApiTestToken: []
@@ -6894,6 +6896,7 @@ paths:
       tags:
       - 'Админка: организация'
       summary: Отозвать приглашение
+      description: В демо-УК - 403 на чужое приглашение
       operationId: revoke_org_invite
       security:
       - ApiTestToken: []
@@ -7050,6 +7053,7 @@ paths:
       tags:
       - 'Админка: организация'
       summary: Назначить исполнителя по умолчанию для категории
+      description: В демо-УК - 403
       operationId: set_category_executor
       security:
       - ApiTestToken: []
@@ -7757,6 +7761,7 @@ paths:
       tags:
       - 'Админка: дома'
       summary: Назначить председателя
+      description: В демо-УК - 403, если нынешний председатель дома - другой проверяющий
       operationId: set_chairman
       security:
       - ApiTestToken: []
@@ -9677,7 +9682,7 @@ paths:
       tags:
       - 'Админка: прием и доступ'
       summary: Задать часы приема
-      description: Заменяет всю сетку целиком. Несколько окон в один день - это обеденный перерыв, пустой список - прием не ведется. capacity - сколько жителей принимают в один слот
+      description: Заменяет всю сетку целиком. Несколько окон в один день - это обеденный перерыв, пустой список - прием не ведется. capacity - сколько жителей принимают в один слот. В демо-УК - 403
       operationId: set_reception_windows
       security:
       - ApiTestToken: []
@@ -13122,9 +13127,14 @@ components:
         ok:
           type: boolean
           title: Ok
+        commit:
+          type: string
+          title: Commit
+          description: Коммит, из которого собран образ API; dev без BUILD_COMMIT
       type: object
       required:
       - ok
+      - commit
       title: HealthcheckResponse
     HouseAtPointResponse:
       properties:
@@ -16045,7 +16055,7 @@ components:
       scheme: bearer
 tags:
 - name: Healthcheck
-  description: Проверка связи с базой, без авторизации
+  description: Проверка связи с базой и коммит сборки, без авторизации
 - name: Профиль
   description: Аккаунт, согласие на обработку ПД и уведомления
 - name: Дома

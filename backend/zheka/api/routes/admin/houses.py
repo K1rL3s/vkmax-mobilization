@@ -181,6 +181,7 @@ async def revoke_flat_verification(
 @router.post(
     "/admin/residents/{resident_id}/chairman",
     summary="Назначить председателя",
+    description="В демо-УК - 403, если нынешний председатель дома - другой проверяющий",
 )
 async def set_chairman(
     resident_id: ResidentId,
@@ -192,6 +193,7 @@ async def set_chairman(
         current_org.org_id,
         resident_id,
         body.is_chairman,
+        current_org.user_id,
     )
     return HouseResidentItem.of(view, current_org)
 

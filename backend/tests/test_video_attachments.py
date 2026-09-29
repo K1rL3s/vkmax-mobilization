@@ -52,14 +52,14 @@ async def test_bot_downloads_the_best_available_mp4(
     async def download(url: str, out: BinaryIO, *, seek: bool) -> None:
         assert url == expected
         assert not seek
-        out.write(b"video")
+        out.write(b"\x00\x00\x00\x18ftypmp42")
 
     bot.download.side_effect = download
     files = FilesService(FilesConfig(dir=str(tmp_path), max_size_mb=10), "test")
     names = await save_videos(bot, files, [str(1)])
     bot.get_video_attachment_details.assert_awaited_once_with(video_token=str(1))
     assert names[0].endswith(".mp4")
-    assert files.path_of(names[0]).read_bytes() == b"video"
+    assert files.path_of(names[0]).read_bytes() == b"\x00\x00\x00\x18ftypmp42"
 
 
 @pytest.mark.parametrize("urls", [None, VideoUrls()])

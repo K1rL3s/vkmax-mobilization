@@ -11,7 +11,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Проверка связи с базой */
+    /** Проверка связи с базой и версия сборки */
     get: operations["healthcheck"];
     put?: never;
     post?: never;
@@ -1223,7 +1223,10 @@ export interface paths {
     };
     /** Настройки организации */
     get: operations["get_org_settings"];
-    /** Изменить настройки организации */
+    /**
+     * Изменить настройки организации
+     * @description В демо-УК - 403
+     */
     put: operations["update_org_settings"];
     post?: never;
     delete?: never;
@@ -1259,7 +1262,10 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Исключить сотрудника */
+    /**
+     * Исключить сотрудника
+     * @description В демо-УК - 403
+     */
     delete: operations["remove_org_member"];
     options?: never;
     head?: never;
@@ -1294,7 +1300,10 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    /** Отозвать приглашение */
+    /**
+     * Отозвать приглашение
+     * @description В демо-УК - 403 на чужое приглашение
+     */
     delete: operations["revoke_org_invite"];
     options?: never;
     head?: never;
@@ -1310,7 +1319,10 @@ export interface paths {
     };
     /** Исполнители по умолчанию для категорий заявок */
     get: operations["list_category_executors"];
-    /** Назначить исполнителя по умолчанию для категории */
+    /**
+     * Назначить исполнителя по умолчанию для категории
+     * @description В демо-УК - 403
+     */
     put: operations["set_category_executor"];
     post?: never;
     delete?: never;
@@ -1447,7 +1459,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Назначить председателя */
+    /**
+     * Назначить председателя
+     * @description В демо-УК - 403, если нынешний председатель дома - другой проверяющий
+     */
     post: operations["set_chairman"];
     delete?: never;
     options?: never;
@@ -1740,7 +1755,7 @@ export interface paths {
     get: operations["list_reception_windows"];
     /**
      * Задать часы приема
-     * @description Заменяет всю сетку целиком. Несколько окон в один день - это обеденный перерыв, пустой список - прием не ведется. capacity - сколько жителей принимают в один слот
+     * @description Заменяет всю сетку целиком. Несколько окон в один день - это обеденный перерыв, пустой список - прием не ведется. capacity - сколько жителей принимают в один слот. В демо-УК - 403
      */
     put: operations["set_reception_windows"];
     post?: never;
@@ -3356,6 +3371,11 @@ export interface components {
     HealthcheckResponse: {
       /** Ok */
       ok: boolean;
+      /**
+       * Commit
+       * @description Коммит, из которого собран образ API; dev без BUILD_COMMIT
+       */
+      commit: string;
     };
     /** HouseAtPointResponse */
     HouseAtPointResponse: {

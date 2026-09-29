@@ -51,3 +51,8 @@ export const ROLE_TONE: Record<OrgRole, StatusPillTone> = {
   employee: "neutral",
   executor: "positive",
 };
+
+export type SettingsLock = "role" | "demo" | null;
+
+export const DEMO_LOCKED =
+  "В демо-УК настройки общие для всех проверяющих и не меняются";

@@ -4,7 +4,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter
 
-from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep
+from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep, LiveAdminOrgDep
 from zheka.api.schemas.access import (
     AccessRequestGrid,
     AccessRequestItem,
@@ -41,11 +41,11 @@ async def list_reception_windows(
     description=(
         "Заменяет всю сетку целиком. Несколько окон в один день - это "
         "обеденный перерыв, пустой список - прием не ведется. capacity - "
-        "сколько жителей принимают в один слот"
+        "сколько жителей принимают в один слот. В демо-УК - 403"
     ),
 )
 async def set_reception_windows(
-    current_org: AdminOrgDep,
+    current_org: LiveAdminOrgDep,
     body: SetReceptionWindowsRequest,
     reception_service: FromDishka[ReceptionService],
 ) -> list[ReceptionWindowItem]:

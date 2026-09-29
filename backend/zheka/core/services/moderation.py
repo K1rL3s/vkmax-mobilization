@@ -23,6 +23,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
 SPARE_REVIEWERS = "В демо-УК можно ограничить только модельных жителей"
+SPARE_CHAIRMAN = "В демо-УК можно снять или сменить только модельного председателя"
 
 
 class ModerationService:
@@ -131,6 +132,7 @@ class ModerationService:
         org_id: OrgId,
         resident_id: ResidentId,
         value: bool,
+        by: UserId,
     ) -> HouseResidentView:
         resident = await self._get_resident(org_id, resident_id)
         if value:
@@ -140,7 +142,12 @@ class ModerationService:
                 )
             if resident.role is not ResidentRole.OWNER:
                 raise InvalidState(OWNERS_ONLY)
+            chairman = await self._residents.get_chairman(resident.house_id)
+            if chairman is not None and chairman.id != resident.id:
+                await self._spare_reviewers(org_id, chairman, by, SPARE_CHAIRMAN)
             await self._residents.clear_chairman(resident.house_id)
+        elif resident.is_chairman:
+            await self._spare_reviewers(org_id, resident, by, SPARE_CHAIRMAN)
         await self._residents.set_chairman(resident, value)
         return await self._view(resident)
 
@@ -182,6 +189,7 @@ class ModerationService:
         org_id: OrgId,
         resident: Resident,
         by: UserId,
+        refusal: str = SPARE_REVIEWERS,
     ) -> None:
         if (
             resident.user_id == by
@@ -190,7 +198,7 @@ class ModerationService:
             return
         user = await self._users.get_by_id(resident.user_id)
         if user is not None and user.max_user_id > 0:
-            raise NotEnoughRights(SPARE_REVIEWERS)
+            raise NotEnoughRights(refusal)
 
 
 def _require_reason(reason: str) -> str:

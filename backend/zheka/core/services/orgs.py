@@ -18,6 +18,7 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import OrgId, UserId
 from zheka.core.models import OrgInvite, OrgMember, OrgSettings, Organization, User
+from zheka.core.services.demo import DEMO_LOCKED
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseFound, is_connected
 from zheka.core.services.invites import issue_invite
@@ -284,10 +285,20 @@ class OrgsService:
         )
         return invite
 
-    async def revoke_invite(self, org_id: OrgId, code: str) -> None:
+    async def revoke_invite(
+        self,
+        org_id: OrgId,
+        code: str,
+        actor_id: UserId,
+    ) -> None:
         invite = await self._invites.get(code)
         if invite is None or invite.org_id != org_id:
             raise EntityNotFound(INVITE_NOT_FOUND)
+        if (
+            invite.created_by != actor_id
+            and (await self._orgs.get_existing(org_id)).is_demo
+        ):
+            raise NotEnoughRights(DEMO_LOCKED)
         await self._invites.revoke(invite, datetime.now(UTC))
 
     async def activate_invite(self, user_id: UserId, code: str) -> OrgMembershipView:

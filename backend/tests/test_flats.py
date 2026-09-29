@@ -11,7 +11,9 @@ from tests.conftest import (
     make_notifications_service,
 )
 
-from zheka.api.schemas.flats import FlatCard
+from zheka.api.dependencies.current_residency import CurrentResidency
+from zheka.api.routes.flats import verify_flat
+from zheka.api.schemas.flats import FlatCard, VerifyFlatRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
@@ -25,6 +27,7 @@ from zheka.core.errors import (
     InvalidRequest,
     InvalidState,
     NotEnoughRights,
+    TooManyRequests,
 )
 from zheka.core.ids import FlatId, HouseId, UserId
 from zheka.core.services.events import EventsService
@@ -44,6 +47,7 @@ from zheka.infra.database.repos.invites import InvitesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.quota import VERIFY_CALLS, VerifyQuota
 
 ACCOUNT = "ЛС-0042 7781"
 
@@ -747,3 +751,30 @@ async def test_a_revoked_resident_cannot_return_by_an_invite(
 
     with pytest.raises(NotEnoughRights, match=REVOKED_BY_ORG):
         await service.activate_invite(revoked_id, invite.code)
+
+
+async def test_verify_attempts_past_the_hourly_quota_are_refused(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await _set_account(session, own.flat_id, ACCOUNT)
+    resident = await _add_resident(session, own.user_id, own.house_id, None)
+    residency = CurrentResidency(
+        user_id=own.user_id,
+        house_id=own.house_id,
+        flat_id=None,
+        can_see_charges=True,
+        verified=False,
+    )
+    service = _make_service(session)
+    quota = VerifyQuota()
+    for number in range(VERIFY_CALLS):
+        wrong = VerifyFlatRequest(account_no=f"{number:010}")
+        result = await verify_flat(own.flat_id, residency, service, wrong, quota)
+        assert result.verified is False
+
+    right = VerifyFlatRequest(account_no=ACCOUNT)
+    with pytest.raises(TooManyRequests):
+        await verify_flat(own.flat_id, residency, service, right, quota)
+    assert resident.verified_at is None

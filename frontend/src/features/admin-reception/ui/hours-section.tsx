@@ -10,6 +10,7 @@ import {
 
 import { cn } from "@/shared/lib/css";
 import { plural } from "@/shared/lib/format";
+import { useSession } from "@/shared/model/session";
 import { ConfirmDialog, useConfirm } from "@/shared/ui/confirm-dialog";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 
@@ -220,6 +221,7 @@ const HoursEditor = ({ windows }: { windows: ReceptionWindow[] }) => {
 
 export const HoursSection = () => {
   const canEdit = useIsOrgAdmin();
+  const isDemo = useSession().currentOrg?.is_demo;
   const windows = useReceptionWindows(canEdit);
   const [isOpen, setOpen] = useState(false);
 
@@ -252,6 +254,7 @@ export const HoursSection = () => {
             type="button"
             className={styles.Summary}
             aria-expanded={isOpen}
+            disabled={isDemo}
             onClick={() => setOpen((open) => !open)}
           >
             <Typography.Text variant="body" color="primary">
@@ -265,7 +268,11 @@ export const HoursSection = () => {
             )}
 
             <Typography.Text variant="description" color="secondary">
-              {isOpen ? "Свернуть" : "Изменить"}
+              {isDemo
+                ? "В демо-УК настройки общие для всех проверяющих и не меняются"
+                : isOpen
+                  ? "Свернуть"
+                  : "Изменить"}
             </Typography.Text>
           </button>
 

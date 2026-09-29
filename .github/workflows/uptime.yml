@@ -1,0 +1,50 @@
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * 30 9 *"
+    - cron: "*/15 * 1-14 10 *"
+    - cron: "7 * 15-29 10 *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the stand
+        run: |
+          failed=()
+
+          health=$(curl -fsS --max-time 20 "$SITE/api/healthcheck" || true)
+          ok=$(jq -r .ok <<< "$health" 2>/dev/null || true)
+          commit=$(jq -r .commit <<< "$health" 2>/dev/null || true)
+          if [ "$ok" != true ]; then
+            failed+=("healthcheck не отвечает")
+          elif [ -n "$SUBMITTED_COMMIT" ] && [ "$commit" != "$SUBMITTED_COMMIT" ]; then
+            failed+=("на стенде коммит $commit, а не $SUBMITTED_COMMIT")
+          fi
+
+          web=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/" || true)
+          [ "$web" = 200 ] || failed+=("мини-приложение отвечает $web")
+
+          webhook=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+            -X POST -H "Content-Type: application/json" -d '{}' "$SITE/webhook" || true)
+          [ "$webhook" = 403 ] || failed+=("вебхук без секрета отвечает $webhook, а не 403")
+
+          [ ${#failed[@]} -eq 0 ] && exit 0
+
+          text="🔴 Стенд Жэки:$(printf '\n- %s' "${failed[@]}")"
+          echo "$text"
+          jq -n --arg text "$text" '{text: $text}' |
+            curl -fsS --max-time 20 -X POST \
+              "https://platform-api2.max.ru/messages?user_id=$CAPTAIN_MAX_USER_ID" \
+              -H "Authorization: $MAX_TOKEN" -H "Content-Type: application/json" -d @- > /dev/null
+          exit 1
+        env:
+          SITE: https://vkmax.k1rles.ru
+          SUBMITTED_COMMIT: ${{ vars.SUBMITTED_COMMIT }}
+          MAX_TOKEN: ${{ secrets.MAX_TOKEN }}
+          CAPTAIN_MAX_USER_ID: ${{ secrets.CAPTAIN_MAX_USER_ID }}

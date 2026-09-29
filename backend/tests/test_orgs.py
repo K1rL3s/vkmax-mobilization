@@ -1,7 +1,9 @@
+import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,28 +12,40 @@ from tests.conftest import (
     OrgHouseFlatUser,
     RecordingBroker,
     add_resident,
+    add_user,
+    empty_bot_setup,
+    make_bot_config,
     make_config,
     make_notifications_service,
 )
+from tests.test_admin_map import _staff_headers
 
+from zheka.api.app import app_factory
 from zheka.api.schemas.houses import OrgContacts
 from zheka.api.schemas.orgs import RegisterOrgRequest, UpdateOrgSettingsRequest
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core import texts
 from zheka.core.deeplinks import Deeplink, DeeplinkKind, parse_deeplink
-from zheka.core.enums import EventType, OrgRole, ResidentRole, ResidentStatus
+from zheka.core.enums import (
+    EventType,
+    OrgRole,
+    RequestCategory,
+    ResidentRole,
+    ResidentStatus,
+)
 from zheka.core.errors import (
     EntityNotFound,
     InvalidRequest,
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import MaxUserId
+from zheka.core.ids import MaxUserId, UserId
+from zheka.core.services.demo import DEMO_LOCKED
 from zheka.core.services.events import EventsService
-from zheka.core.services.moderation import ModerationService
+from zheka.core.services.moderation import SPARE_CHAIRMAN, ModerationService
 from zheka.core.services.orgs import OrgSettingsView, OrgsService
-from zheka.infra.database.models import Event, User
+from zheka.infra.database.models import Event, OrgMember, Organization, User
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.invites import InvitesRepo
@@ -166,7 +180,7 @@ async def test_org_surface(
         max_activations=2,
     )
     assert len(await orgs_service.invites(own.org_id)) == 1
-    await orgs_service.revoke_invite(own.org_id, invite.code)
+    await orgs_service.revoke_invite(own.org_id, invite.code, own.user_id)
     with pytest.raises(InvalidState):
         await orgs_service.activate_invite(own.user_id, invite.code)
 
@@ -295,11 +309,21 @@ async def test_moderation(
     assert {event.user_id for event in events} == {own.user_id}
 
     with pytest.raises(InvalidState):
-        await moderation.set_chairman(own.org_id, resident.id, value=True)
+        await moderation.set_chairman(
+            own.org_id,
+            resident.id,
+            value=True,
+            by=own.user_id,
+        )
 
     resident.verified_at = datetime.now(UTC)
     await session.flush()
-    view = await moderation.set_chairman(own.org_id, resident.id, value=True)
+    view = await moderation.set_chairman(
+        own.org_id,
+        resident.id,
+        value=True,
+        by=own.user_id,
+    )
     assert view.resident.is_chairman is True
 
     with pytest.raises(InvalidState):
@@ -357,7 +381,11 @@ async def test_foreign_invite_is_not_revoked_from_another_org(
     )
 
     with pytest.raises(EntityNotFound):
-        await orgs_service.revoke_invite(own.org_id, foreign_invite.code)
+        await orgs_service.revoke_invite(
+            own.org_id,
+            foreign_invite.code,
+            own.user_id,
+        )
 
     alive = await InvitesRepo(session).get(foreign_invite.code)
     assert alive is not None
@@ -547,3 +575,181 @@ def test_an_org_phone_is_capped(build: Callable[[str], object]) -> None:
 
     with pytest.raises(ValidationError):
         build("7" * 33)
+
+
+@pytest.mark.parametrize("is_demo", [True, False], ids=["demo", "live"])
+@pytest.mark.parametrize(
+    "action",
+    ["settings", "member", "category_executor", "reception"],
+)
+async def test_a_demo_org_keeps_its_setup(
+    bot_session: AsyncSession,
+    action: str,
+    is_demo: bool,
+) -> None:
+    headers, colleague_id = await _admin_with_colleague(bot_session, is_demo=is_demo)
+    requests: dict[str, tuple[str, str, object]] = {
+        "settings": (
+            "PUT",
+            "/api/admin/org/settings",
+            _settings("+79990000000", "").model_dump(mode="json"),
+        ),
+        "member": ("DELETE", f"/api/admin/org/members/{colleague_id}", None),
+        "category_executor": (
+            "PUT",
+            "/api/admin/org/category-executors",
+            {"category": RequestCategory.LEAK, "executor_user_id": None},
+        ),
+        "reception": ("PUT", "/api/admin/reception/windows", {"windows": []}),
+    }
+    method, url, body = requests[action]
+
+    async with _client() as client:
+        response = await client.request(method, url, headers=headers, json=body)
+
+    if is_demo:
+        assert response.status_code == 403
+        assert response.json()["error"]["detail"] == DEMO_LOCKED
+    else:
+        assert response.status_code == 200
+
+
+@pytest.mark.parametrize("is_demo", [True, False], ids=["demo", "live"])
+async def test_a_demo_org_offers_no_one_to_remove(
+    bot_session: AsyncSession,
+    is_demo: bool,
+) -> None:
+    headers, colleague_id = await _admin_with_colleague(bot_session, is_demo=is_demo)
+
+    async with _client() as client:
+        response = await client.get("/api/admin/org/members", headers=headers)
+
+    can_remove = {item["user_id"]: item["can_remove"] for item in response.json()}
+    assert can_remove[colleague_id] is not is_demo
+
+
+@pytest.mark.parametrize(
+    ("is_demo", "own_invite", "revoked"),
+    [(True, False, False), (True, True, True), (False, False, True)],
+    ids=["demo-foreign", "demo-own", "live-foreign"],
+)
+async def test_a_demo_org_admin_revokes_only_own_invites(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    is_demo: bool,
+    own_invite: bool,
+    revoked: bool,
+) -> None:
+    await _mark_demo(session, own, is_demo=is_demo)
+    colleague_id = await add_user(session)
+    orgs_service = make_orgs_service(session)
+    invite = await orgs_service.create_invite(
+        own.org_id,
+        own.user_id if own_invite else colleague_id,
+        OrgRole.ADMIN,
+        OrgRole.EMPLOYEE,
+        expires_in_hours=72,
+        max_activations=1,
+    )
+
+    if revoked:
+        await orgs_service.revoke_invite(own.org_id, invite.code, own.user_id)
+    else:
+        with pytest.raises(NotEnoughRights, match=DEMO_LOCKED):
+            await orgs_service.revoke_invite(own.org_id, invite.code, own.user_id)
+
+    stored = await InvitesRepo(session).get(invite.code)
+    assert stored is not None
+    assert (stored.revoked_at is not None) is revoked
+
+
+@pytest.mark.parametrize("appoint", [True, False], ids=["replace", "remove"])
+@pytest.mark.parametrize(
+    ("sign", "spared"),
+    [(1, True), (-1, False)],
+    ids=["reviewer", "seeded"],
+)
+async def test_a_demo_org_keeps_a_reviewer_chairman(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    appoint: bool,
+    sign: int,
+    spared: bool,
+) -> None:
+    own = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    await _mark_demo(session, own, is_demo=True)
+    successor = await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    holder = User(max_user_id=MaxUserId(sign * secrets.randbits(40)), name="Сосед")
+    session.add(holder)
+    await session.flush()
+    chairman = await add_resident(
+        session,
+        holder.id,
+        own.house_id,
+        own.flat_id,
+        is_chairman=True,
+    )
+    target = successor if appoint else chairman
+    moderation = make_moderation_service(session)
+
+    if spared:
+        with pytest.raises(NotEnoughRights, match=SPARE_CHAIRMAN):
+            await moderation.set_chairman(
+                own.org_id,
+                target.id,
+                value=appoint,
+                by=own.user_id,
+            )
+    else:
+        await moderation.set_chairman(
+            own.org_id,
+            target.id,
+            value=appoint,
+            by=own.user_id,
+        )
+
+    await session.refresh(chairman)
+    assert chairman.is_chairman is spared
+
+
+async def _admin_with_colleague(
+    session: AsyncSession,
+    *,
+    is_demo: bool,
+) -> tuple[dict[str, str], UserId]:
+    org = Organization(
+        name=f"УК {secrets.token_hex(4)}",
+        inn=secrets.token_hex(6),
+        phone="+70000000000",
+        address="Тестовая область, Тестоград, Тестовая, 1",
+        registered_at=datetime.now(UTC),
+        timezone="Europe/Moscow",
+        is_demo=is_demo,
+    )
+    session.add(org)
+    await session.flush()
+    org_id = org.id
+    headers = await _staff_headers(session, org_id, OrgRole.ADMIN)
+    colleague_id = await add_user(session)
+    session.add(OrgMember(org_id=org_id, user_id=colleague_id, role=OrgRole.EMPLOYEE))
+    await session.commit()
+    return headers, colleague_id
+
+
+def _client() -> AsyncClient:
+    return AsyncClient(
+        transport=ASGITransport(app=app_factory(make_bot_config(), empty_bot_setup())),
+        base_url="http://test",
+    )
+
+
+async def _mark_demo(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    *,
+    is_demo: bool,
+) -> None:
+    org = await OrgsRepo(session).get(own.org_id)
+    assert org is not None
+    org.is_demo = is_demo
+    await session.flush()

@@ -12,10 +12,12 @@ import {
   useOrgExecutors,
   useSetCategoryExecutor,
 } from "../model/use-org";
+import { DEMO_LOCKED, type SettingsLock } from "../domain/roles";
 
 import styles from "./category-executors.module.css";
 
-export const CategoryExecutors = ({ readOnly }: { readOnly: boolean }) => {
+export const CategoryExecutors = ({ lock }: { lock: SettingsLock }) => {
+  const readOnly = lock !== null;
   const categories = useRequestCategories();
   const executors = useOrgExecutors();
   const chosen = useCategoryExecutors();
@@ -143,9 +145,11 @@ export const CategoryExecutors = ({ readOnly }: { readOnly: boolean }) => {
           </Typography.Text>
         )}
         <Typography.Text variant="description" color="secondary">
-          {readOnly
-            ? "Исполнителей по категориям назначают создатель и администраторы организации"
-            : "Новая заявка категории сразу уходит выбранному исполнителю в MAX. Если он откажется, заявку переназначает диспетчер"}
+          {lock === "demo"
+            ? DEMO_LOCKED
+            : readOnly
+              ? "Исполнителей по категориям назначают создатель и администраторы организации"
+              : "Новая заявка категории сразу уходит выбранному исполнителю в MAX. Если он откажется, заявку переназначает диспетчер"}
         </Typography.Text>
       </section>
     </Flex>

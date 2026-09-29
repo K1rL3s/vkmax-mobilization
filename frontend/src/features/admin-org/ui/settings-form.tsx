@@ -12,13 +12,14 @@ import { useWatch } from "react-hook-form";
 import { plural } from "@/shared/lib/format";
 
 import { orgFormConstraints as limits } from "../domain/org-form-constraints";
+import type { SettingsLock } from "../domain/roles";
 import { useSettingsForm, type OrgSettings } from "../model/use-settings-form";
 
 import styles from "./settings-form.module.css";
 
 type SettingsFormProps = {
   settings: OrgSettings;
-  readOnly: boolean;
+  lock: SettingsLock;
 };
 
 type Watched = ReturnType<typeof useSettingsForm>["watched"];
@@ -101,8 +102,9 @@ const NoteCounter = ({
   );
 };
 
-export const SettingsForm = ({ settings, readOnly }: SettingsFormProps) => {
-  const form = useSettingsForm(settings, readOnly);
+export const SettingsForm = ({ settings, lock }: SettingsFormProps) => {
+  const readOnly = lock !== null;
+  const form = useSettingsForm(settings, lock);
   const { errors, register, watched } = form;
   const number = { valueAsNumber: true } as const;
 

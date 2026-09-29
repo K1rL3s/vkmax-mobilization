@@ -28,6 +28,7 @@ from zheka.infra.database.repos.users import UsersRepo
 
 DEMO_INNS = ("9900000001", "9900000010", "9900000020", "9900000030", "9900000040")
 DEMO_INN = DEMO_INNS[0]
+DEMO_LOCKED = "Демо-УК общая для всех проверяющих, это действие в ней отключено"
 NOT_SEEDED = "Демо-доступ еще не готов: демо-данные не загружены"
 API_CHECKER_DEMO_NUMBER = 5
 CHECKER_ONLY = (

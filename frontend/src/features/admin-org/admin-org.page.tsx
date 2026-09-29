@@ -61,6 +61,7 @@ const AdminOrgPage = () => {
 
   const org = card.data;
   const isDemo = org?.is_demo ?? currentOrg?.is_demo;
+  const lock = isDemo ? "demo" : readOnly ? "role" : null;
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -120,9 +121,9 @@ const AdminOrgPage = () => {
         </Flex>
       )}
 
-      <SettingsForm settings={settings.data} readOnly={readOnly} />
+      <SettingsForm settings={settings.data} lock={lock} />
 
-      <CategoryExecutors readOnly={readOnly} />
+      <CategoryExecutors lock={lock} />
 
       {!readOnly && <MembersSection />}
     </Panel>

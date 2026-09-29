@@ -11,6 +11,7 @@ from zheka.core.enums import OrgRole
 from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import OrgId, UserId
 from zheka.core.models import User
+from zheka.core.services.demo import DEMO_LOCKED
 from zheka.infra.database.models import OrgMember
 from zheka.infra.database.repos.orgs import OrgsRepo
 
@@ -75,3 +76,12 @@ async def require_admin_org(current_org: CurrentOrgDep) -> CurrentOrg:
 
 
 AdminOrgDep = Annotated[CurrentOrg, Depends(require_admin_org)]
+
+
+async def require_live_org(current_org: AdminOrgDep) -> CurrentOrg:
+    if current_org.is_demo:
+        raise NotEnoughRights(DEMO_LOCKED)
+    return current_org
+
+
+LiveAdminOrgDep = Annotated[CurrentOrg, Depends(require_live_org)]

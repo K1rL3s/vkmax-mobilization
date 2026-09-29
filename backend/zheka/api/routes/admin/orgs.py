@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from maxo import Bot
 from maxo.utils.deeplink import create_start_link
 
-from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep
+from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep, LiveAdminOrgDep
 from zheka.api.schemas.base import OkResponse
 from zheka.api.schemas.orgs import (
     CategoryExecutorItem,
@@ -41,9 +41,13 @@ async def get_org_settings(
     return OrgSettingsResponse.of(await orgs_service.settings(current_org.org_id))
 
 
-@router.put("/admin/org/settings", summary="Изменить настройки организации")
+@router.put(
+    "/admin/org/settings",
+    summary="Изменить настройки организации",
+    description="В демо-УК - 403",
+)
 async def update_org_settings(
-    current_org: AdminOrgDep,
+    current_org: LiveAdminOrgDep,
     orgs_service: FromDishka[OrgsService],
     body: UpdateOrgSettingsRequest,
 ) -> OrgSettingsResponse:
@@ -72,16 +76,21 @@ async def list_org_members(
     return [
         OrgMemberItem.of(
             view,
-            can_remove=current_org.role.can_remove_member(view.member.role),
+            can_remove=not current_org.is_demo
+            and current_org.role.can_remove_member(view.member.role),
         )
         for view in members
     ]
 
 
-@router.delete("/admin/org/members/{user_id}", summary="Исключить сотрудника")
+@router.delete(
+    "/admin/org/members/{user_id}",
+    summary="Исключить сотрудника",
+    description="В демо-УК - 403",
+)
 async def remove_org_member(
     user_id: UserId,
-    current_org: AdminOrgDep,
+    current_org: LiveAdminOrgDep,
     orgs_service: FromDishka[OrgsService],
 ) -> OkResponse:
     await orgs_service.remove_member(current_org.org_id, current_org.role, user_id)
@@ -125,13 +134,17 @@ async def create_org_invite(
     )
 
 
-@router.delete("/admin/org/invites/{code}", summary="Отозвать приглашение")
+@router.delete(
+    "/admin/org/invites/{code}",
+    summary="Отозвать приглашение",
+    description="В демо-УК - 403 на чужое приглашение",
+)
 async def revoke_org_invite(
     code: str,
     current_org: AdminOrgDep,
     orgs_service: FromDishka[OrgsService],
 ) -> OkResponse:
-    await orgs_service.revoke_invite(current_org.org_id, code)
+    await orgs_service.revoke_invite(current_org.org_id, code, current_org.user_id)
     return OkResponse()
 
 
@@ -151,9 +164,10 @@ async def list_category_executors(
 @router.put(
     "/admin/org/category-executors",
     summary="Назначить исполнителя по умолчанию для категории",
+    description="В демо-УК - 403",
 )
 async def set_category_executor(
-    current_org: AdminOrgDep,
+    current_org: LiveAdminOrgDep,
     category_executors_service: FromDishka[CategoryExecutorsService],
     body: SetCategoryExecutorRequest,
 ) -> list[CategoryExecutorItem]:

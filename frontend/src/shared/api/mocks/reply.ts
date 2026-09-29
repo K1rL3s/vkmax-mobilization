@@ -135,3 +135,7 @@ export const houseOf = (request: MockHttpRequest): number | null =>
   number(request.headers["x-house-id"]) ??
   residencies().at(-1)?.house_id ??
   null;
+
+export const demoLocked = forbidden(
+  "Демо-УК общая для всех проверяющих, это действие в ней отключено",
+);

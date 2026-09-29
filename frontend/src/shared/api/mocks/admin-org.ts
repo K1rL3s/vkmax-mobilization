@@ -1,7 +1,14 @@
 import type { components } from "../schema/generated";
 
-import { badRequest, endpoint, forbidden, notFound, ok } from "./reply";
-import { hours, user } from "./state";
+import {
+  badRequest,
+  demoLocked,
+  endpoint,
+  forbidden,
+  notFound,
+  ok,
+} from "./reply";
+import { hours, user, ZHILSERVIS } from "./state";
 
 type Schemas = components["schemas"];
 
@@ -114,7 +121,7 @@ const state = {
 
 const memberItem = (item: MockMember): Schemas["OrgMemberItem"] => ({
   ...item,
-  can_remove: canRemove(item.role),
+  can_remove: !ZHILSERVIS.is_demo && canRemove(item.role),
 });
 
 const inviteItem = (item: MockInvite): Schemas["OrgInviteItem"] => ({
@@ -203,13 +210,17 @@ export const adminOrgConfigs = [
       address: "Казань, ул. Баумана, 10",
       reception_note: state.settings.reception_note,
       registered_at: "2026-06-01T09:00:00Z",
-      is_demo: true,
+      is_demo: ZHILSERVIS.is_demo,
       houses_count: 3,
       members_count: state.members.length,
     } satisfies Schemas["OrgCard"]),
   ),
   endpoint("get", "/admin/org/settings", () => ok(state.settings)),
   endpoint("put", "/admin/org/settings", (request) => {
+    if (ZHILSERVIS.is_demo) {
+      return demoLocked;
+    }
+
     const error = settingsError(request.body);
 
     if (error) {
@@ -234,6 +245,10 @@ export const adminOrgConfigs = [
     ok(state.members.map(memberItem)),
   ),
   endpoint("delete", "/admin/org/members/:user_id", (request) => {
+    if (ZHILSERVIS.is_demo) {
+      return demoLocked;
+    }
+
     const userId = Number(request.params.user_id);
     const found = state.members.find((item) => item.user_id === userId);
 
@@ -305,6 +320,10 @@ export const adminOrgConfigs = [
     ok(state.categoryExecutors),
   ),
   endpoint("put", "/admin/org/category-executors", (request) => {
+    if (ZHILSERVIS.is_demo) {
+      return demoLocked;
+    }
+
     const body = request.body as Schemas["SetCategoryExecutorRequest"];
     const others = state.categoryExecutors.filter(
       (item) => item.category !== body.category,

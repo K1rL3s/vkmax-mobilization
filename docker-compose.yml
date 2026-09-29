@@ -6,6 +6,8 @@ x-build: &build
   build:
     context: ./backend
     dockerfile: Dockerfile
+    args:
+      BUILD_COMMIT: ${BUILD_COMMIT:-dev}
 
 x-common: &common
   restart: unless-stopped

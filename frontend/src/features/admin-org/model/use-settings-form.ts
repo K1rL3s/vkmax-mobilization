@@ -10,6 +10,7 @@ import {
   isSiteAddress,
   orgFormConstraints as limits,
 } from "../domain/org-form-constraints";
+import { DEMO_LOCKED, type SettingsLock } from "../domain/roles";
 import { useSaveSettings } from "./use-org";
 
 export type OrgSettings = components["schemas"]["OrgSettingsResponse"];
@@ -85,8 +86,9 @@ const draftOf = (settings: OrgSettings): SettingsDraft => ({
   site: settings.site ?? "",
 });
 
-export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
+export const useSettingsForm = (settings: OrgSettings, lock: SettingsLock) => {
   const save = useSaveSettings();
+  const readOnly = lock !== null;
 
   const form = useForm<SettingsDraft>({
     resolver: zodResolver(settingsSchema),
@@ -128,15 +130,18 @@ export const useSettingsForm = (settings: OrgSettings, readOnly: boolean) => {
     errors: form.formState.errors,
     watched: { alwaysOpen, dayFrom, dayTo, threshold, windowHours },
     canSave: form.formState.isDirty && form.formState.isValid && !readOnly,
-    hint: readOnly
-      ? "Настройки меняют создатель и администраторы организации"
-      : !form.formState.isValid
-        ? "Исправьте поля, отмеченные красным"
-        : form.formState.isDirty
-          ? null
-          : save.isSuccess
-            ? "Настройки сохранены"
-            : "Кнопка станет активной, когда вы что-нибудь измените",
+    hint:
+      lock === "demo"
+        ? DEMO_LOCKED
+        : readOnly
+          ? "Настройки меняют создатель и администраторы организации"
+          : !form.formState.isValid
+            ? "Исправьте поля, отмеченные красным"
+            : form.formState.isDirty
+              ? null
+              : save.isSuccess
+                ? "Настройки сохранены"
+                : "Кнопка станет активной, когда вы что-нибудь измените",
     isSaving: save.isPending,
     saveError:
       save.isError &&

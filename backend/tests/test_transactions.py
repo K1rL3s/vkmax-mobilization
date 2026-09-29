@@ -215,7 +215,7 @@ async def test_healthcheck_still_answers(probe_client: AsyncClient) -> None:
     response = await probe_client.get("/healthcheck")
 
     assert response.status_code == 200
-    assert response.json() == {"ok": True}
+    assert response.json()["ok"] is True
 
 
 async def test_successful_request_delivers_exactly_once(

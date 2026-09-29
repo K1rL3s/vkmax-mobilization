@@ -54,3 +54,6 @@ COPY ./migrations ./migrations
 COPY ./zheka ./zheka
 
 RUN python -O -m compileall -q ./zheka ./migrations
+
+ARG BUILD_COMMIT=dev
+ENV BUILD_COMMIT=$BUILD_COMMIT

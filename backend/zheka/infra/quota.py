@@ -49,3 +49,12 @@ class HouseLookupQuota(Quota):
     __slots__ = ()
 
     calls = HOUSE_LOOKUP_CALLS
+
+
+VERIFY_CALLS = 10
+
+
+class VerifyQuota(Quota):
+    __slots__ = ()
+
+    calls = VERIFY_CALLS

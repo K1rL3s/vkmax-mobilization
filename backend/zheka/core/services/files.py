@@ -21,6 +21,10 @@ _SUFFIX_BY_MIME = {
     "video/mp4": ".mp4",
     "video/quicktime": ".mov",
 }
+_HEIC_BRANDS = frozenset(
+    (b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1"),
+)
+_UNSUPPORTED = "Поддерживаются только изображения и видео MP4 или MOV"
 FILE_URL_TTL = timedelta(hours=1)
 
 _SUFFIX_PATTERN = "|".join(re.escape(suffix) for suffix in _SUFFIX_BY_MIME.values())
@@ -83,22 +87,24 @@ class FilesService:
     ) -> str:
         suffix = _SUFFIX_BY_MIME.get(content_type)
         if suffix is None:
-            raise InvalidRequest(
-                "Поддерживаются только изображения и видео MP4 или MOV",
-            )
+            raise InvalidRequest(_UNSUPPORTED)
 
-        name = f"{uuid4().hex}{suffix}"
-        destination = self.path_of(name)
+        destination = self.path_of(f"{uuid4().hex}{suffix}")
+        video = self.is_video(suffix)
         try:
-            with destination.open("wb") as out:
-                video = self.is_video(name)
+            with destination.open("w+b") as out:
                 limit = self._max_video_mb if video else self._max_size_mb
                 writer = _CappedWriter(out, limit, "Видео" if video else "Файл")
                 await download(cast("BinaryIO", writer))
+                out.seek(0)
+                actual = _suffix_of(out.read(12))
         except BaseException:
             destination.unlink(missing_ok=True)
             raise
-        return name
+        if actual is None or self.is_video(actual) != video:
+            destination.unlink()
+            raise InvalidRequest(_UNSUPPORTED)
+        return destination.rename(destination.with_suffix(actual)).name
 
     def remove_orphans(self, referenced: Container[str], before: datetime) -> int:
         removed = 0
@@ -129,3 +135,17 @@ class _CappedWriter:
 
     def flush(self) -> None:
         self._out.flush()
+
+
+def _suffix_of(head: bytes) -> str | None:
+    if head.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if head.startswith(b"RIFF") and head[8:12] == b"WEBP":
+        return ".webp"
+    if head[4:8] != b"ftyp":
+        return None
+    if head[8:12] in _HEIC_BRANDS:
+        return ".heic"
+    return ".mov" if head[8:12] == b"qt  " else ".mp4"

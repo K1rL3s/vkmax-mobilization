@@ -1,7 +1,7 @@
 import type { components } from "../schema/generated";
 
 import { houseResidents } from "./admin-houses";
-import { badRequest, endpoint, notFound, ok } from "./reply";
+import { badRequest, demoLocked, endpoint, notFound, ok } from "./reply";
 import {
   accessRequestGrid,
   createAccessRequest,
@@ -11,6 +11,7 @@ import {
   receptionWindows,
   setReceptionWindows,
   todayIso,
+  ZHILSERVIS,
 } from "./state";
 
 type Schemas = components["schemas"];
@@ -79,6 +80,10 @@ export const adminReceptionConfigs = [
     ok(receptionWindows(ORG_ID)),
   ),
   endpoint("put", "/admin/reception/windows", (request) => {
+    if (ZHILSERVIS.is_demo) {
+      return demoLocked;
+    }
+
     const body = request.body as Schemas["SetReceptionWindowsRequest"];
     const invalid = body.windows.map(windowError).find(Boolean);
 

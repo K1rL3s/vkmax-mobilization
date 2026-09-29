@@ -7,6 +7,7 @@ from sqlalchemy import URL
 from zheka.base import ZhekaType
 
 YANDEX_DEFAULT_MODEL = "yandexgpt-5-lite"
+DEV_BUILD_COMMIT = "dev"
 REGISTER_CODE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
@@ -28,6 +29,7 @@ class LogConfig(ZhekaType):
 class ApiConfig(ZhekaType):
     cors: tuple[str, ...]
     test_token: str | None = None
+    build_commit: str = DEV_BUILD_COMMIT
 
 
 class DbConfig(ZhekaType):
@@ -113,6 +115,7 @@ def load_config(env_path: str | None = None) -> Config:
         api=ApiConfig(
             cors=tuple(env.list("API_CORS", [])),
             test_token=env.str("API_TEST_TOKEN", "") or None,
+            build_commit=env.str("BUILD_COMMIT", DEV_BUILD_COMMIT),
         ),
         db=DbConfig(
             host=env.str("POSTGRES_HOST"),

@@ -3,7 +3,12 @@ from zheka.api.dependencies.current_account import (
     CurrentAccountDep,
     RequireConsentDep,
 )
-from zheka.api.dependencies.current_org import AdminOrgDep, CurrentOrg, CurrentOrgDep
+from zheka.api.dependencies.current_org import (
+    AdminOrgDep,
+    CurrentOrg,
+    CurrentOrgDep,
+    LiveAdminOrgDep,
+)
 from zheka.api.dependencies.current_residency import (
     CurrentResidency,
     CurrentResidencyDep,
@@ -24,6 +29,7 @@ __all__ = (
     "CurrentResidencyDep",
     "CurrentUserDep",
     "IdempotencyDep",
+    "LiveAdminOrgDep",
     "RequireConsentDep",
     "ResidencyForFlatDep",
     "ResidencyForFlatHouseDep",

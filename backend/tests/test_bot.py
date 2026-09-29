@@ -4941,7 +4941,9 @@ async def test_video_from_both_draft_windows_reaches_the_created_request(
             urls=VideoUrls(mp4_480=RESULT_URL),
         ),
     )
-    download = AsyncMock(side_effect=lambda _url, out, **_: out.write(b"video"))
+    download = AsyncMock(
+        side_effect=lambda _url, out, **_: out.write(b"\x00\x00\x00\x18ftypmp42"),
+    )
     monkeypatch.setattr(fake_bot, "get_video_attachment_details", details)
     monkeypatch.setattr(fake_bot, "download", download)
     await _run(task_broker, create_bot_request, **kwargs)

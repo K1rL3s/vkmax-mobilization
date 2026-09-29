@@ -17,13 +17,17 @@ from zheka.core.services.files import FilesService
 from zheka.infra.quota import UPLOAD_CALLS, UploadQuota
 
 _TOKEN = "test-max-token"  # noqa: S105
+_JPEG = b"\xff\xd8\xff\xe0"
+_PNG = b"\x89PNG\r\n\x1a\n"
+_MP4 = b"\x00\x00\x00\x18ftypmp42"
+_MOV = b"\x00\x00\x00\x14ftypqt  "
 
 
 class _FakeUpload:
-    def __init__(self, content_type: str, size: int) -> None:
+    def __init__(self, content_type: str, size: int, head: bytes = _JPEG) -> None:
         self.content_type = content_type
         self.size = size
-        self._buffer = b"x" * size
+        self._buffer = head + b"x" * (size - len(head))
         self.total_read = 0
 
     async def read(self, size: int) -> bytes:
@@ -62,7 +66,7 @@ async def test_save_writes_the_file_under_its_generated_name(tmp_path: Path) -> 
 
     name = await service.save(upload)  # type: ignore[arg-type]
 
-    assert service.path_of(name).read_bytes() == b"x" * 1024
+    assert service.path_of(name).read_bytes() == _JPEG + b"x" * 1020
     assert name.endswith(".jpg")
 
 
@@ -127,16 +131,17 @@ async def test_uploads_past_the_hourly_quota_are_refused(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
-    ("mime", "suffix"),
-    [("video/mp4", ".mp4"), ("video/quicktime", ".mov")],
+    ("mime", "head", "suffix"),
+    [("video/mp4", _MP4, ".mp4"), ("video/quicktime", _MOV, ".mov")],
 )
 async def test_video_has_its_own_limit_and_signed_type(
     tmp_path: Path,
     mime: str,
+    head: bytes,
     suffix: str,
 ) -> None:
     service = _make_service(tmp_path, max_size_mb=1)
-    upload = _FakeUpload(mime, 50 * 1024 * 1024)
+    upload = _FakeUpload(mime, 50 * 1024 * 1024, head)
     ref = await upload_file(
         CurrentAccount(user_id=UserId(1), consent_at=None),
         upload,  # type: ignore[arg-type]
@@ -167,7 +172,7 @@ async def test_avi_is_rejected_before_download(tmp_path: Path) -> None:
 async def test_signed_video_supports_seeking(tmp_path: Path) -> None:
 
     files = _make_service(tmp_path, 10)
-    name = await files.save(_FakeUpload("video/mp4", 1024))  # type: ignore[arg-type]
+    name = await files.save(_FakeUpload("video/mp4", 1024, _MP4))  # type: ignore[arg-type]
     app = FastAPI()
 
     @app.get("/files/{name}")
@@ -186,3 +191,49 @@ async def test_signed_video_supports_seeking(tmp_path: Path) -> None:
     assert response.headers["content-range"] == "bytes 100-199/1024"
     assert response.headers["content-type"] == "video/mp4"
     assert response.content == b"x" * 100
+
+
+@pytest.mark.parametrize(
+    ("content_type", "head", "suffix"),
+    [
+        ("image/jpeg", _PNG, ".png"),
+        ("image/jpeg", b"\x00\x00\x00\x18ftypheic", ".heic"),
+        ("image/png", b"RIFF\x10\x00\x00\x00WEBPVP8 ", ".webp"),
+        ("video/mp4", _MOV, ".mov"),
+    ],
+)
+async def test_save_names_the_file_by_its_content(
+    tmp_path: Path,
+    content_type: str,
+    head: bytes,
+    suffix: str,
+) -> None:
+    service = _make_service(tmp_path, max_size_mb=1)
+
+    name = await service.save(_FakeUpload(content_type, 64, head))  # type: ignore[arg-type]
+
+    assert name.endswith(suffix)
+    assert [path.name for path in tmp_path.iterdir()] == [name]  # noqa: ASYNC240
+
+
+@pytest.mark.parametrize(
+    ("content_type", "head"),
+    [
+        ("image/jpeg", b"<html><script>"),
+        ("image/jpeg", _MP4),
+        ("video/mp4", _JPEG),
+        ("image/png", b""),
+    ],
+    ids=["html-as-jpeg", "video-as-photo", "photo-as-video", "empty"],
+)
+async def test_save_refuses_content_that_is_not_the_declared_kind(
+    tmp_path: Path,
+    content_type: str,
+    head: bytes,
+) -> None:
+    service = _make_service(tmp_path, max_size_mb=1)
+
+    with pytest.raises(InvalidRequest, match="Поддерживаются только"):
+        await service.save(_FakeUpload(content_type, len(head), head))  # type: ignore[arg-type]
+
+    assert list(tmp_path.iterdir()) == []  # noqa: ASYNC240

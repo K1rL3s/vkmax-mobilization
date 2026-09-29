@@ -77,7 +77,7 @@ const MemberRow = ({
 
 export const MembersSection = () => {
   const navigate = useNavigate();
-  const { session } = useSession();
+  const { session, currentOrg } = useSession();
   const members = useOrgMembers();
   const remove = useRemoveMember();
   const confirm = useConfirm<OrgMember>();
@@ -130,6 +130,13 @@ export const MembersSection = () => {
         </Typography.Text>
 
         {content()}
+
+        {currentOrg?.is_demo && (
+          <Typography.Text variant="description" color="secondary">
+            В демо-УК команда общая для всех проверяющих, исключить никого
+            нельзя
+          </Typography.Text>
+        )}
 
         <div className={styles.Panel}>
           <CellSimple

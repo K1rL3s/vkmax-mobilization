@@ -35,7 +35,12 @@ from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
 from zheka.core.services.retention import RetentionService
-from zheka.infra.quota import HouseAddQuota, HouseLookupQuota, UploadQuota
+from zheka.infra.quota import (
+    HouseAddQuota,
+    HouseLookupQuota,
+    UploadQuota,
+    VerifyQuota,
+)
 
 
 class ServicesProvider(Provider):
@@ -79,6 +84,7 @@ class ServicesProvider(Provider):
     upload_quota = provide(UploadQuota, scope=Scope.APP)
     house_add_quota = provide(HouseAddQuota, scope=Scope.APP)
     house_lookup_quota = provide(HouseLookupQuota, scope=Scope.APP)
+    verify_quota = provide(VerifyQuota, scope=Scope.APP)
 
     @provide(scope=Scope.APP)
     def files_service(self, config: FilesConfig, max_config: MaxConfig) -> FilesService:
