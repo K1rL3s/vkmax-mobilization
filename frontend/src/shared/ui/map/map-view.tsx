@@ -20,7 +20,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 
 import { cn } from "@/shared/lib/css";
 
-import { resolveBasemap, styleOf } from "./basemaps";
+import { resolveBasemap, restyleOf, styleOf } from "./basemaps";
 import type { MapSettings } from "./map-settings";
 import { hasWebGL, isFatalMapError, proxiedUrl } from "./tiles";
 import { type MapTone, TONE_COLORS } from "./tones";
@@ -566,7 +566,7 @@ export const MapViewComponent = ({
   }, [supported, initial]);
 
   useEffect(() => {
-    map?.setStyle(styleOf(basemap));
+    map?.setStyle(styleOf(basemap), { transformStyle: restyleOf(basemap) });
   }, [map, basemap]);
 
   useEffect(() => {

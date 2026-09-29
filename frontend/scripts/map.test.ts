@@ -10,12 +10,16 @@ const { proxiedUrl, isFatalMapError, hasWebGL } = (await import(tilesUrl)) as {
   isFatalMapError: (event: object, styled: boolean) => boolean;
   hasWebGL: () => boolean;
 };
-const { resolveBasemap, styleOf } = (await import(basemapsUrl)) as {
+const { resolveBasemap, restyleOf, styleOf } = (await import(basemapsUrl)) as {
   resolveBasemap: (
     choice: string,
     scheme: "light" | "dark",
   ) => { id: string; kind: string };
   styleOf: (basemap: unknown) => unknown;
+  restyleOf: (basemap: unknown) => (
+    previous: undefined,
+    next: { layers: { id: string; paint?: object }[] },
+  ) => { layers: { id: string; paint?: object }[] };
 };
 
 const ORIGIN = "https://vkmax.k1rles.ru";
@@ -40,7 +44,8 @@ test("leaves other urls alone", () => {
 
 test("auto follows the MAX colour scheme", () => {
   assert.equal(resolveBasemap("auto", "light").id, "light");
-  assert.equal(resolveBasemap("auto", "dark").id, "dark");
+  assert.equal(resolveBasemap("auto", "dark").id, "grey");
+  assert.equal(resolveBasemap("dark", "dark").id, "dark");
   assert.equal(resolveBasemap("osm", "dark").id, "osm");
 });
 
@@ -78,4 +83,25 @@ test("the WebGL probe gives its context back so it cannot evict the map", () => 
 
   assert.equal(hasWebGL(), true);
   assert.equal(released, 1);
+});
+
+test("the grey basemap repaints the dark style and keeps the rest", () => {
+  const next = {
+    layers: [
+      { id: "background", paint: { "background-color": "rgb(12,12,12)" } },
+      { id: "unknown", paint: { "fill-color": "#123456" } },
+    ],
+  };
+
+  assert.deepEqual(
+    restyleOf(resolveBasemap("grey", "dark"))(undefined, next).layers,
+    [
+      { id: "background", paint: { "background-color": "#2b2b2b" } },
+      { id: "unknown", paint: { "fill-color": "#123456" } },
+    ],
+  );
+  assert.equal(
+    restyleOf(resolveBasemap("dark", "dark"))(undefined, next),
+    next,
+  );
 });

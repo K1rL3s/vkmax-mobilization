@@ -1,7 +1,8 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 import { Button, CellSimple, Flex, Switch, Typography } from "@maxhub/max-ui";
 
 import { cn } from "@/shared/lib/css";
+import { BottomSheet } from "@/shared/ui/bottom-sheet";
 
 import { BASEMAPS } from "./basemaps";
 import type { MapSettings } from "./map-settings";
@@ -25,21 +26,13 @@ export const MapSettingsSheet = ({
   sizeOption = false,
   children,
 }: MapSettingsSheetProps) => {
-  const dialog = useRef<HTMLDialogElement>(null);
   const raster = BASEMAPS.some(
     (basemap) => basemap.id === settings.basemap && basemap.kind === "raster",
   );
   const choices = [
-    { id: "auto", label: "Как в MAX", swatch: ["#f4f3ef", "#1c1f24"] },
+    { id: "auto", label: "Как в MAX", swatch: ["#f4f3ef", "#2b2b2b"] },
     ...BASEMAPS,
   ] as const;
-
-  useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    if (open && !element.open) element.showModal();
-    if (!open && element.open) element.close();
-  }, [open]);
 
   const toggle = (
     key: "threeD" | "cluster" | "labels" | "sizeByCount",
@@ -65,7 +58,7 @@ export const MapSettingsSheet = ({
   );
 
   return (
-    <dialog ref={dialog} className={styles.Sheet} onClose={onClose}>
+    <BottomSheet isOpen={open} onClose={onClose} className={styles.Sheet}>
       <Flex align="stretch" direction="column" gapY={12}>
         <Typography.Text asChild variant="title" color="primary">
           <h2 className={styles.Title}>Подложка</h2>
@@ -126,15 +119,10 @@ export const MapSettingsSheet = ({
           </a>
         </Typography.Text>
 
-        <Button
-          size="large"
-          stretched
-          variant="secondary"
-          onClick={() => dialog.current?.close()}
-        >
+        <Button size="large" stretched variant="secondary" onClick={onClose}>
           Готово
         </Button>
       </Flex>
-    </dialog>
+    </BottomSheet>
   );
 };

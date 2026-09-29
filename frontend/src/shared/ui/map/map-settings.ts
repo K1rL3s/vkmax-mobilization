@@ -3,7 +3,16 @@ import { z } from "zod";
 
 const settingsSchema = z.object({
   basemap: z
-    .enum(["auto", "light", "bright", "liberty", "dark", "fiord", "osm"])
+    .enum([
+      "auto",
+      "light",
+      "bright",
+      "liberty",
+      "grey",
+      "dark",
+      "fiord",
+      "osm",
+    ])
     .catch("auto"),
   threeD: z.boolean().catch(false),
   cluster: z.boolean().catch(true),

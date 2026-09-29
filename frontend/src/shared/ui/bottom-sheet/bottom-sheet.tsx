@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "@/shared/lib/css";
 
@@ -18,13 +18,49 @@ export const BottomSheet = ({
   className,
 }: BottomSheetProps) => {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [shown, setShown] = useState(children);
+
+  if (isOpen && shown !== children) {
+    setShown(children);
+  }
 
   useEffect(() => {
-    if (isOpen) {
-      dialog.current?.showModal();
-    } else {
-      dialog.current?.close();
+    const element = dialog.current;
+
+    if (!element) {
+      return;
     }
+
+    if (isOpen) {
+      delete element.dataset.closing;
+      element.inert = false;
+      if (!element.open) {
+        element.showModal();
+      }
+      return;
+    }
+
+    if (!element.open) {
+      return;
+    }
+
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      element.close();
+      return;
+    }
+
+    const finish = (event: AnimationEvent) => {
+      if (event.target === element) {
+        delete element.dataset.closing;
+        element.close();
+      }
+    };
+
+    element.dataset.closing = "";
+    element.inert = true;
+    element.addEventListener("animationend", finish);
+
+    return () => element.removeEventListener("animationend", finish);
   }, [isOpen]);
 
   return (
@@ -32,8 +68,12 @@ export const BottomSheet = ({
       ref={dialog}
       className={cn(styles.BottomSheet, className)}
       onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
     >
-      {children}
+      {isOpen ? children : shown}
     </dialog>
   );
 };
