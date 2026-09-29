@@ -1,10 +1,12 @@
 .Stars {
   display: flex;
-  gap: 8px;
+  gap: 12px;
 }
 
 .Button {
-  padding: 0;
+  display: flex;
+  margin: -6px;
+  padding: 6px;
   border: none;
   background: none;
   cursor: pointer;

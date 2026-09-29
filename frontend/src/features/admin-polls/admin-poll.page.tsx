@@ -32,12 +32,12 @@ const AdminPollPage = () => {
   return (
     <Panel className={styles.Page} mode="secondary">
       <div className={styles.Content}>
-        <Flex align="stretch" direction="column" gapY={6}>
+        <Flex align="stretch" direction="column" gapY={4}>
           <Flex align="flex-start" gap={8}>
             <Typography.Text
               asChild
               className={styles.Grow}
-              variant="title"
+              variant="header"
               color="primary"
             >
               <h1 className={styles.Title}>{poll.title}</h1>

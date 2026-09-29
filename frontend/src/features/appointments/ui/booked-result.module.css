@@ -2,19 +2,13 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   padding: 16px 16px 24px;
 }
 
 .Hero {
   padding-top: 8px;
   text-align: center;
-}
-
-.Check {
-  width: 64px;
-  height: 64px;
-  border-radius: 32px;
 }
 
 .Title {
@@ -29,7 +23,7 @@
 
 .Icon {
   flex-shrink: 0;
-  color: var(--icon-secondary);
+  color: var(--icon-primary);
 }
 
 .Grow {
@@ -42,5 +36,5 @@
 }
 
 .Footer {
-  padding: 12px 16px;
+  padding: 12px 16px 24px;
 }

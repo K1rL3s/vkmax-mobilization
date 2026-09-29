@@ -8,3 +8,22 @@
 :where(:focus) {
   outline: none;
 }
+
+:root[data-text-size="large"] {
+  font-size: 112.5%;
+}
+
+:root[data-text-size="xlarge"] {
+  font-size: 125%;
+}
+
+[class*="Button_size_small__"] {
+  height: 44px;
+  border-block: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+[class*="IconButton_size_small__"] {
+  width: 44px;
+  border-inline: 2px solid transparent;
+}

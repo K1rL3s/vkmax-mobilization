@@ -12,7 +12,7 @@ export const LetterPanel = ({ title, hint, text }: Letter) => {
   return (
     <div className={styles.Panel}>
       <Flex align="stretch" direction="column" gapY={2}>
-        <Typography.Text variant="title" color="primary">
+        <Typography.Text variant="body-strong" color="primary">
           {title}
         </Typography.Text>
         <Typography.Text variant="description" color="secondary">
@@ -27,7 +27,7 @@ export const LetterPanel = ({ title, hint, text }: Letter) => {
           </Typography.Text>
 
           <Button
-            size="large"
+            size="medium"
             variant="primary"
             stretched
             onClick={() => void copy.copy(text)}
@@ -38,7 +38,7 @@ export const LetterPanel = ({ title, hint, text }: Letter) => {
       )}
 
       <Button
-        size="large"
+        size="medium"
         variant="secondary"
         stretched
         onClick={() => toggle()}

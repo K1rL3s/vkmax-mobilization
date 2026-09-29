@@ -30,6 +30,17 @@ export const meConfigs = [
 
     return ok(me());
   }),
+  endpoint("put", "/me/appearance", (request) => {
+    const size = request.body.text_size;
+
+    if (!["normal", "large", "xlarge"].includes(String(size))) {
+      return badRequest("Неизвестный размер текста");
+    }
+
+    user.text_size = size as typeof user.text_size;
+
+    return ok(me());
+  }),
   endpoint("post", "/events", (request) => {
     const type = request.body.type;
 

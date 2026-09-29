@@ -604,6 +604,78 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/me/appearance:
+    put:
+      tags:
+      - Профиль
+      summary: Изменить размер текста в мини-приложении
+      operationId: update_appearance
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAppearanceRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/geo/cities:
     get:
       tags:
@@ -14492,6 +14564,9 @@ components:
           - type: 'null'
           title: Phone
           description: Номер, подтвержденный MAX, в формате +79991234567
+        text_size:
+          $ref: '#/components/schemas/TextSize'
+          description: 'Размер текста в мини-приложении: обычный, крупный, очень крупный'
       type: object
       required:
       - user_id
@@ -14501,6 +14576,7 @@ components:
       - residencies
       - orgs
       - is_demo
+      - text_size
       title: MeResponse
     MeterItem:
       properties:
@@ -17053,6 +17129,13 @@ components:
       - started_at
       - ended_at
       title: TenancyItem
+    TextSize:
+      type: string
+      enum:
+      - normal
+      - large
+      - xlarge
+      title: TextSize
     TrackEventRequest:
       properties:
         type:
@@ -17097,6 +17180,14 @@ components:
       - address
       - waiting
       title: UnconnectedHouseItem
+    UpdateAppearanceRequest:
+      properties:
+        text_size:
+          $ref: '#/components/schemas/TextSize'
+      type: object
+      required:
+      - text_size
+      title: UpdateAppearanceRequest
     UpdateMeterRequest:
       properties:
         tariff_zones:

@@ -89,7 +89,7 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
       <form className={styles.Form} noValidate onSubmit={form.submit}>
         <div className={styles.Content}>
           <Flex align="stretch" direction="column" gapY={4}>
-            <Typography.Text asChild variant="title" color="primary">
+            <Typography.Text asChild variant="header" color="primary">
               <h1>Новое объявление</h1>
             </Typography.Text>
 

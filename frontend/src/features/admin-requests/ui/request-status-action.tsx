@@ -38,7 +38,7 @@ export const RequestStatusAction = ({ target }: { target: StatusTarget }) => {
     <div className={styles.Form}>
       {isChoice && (
         <>
-          <Typography.Text asChild variant="title" color="primary">
+          <Typography.Text asChild variant="body-strong" color="primary">
             <h2>Статус всех заявок</h2>
           </Typography.Text>
           <ChipRow

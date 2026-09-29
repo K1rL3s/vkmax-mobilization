@@ -35,6 +35,7 @@ export const user = {
   consent_at: null as string | null,
   consent_version: null as string | null,
   phone: null as string | null,
+  text_size: "normal" as Schemas["TextSize"],
 };
 
 const residencyList: MockResidency[] = [];

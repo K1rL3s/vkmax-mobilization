@@ -152,7 +152,7 @@ export const PublicHouseMap = ({
                 className={styles.Tool}
                 onClick={() => setLayersOpen(true)}
               >
-                <Icon src={layersIcon} size={22} />
+                <Icon src={layersIcon} size={24} />
               </IconButton>
               <IconButton
                 size="medium"
@@ -162,7 +162,7 @@ export const PublicHouseMap = ({
                 loading={map.isLocating}
                 onClick={map.locate}
               >
-                <Icon src={locateIcon} size={22} />
+                <Icon src={locateIcon} size={24} />
               </IconButton>
             </div>
 

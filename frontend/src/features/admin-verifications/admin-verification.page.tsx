@@ -83,7 +83,7 @@ const AdminVerificationPage = () => {
   return (
     <Panel className={styles.Page} mode="secondary">
       <div className={styles.Content}>
-        <Flex align="stretch" direction="column" gapY={6}>
+        <Flex align="stretch" direction="column" gapY={4}>
           <Flex align="center" gap={8}>
             <Typography.Text
               asChild

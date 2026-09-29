@@ -28,7 +28,7 @@ export const SharePanel = ({ request }: { request: RequestCard }) => {
   return (
     <div className={styles.Panel}>
       <Flex align="stretch" direction="column" gapY={2}>
-        <Typography.Text variant="title" color="primary">
+        <Typography.Text variant="body-strong" color="primary">
           Рассказать соседям
         </Typography.Text>
         <Typography.Text variant="description" color="secondary">
@@ -40,7 +40,7 @@ export const SharePanel = ({ request }: { request: RequestCard }) => {
 
       {!share.data?.posted && (
         <Button
-          size="large"
+          size="medium"
           variant="secondary"
           stretched
           loading={share.isPending}

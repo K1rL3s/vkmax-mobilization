@@ -1,6 +1,6 @@
 .Page {
   flex: 1;
-  gap: 16px;
+  gap: 20px;
   padding: 16px 16px 24px;
 
   h2 {
@@ -15,7 +15,7 @@
   .Steps {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     margin: 0;
     padding-left: 20px;
   }

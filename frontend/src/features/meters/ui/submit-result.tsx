@@ -55,23 +55,24 @@ export const SubmitResult = ({
         <Flex
           direction="column"
           align="center"
-          gap={12}
+          gap={16}
           className={styles.Hero}
         >
           <IconTile
             icon={isBelow ? alertIcon : checkIcon}
             tone={isBelow ? "negative" : "positive"}
             size="xlarge"
-            className={styles.Check}
           />
-          <Typography.Text asChild variant="header" color="primary">
-            <h1 className={styles.Title}>
-              {isBelow ? "Проверьте показания" : "Показания отправлены"}
-            </h1>
-          </Typography.Text>
-          <Typography.Text variant="detail" color="secondary">
-            {METER_LABEL[meter.type]} · {formatPeriod(reading.period)}
-          </Typography.Text>
+          <Flex direction="column" align="center" gapY={4}>
+            <Typography.Text asChild variant="header" color="primary">
+              <h1 className={styles.Title}>
+                {isBelow ? "Проверьте показания" : "Показания отправлены"}
+              </h1>
+            </Typography.Text>
+            <Typography.Text variant="body" color="secondary">
+              {METER_LABEL[meter.type]} · {formatPeriod(reading.period)}
+            </Typography.Text>
+          </Flex>
         </Flex>
 
         {isBelow && (
@@ -92,7 +93,7 @@ export const SubmitResult = ({
         )}
 
         {!isBelow && (
-          <Flex asChild direction="column" align="stretch" gap={12}>
+          <Flex asChild direction="column" align="stretch" gap={8}>
             <section>
               <Typography.Text asChild variant="title" color="primary">
                 <h2>Расход за месяц</h2>
@@ -165,7 +166,7 @@ export const SubmitResult = ({
         )}
 
         {!isBelow && houseAverage != null && (
-          <Flex asChild direction="column" align="stretch" gap={12}>
+          <Flex asChild direction="column" align="stretch" gap={8}>
             <section>
               <Typography.Text asChild variant="title" color="primary">
                 <h2>Сравнение с домом</h2>
@@ -174,7 +175,7 @@ export const SubmitResult = ({
               <Flex
                 direction="column"
                 align="stretch"
-                gap={14}
+                gap={12}
                 className={styles.Comparison}
               >
                 <Bar
@@ -271,7 +272,7 @@ type BarProps = {
 };
 
 const Bar = ({ label, value, unit, scale, fill }: BarProps) => (
-  <Flex direction="column" align="stretch" gap={6}>
+  <Flex direction="column" align="stretch" gap={8}>
     <Flex align="center" gap={8}>
       <Typography.Text variant="detail" color="primary" className={styles.Grow}>
         {label}

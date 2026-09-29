@@ -10,7 +10,7 @@
   width: 72px;
   height: 72px;
   border-radius: 12px;
-  background-color: var(--background-secondary);
+  background-color: var(--background-tertiary);
 
   img,
   video {
@@ -36,7 +36,7 @@
   height: 72px;
   padding: 0 8px;
   border-radius: 12px;
-  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
+  background-color: var(--background-tertiary);
   color: var(--text-themed);
   cursor: pointer;
 }

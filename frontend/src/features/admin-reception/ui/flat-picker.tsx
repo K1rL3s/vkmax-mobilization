@@ -2,6 +2,7 @@ import { Button, Flex, Input, Typography } from "@maxhub/max-ui";
 
 import { useHouseResidents } from "@/features/admin-houses";
 import { Checkbox } from "@/shared/ui/checkbox";
+import { FilterChip } from "@/shared/ui/filter-chip";
 import { Icon, searchOutlineIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
@@ -119,16 +120,12 @@ export const FlatPicker = ({
       {selected.length > 0 && (
         <div className={styles.Chips}>
           {selected.map((flat) => (
-            <button
+            <FilterChip
               key={flat.flat_id}
-              type="button"
-              className={styles.Chip}
-              onClick={() => onToggle(flat, false)}
+              onRemove={() => onToggle(flat, false)}
             >
-              <Typography.Text variant="description" color="primary">
-                кв. {flat.flat_number} ✕
-              </Typography.Text>
-            </button>
+              кв. {flat.flat_number}
+            </FilterChip>
           ))}
         </div>
       )}

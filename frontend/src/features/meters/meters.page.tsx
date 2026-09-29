@@ -128,7 +128,7 @@ const MetersPage = () => {
           submitted={meter.last_period === form.period.period}
         />
 
-        <Flex asChild align="stretch" direction="column" gap={12}>
+        <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
               <h2>Какой счётчик?</h2>
@@ -169,7 +169,7 @@ const MetersPage = () => {
         </Flex>
 
         {form.periods.length > 1 && (
-          <Flex asChild align="stretch" direction="column" gap={12}>
+          <Flex asChild align="stretch" direction="column" gap={8}>
             <section>
               <Typography.Text asChild variant="title" color="primary">
                 <h2>За какой месяц?</h2>

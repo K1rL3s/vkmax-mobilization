@@ -13,7 +13,7 @@ export const QuestionPanel = ({ request }: { request: RequestCard }) => {
 
   return (
     <section className={styles.Panel}>
-      <Typography.Text asChild variant="title" color="primary">
+      <Typography.Text asChild variant="body-strong" color="primary">
         <h2>УК ждёт вашего ответа</h2>
       </Typography.Text>
       {question && (

@@ -76,71 +76,77 @@ const AdminRequestPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex align="center" gap={12}>
-        <IconTile
-          icon={CATEGORY_ICON[request.category]}
-          tone={tone}
-          size="large"
-        />
-        <Flex
-          className={styles.Grow}
-          align="stretch"
-          direction="column"
-          gapY={2}
-        >
-          <Typography.Text asChild variant="title" color="primary">
-            <h1>Заявка №{request.id}</h1>
-          </Typography.Text>
-          <Typography.Text variant="description" color="secondary">
-            {request.address}
-          </Typography.Text>
+      <Flex align="stretch" direction="column" gap={8}>
+        <Flex align="center" gap={12}>
+          <IconTile
+            icon={CATEGORY_ICON[request.category]}
+            tone={tone}
+            size="large"
+          />
+          <Flex
+            className={styles.Grow}
+            align="stretch"
+            direction="column"
+            gapY={2}
+          >
+            <Typography.Text asChild variant="title" color="primary">
+              <h1>Заявка №{request.id}</h1>
+            </Typography.Text>
+            <Typography.Text variant="description" color="secondary">
+              {request.address}
+            </Typography.Text>
+          </Flex>
         </Flex>
-      </Flex>
 
-      <Flex align="center" wrap="wrap" gap={8}>
-        <StatusPill tone={tone}>{statusLabel(request, "staff")}</StatusPill>
-        <StatusPill tone="neutral">{request.category_label}</StatusPill>
-        {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
-        {danger && <StatusPill tone="negative">{danger}</StatusPill>}
-        {thread && <StatusPill tone={thread.tone}>{thread.text}</StatusPill>}
-        {request.group_id != null && (
-          <Typography.Text asChild variant="description-strong">
-            <Link
-              className={styles.Link}
-              to={generatePath(Routes.ADMIN_REQUEST_GROUP, {
-                groupId: String(request.group_id),
-              })}
-            >
-              Коллективная · {request.group_size}{" "}
-              {plural(request.group_size, ["квартира", "квартиры", "квартир"])}
-            </Link>
+        <Flex align="center" wrap="wrap" gap={8}>
+          <StatusPill tone={tone}>{statusLabel(request, "staff")}</StatusPill>
+          <StatusPill tone="neutral">{request.category_label}</StatusPill>
+          {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
+          {danger && <StatusPill tone="negative">{danger}</StatusPill>}
+          {thread && <StatusPill tone={thread.tone}>{thread.text}</StatusPill>}
+          {request.group_id != null && (
+            <Typography.Text asChild variant="description-strong">
+              <Link
+                className={styles.Link}
+                to={generatePath(Routes.ADMIN_REQUEST_GROUP, {
+                  groupId: String(request.group_id),
+                })}
+              >
+                Коллективная · {request.group_size}{" "}
+                {plural(request.group_size, [
+                  "квартира",
+                  "квартиры",
+                  "квартир",
+                ])}
+              </Link>
+            </Typography.Text>
+          )}
+          {request.parent_request_id != null && (
+            <Typography.Text asChild variant="description-strong">
+              <Link
+                className={styles.Link}
+                to={generatePath(Routes.ADMIN_REQUEST, {
+                  requestId: String(request.parent_request_id),
+                })}
+              >
+                Повторно по заявке №{request.parent_request_id}
+              </Link>
+            </Typography.Text>
+          )}
+        </Flex>
+
+        {danger && request.danger_phrase && (
+          <Typography.Text variant="description" color="secondary">
+            По словам «{request.danger_phrase}»
           </Typography.Text>
         )}
-        {request.parent_request_id != null && (
-          <Typography.Text asChild variant="description-strong">
-            <Link
-              className={styles.Link}
-              to={generatePath(Routes.ADMIN_REQUEST, {
-                requestId: String(request.parent_request_id),
-              })}
-            >
-              Повторно по заявке №{request.parent_request_id}
-            </Link>
+
+        {actor && (
+          <Typography.Text variant="description" color="secondary">
+            Сейчас: {actor}
           </Typography.Text>
         )}
       </Flex>
-
-      {danger && request.danger_phrase && (
-        <Typography.Text variant="description" color="secondary">
-          По словам «{request.danger_phrase}»
-        </Typography.Text>
-      )}
-
-      {actor && (
-        <Typography.Text variant="description" color="secondary">
-          Сейчас: {actor}
-        </Typography.Text>
-      )}
 
       <RequestStatusAction target={{ kind: "request", request }} />
 

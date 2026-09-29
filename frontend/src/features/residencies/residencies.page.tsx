@@ -59,7 +59,7 @@ const ResidenciesPage = () => {
                 subtitle={flatOf(residency)}
                 after={
                   <IconButton
-                    size="xsmall"
+                    size="small"
                     variant="ghost"
                     aria-label={`Отвязаться от дома ${residency.address}`}
                     onClick={(event) => {
@@ -67,7 +67,7 @@ const ResidenciesPage = () => {
                       unlink.ask(residency);
                     }}
                   >
-                    <Icon src={closeIcon} size={18} className={styles.Close} />
+                    <Icon src={closeIcon} size={20} className={styles.Close} />
                   </IconButton>
                 }
                 onClick={() => switcher.mark(residency)}

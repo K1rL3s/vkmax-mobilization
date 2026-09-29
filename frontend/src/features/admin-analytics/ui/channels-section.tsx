@@ -34,7 +34,7 @@ export const ChannelsSection = ({ period }: { period: PeriodDays }) => {
           description="Выберите период длиннее"
         />
       ) : (
-        <Flex direction="column" align="stretch" gapY={10}>
+        <Flex direction="column" align="stretch" gapY={12}>
           {channels.data?.items.map((item) => (
             <Flex
               key={item.channel}

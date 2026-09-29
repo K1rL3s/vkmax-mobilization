@@ -23,17 +23,12 @@ const AdminRequestsPage = () => {
     <Panel className={styles.Page} mode="secondary">
       <Flex align="stretch" direction="column" gap={12}>
         <Flex align="center" justify="space-between" gap={12}>
-          <Typography.Text asChild variant="title" color="primary">
+          <Typography.Text asChild variant="header" color="primary">
             <h1>Заявки</h1>
           </Typography.Text>
-          <IconButton
-            asChild
-            className={styles.MapLink}
-            size="small"
-            variant="secondary"
-          >
+          <IconButton asChild size="small" variant="secondary">
             <Link to={Routes.ADMIN_HOUSES} aria-label="Дома на карте">
-              <Icon src={geoPinIcon} size={24} />
+              <Icon src={geoPinIcon} size={20} />
             </Link>
           </IconButton>
         </Flex>

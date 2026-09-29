@@ -71,7 +71,7 @@ const AdminOrgPage = () => {
           <Typography.Text
             asChild
             className={styles.Grow}
-            variant="title"
+            variant="header"
             color="primary"
           >
             <h1>{org?.name ?? currentOrg?.name ?? "Организация"}</h1>

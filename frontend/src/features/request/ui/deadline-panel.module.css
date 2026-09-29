@@ -49,6 +49,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 44px;
   color: var(--text-themed);
   list-style: none;
   cursor: pointer;
@@ -72,7 +73,7 @@
 .WorksList {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 0;
   padding-left: 20px;
 }

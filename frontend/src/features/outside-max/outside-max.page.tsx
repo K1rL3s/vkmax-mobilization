@@ -12,7 +12,7 @@ const OutsideMaxPage = () => {
         className={styles.Content}
         direction="column"
         align="center"
-        gap={36}
+        gap={16}
       >
         <IconTile icon={alertIcon} tone="negative" size="xlarge" />
 
@@ -20,7 +20,7 @@ const OutsideMaxPage = () => {
           className={styles.Hero}
           direction="column"
           align="center"
-          gapY={6}
+          gapY={4}
         >
           <Typography.Text asChild variant="header" color="primary">
             <h1>Откройте Жэку в MAX</h1>

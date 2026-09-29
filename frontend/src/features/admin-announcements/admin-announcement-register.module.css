@@ -2,7 +2,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   padding: 16px 16px 24px;
 
   h1 {
@@ -39,8 +39,8 @@
   border-radius: 16px;
   background-color: var(--background-card);
   color: var(--text-primary);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 
 .Demo {
@@ -55,8 +55,8 @@
 
 .Title {
   margin: 0;
-  font-size: 20px;
-  line-height: 26px;
+  font-size: 1.25rem;
+  line-height: 1.625rem;
 }
 
 .Line,
@@ -77,15 +77,15 @@
 
 .Note {
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
 }
 
 .Table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
 
   th,
   td {
@@ -119,8 +119,8 @@
 .Role {
   display: block;
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 0.75rem;
+  line-height: 1rem;
 }
 
 @page {

@@ -23,7 +23,7 @@ export const RequestAssignment = ({ request }: { request: AdminRequest }) => {
 
   return (
     <div className={styles.Form}>
-      <Typography.Text asChild variant="title" color="primary">
+      <Typography.Text asChild variant="body-strong" color="primary">
         <h2>Исполнитель</h2>
       </Typography.Text>
 

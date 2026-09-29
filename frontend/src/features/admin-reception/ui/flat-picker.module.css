@@ -12,14 +12,5 @@
 .Chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-}
-
-.Chip {
-  padding: 4px 10px;
-  border: none;
-  border-radius: 10px;
-  background-color: var(--background-secondary);
-  font: inherit;
-  cursor: pointer;
+  gap: 8px;
 }

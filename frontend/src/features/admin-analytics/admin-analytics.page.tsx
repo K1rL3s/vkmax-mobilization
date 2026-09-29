@@ -22,7 +22,7 @@ const AdminAnalyticsPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Typography.Text asChild variant="title" color="primary">
+      <Typography.Text asChild variant="header" color="primary">
         <h1>Аналитика</h1>
       </Typography.Text>
 
@@ -46,7 +46,7 @@ const AdminAnalyticsPage = () => {
       )}
 
       {dashboard.isSuccess && !dashboard.data.is_empty && (
-        <Flex direction="column" align="stretch" gapY={16}>
+        <Flex direction="column" align="stretch" gapY={20}>
           <TilesSection tiles={dashboard.data.tiles} />
 
           <ChartsSection charts={dashboard.data.charts} />

@@ -66,7 +66,7 @@ const AnnouncementsPage = () => {
                 direction="column"
                 gapY={2}
               >
-                <Typography.Text variant="title" color="primary">
+                <Typography.Text variant="body-strong" color="primary">
                   {item.urgent
                     ? "Срочное объявление"
                     : item.works

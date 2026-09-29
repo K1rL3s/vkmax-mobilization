@@ -25,6 +25,12 @@
   background-color: var(--button-primary);
   color: var(--text-primary-inverse-static);
   cursor: pointer;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+  }
 }
 
 .Send:disabled {

@@ -95,7 +95,7 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
       <Flex direction="row-reverse" wrap="wrap" gap={8}>
         <Button
           className={styles.Action}
-          size="large"
+          size="medium"
           loading={form.isAccepting}
           disabled={!form.canAccept}
           onClick={form.accept}
@@ -104,7 +104,7 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
         </Button>
         <Button
           className={styles.Action}
-          size="large"
+          size="medium"
           variant="secondary"
           loading={form.isRejecting}
           disabled={!form.canReject}

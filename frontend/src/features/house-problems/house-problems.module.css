@@ -31,7 +31,9 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px 16px;
+    box-sizing: border-box;
+    min-height: 56px;
+    padding: 8px 12px;
     list-style: none;
     cursor: pointer;
 
@@ -57,11 +59,11 @@
   }
 
   .Row {
-    padding: 6px 16px;
+    padding: 6px 12px;
   }
 
   .Note {
     margin: 0;
-    padding: 6px 16px 8px;
+    padding: 6px 12px 8px;
   }
 }

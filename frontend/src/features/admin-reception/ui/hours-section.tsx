@@ -192,7 +192,7 @@ const HoursEditor = ({ windows }: { windows: ReceptionWindow[] }) => {
 
         <Button
           type="submit"
-          size="large"
+          size="medium"
           stretched
           loading={form.isSaving}
           disabled={!form.canSave}

@@ -51,21 +51,18 @@ export const BookedResult = ({
         <Flex
           direction="column"
           align="center"
-          gap={12}
+          gap={16}
           className={styles.Hero}
         >
-          <IconTile
-            icon={checkIcon}
-            tone="positive"
-            size="xlarge"
-            className={styles.Check}
-          />
-          <Typography.Text asChild variant="header" color="primary">
-            <h1 className={styles.Title}>Вы записаны на приём</h1>
-          </Typography.Text>
-          <Typography.Text variant="detail" color="secondary">
-            {schedule.appointmentTitle(appointment.starts_at)}
-          </Typography.Text>
+          <IconTile icon={checkIcon} tone="positive" size="xlarge" />
+          <Flex direction="column" align="center" gapY={4}>
+            <Typography.Text asChild variant="header" color="primary">
+              <h1 className={styles.Title}>Вы записаны на приём</h1>
+            </Typography.Text>
+            <Typography.Text variant="body" color="secondary">
+              {schedule.appointmentTitle(appointment.starts_at)}
+            </Typography.Text>
+          </Flex>
         </Flex>
 
         <Flex

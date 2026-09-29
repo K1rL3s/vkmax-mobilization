@@ -12,11 +12,6 @@
   h2 {
     margin: 0;
   }
-
-  .MapLink {
-    width: 44px;
-    height: 44px;
-  }
 }
 .Text {
   white-space: pre-wrap;
@@ -32,7 +27,7 @@
 .Facts {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
 
   div {

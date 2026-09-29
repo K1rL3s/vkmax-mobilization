@@ -4,16 +4,7 @@ import { Icon } from "@/shared/ui/icon";
 import styles from "./icon-tile.module.css";
 
 export type IconTileTone =
-  | "neutral"
-  | "card"
-  | "secondary"
-  | "themed"
-  | "positive"
-  | "negative"
-  | "promo"
-  | "brand-blue"
-  | "brand-green"
-  | "brand-orange";
+  "neutral" | "secondary" | "themed" | "positive" | "negative" | "promo";
 
 type IconTileProps = {
   icon: string;

@@ -72,8 +72,16 @@ Knows every feature; nothing imports it.
   `color-scheme` is load-bearing: without it Android WebView force-darkens
   and inverts the app in MAX's dark theme (`index.html` repeats it as a
   `<meta>` for the first paint). Inverted colours on a phone: check it before
-  touching any token. It holds only these; a rule that paints something goes
-  in that thing's module, palette overrides nowhere.
+  touching any token. The one exception is the text size: `app.tsx` copies
+  `/me` `text_size` into `data-text-size` on `:root`, and two rules raise the
+  root `font-size` to 112.5% or 125%. `useTextSize` reads the cache through
+  `useSyncExternalStore`: a `useQuery` observer on `/me` in `App` mounts
+  while the loader fetches, and its StrictMode unmount aborts that fetch. The
+  other exception is the tap target: the kit draws `small` `Button` and
+  `IconButton` at 40 px, so a transparent 2 px border makes every one of them
+  44 px to the finger without changing what is drawn. It holds only these; a
+  rule that paints something goes in that thing's module, palette overrides
+  nowhere.
 
 ### `features/<feature>/`
 
@@ -153,8 +161,26 @@ Knows every feature; nothing imports it.
   classes PascalCase (`styles.TabBar`), variant classes lowercase
   (`styles[tone]`).
 - The app runs only on a phone inside MAX: design for 320-400px and check at
-  360 and 393. Two buttons rarely fit in a row (content width, let them wrap);
-  the kit truncates long labels with an ellipsis silently.
+  360 and 393, also with «Очень крупный» text (125%). A font size or the line
+  height next to it is in `rem`, never `px`, so it follows the text size;
+  print sheets keep `pt`, and a label whose width is fixed by a row of
+  siblings (the cabinet tab bar) is capped by `vw`. Two buttons rarely fit
+  in a row (content width, let them wrap); the kit truncates long labels
+  with an ellipsis silently.
+- One size scale for both cabinets. Spacing: 20 px between the top-level
+  blocks of a screen, 8 px from a section heading to its content and between
+  rows of one list, 12 px for card padding and blocks inside a card, 2-4 px
+  inside a text stack; the page gutter is 16 px, a footer is
+  `12px 16px 24px`. Text: `header` for the screen title, `title` for a
+  section heading, `body-strong` for a title inside a card. A card is 16 px
+  radius, a box or tile inside it 12 px. A row icon is 24 px with no
+  background (`IconTile` `medium`), a header tile 44 px and a hero tile 72 px
+  sit on `--controls-inactive`; an icon inside a button or note is 20 px.
+  A button is `large` for the screen's main action, a form submit or a sheet,
+  `medium` inside a card, `small` for chips and inline actions.
+  Anything tappable is at least 44x44 px, a custom panel row lines up with
+  `CellSimple` (12 px sides, 56 px tall), a progress bar is 4 px. A state
+  colours a glyph or a `StatusPill`, never the background of a card or note.
 - A name is earned by a second use: single-use strings, numbers, objects and
   copy go inline (a review rule).
 - `@/*` is `src/*`: relative imports inside a module, `@/` across modules.

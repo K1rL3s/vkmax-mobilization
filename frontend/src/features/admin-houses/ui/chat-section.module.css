@@ -17,9 +17,9 @@
   overflow-wrap: anywhere;
   color: var(--text-primary);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 700;
-  line-height: 32px;
+  line-height: 2rem;
   letter-spacing: 0.06em;
 }
 

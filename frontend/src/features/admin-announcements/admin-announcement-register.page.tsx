@@ -45,7 +45,7 @@ const AdminAnnouncementRegisterPage = () => {
     <Panel className={styles.Page} mode="secondary">
       <div className={styles.Screen}>
         <Flex align="stretch" direction="column" gapY={4}>
-          <Typography.Text asChild variant="title" color="primary">
+          <Typography.Text asChild variant="header" color="primary">
             <h1>Реестр уведомлений</h1>
           </Typography.Text>
 

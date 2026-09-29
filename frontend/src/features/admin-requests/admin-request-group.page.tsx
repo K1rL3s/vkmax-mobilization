@@ -44,7 +44,7 @@ const AdminRequestGroupPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex align="stretch" direction="column" gap={6}>
+      <Flex align="stretch" direction="column" gap={8}>
         <Typography.Text asChild variant="header" color="primary">
           <h1>Коллективная заявка</h1>
         </Typography.Text>

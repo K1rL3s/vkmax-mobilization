@@ -2,13 +2,14 @@ from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
+    Enum,
     ForeignKey,
     String,
     Table,
     UniqueConstraint,
 )
 
-from zheka.core.enums import NotificationCategory, NotificationLevel
+from zheka.core.enums import NotificationCategory, NotificationLevel, TextSize
 from zheka.infra.database.tables._columns import (
     created_at_column,
     id_column,
@@ -32,6 +33,17 @@ users_table = Table(
     Column("max_chat_id", BigInteger, nullable=True),
     Column("phone", String(16), nullable=True),
     Column("phone_verified_at", DateTime(timezone=True), nullable=True),
+    Column(
+        "text_size",
+        Enum(
+            TextSize,
+            native_enum=False,
+            length=8,
+            values_callable=lambda sizes: [size.value for size in sizes],
+        ),
+        server_default=TextSize.NORMAL.value,
+        nullable=False,
+    ),
 )
 
 notification_settings_table = Table(

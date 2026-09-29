@@ -33,7 +33,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
   return (
     <div className={styles.Panel}>
       <Flex align="stretch" direction="column" gapY={2}>
-        <Typography.Text variant="title" color="primary">
+        <Typography.Text variant="body-strong" color="primary">
           1. Попросить руководство УК
         </Typography.Text>
         <Typography.Text variant="description" color="secondary">
@@ -45,7 +45,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
 
       {!request.escalated_at && (
         <Button
-          size="large"
+          size="medium"
           stretched
           loading={escalate.isPending}
           onClick={() =>
@@ -67,7 +67,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
       )}
 
       <Flex align="stretch" direction="column" gapY={2}>
-        <Typography.Text variant="title" color="primary">
+        <Typography.Text variant="body-strong" color="primary">
           2. Жалоба в ГЖИ
         </Typography.Text>
         <Typography.Text variant="description" color="secondary">
@@ -78,7 +78,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
       </Flex>
 
       <Button
-        size="large"
+        size="medium"
         stretched
         loading={pdf.isPending}
         disabled={pdf.isSuccess}
@@ -134,7 +134,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
           </Typography.Text>
 
           <Button
-            size="large"
+            size="medium"
             variant="secondary"
             stretched
             onClick={() => void copy.copy(text)}
@@ -148,7 +148,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
         <summary className={styles.MoreTitle}>
           <Typography.Text
             className={styles.Grow}
-            variant="title"
+            variant="body-strong"
             color="primary"
           >
             3. Куда ещё

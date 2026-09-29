@@ -18,7 +18,7 @@ export const UnconnectedHouses = ({
   const rest = houses.length - VISIBLE;
 
   return (
-    <Flex direction="column" align="stretch" gapY={10}>
+    <Flex direction="column" align="stretch" gapY={12}>
       {(expanded ? houses : houses.slice(0, VISIBLE)).map((house) => (
         <Flex
           key={house.house_id}

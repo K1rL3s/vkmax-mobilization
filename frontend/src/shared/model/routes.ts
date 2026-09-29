@@ -19,6 +19,7 @@ export const Routes = {
   MEETING_NON_VOTERS: "/meetings/:pollId/non-voters",
   PROFILE: "/profile",
   NOTIFICATIONS: "/profile/notifications",
+  APPEARANCE: "/profile/appearance",
   CHARGES: "/charges",
   CHARGE: "/charges/:chargeId",
   HOUSE_CARD: "/house",

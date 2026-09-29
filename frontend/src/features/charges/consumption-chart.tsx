@@ -76,7 +76,7 @@ export const ConsumptionChart = ({
                 tickLine={false}
                 interval={0}
                 padding={{ left: 12, right: 12 }}
-                tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
+                tick={{ fill: "var(--text-secondary)", fontSize: "0.75rem" }}
               />
               <YAxis hide domain={["auto", "auto"]} />
               <Tooltip
@@ -111,13 +111,13 @@ export const ConsumptionChart = ({
         )}
 
         <Flex gap={16} wrap="wrap" className={styles.Legend}>
-          <Flex align="center" gap={6}>
+          <Flex align="center" gap={8}>
             <span className={styles.OwnMark} />
             <Typography.Text variant="description" color="secondary">
               Ваш расход
             </Typography.Text>
           </Flex>
-          <Flex align="center" gap={6}>
+          <Flex align="center" gap={8}>
             <span className={styles.HouseMark} />
             <Typography.Text variant="description" color="secondary">
               {average === null

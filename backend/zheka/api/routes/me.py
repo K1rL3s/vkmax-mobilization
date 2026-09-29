@@ -12,6 +12,7 @@ from zheka.api.schemas.me import (
     MeResponse,
     NotificationSettingsResponse,
     TrackEventRequest,
+    UpdateAppearanceRequest,
     UpdateNotificationSettingsRequest,
     VerifyPhoneRequest,
 )
@@ -132,3 +133,14 @@ async def forget_me(
     profile_service: FromDishka[ProfileService],
 ) -> None:
     await profile_service.forget(current_account.user_id)
+
+
+@router.put("/me/appearance", summary="Изменить размер текста в мини-приложении")
+async def update_appearance(
+    current_account: RequireConsentDep,
+    body: UpdateAppearanceRequest,
+    profile_service: FromDishka[ProfileService],
+) -> MeResponse:
+    return MeResponse.of(
+        await profile_service.set_text_size(current_account.user_id, body.text_size),
+    )

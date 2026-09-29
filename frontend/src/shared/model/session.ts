@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import {
   dispatchStorageEvent,
   useLocalStorage,
@@ -147,3 +148,9 @@ export const useSession = () => {
     reload: reloadSession,
   };
 };
+
+export const useTextSize = () =>
+  useSyncExternalStore(
+    (onChange) => queryClient.getQueryCache().subscribe(onChange),
+    () => cachedSession()?.text_size ?? "normal",
+  );

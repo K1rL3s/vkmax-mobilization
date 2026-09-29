@@ -25,24 +25,25 @@ export const Consent = ({
         className={styles.Content}
         direction="column"
         align="center"
-        gap={36}
+        gap={32}
       >
-        <IconTile icon={buildingIcon} tone="secondary" size="xlarge" />
+        <Flex direction="column" align="center" gap={16}>
+          <IconTile icon={buildingIcon} tone="secondary" size="xlarge" />
 
-        <Flex
-          className={styles.Hero}
-          direction="column"
-          align="center"
-          gapY={6}
-        >
-          <Typography.Text asChild variant="header" color="primary">
-            <h1>Жэка Коммуналкин</h1>
-          </Typography.Text>
+          <Flex
+            className={styles.Hero}
+            direction="column"
+            align="center"
+            gapY={4}
+          >
+            <Typography.Text asChild variant="header" color="primary">
+              <h1>Жэка Коммуналкин</h1>
+            </Typography.Text>
 
-          <Typography.Text variant="body" color="secondary">
-            Всё для вашего дома в одном чате: заявки в УК, показания счётчиков,
-            опросы жильцов
-          </Typography.Text>
+            <Typography.Text variant="body" color="secondary">
+              Заявки в УК, показания счётчиков и опросы жильцов вашего дома
+            </Typography.Text>
+          </Flex>
         </Flex>
 
         <Flex

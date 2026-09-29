@@ -11,7 +11,7 @@
 
 .Exit {
   display: flex;
-  height: 34px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -20,7 +20,7 @@
 
 .Tabs {
   display: flex;
-  padding: 8px 0;
+  padding: 2px 0;
   border-top: 1px solid var(--divider-primary);
 }
 
@@ -30,7 +30,9 @@
   min-width: 0;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  gap: 4px;
+  min-height: 48px;
   color: var(--icon-tertiary);
   text-decoration: none;
 }
@@ -40,7 +42,7 @@
 }
 
 .Label {
-  font-size: clamp(9px, 2.7vw, 10px);
+  font-size: clamp(9px, 2.7vw, 0.625rem);
   line-height: 12px;
   white-space: nowrap;
 }

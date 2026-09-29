@@ -263,7 +263,7 @@ export const MapLayers = ({
                     checked={filters.porg.includes(org.id)}
                     onChange={() => toggle("porg", org.id)}
                   >
-                    <Flex align="center" gap={6} wrap="wrap">
+                    <Flex align="center" gap={8} wrap="wrap">
                       {org.name}
                       {org.is_demo && (
                         <StatusPill tone="themed">демо</StatusPill>

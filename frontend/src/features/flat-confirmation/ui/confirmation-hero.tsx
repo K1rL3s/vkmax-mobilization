@@ -18,10 +18,10 @@ export const ConfirmationHero = ({
   address,
 }: ConfirmationHeroProps) => {
   return (
-    <Flex className={styles.Hero} direction="column" align="center" gapY={12}>
+    <Flex className={styles.Hero} direction="column" align="center" gapY={16}>
       <IconTile icon={icon} tone={tone} size="xlarge" />
 
-      <Flex direction="column" align="center" gapY={6}>
+      <Flex direction="column" align="center" gapY={4}>
         <Typography.Text asChild variant="header" color="primary">
           <h1>{title}</h1>
         </Typography.Text>

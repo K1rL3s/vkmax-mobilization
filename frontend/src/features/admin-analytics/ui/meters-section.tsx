@@ -28,7 +28,7 @@ const Remind = ({ season }: { season: MetersSeason }) => {
   }
 
   return (
-    <Flex direction="column" align="flex-start" gapY={6}>
+    <Flex direction="column" align="flex-start" gapY={8}>
       <Button
         size="medium"
         variant="secondary"
@@ -79,7 +79,7 @@ export const MetersSection = () => {
             {season.submitted + season.not_submitted}
           </Typography.Text>
 
-          <Flex direction="column" align="stretch" gapY={10}>
+          <Flex direction="column" align="stretch" gapY={12}>
             {season.houses.map((house) => (
               <Flex
                 key={house.house_id}

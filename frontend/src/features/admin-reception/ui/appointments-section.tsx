@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Flex, Typography } from "@maxhub/max-ui";
+import { Flex, IconButton, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { cn } from "@/shared/lib/css";
 import { formatTime } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { Chevron } from "@/shared/ui/chevron";
+import { chevronSmallIcon, Icon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 import { FilterChip } from "@/shared/ui/filter-chip";
 import { StatusPill } from "@/shared/ui/status-pill";
@@ -94,23 +95,23 @@ export const AppointmentsSection = () => {
           <h2>Записи на приём</h2>
         </Typography.Text>
 
-        <button
-          type="button"
-          className={styles.Arrow}
+        <IconButton
+          size="small"
+          variant="secondary"
           aria-label="Предыдущий день"
           onClick={() => setDay(shiftDay(day, -1))}
         >
-          ‹
-        </button>
+          <Icon src={chevronSmallIcon} size={16} className={styles.Back} />
+        </IconButton>
 
-        <button
-          type="button"
-          className={styles.Arrow}
+        <IconButton
+          size="small"
+          variant="secondary"
           aria-label="Следующий день"
           onClick={() => setDay(shiftDay(day, 1))}
         >
-          ›
-        </button>
+          <Icon src={chevronSmallIcon} size={16} />
+        </IconButton>
       </Flex>
 
       <Typography.Text variant="description" color="secondary">

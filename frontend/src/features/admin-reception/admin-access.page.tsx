@@ -24,7 +24,7 @@ const Flats = ({ numbers }: { numbers: string[] }) => (
       <Typography.Text
         key={number}
         className={styles.Flat}
-        variant="description"
+        variant="body"
         color="primary"
       >
         кв. {number}
@@ -71,7 +71,7 @@ const AdminAccessPage = () => {
             gapY={2}
             className={styles.Grow}
           >
-            <Typography.Text asChild variant="body-strong" color="primary">
+            <Typography.Text asChild variant="title" color="primary">
               <h1 className={styles.Title}>{item.reason}</h1>
             </Typography.Text>
 

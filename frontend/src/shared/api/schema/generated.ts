@@ -112,6 +112,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/me/appearance": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Изменить размер текста в мини-приложении */
+    put: operations["update_appearance"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/geo/cities": {
     parameters: {
       query?: never;
@@ -3964,6 +3981,8 @@ export interface components {
        * @description Номер, подтвержденный MAX, в формате +79991234567
        */
       phone?: string | null;
+      /** @description Размер текста в мини-приложении: обычный, крупный, очень крупный */
+      text_size: components["schemas"]["TextSize"];
     };
     /** MeterItem */
     MeterItem: {
@@ -5548,6 +5567,11 @@ export interface components {
        */
       ended_at: string | null;
     };
+    /**
+     * TextSize
+     * @enum {string}
+     */
+    TextSize: "normal" | "large" | "xlarge";
     /** TrackEventRequest */
     TrackEventRequest: {
       /**
@@ -5569,6 +5593,10 @@ export interface components {
       address: string;
       /** Waiting */
       waiting: number;
+    };
+    /** UpdateAppearanceRequest */
+    UpdateAppearanceRequest: {
+      text_size: components["schemas"]["TextSize"];
     };
     /** UpdateMeterRequest */
     UpdateMeterRequest: {
@@ -6414,6 +6442,95 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OkResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  update_appearance: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UpdateAppearanceRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MeResponse"];
         };
       };
       /** @description Некорректный запрос */

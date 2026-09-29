@@ -27,7 +27,7 @@ const Block = ({
       <IconTile icon={icon} tone={tone} />
       <Typography.Text
         asChild
-        variant="title"
+        variant="body-strong"
         color="primary"
         className={styles.Grow}
       >
@@ -49,7 +49,7 @@ const Call = ({
 }) => (
   <Button
     asChild
-    size="large"
+    size="medium"
     stretched
     variant={destructive ? "destructive" : "secondary"}
   >
@@ -93,9 +93,9 @@ const EmergencyPage = () => {
         </Typography.Text>
         {contact?.isEmergencyLine && (
           <>
-            <Call phone={contact.phone}>Аварийная служба: {contact.phone}</Call>
+            <Call phone={contact.phone}>{contact.phone}</Call>
             <Typography.Text variant="description" color="secondary">
-              Оператор обязан ответить за 5 минут
+              Аварийная служба дома, оператор обязан ответить за 5 минут
             </Typography.Text>
           </>
         )}
@@ -106,7 +106,12 @@ const EmergencyPage = () => {
           </Typography.Text>
         )}
         {contact && !contact.isEmergencyLine && (
-          <Call phone={contact.phone}>Телефон УК: {contact.phone}</Call>
+          <>
+            <Call phone={contact.phone}>{contact.phone}</Call>
+            <Typography.Text variant="description" color="secondary">
+              Телефон УК
+            </Typography.Text>
+          </>
         )}
       </Block>
 

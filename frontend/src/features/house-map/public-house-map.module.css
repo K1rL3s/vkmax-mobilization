@@ -38,9 +38,6 @@
 
   .Chip {
     flex-shrink: 0;
-    height: 44px;
-    border-block: 2px solid transparent;
-    background-clip: padding-box;
   }
 
   .Tool {

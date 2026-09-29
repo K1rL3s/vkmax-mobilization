@@ -16,11 +16,6 @@
     flex: 1;
     min-width: 0;
   }
-
-  .Close {
-    width: 44px;
-    height: 44px;
-  }
 }
 
 .Head {
@@ -37,7 +32,7 @@
 .State {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .Dot {

@@ -8,22 +8,18 @@
   }
 
   .Warning {
-    padding: 8px 12px;
-    border-radius: 12px;
-    background-color: var(--controls-inactive);
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
   }
 
   .WarningIcon {
     flex-shrink: 0;
-    color: var(--icon-secondary);
+    color: var(--icon-tertiary);
   }
 
   .alert {
-    background-color: color-mix(in srgb, var(--icon-negative) 10%, transparent);
-
-    .WarningIcon {
-      color: var(--icon-negative);
-    }
+    color: var(--icon-negative);
   }
 
   .Panel {
@@ -63,7 +59,13 @@
 
   .NoteIcon {
     flex-shrink: 0;
-    color: var(--icon-secondary);
+    color: var(--icon-tertiary);
+  }
+
+  .Sample {
+    padding: 12px;
+    border-radius: 16px;
+    background-color: var(--background-card);
   }
 }
 

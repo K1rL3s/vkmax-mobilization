@@ -104,7 +104,7 @@ const DemoExpireButton = ({ requestId }: { requestId: number }) => {
           })
         }
       >
-        ⏩ Демо: срок истек
+        Демо: срок истек
       </Button>
       {expire.error && (
         <Typography.Text variant="description" className={styles.Failed}>
@@ -138,7 +138,7 @@ const DemoNeighboursButton = ({ requestId }: { requestId: number }) => {
           })
         }
       >
-        👥 Демо: соседи сообщили
+        Демо: соседи сообщили
       </Button>
       {neighbours.error && (
         <Typography.Text variant="description" className={styles.Failed}>

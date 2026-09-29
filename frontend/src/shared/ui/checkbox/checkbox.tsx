@@ -22,7 +22,7 @@ export const Checkbox = ({
   className,
 }: CheckboxProps) => {
   return (
-    <Flex asChild align="flex-start" gap={12}>
+    <Flex asChild align="center" gap={12}>
       <label
         className={cn(styles.Checkbox, disabled && styles.disabled, className)}
       >

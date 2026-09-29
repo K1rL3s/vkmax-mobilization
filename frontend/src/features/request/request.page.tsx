@@ -60,63 +60,65 @@ const RequestPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Flex align="center" gap={12}>
-        <IconTile
-          icon={CATEGORY_ICON[request.category]}
-          tone={tone}
-          size="large"
-        />
-        <Flex
-          className={styles.Grow}
-          align="stretch"
-          direction="column"
-          gapY={2}
-        >
-          <Typography.Text variant="description" color="secondary">
-            Заявка №{request.id}
-          </Typography.Text>
-          <Typography.Text variant="title" color="primary">
-            {request.description}
-          </Typography.Text>
-          <Typography.Text variant="description" color="secondary">
-            Подана {formatDay(request.created_at)} в{" "}
-            {formatTime(request.created_at)}
-            {request.flat_number && ` · кв. ${request.flat_number}`}
-          </Typography.Text>
-          {request.parent_request_id && (
-            <Typography.Text
-              asChild
-              className={styles.Parent}
-              variant="description"
-            >
-              <Link
-                to={generatePath(Routes.REQUEST, {
-                  requestId: String(request.parent_request_id),
-                })}
-              >
-                Повторно по заявке №{request.parent_request_id}
-              </Link>
+      <Flex align="stretch" direction="column" gap={8}>
+        <Flex align="center" gap={12}>
+          <IconTile
+            icon={CATEGORY_ICON[request.category]}
+            tone={tone}
+            size="large"
+          />
+          <Flex
+            className={styles.Grow}
+            align="stretch"
+            direction="column"
+            gapY={2}
+          >
+            <Typography.Text variant="description" color="secondary">
+              Заявка №{request.id}
             </Typography.Text>
+            <Typography.Text variant="title" color="primary">
+              {request.description}
+            </Typography.Text>
+            <Typography.Text variant="description" color="secondary">
+              Подана {formatDay(request.created_at)} в{" "}
+              {formatTime(request.created_at)}
+              {request.flat_number && ` · кв. ${request.flat_number}`}
+            </Typography.Text>
+            {request.parent_request_id && (
+              <Typography.Text
+                asChild
+                className={styles.Parent}
+                variant="description"
+              >
+                <Link
+                  to={generatePath(Routes.REQUEST, {
+                    requestId: String(request.parent_request_id),
+                  })}
+                >
+                  Повторно по заявке №{request.parent_request_id}
+                </Link>
+              </Typography.Text>
+            )}
+          </Flex>
+        </Flex>
+
+        <Flex align="center" gap={8}>
+          <StatusPill tone={tone}>{statusLabel(request)}</StatusPill>
+          {request.group_size > 1 && (
+            <StatusPill tone="neutral">
+              {request.group_size}{" "}
+              {plural(request.group_size, ["квартира", "квартиры", "квартир"])}{" "}
+              в заявке
+            </StatusPill>
           )}
         </Flex>
-      </Flex>
 
-      <Flex align="center" gap={8}>
-        <StatusPill tone={tone}>{statusLabel(request)}</StatusPill>
-        {request.group_size > 1 && (
-          <StatusPill tone="neutral">
-            {request.group_size}{" "}
-            {plural(request.group_size, ["квартира", "квартиры", "квартир"])} в
-            заявке
-          </StatusPill>
+        {actor && (
+          <Typography.Text variant="description" color="secondary">
+            Сейчас: {actor}
+          </Typography.Text>
         )}
       </Flex>
-
-      {actor && (
-        <Typography.Text variant="description" color="secondary">
-          Сейчас: {actor}
-        </Typography.Text>
-      )}
 
       {request.question_asked_at && <QuestionPanel request={request} />}
 

@@ -2,7 +2,13 @@ from datetime import UTC, datetime
 
 from zheka.base import ZhekaType
 from zheka.core.consent import CONSENT_VERSION
-from zheka.core.enums import EventSource, EventType, OrgRole, VerificationStatus
+from zheka.core.enums import (
+    EventSource,
+    EventType,
+    OrgRole,
+    TextSize,
+    VerificationStatus,
+)
 from zheka.core.errors import EntityNotFound, InvalidRequest, NotEnoughRights
 from zheka.core.ids import API_CHECKER_MAX_USER_ID, MaxUserId, UserId
 from zheka.core.models import OrgMember, Organization, User
@@ -175,3 +181,10 @@ class ProfileService:
             raise NotEnoughRights(CREATOR_CANNOT_FORGET)
         await self._users.forget(user, MaxUserId(API_CHECKER_MAX_USER_ID - user_id))
         await self._events.record(EventType.ACCOUNT_DELETED, user_id=user_id)
+
+    async def set_text_size(self, user_id: UserId, text_size: TextSize) -> MeView:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise EntityNotFound("Пользователь не найден")
+        await self._users.set_text_size(user, text_size)
+        return await self.me(user_id)

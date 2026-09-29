@@ -173,6 +173,10 @@ const router = createBrowserRouter([
                 path: Routes.NOTIFICATIONS,
                 lazy: () => import("@/features/profile/notifications.page"),
               },
+              {
+                path: Routes.APPEARANCE,
+                lazy: () => import("@/features/profile/appearance.page"),
+              },
             ],
           },
           {

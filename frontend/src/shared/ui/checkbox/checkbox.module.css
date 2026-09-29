@@ -1,4 +1,5 @@
 .Checkbox {
+  min-height: 44px;
   cursor: pointer;
 }
 

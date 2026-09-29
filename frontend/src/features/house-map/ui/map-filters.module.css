@@ -2,12 +2,6 @@
   margin: 0;
 }
 
-.Kinds button {
-  height: 44px;
-  border-block: 2px solid transparent;
-  background-clip: padding-box;
-}
-
 .Org {
   margin-block: -3px;
   padding-block: 3px;

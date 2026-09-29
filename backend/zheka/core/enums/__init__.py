@@ -16,6 +16,7 @@ from zheka.core.enums.meters import (
 from zheka.core.enums.notifications import NotificationCategory, NotificationLevel
 from zheka.core.enums.orgs import OrgRole
 from zheka.core.enums.polls import PollAuthor, PollStatus
+from zheka.core.enums.profile import TextSize
 from zheka.core.enums.proposals import ProposalStatus
 from zheka.core.enums.requests import (
     CANCEL_REASONS,
@@ -74,6 +75,7 @@ __all__ = (
     "ResponsibilityZone",
     "ServiceType",
     "TariffZone",
+    "TextSize",
     "UnpinMethod",
     "VerificationStatus",
 )

@@ -38,7 +38,6 @@ const Card = ({
         {badge}
       </Flex>
       <IconButton
-        className={styles.Close}
         size="small"
         variant="secondary"
         aria-label="Закрыть"
@@ -202,7 +201,7 @@ export const PlatformHousePopup = ({
   <Card
     title={house.address}
     badge={
-      <Flex align="center" gap={6} wrap="wrap">
+      <Flex align="center" gap={8} wrap="wrap">
         <Typography.Text variant="description" color="secondary">
           {house.org_name ?? "УК не указана"}
         </Typography.Text>

@@ -63,7 +63,7 @@ export const TilesSection = ({ tiles }: { tiles: DashboardTile[] }) => {
   const { now, period } = splitTiles(tiles);
 
   return (
-    <Flex direction="column" align="stretch" gapY={16}>
+    <Flex direction="column" align="stretch" gapY={20}>
       <TileGroup title="Сейчас" tiles={now} />
       <TileGroup title="За период" tiles={period} />
     </Flex>

@@ -29,7 +29,7 @@ export const MapFilters = ({
       <h2 className={styles.Title}>Какие дома показать</h2>
     </Typography.Text>
 
-    <Flex wrap="wrap" gapX={8} gapY={4} className={styles.Kinds}>
+    <Flex wrap="wrap" gapX={8} gapY={4}>
       {MAP_KINDS.map((choice) => (
         <Button
           key={choice.id}

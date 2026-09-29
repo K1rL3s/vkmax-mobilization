@@ -302,7 +302,7 @@ export const FlatResidentsSection = () => {
   };
 
   return (
-    <Flex asChild align="stretch" direction="column" gap={12}>
+    <Flex asChild align="stretch" direction="column" gap={8}>
       <section className={styles.FlatResidentsSection}>
         <Typography.Text asChild variant="title" color="primary">
           <h2>Жители квартиры</h2>

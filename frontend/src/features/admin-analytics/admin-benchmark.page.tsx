@@ -58,7 +58,7 @@ const AdminBenchmarkPage = () => {
   return (
     <Panel className={styles.Page} mode="secondary">
       <Flex direction="column" align="stretch" gapY={4}>
-        <Typography.Text asChild variant="title" color="primary">
+        <Typography.Text asChild variant="header" color="primary">
           <h1>Сравнение с платформой</h1>
         </Typography.Text>
 
@@ -89,7 +89,7 @@ const AdminBenchmarkPage = () => {
       {benchmark.isSuccess && !benchmark.data.is_empty && (
         <>
           <Section title="Ваши показатели">
-            <Flex direction="column" align="stretch" gapY={14}>
+            <Flex direction="column" align="stretch" gapY={12}>
               {benchmark.data.metrics.map((metric) => (
                 <BenchmarkMetricRow key={metric.key} metric={metric} />
               ))}
@@ -101,7 +101,7 @@ const AdminBenchmarkPage = () => {
               title="Разрезы"
               note="Среднее время до принятия, медиана по УК разреза"
             >
-              <Flex direction="column" align="stretch" gapY={14}>
+              <Flex direction="column" align="stretch" gapY={12}>
                 <SplitRows
                   title="По регионам"
                   rows={benchmark.data.regions.filter(

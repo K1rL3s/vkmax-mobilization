@@ -109,7 +109,7 @@ export const SettingsForm = ({ settings, lock }: SettingsFormProps) => {
   const number = { valueAsNumber: true } as const;
 
   return (
-    <Flex asChild align="stretch" direction="column" gapY={24}>
+    <Flex asChild align="stretch" direction="column" gapY={20}>
       <form noValidate onSubmit={form.submit}>
         <Section
           id="meter-window"

@@ -22,14 +22,13 @@
   border-radius: 20px;
 }
 
-.neutral {
+.large,
+.xlarge {
   background-color: var(--controls-inactive);
-  color: var(--icon-primary);
 }
 
-.card {
-  background-color: var(--background-card);
-  color: var(--icon-themed);
+.neutral {
+  color: var(--icon-primary);
 }
 
 .secondary {
@@ -38,40 +37,17 @@
 }
 
 .themed {
-  background-color: color-mix(in srgb, var(--icon-themed) 12%, transparent);
   color: var(--icon-themed);
 }
 
 .positive {
-  background-color: color-mix(in srgb, var(--icon-positive) 12%, transparent);
   color: var(--icon-positive);
 }
 
 .negative {
-  background-color: color-mix(in srgb, var(--icon-negative) 12%, transparent);
   color: var(--icon-negative);
 }
 
 .promo {
-  background-color: color-mix(
-    in srgb,
-    var(--promo-text-step-1) 12%,
-    transparent
-  );
   color: var(--promo-text-step-1);
-}
-
-.brand-blue {
-  background: var(--gradient-blue);
-  color: #eef1f5;
-}
-
-.brand-green {
-  background: var(--gradient-green);
-  color: #eef1f5;
-}
-
-.brand-orange {
-  background: var(--gradient-orange);
-  color: #eef1f5;
 }

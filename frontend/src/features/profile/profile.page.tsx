@@ -22,6 +22,7 @@ import {
   homeIcon,
   Icon,
   infoIcon,
+  textSizeIcon,
   trashIcon,
   usersIcon,
 } from "@/shared/ui/icon";
@@ -43,7 +44,7 @@ const WARNING: Partial<
 > = {
   ways: {
     title: "Квартира не подтверждена",
-    action: "Подтвердить квартиру",
+    action: "Подтвердить",
     alert: true,
   },
   pending: {
@@ -131,24 +132,30 @@ const ProfilePage = () => {
       </Flex>
 
       {warning && (
-        <Flex align="stretch" direction="column" gap={8}>
-          <Flex
-            align="center"
-            gap={8}
-            className={cn(styles.Warning, warning.alert && styles.alert)}
-          >
-            <Icon
-              src={warning.alert ? alertIcon : clockIcon}
-              size={20}
-              className={styles.WarningIcon}
-            />
-            <Typography.Text variant="body-strong" color="primary">
-              {warning.title}
+        <Flex
+          align="stretch"
+          direction="column"
+          gap={12}
+          className={styles.Warning}
+        >
+          <Flex align="stretch" direction="column" gapY={4}>
+            <Flex align="center" gap={8}>
+              <Icon
+                src={warning.alert ? alertIcon : clockIcon}
+                size={20}
+                className={cn(
+                  styles.WarningIcon,
+                  warning.alert && styles.alert,
+                )}
+              />
+              <Typography.Text variant="body-strong" color="primary">
+                {warning.title}
+              </Typography.Text>
+            </Flex>
+            <Typography.Text variant="description" color="secondary">
+              После подтверждения станут доступны начисления и счётчики
             </Typography.Text>
           </Flex>
-          <Typography.Text variant="description" color="secondary">
-            После подтверждения станут доступны начисления и счётчики
-          </Typography.Text>
           <Button asChild size="medium" variant="secondary" stretched>
             <Link
               to={generatePath(Routes.FLAT_CONFIRMATION, {
@@ -237,6 +244,23 @@ const ProfilePage = () => {
           <Typography.Text variant="description" color="tertiary">
             {ALWAYS_DELIVERED}
           </Typography.Text>
+        </section>
+      </Flex>
+
+      <Flex asChild align="stretch" direction="column" gap={8}>
+        <section>
+          <Typography.Text asChild variant="title" color="primary">
+            <h2>Экран</h2>
+          </Typography.Text>
+          <div className={styles.Panel}>
+            <CellSimple
+              before={<Icon src={textSizeIcon} className={styles.CellIcon} />}
+              title="Размер текста"
+              subtitle="Обычный, крупный или очень крупный"
+              showChevron
+              onClick={() => void navigate(Routes.APPEARANCE)}
+            />
+          </div>
         </section>
       </Flex>
 

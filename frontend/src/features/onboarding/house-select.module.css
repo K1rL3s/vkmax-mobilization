@@ -7,24 +7,18 @@
   .Views {
     display: flex;
     gap: 8px;
-    padding: 10px 16px 6px;
-
-    button {
-      height: 44px;
-      border-block: 2px solid transparent;
-      background-clip: padding-box;
-    }
+    padding: 8px 16px;
   }
 
   .Form {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
     padding: 8px 16px 16px;
   }
 
   .Footer {
-    padding: 12px 16px;
+    padding: 12px 16px 24px;
   }
 }

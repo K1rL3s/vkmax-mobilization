@@ -16,21 +16,27 @@ const MeetingsPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      {list.isChairman && list.isConnected && (
-        <Button asChild size="large" stretched>
-          <Link to={Routes.MEETING_NEW}>Создать опрос</Link>
-        </Button>
-      )}
+      {((list.isChairman && list.isConnected) || list.canPropose) && (
+        <Flex align="stretch" direction="column" gap={8}>
+          {list.isChairman && list.isConnected && (
+            <Button asChild size="large" stretched>
+              <Link to={Routes.MEETING_NEW}>Создать опрос</Link>
+            </Button>
+          )}
 
-      {list.canPropose && (
-        <Button
-          asChild
-          size="large"
-          stretched
-          variant={list.isChairman ? "secondary" : "primary"}
-        >
-          <Link to={Routes.MEETING_INITIATIVE_NEW}>Предложить инициативу</Link>
-        </Button>
+          {list.canPropose && (
+            <Button
+              asChild
+              size="large"
+              stretched
+              variant={list.isChairman ? "secondary" : "primary"}
+            >
+              <Link to={Routes.MEETING_INITIATIVE_NEW}>
+                Предложить инициативу
+              </Link>
+            </Button>
+          )}
+        </Flex>
       )}
 
       {!list.isConnected && (

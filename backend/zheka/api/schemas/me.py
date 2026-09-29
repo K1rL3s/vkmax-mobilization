@@ -12,6 +12,7 @@ from zheka.core.enums import (
     EventType,
     NotificationCategory,
     NotificationLevel,
+    TextSize,
 )
 from zheka.core.ids import AnnouncementId, UserId
 from zheka.core.services.profile import MeView
@@ -29,6 +30,9 @@ class MeResponse(BaseSchema):
         default=None,
         description="Номер, подтвержденный MAX, в формате +79991234567",
     )
+    text_size: TextSize = Field(
+        description="Размер текста в мини-приложении: обычный, крупный, очень крупный",
+    )
 
     @classmethod
     def of(cls, view: MeView) -> Self:
@@ -43,6 +47,7 @@ class MeResponse(BaseSchema):
             orgs=[OrgMembership.of(membership) for membership in view.orgs],
             is_demo=view.is_demo,
             phone=view.user.phone,
+            text_size=view.user.text_size,
         )
 
 
@@ -83,3 +88,7 @@ class TrackEventRequest(BaseSchema):
     source: EventSource | None = None
     tab: FreeText | None = None
     announcement_id: AnnouncementId | None = None
+
+
+class UpdateAppearanceRequest(BaseSchema):
+    text_size: TextSize

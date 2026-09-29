@@ -17,7 +17,7 @@ const ChargesPage = () => {
 
   return (
     <Panel className={styles.Page} mode="secondary">
-      <Typography.Text asChild variant="title" color="primary">
+      <Typography.Text asChild variant="header" color="primary">
         <h1>История начислений</h1>
       </Typography.Text>
 

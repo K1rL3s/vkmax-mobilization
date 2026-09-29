@@ -15,7 +15,7 @@ const SECTION_ROWS = 3;
 
 export const ModelNote = ({ text }: { text: string }) => (
   <Flex align="center" gap={12} className={styles.Note}>
-    <Icon src={infoIcon} size={24} className={styles.NoteIcon} />
+    <Icon src={infoIcon} size={20} className={styles.NoteIcon} />
     <Typography.Text variant="description" color="secondary">
       {text}
     </Typography.Text>

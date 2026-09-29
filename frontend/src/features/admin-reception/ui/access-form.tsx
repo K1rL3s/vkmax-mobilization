@@ -45,7 +45,7 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
     <Panel className={styles.Page} mode="secondary">
       <form className={styles.Form} noValidate onSubmit={form.submit}>
         <Flex align="stretch" direction="column" gapY={4}>
-          <Typography.Text asChild variant="title" color="primary">
+          <Typography.Text asChild variant="header" color="primary">
             <h1 className={styles.Title}>Сбор доступа</h1>
           </Typography.Text>
 
@@ -56,7 +56,7 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
         </Flex>
 
         <section className={styles.Section}>
-          <Typography.Text asChild variant="body-strong" color="primary">
+          <Typography.Text asChild variant="title" color="primary">
             <h2 className={styles.Title}>Дом</h2>
           </Typography.Text>
 
@@ -91,7 +91,7 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
         </section>
 
         <section className={styles.Section}>
-          <Typography.Text asChild variant="body-strong" color="primary">
+          <Typography.Text asChild variant="title" color="primary">
             <h2 className={styles.Title}>Зачем нужен доступ</h2>
           </Typography.Text>
 
@@ -115,7 +115,7 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
         </section>
 
         <section className={styles.Section}>
-          <Typography.Text asChild variant="body-strong" color="primary">
+          <Typography.Text asChild variant="title" color="primary">
             <h2 className={styles.Title}>Когда придём</h2>
           </Typography.Text>
 
@@ -190,7 +190,7 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
                   <Typography.Text
                     key={startsAt}
                     className={styles.Chip}
-                    variant="description"
+                    variant="body"
                     color="primary"
                   >
                     {windowLabel(startsAt, form.windowMinutes)}
@@ -206,7 +206,7 @@ export const AccessForm = ({ houses }: { houses: OrgHouse[] }) => {
         </section>
 
         <section className={styles.Section}>
-          <Typography.Text asChild variant="body-strong" color="primary">
+          <Typography.Text asChild variant="title" color="primary">
             <h2 className={styles.Title}>В какие квартиры</h2>
           </Typography.Text>
 

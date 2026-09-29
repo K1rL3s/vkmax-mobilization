@@ -1,12 +1,16 @@
 import inspect
+import json
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import Fixture
+from tests.conftest import Fixture, make_bot_config, signed_init_data
+from tests.test_auth import CHECKER_TOKEN, _app
 
 from zheka.api.dependencies.current_account import CurrentAccount
 from zheka.api.dependencies.current_residency import (
@@ -335,3 +339,49 @@ async def test_a_consent_is_recorded_with_its_source(
     assert (await session.execute(stmt)).scalars().all() == [
         {"source": EventSource.MINIAPP.value, "version": CONSENT_VERSION},
     ]
+
+
+async def test_a_text_size_is_kept_for_its_own_account_only(
+    bot_database_url: str,  # noqa: ARG001
+) -> None:
+    app = _app(CHECKER_TOKEN, make_bot_config().db)
+    reader, neighbour = (
+        {
+            "WebAppData": signed_init_data(
+                datetime.now(UTC),
+                user=json.dumps({"id": secrets.randbits(40), "first_name": name}),
+            ),
+        }
+        for name in ("Жека", "Сосед")
+    )
+    xlarge = {"text_size": "xlarge"}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        before_consent = await client.put(
+            "/api/me/appearance",
+            headers=reader,
+            json=xlarge,
+        )
+        for headers in (reader, neighbour):
+            await client.post(
+                "/api/me/consent",
+                headers=headers,
+                json={"version": CONSENT_VERSION},
+            )
+        saved = await client.put("/api/me/appearance", headers=reader, json=xlarge)
+        unknown = await client.put(
+            "/api/me/appearance",
+            headers=reader,
+            json={"text_size": "huge"},
+        )
+        relaunched = await client.get("/api/me", headers=reader)
+        other = await client.get("/api/me", headers=neighbour)
+
+    assert before_consent.status_code == 403
+    assert saved.json()["text_size"] == "xlarge"
+    assert unknown.status_code == 400
+    assert relaunched.json()["text_size"] == "xlarge"
+    assert other.json()["text_size"] == "normal"

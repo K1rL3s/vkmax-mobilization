@@ -37,6 +37,7 @@ export { default as receiptIcon } from "./receipt.svg";
 export { default as searchOutlineIcon } from "./search-outline.svg";
 export { default as starFilledIcon } from "./star-filled.svg";
 export { default as starIcon } from "./star.svg";
+export { default as textSizeIcon } from "./text-size.svg";
 export { default as trashIcon } from "./trash.svg";
 export { default as treeIcon } from "./tree.svg";
 export { default as userIcon } from "./user.svg";

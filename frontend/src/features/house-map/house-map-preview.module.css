@@ -11,8 +11,8 @@
     pointer-events: none;
 
     :global(.maplibregl-ctrl-attrib) {
-      font-size: 10px;
-      line-height: 16px;
+      font-size: 0.625rem;
+      line-height: 1rem;
     }
   }
 

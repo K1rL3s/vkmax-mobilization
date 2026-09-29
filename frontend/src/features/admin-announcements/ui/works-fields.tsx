@@ -153,7 +153,7 @@ export const WorksFields = ({ form }: { form: AnnouncementFormModel }) => {
                   aria-label={`Убрать документ ${index + 1}`}
                   onClick={() => form.removeDocument(index)}
                 >
-                  <Icon src={trashIcon} size={18} />
+                  <Icon src={trashIcon} size={20} />
                 </IconButton>
               </div>
             ))}

@@ -138,7 +138,7 @@ const NewRequestPage = () => {
         )}
 
         {outage && (
-          <Flex direction="column" align="flex-start" gap={6}>
+          <Flex direction="column" align="flex-start" gap={8}>
             <Typography.Text variant="description" color="secondary">
               По дому {outageTitle(outage).toLowerCase()}
             </Typography.Text>

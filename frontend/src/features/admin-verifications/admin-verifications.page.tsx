@@ -15,7 +15,7 @@ const AdminVerificationsPage = () => {
   return (
     <Panel className={styles.Page} mode="secondary">
       <Flex align="stretch" direction="column" gapY={4}>
-        <Typography.Text asChild variant="title" color="primary">
+        <Typography.Text asChild variant="header" color="primary">
           <h1>Запросы подтверждения</h1>
         </Typography.Text>
 
@@ -74,13 +74,17 @@ const AdminVerificationsPage = () => {
         />
       )}
 
-      {list.items.map((request) => (
-        <VerificationRow
-          key={request.id}
-          request={request}
-          showAddress={list.houseId === null}
-        />
-      ))}
+      {list.items.length > 0 && (
+        <Flex align="stretch" direction="column" gap={8}>
+          {list.items.map((request) => (
+            <VerificationRow
+              key={request.id}
+              request={request}
+              showAddress={list.houseId === null}
+            />
+          ))}
+        </Flex>
+      )}
 
       {list.isTruncated && (
         <Typography.Text variant="description" color="secondary">

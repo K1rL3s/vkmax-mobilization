@@ -158,7 +158,7 @@ const AdminPollNewPage = () => {
                     aria-label={`Убрать вариант ${index + 1}`}
                     onClick={() => form.removeOption(index)}
                   >
-                    <Icon src={trashIcon} size={18} />
+                    <Icon src={trashIcon} size={20} />
                   </IconButton>
                 )}
               </div>

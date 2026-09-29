@@ -6,9 +6,9 @@ import {
   confirmationTone,
   type ResidencyState,
 } from "@/features/flat-confirmation";
-import { cn } from "@/shared/lib/css";
 import { Chevron } from "@/shared/ui/chevron";
-import { homeIcon, Icon } from "@/shared/ui/icon";
+import { homeIcon } from "@/shared/ui/icon";
+import { IconTile } from "@/shared/ui/icon-tile";
 import { StatusPill } from "@/shared/ui/status-pill";
 
 import styles from "./house-summary.module.css";
@@ -50,11 +50,7 @@ export const HouseSummary = ({
 
   const content = (
     <>
-      <Icon
-        src={homeIcon}
-        size={32}
-        className={cn(styles.Icon, styles[tone])}
-      />
+      <IconTile icon={homeIcon} tone={tone} />
 
       <Flex className={styles.Grow} align="stretch" direction="column" gapY={2}>
         <Typography.Text

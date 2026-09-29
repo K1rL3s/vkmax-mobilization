@@ -13,7 +13,7 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
   if (!request.can_rate) {
     return (
       <div className={styles.Panel}>
-        <Typography.Text variant="title" color="primary">
+        <Typography.Text variant="body-strong" color="primary">
           Ваша оценка
         </Typography.Text>
 
@@ -32,7 +32,7 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
             )}
 
             <Button
-              size="large"
+              size="medium"
               variant="secondary"
               loading={form.isRepeating}
               disabled={!form.canRepeat}
@@ -53,7 +53,7 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
   return (
     <div className={styles.Panel}>
       <Flex align="stretch" direction="column" gapY={2}>
-        <Typography.Text variant="title" color="primary">
+        <Typography.Text variant="body-strong" color="primary">
           Оцените работу
         </Typography.Text>
         <Typography.Text variant="description" color="secondary">
@@ -90,7 +90,7 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
       <Flex direction="row-reverse" wrap="wrap" gap={8}>
         <Button
           className={styles.Action}
-          size="large"
+          size="medium"
           loading={form.isRating}
           disabled={!form.canRate}
           onClick={form.rate}
@@ -99,7 +99,7 @@ export const RatePanel = ({ request }: { request: RequestCard }) => {
         </Button>
         <Button
           className={styles.Action}
-          size="large"
+          size="medium"
           variant="secondary"
           loading={form.isRepeating}
           disabled={!form.canRepeat}

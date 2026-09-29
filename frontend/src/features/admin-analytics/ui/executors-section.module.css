@@ -9,7 +9,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   white-space: nowrap;
 
   th,
@@ -27,7 +27,7 @@
 
   thead th {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   tbody tr + tr th,

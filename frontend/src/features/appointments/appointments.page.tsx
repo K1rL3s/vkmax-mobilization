@@ -27,7 +27,7 @@ type SectionProps = {
 };
 
 const Section = ({ title, aside, children }: SectionProps) => (
-  <Flex asChild direction="column" align="stretch" gap={12}>
+  <Flex asChild direction="column" align="stretch" gap={8}>
     <section>
       <Flex align="baseline" gap={8}>
         <Typography.Text

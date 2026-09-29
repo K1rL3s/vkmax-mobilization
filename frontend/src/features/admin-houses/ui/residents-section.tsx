@@ -35,7 +35,7 @@ const ResidentRow = ({
         {residentPlace(resident)}
       </Typography.Text>
 
-      <Flex align="center" gap={6} wrap="wrap">
+      <Flex align="center" gap={8} wrap="wrap">
         {resident.is_chairman && (
           <StatusPill tone="promo">Председатель</StatusPill>
         )}

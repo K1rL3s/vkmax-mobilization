@@ -61,7 +61,7 @@ const HouseRow = ({ house, isAdmin }: { house: House; isAdmin: boolean }) => {
             {house.address}
           </Typography.Text>
 
-          <Flex align="center" gap={6} wrap="wrap">
+          <Flex align="center" gap={8} wrap="wrap">
             {requests}
           </Flex>
         </Flex>
@@ -92,7 +92,7 @@ const HouseRow = ({ house, isAdmin }: { house: House; isAdmin: boolean }) => {
             ` · ${house.residents_count} ${plural(house.residents_count, ["житель", "жителя", "жителей"])}`}
         </Typography.Text>
 
-        <Flex align="center" gap={6} wrap="wrap">
+        <Flex align="center" gap={8} wrap="wrap">
           {requests}
 
           {house.chat_bound ? (
@@ -194,9 +194,11 @@ const HouseList = ({ isAdmin }: { isAdmin: boolean }) => {
 
     return (
       <>
-        {items.map((house) => (
-          <HouseRow key={house.id} house={house} isAdmin={isAdmin} />
-        ))}
+        <Flex align="stretch" direction="column" gap={8}>
+          {items.map((house) => (
+            <HouseRow key={house.id} house={house} isAdmin={isAdmin} />
+          ))}
+        </Flex>
 
         {houses.hasNextPage && (
           <Button
@@ -261,7 +263,7 @@ const AdminHousesPage = () => {
           direction="column"
           gapY={4}
         >
-          <Typography.Text asChild variant="title" color="primary">
+          <Typography.Text asChild variant="header" color="primary">
             <h1>Дома</h1>
           </Typography.Text>
 

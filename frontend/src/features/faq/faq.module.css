@@ -20,7 +20,7 @@
       position: absolute;
       top: 0;
       right: 0;
-      left: 16px;
+      left: 12px;
       height: 1px;
       background-color: var(--controls-inactive);
       content: "";
@@ -31,7 +31,9 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px 16px;
+    box-sizing: border-box;
+    min-height: 56px;
+    padding: 8px 12px;
     list-style: none;
     cursor: pointer;
 
@@ -63,7 +65,7 @@
 
   .Answer {
     margin: -8px 0 0;
-    padding: 0 16px 14px;
+    padding: 0 12px 12px;
 
     a {
       color: var(--text-themed);
