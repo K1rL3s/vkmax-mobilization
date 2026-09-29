@@ -390,7 +390,8 @@ def poll_card(
         share = f"{row.flats} кв., {row.percent // 100}% площади"
         lines.append(f"{number}. {escape(row.text)} - {share}")
     until = "" if ends_at is None else f", до {ends_at:%d.%m}"
-    lines.append(f"Проголосовало {voted} из {flats_count(total)}{until}")
+    flats = _plural(total, "квартиры", "квартир", "квартир")
+    lines.append(f"Проголосовало {voted} из {total} {flats}{until}")
     lines.extend((POLL_NOT_OSS, POLL_HASHTAG))
     return "\n".join(lines)
 

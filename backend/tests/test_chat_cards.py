@@ -471,7 +471,7 @@ async def test_the_poll_card_counts_flats_and_area_and_closes_without_buttons(
         "1. Да - 1 кв., 25% площади",
         "2. Нет - 0 кв., 0% площади",
     ]
-    assert lines[3].startswith("Проголосовало 1 из 2 квартиры, до ")
+    assert lines[3].startswith("Проголосовало 1 из 2 квартир, до ")
     assert lines[-2:] == [texts.POLL_NOT_OSS, texts.POLL_HASHTAG]
     assert len(view.votes) == (0 if is_multiple else 2)
     assert view.app_path == (f"/meetings/{card.poll.id}" if is_multiple else None)
@@ -491,3 +491,21 @@ def test_a_long_option_is_cut_on_its_button() -> None:
     assert len(label) == texts.VOTE_OPTION_LIMIT
     assert label.startswith("2. Очень")
     assert label.endswith("…")
+
+
+@pytest.mark.parametrize(
+    ("total", "words"),
+    [
+        (1, "из 1 квартиры"),
+        (2, "из 2 квартир"),
+        (11, "из 11 квартир"),
+        (21, "из 21 квартиры"),
+    ],
+)
+def test_the_poll_card_counts_voters_out_of_flats_in_russian(
+    total: int,
+    words: str,
+) -> None:
+    text = texts.poll_card("Шлагбаум?", True, [], 0, total, None)
+
+    assert f"Проголосовало 0 {words}\n" in text

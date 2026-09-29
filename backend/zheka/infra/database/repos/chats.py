@@ -13,12 +13,19 @@ from zheka.infra.database.tables.chats import (
     chat_pins_table,
     chats_table,
 )
+from zheka.infra.database.tables.polls import polls_table
+from zheka.infra.database.tables.requests import request_groups_table, requests_table
 
 BOUND_CHAT = and_(
     chats_table.c.house_id.is_not(None),
     chats_table.c.bound_at.is_not(None),
     chats_table.c.status == ChatStatus.ACTIVE,
 )
+CARD_SOURCES = {
+    ChatCardKind.REQUEST: requests_table,
+    ChatCardKind.GROUP: request_groups_table,
+    ChatCardKind.POLL: polls_table,
+}
 
 
 class ChatsRepo(BaseAlchemyRepo):
@@ -124,18 +131,6 @@ class ChatsRepo(BaseAlchemyRepo):
         card: ChatCard | None = await self._session.scalar(stmt)
         return card
 
-    async def list_cards(
-        self,
-        kind: ChatCardKind,
-        ref_id: int,
-    ) -> Sequence[ChatCard]:
-        stmt = select(ChatCard).where(
-            chat_cards_table.c.kind == kind,
-            chat_cards_table.c.ref_id == ref_id,
-        )
-        result = await self._session.execute(stmt)
-        return result.scalars().all()
-
     async def add_card(self, card: ChatCard) -> None:
         self._session.add(card)
         await self._session.flush()
@@ -145,3 +140,20 @@ class ChatsRepo(BaseAlchemyRepo):
         if mid is not None:
             stmt = stmt.where(chat_cards_table.c.mid == mid)
         await self._session.execute(stmt)
+
+    async def lock_for_card(self, kind: ChatCardKind, ref_id: int) -> Sequence[Chat]:
+        source = CARD_SOURCES[kind]
+        house_id = select(source.c.house_id).where(source.c.id == ref_id)
+        stmt = (
+            select(Chat)
+            .where(
+                chats_table.c.house_id == house_id.scalar_subquery(),
+                BOUND_CHAT,
+                chats_table.c.bot_is_admin.is_(True),
+            )
+            .order_by(chats_table.c.chat_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()

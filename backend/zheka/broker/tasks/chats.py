@@ -183,13 +183,13 @@ async def sync_chat_card(
     users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
 ) -> None:
-    view = await cards.render(kind, ref_id)
+    chats = await chats_repo.lock_for_card(kind, ref_id)
+    view = await cards.render(kind, ref_id) if chats else None
     if view is None:
         return
     keyboard = _card_keyboard(bot, view)
-    for chat in await chats_repo.list_for_houses([view.house_id]):
+    for chat in chats:
         chat_id = chat.chat_id
-        await chats_repo.lock(chat_id)
         card = await chats_repo.get_card(chat_id, kind, ref_id)
         if card is not None:
             done = await sender.edit_message(chat_id, card.mid, view.text, keyboard)

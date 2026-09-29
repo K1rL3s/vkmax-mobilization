@@ -318,20 +318,21 @@ ignore it. zsh: quote globs (`--include='*.py'`).
   by name with the join button, unless the chat is unbound, the bot lost
   rights, the member is a bot or already an active resident of the house.
 - Chat cards (`chat_cards`, one message per `(chat, kind, ref_id)`) are sent
-  only by `sync_chat_card`, rendered from the db by `ChatCardsService` under
-  `ChatsRepo.lock`: it edits a card it has and posts one only with
-  `post=True`; a failed send or edit rechecks rights. `TaskPublisher` drops an
-  exact duplicate of a `RENDERED_FROM_DB` task within a transaction, so a
-  group status change queues one sync. A group card is posted on forming and
-  every join, edited by `_move` and `_complete_review` of its members; no
-  flats, names or descriptions in it. `bot_added` and deleting the card
-  message forget it. «✋ У меня тоже» is a startapp `house_<id>_<category>`.
-  A request card goes to the chat only when its author asks
-  (`share_to_chat`, open request; grouped -> the group card; no chat -> the
-  client's native share), then every status move edits it; once grouped it
-  says so and stays. A poll card is posted on create, edited on every vote,
-  close and expiry, shows live counts by verified flats and area; a
-  single-answer poll votes by `VotePayload` buttons (chat router,
+  only by `sync_chat_card`, rendered from the db by `ChatCardsService` after
+  `ChatsRepo.lock_for_card` locks the house's chats (a render before the lock
+  lets a slower task paint an older state): it edits a card it has and posts
+  one only with `post=True`; a failed send or edit rechecks rights.
+  `TaskPublisher` drops an exact duplicate of a `RENDERED_FROM_DB` task within
+  a transaction, so a group status change queues one sync. A group card is
+  posted on forming and every join, edited by `_move` and `_complete_review`
+  of its members; no flats, names or descriptions in it. `bot_added` and
+  deleting the card message forget it. «✋ У меня тоже» is a startapp
+  `house_<id>_<category>`. A request card goes to the chat only when its
+  author asks (`share_to_chat`, open request; grouped -> the group card; no
+  chat -> the client's native share), then every status move edits it; once
+  grouped it says so and stays. A poll card is posted on create, edited on
+  every vote, close and expiry, shows live counts by verified flats and area;
+  a single-answer poll votes by `VotePayload` buttons (chat router,
   `PollsService.vote_in_chat`, `POLL_VOTED.source`), a multi-answer one opens
   the app. The 48-hour chat reminder replies to the card.
 - MAX sends no rights-change event: `is_chat_admin` runs on the «Готово» tap

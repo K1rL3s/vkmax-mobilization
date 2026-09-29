@@ -58,8 +58,8 @@ from maxo.types.user import User as MaxUser
 from maxo.utils.deeplink import create_start_link, create_startapp_link
 from maxo.utils.link import id_to_message_url
 from maxo.utils.payload import decode_payload
-from sqlalchemy import delete, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select, text, update
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from taskiq import InMemoryBroker
 
 from tests.conftest import PROBE_ROUTERS, RecordingBroker, photo_name
@@ -4678,3 +4678,99 @@ async def test_chairman_outcomes_escape_the_name_and_the_address(
 
     assert any("Р&amp;Д" in (text or "") for text in notices.texts)
     assert not any("Р&Д" in (text or "") for text in notices.texts)
+
+
+async def _until_waiting_on_a_lock(engine: AsyncEngine) -> None:
+    stmt = text(
+        "SELECT count(*) FROM pg_stat_activity "
+        "WHERE datname = current_database() AND wait_event_type = 'Lock'",
+    )
+    for _ in range(100):
+        async with engine.connect() as connection:
+            if await connection.scalar(stmt):
+                return
+        await asyncio.sleep(0.05)
+    pytest.fail("Синхронизация карточки не дождалась блокировки чата")
+
+
+async def test_a_card_is_rendered_after_the_chat_lock_is_taken(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+    bot_engine: AsyncEngine,
+) -> None:
+    chat_id, _, group_id = await _grouped_chat(bot_session, client)
+    bot_session.add(
+        ChatCard(chat_id=chat_id, kind=ChatCardKind.GROUP, ref_id=group_id, mid="c-1"),
+    )
+    await bot_session.commit()
+
+    async with AsyncSession(bind=bot_engine) as mover:
+        await ChatsRepo(mover).lock(chat_id)
+        sync = asyncio.create_task(
+            _run(
+                task_broker,
+                sync_chat_card,
+                kind=ChatCardKind.GROUP,
+                ref_id=group_id,
+                post=False,
+            ),
+        )
+        await _until_waiting_on_a_lock(bot_engine)
+        await mover.execute(
+            update(requests_table)
+            .where(requests_table.c.group_id == group_id)
+            .values(status=RequestStatus.IN_PROGRESS),
+        )
+        await mover.commit()
+        await sync
+
+    [edited] = pin_api.edited
+    assert edited["text"] == texts.group_card(
+        RequestCategory.LEAK,
+        2,
+        RequestStatus.IN_PROGRESS,
+    )
+
+
+async def test_a_shared_request_card_reaches_the_chat_without_the_flat(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.house_id is not None
+    flat = Flat(house_id=chat.house_id, number="987")
+    bot_session.add(flat)
+    await bot_session.flush()
+    request = Request(
+        house_id=chat.house_id,
+        flat_id=flat.id,
+        category=RequestCategory.ELEVATOR,
+        description="Кв. 987, лифт стоит",
+        status=RequestStatus.ACCEPTED,
+        channel=RequestChannel.MINIAPP,
+        deadline_at=datetime.now(UTC),
+    )
+    bot_session.add(request)
+    await bot_session.flush()
+    request_id = request.id
+    await bot_session.commit()
+
+    await _run(
+        task_broker,
+        sync_chat_card,
+        kind=ChatCardKind.REQUEST,
+        ref_id=request_id,
+        post=True,
+    )
+
+    [sent] = pin_api.sent
+    assert sent["chat_id"] == chat_id
+    assert sent["text"].startswith(f"🛗 Заявка №{request_id} · Лифт\nСтатус: принята")
+    assert "987" not in sent["text"]
+    assert await _cards(bot_session, chat_id) == ["list-1"]
