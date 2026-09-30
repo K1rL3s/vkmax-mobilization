@@ -28,6 +28,12 @@
     text-decoration: none;
   }
 
+  .Mascot {
+    width: 120px;
+    height: 120px;
+    border-radius: 24px;
+  }
+
   .Hero {
     text-align: center;
 

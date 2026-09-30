@@ -4,13 +4,12 @@ import { Link } from "react-router-dom";
 import { errorMessage } from "@/shared/api/errors";
 import { Routes } from "@/shared/model/routes";
 import { Checkbox } from "@/shared/ui/checkbox";
-import { buildingIcon } from "@/shared/ui/icon";
-import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
 import { useConsent } from "./model/use-consent";
 
+import zheka from "./zheka.webp";
 import styles from "./onboarding.module.css";
 
 export const Consent = ({
@@ -33,7 +32,7 @@ export const Consent = ({
         <Flex direction="column" align="center" gap={16}>
           {notice && <StatusPill tone="positive">{notice}</StatusPill>}
 
-          <IconTile icon={buildingIcon} tone="secondary" size="xlarge" />
+          <img src={zheka} alt="" className={styles.Mascot} />
 
           <Flex
             className={styles.Hero}
