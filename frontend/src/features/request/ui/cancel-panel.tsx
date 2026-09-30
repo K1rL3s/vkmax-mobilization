@@ -25,7 +25,7 @@ export const CancelPanel = ({ request }: { request: RequestCard }) => {
     <>
       <Button
         size="medium"
-        variant="ghost"
+        variant="secondary"
         stretched
         onClick={() => setOpen(true)}
       >
