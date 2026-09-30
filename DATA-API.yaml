@@ -18,8 +18,8 @@ checks:
       resident - житель демо-УК №5 с подтвержденной квартирой, начислениями и показаниями за полгода.
       staff - сотрудник демо-УК №5, видит заявки домов своей организации.
       Мини-приложение вместо токена передает подписанную initData из MAX в заголовке WebAppData.
-      Числовые id в проверках - данные стенда: дом 6 и квартиру 1121 проверяющему выдал provision_demo,
-      заявку 766 создал request_create, заявка 1 - заявка жителя другой УК из сида.
+      Числовые id в проверках - данные стенда: дом 1061 и квартиру 16714 проверяющему выдал provision_demo,
+      заявку 10853 создал request_create, заявка 1 - заявка жителя другой УК из сида.
       На своей базе после сида (python -m zheka.seed) id другие: дом и квартира - house_id и flat_id
       из residency в ответе provision_demo, своя заявка - id из ответа request_create,
       чужая заявка 1 остается чужой
@@ -160,7 +160,7 @@ checks:
       headers:
         Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       path:
-        house_id: 6
+        house_id: 1061
     expected:
       statusCodes: [200]
       contentType: application/json
@@ -178,7 +178,7 @@ checks:
       headers:
         Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json
-        X-House-Id: "6"
+        X-House-Id: "1061"
       body:
         category: leak
         description: Течет кран в ванной, проверка API
@@ -199,7 +199,7 @@ checks:
     request:
       headers:
         Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
-        X-House-Id: "6"
+        X-House-Id: "1061"
       query:
         limit: 20
         offset: 0
@@ -226,7 +226,7 @@ checks:
       headers:
         Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       path:
-        request_id: 766
+        request_id: 10853
     expected:
       statusCodes: [200]
       contentType: application/json
@@ -266,7 +266,7 @@ checks:
       headers:
         Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
       path:
-        flat_id: 1121
+        flat_id: 16714
     expected:
       statusCodes: [200]
       contentType: application/json
@@ -309,7 +309,7 @@ checks:
     dependsOn: [provision_demo]
     request:
       path:
-        request_id: 766
+        request_id: 10853
       headers:
         Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json
@@ -332,7 +332,7 @@ checks:
     dependsOn: [provision_demo]
     request:
       path:
-        request_id: 766
+        request_id: 10853
       headers:
         Authorization: Bearer 34c63235dea4b1fb95ce89a9f108fc18
         Content-Type: application/json

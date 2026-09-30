@@ -76,7 +76,7 @@ curl http://localhost/api/healthcheck
 docker compose run --rm api python -m zheka.seed
 ```
 
-Чтобы проверять API локально запросами, впишите в `.env` любой `API_TEST_TOKEN`, например `API_TEST_TOKEN=local`, и пересоздайте `api` командой `docker compose up -d api`. Запросы из «Проверки API» тогда работают с `http://localhost/api` и заголовком `Authorization: Bearer local`. Id в `DATA-API.yaml` (дом 6, квартира 1121, заявка 766) есть только на стенде: локально дом и квартира - `house_id` и `flat_id` из `residency` в ответе `POST /api/demo/activate`, своя заявка - `id` из ответа `POST /api/requests`.
+Чтобы проверять API локально запросами, впишите в `.env` любой `API_TEST_TOKEN`, например `API_TEST_TOKEN=local`, и пересоздайте `api` командой `docker compose up -d api`. Запросы из «Проверки API» тогда работают с `http://localhost/api` и заголовком `Authorization: Bearer local`. Id в `DATA-API.yaml` (дом 1061, квартира 16714, заявка 10853) есть только на стенде: локально дом и квартира - `house_id` и `flat_id` из `residency` в ответе `POST /api/demo/activate`, своя заявка - `id` из ответа `POST /api/requests`.
 
 Бот локально работает в режиме `polling`, домен и сертификат не нужны. Токен берите отдельный, тестовый: пока на проде включен вебхук, long polling с тем же токеном обновлений не получит.
 
