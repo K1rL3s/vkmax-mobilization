@@ -6,7 +6,7 @@ import { useSession } from "@/shared/model/session";
 
 import type { Flat, House } from "./types";
 
-export const useHouseLink = () => {
+export const useHouseLink = (returnTo: string = Routes.HOME) => {
   const navigate = useNavigate();
   const { residencies, reload } = useSession();
 
@@ -20,7 +20,7 @@ export const useHouseLink = () => {
           })
         : Routes.HOME;
 
-      await navigate(next, { replace: true, state: { returnTo: Routes.HOME } });
+      await navigate(next, { replace: true, state: { returnTo } });
     },
   });
 

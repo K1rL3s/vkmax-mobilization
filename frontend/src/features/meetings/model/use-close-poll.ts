@@ -33,7 +33,7 @@ export const useClosePoll = (pollId: number) => {
       close.isError &&
       (isForbidden(close.error)
         ? "Завершить опрос больше нельзя: права изменились."
-        : "Не получилось завершить опрос. Проверьте связь и попробуйте ещё раз."),
+        : "Не получилось завершить опрос. Проверьте связь и попробуйте ещё раз"),
     confirm: () =>
       close.mutate({ params: { ...authParams(), path: { poll_id: pollId } } }),
   };

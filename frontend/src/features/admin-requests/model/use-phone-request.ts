@@ -189,7 +189,7 @@ export const usePhoneRequest = () => {
     error: create.isError
       ? errorMessage(
           create.error,
-          "Не удалось создать заявку. Попробуйте ещё раз.",
+          "Не удалось создать заявку. Проверьте связь и попробуйте ещё раз",
         )
       : null,
     retry: () => void categories.refetch(),

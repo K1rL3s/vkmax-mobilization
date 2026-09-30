@@ -68,7 +68,7 @@ const ProfilePage = () => {
   const [handoverOpen, setHandoverOpen] = useState(false);
 
   if (!residency) {
-    return <Navigate to={Routes.HOME} replace />;
+    return forgetMe.isOpen ? null : <Navigate to={Routes.HOME} replace />;
   }
 
   const orgs = workingOrgs(session);

@@ -29,7 +29,11 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import ChargeId, FlatId, UserId
-from zheka.core.services.charges import LINE_QUESTION_ASK, ChargesService
+from zheka.core.services.charges import (
+    DEMO_PAYMENT_ONLY,
+    LINE_QUESTION_ASK,
+    ChargesService,
+)
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.meter_access import MeterAccess
@@ -301,6 +305,9 @@ async def test_pay_demo_sets_paid_at_and_refuses_a_second_payment(
 ) -> None:
     own = await make_org_house_flat_user()
     await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    org = await OrgsRepo(session).get_existing(own.org_id)
+    org.is_demo = True
+    await session.flush()
     charge = await _charge(session, own)
     service = _make_service(session)
 
@@ -455,3 +462,17 @@ async def test_a_line_new_this_month_is_called_new_instead_of_a_change(
         "(3,5 м³ × 135.60 руб.), новая строка в этом месяце."
         f"\n\nОткуда эта строка?\n\n{LINE_QUESTION_ASK}"
     )
+
+
+async def test_pay_demo_is_refused_outside_a_demo_org(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    own = await make_org_house_flat_user()
+    await add_resident(session, own.user_id, own.house_id, own.flat_id)
+    charge = await _charge(session, own)
+
+    with pytest.raises(NotEnoughRights, match=DEMO_PAYMENT_ONLY):
+        await _make_service(session).pay_demo(charge.id, own.user_id)
+
+    assert charge.paid_at is None

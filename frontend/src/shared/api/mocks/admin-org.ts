@@ -62,11 +62,11 @@ const state = {
     meter_window_always_open: false,
     group_threshold: 3,
     group_window_hours: 24,
-    phone: "+7 843 200-10-10",
+    phone: ZHILSERVIS.phone,
     reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
-    emergency_phone: "+7 843 200-10-11",
-    email: "priem@zhilservis-kzn.ru",
-    site: "https://zhilservis-kzn.ru",
+    emergency_phone: ZHILSERVIS.emergency_phone,
+    email: ZHILSERVIS.email,
+    site: ZHILSERVIS.site,
   } as Schemas["OrgSettingsResponse"],
   members: [
     member(
@@ -203,11 +203,11 @@ export const adminOrgConfigs = [
   endpoint("get", "/admin/org", () =>
     ok({
       id: 1,
-      name: "ООО «Жилсервис»",
-      inn: "1655123450",
-      license_no: "016-000123",
+      name: ZHILSERVIS.name,
+      inn: "9900000020",
+      license_no: null,
       phone: state.settings.phone,
-      address: "Казань, ул. Баумана, 10",
+      address: ZHILSERVIS.address,
       reception_note: state.settings.reception_note,
       registered_at: "2026-06-01T09:00:00Z",
       is_demo: ZHILSERVIS.is_demo,

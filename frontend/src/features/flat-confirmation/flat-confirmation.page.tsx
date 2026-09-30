@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Button, Typography } from "@maxhub/max-ui";
-import { Navigate } from "react-router-dom";
+import { Button, Flex, Typography } from "@maxhub/max-ui";
+import { Link, Navigate } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
 import {
@@ -11,6 +11,7 @@ import {
   infoIcon,
 } from "@/shared/ui/icon";
 
+import { changeFlatLink } from "./domain/change-flat";
 import { useFlatConfirmation } from "./model/use-flat-confirmation";
 import { ConfirmationHero } from "./ui/confirmation-hero";
 import { Notice } from "./ui/notice";
@@ -85,25 +86,42 @@ const FlatConfirmationPage = () => {
     </Button>
   );
 
-  const hero = (
-    <ConfirmationHero
-      icon={homeIcon}
-      tone="themed"
-      title="Подтвердите квартиру"
-      address={address}
-    />
-  );
-
   if (view === "no-flat" || view === "flat-missing") {
+    const isMissing = view === "flat-missing";
+
     return (
-      <PageLayout footer={later}>
-        {hero}
+      <PageLayout
+        footer={
+          <Flex align="stretch" direction="column" gapY={8}>
+            <Button asChild size="large" stretched>
+              <Link {...changeFlatLink(residency, returnTo)} replace>
+                {isMissing ? "Изменить номер квартиры" : "Указать квартиру"}
+              </Link>
+            </Button>
+            {later}
+          </Flex>
+        }
+      >
+        <ConfirmationHero
+          icon={homeIcon}
+          tone="themed"
+          title="Подтвердить пока нельзя"
+          address={address}
+        />
 
         <Notice
           icon={infoIcon}
           tone="info"
-          title="УК ещё не добавила вашу квартиру"
-          text="Квартира указана номером, но её пока нет в данных управляющей компании. Подтвердить её сейчас нельзя"
+          title={
+            isMissing
+              ? "УК ещё не добавила вашу квартиру"
+              : "Квартира не указана"
+          }
+          text={
+            isMissing
+              ? "Квартиры с этим номером пока нет в данных управляющей компании. Если номер указан с ошибкой, исправьте его"
+              : "Укажите номер квартиры - без него подтвердить её не получится"
+          }
         />
       </PageLayout>
     );
@@ -111,7 +129,12 @@ const FlatConfirmationPage = () => {
 
   return (
     <PageLayout footer={later}>
-      {hero}
+      <ConfirmationHero
+        icon={homeIcon}
+        tone="themed"
+        title="Подтвердите квартиру"
+        address={address}
+      />
 
       {view === "rejected" ? (
         <Notice

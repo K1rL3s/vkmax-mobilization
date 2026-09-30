@@ -12,9 +12,9 @@ docker compose up -d --remove-orphans
 for _ in $(seq 60); do curl -fsS -o /dev/null "$api/healthcheck" && break; sleep 5; done
 docker compose run --rm api python -m zheka.seed
 
-curl -fsS -H "$auth" -H "$json" -d '{"version":"1.0"}' "$api/me/consent" > /dev/null
+curl -fsS -H "$auth" -H "$json" -d '{"version":"1.2"}' "$api/me/consent" > /dev/null
 demo=$(curl -fsS -H "$auth" -H "$json" -d '{"number":5}' "$api/demo/activate")
-request=$(curl -fsS -H "$auth" -H "$json" -d '{"category":"leak","description":"Течет кран в ванной, проверка API"}' "$api/requests")
+request=$(curl -fsS -H "$auth" -H "$json" -d '{"category":"leak","description":"Течет кран в ванной, проверка API","place":"flat"}' "$api/requests")
 org=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["org"]["org_id"])' "$demo")
 foreign=$(docker compose exec -T database sh -c "psql -U \"\$POSTGRES_USER\" \"\$POSTGRES_DB\" -tAc 'select r.id from requests r join houses h on h.id = r.house_id where h.org_id <> $org and r.author_user_id is not null order by r.id limit 1'")
 

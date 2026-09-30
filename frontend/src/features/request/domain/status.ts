@@ -37,7 +37,7 @@ export const currentActor = (
   if (status === "done") return null;
   if (status === "new") return "УК принимает заявку";
   if (status === "on_review") {
-    if (audience === "resident") return "Вы: проверьте работу";
+    if (audience === "resident") return "проверьте работу";
     return author == null ? "УК проверяет работу" : "Житель проверяет работу";
   }
   return executor || audience === "staff" ? null : "УК подбирает исполнителя";
@@ -53,6 +53,9 @@ export const statusLabel = (
   },
   audience: "resident" | "staff" = "resident",
 ): string => {
+  if (reason === "resident_rejected") {
+    return audience === "resident" ? "Не принята" : "Не принята жителем";
+  }
   if (reason !== "resident_canceled") return STATUS_LABEL[status];
   return audience === "resident" ? "Отменена" : "Отменена жителем";
 };

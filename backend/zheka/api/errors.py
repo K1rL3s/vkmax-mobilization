@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import DataError
 from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
@@ -89,6 +90,16 @@ async def unknown_handler(request: Request, exc: Exception) -> Response:
     )
 
 
+async def data_error_handler(request: Request, exc: DataError) -> Response:
+    logger.debug("400_BAD_REQUEST", exc_info=exc)
+    return error_response(
+        request,
+        status.HTTP_400_BAD_REQUEST,
+        "DataError",
+        "Значение вне допустимого диапазона",
+    )
+
+
 exception_handlers: dict[Any, Any] = {
     **{
         error: _domain_handler(code)
@@ -102,6 +113,7 @@ exception_handlers: dict[Any, Any] = {
         )
     },
     ValueError: value_error_handler,
+    DataError: data_error_handler,
     RequestValidationError: validation_handler,
     StarletteHTTPException: http_handler,
     Exception: unknown_handler,

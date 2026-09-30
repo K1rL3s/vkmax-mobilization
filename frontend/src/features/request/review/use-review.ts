@@ -47,7 +47,30 @@ export const useReview = (request: RequestCard) => {
     canAccept: !isSending,
     canReject:
       text.length > 0 && hasProof && !attachments.isUploading && !isSending,
+    rejectMissing: isSending
+      ? null
+      : rejectMissing(text.length > 0, hasProof, attachments.isUploading),
     accept: () => accept.mutate({ params }),
     reject: () => repeat.send(request.id, text, attachments.names),
   };
+};
+
+const rejectMissing = (
+  hasText: boolean,
+  hasProof: boolean,
+  isUploading: boolean,
+): string | null => {
+  if (!hasText && !hasProof) {
+    return "Для «Сделано плохо» опишите, что не так, и приложите фото";
+  }
+
+  if (!hasText) {
+    return "Для «Сделано плохо» опишите, что не так";
+  }
+
+  if (!hasProof) {
+    return "Для «Сделано плохо» приложите фото";
+  }
+
+  return isUploading ? "Дождитесь загрузки вложений" : null;
 };

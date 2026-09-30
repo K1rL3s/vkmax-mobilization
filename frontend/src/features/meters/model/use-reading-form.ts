@@ -145,6 +145,12 @@ export const useReadingForm = () => {
       photos.photos.length > 0 &&
       !photos.isUploading &&
       parsed.every((value) => value !== null),
+    missing: missingPart(
+      meter?.can_submit === true,
+      photos.photos.length > 0,
+      photos.isUploading,
+      parsed.every((value) => value !== null),
+    ),
     send: () => {
       if (anomalies.length > 0) {
         setQuestion("anomaly");
@@ -166,4 +172,25 @@ export const useReadingForm = () => {
     },
     dismissQuestion: () => setQuestion(null),
   };
+};
+
+const missingPart = (
+  canSubmit: boolean,
+  hasPhoto: boolean,
+  isUploading: boolean,
+  isFilled: boolean,
+): string | null => {
+  if (!canSubmit) {
+    return null;
+  }
+
+  if (!hasPhoto) {
+    return "Добавьте фото счётчика - без него показания не примут";
+  }
+
+  if (isUploading) {
+    return "Дождитесь загрузки фото";
+  }
+
+  return isFilled ? null : "Введите показания";
 };

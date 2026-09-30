@@ -1,6 +1,7 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { generatePath, Link, useNavigate } from "react-router-dom";
 
+import { changeFlatLink } from "@/features/flat-confirmation";
 import { plural } from "@/shared/lib/format";
 import { Routes } from "@/shared/model/routes";
 import { meterIcon } from "@/shared/ui/icon";
@@ -46,6 +47,34 @@ const MetersPage = () => {
   const navigate = useNavigate();
   const form = useReadingForm();
   const residency = form.residency;
+
+  if (residency && residency.flat_id == null) {
+    return (
+      <EmptyState
+        fill
+        icon={meterIcon}
+        title={
+          residency.flat_number
+            ? "Квартиры пока нет в данных УК"
+            : "Квартира не выбрана"
+        }
+        description={
+          residency.flat_number
+            ? `Показания по кв. ${residency.flat_number} примут, когда УК заведёт её в системе. Если номер указан с ошибкой, исправьте его`
+            : "Показания передаются по квартире - укажите её номер"
+        }
+        action={
+          <Button asChild size="medium">
+            <Link {...changeFlatLink(residency, Routes.METERS)}>
+              {residency.flat_number
+                ? "Изменить номер квартиры"
+                : "Указать квартиру"}
+            </Link>
+          </Button>
+        }
+      />
+    );
+  }
 
   if (residency && !residency.verified) {
     return (
@@ -254,6 +283,16 @@ const MetersPage = () => {
       </div>
 
       <div className={styles.Footer}>
+        {form.missing && (
+          <Typography.Text
+            className={styles.Missing}
+            variant="description"
+            color="secondary"
+          >
+            {form.missing}
+          </Typography.Text>
+        )}
+
         <Button
           size="large"
           stretched

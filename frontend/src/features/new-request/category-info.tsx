@@ -66,7 +66,8 @@ export const CategoryInfo = ({
                   Течёт или искрит прямо сейчас? Звоните
                 </Typography.Text>
                 <Typography.Text variant="body-strong" color="primary">
-                  {emergency.label}: {emergency.phone}
+                  {emergency.label}:{" "}
+                  <span className={styles.Phone}>{emergency.phone}</span>
                 </Typography.Text>
               </Flex>
             </a>

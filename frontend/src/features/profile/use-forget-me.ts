@@ -15,7 +15,10 @@ export const useForgetMe = () => {
     onSuccess: async () => {
       forgetResidency();
       queryClient.clear();
-      await navigate(Routes.WELCOME, { replace: true });
+      await navigate(Routes.WELCOME, {
+        replace: true,
+        state: { forgotten: true },
+      });
     },
   });
 

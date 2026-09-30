@@ -177,3 +177,47 @@ async def test_the_checker_cannot_join_an_org_by_an_invite(
     assert refused.status_code == 403
     assert refused.json()["error"]["detail"] == CHECKER_ONLY
     assert unknown.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/requests/99999999999999999999999",
+        "/api/houses/99999999999999999999999",
+        "/api/flats/99999999999999999999/meters",
+        "/api/houses?q=Москва&offset=99999999999999999999",
+    ],
+)
+async def test_an_id_beyond_bigint_is_a_bad_request(
+    bot_database_url: str,  # noqa: ARG001
+    path: str,
+) -> None:
+    app = _app(CHECKER_TOKEN, make_bot_config().db)
+    headers = {"Authorization": f"Bearer {CHECKER_TOKEN}"}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
+        await client.post(
+            "/api/me/consent",
+            headers=headers,
+            json={"version": CONSENT_VERSION},
+        )
+        response = await client.get(path, headers=headers)
+
+    assert response.status_code == 400
+
+
+async def test_the_wildcard_origin_carries_no_credentials() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=_app(None)),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/api/openapi.json",
+            headers={"Origin": "https://evil.example", "Cookie": "a=b"},
+        )
+
+    assert response.headers["access-control-allow-origin"] == "*"
+    assert "access-control-allow-credentials" not in response.headers

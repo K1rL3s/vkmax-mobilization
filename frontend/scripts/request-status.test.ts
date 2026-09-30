@@ -21,3 +21,10 @@ test("a canceled request reads as canceled, other closed ones as done", () => {
   );
   assert.equal(statusLabel({ status: "in_progress" }), "В работе");
 });
+
+test("a request the resident rejected reads as not accepted", () => {
+  const rejected = { status: "done", completion_reason: "resident_rejected" };
+
+  assert.equal(statusLabel(rejected), "Не принята");
+  assert.equal(statusLabel(rejected, "staff"), "Не принята жителем");
+});

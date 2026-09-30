@@ -72,7 +72,7 @@ const NewInitiativePage = () => {
           <Typography.Text className={styles.Error} variant="description">
             {errorMessage(
               form.error,
-              "Инициатива не создалась. Проверьте связь и попробуйте ещё раз.",
+              "Инициатива не создалась. Проверьте связь и попробуйте ещё раз",
             )}
           </Typography.Text>
         )}

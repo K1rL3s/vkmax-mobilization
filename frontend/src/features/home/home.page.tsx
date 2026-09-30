@@ -280,29 +280,30 @@ const HomePage = () => {
         onClick={() => void navigate(Routes.FLAT)}
       />
 
-      <OutagesPanel outages={house.outages} />
-
       {house.org && (
         <Card>
           <Flex align="center" gap={12}>
-            <IconTile icon={buildingIcon} tone="neutral" />
-            <Flex
-              className={styles.Grow}
-              align="stretch"
-              direction="column"
-              gapY={2}
-            >
-              <Typography.Text
-                variant="body-strong"
-                color="primary"
-                className={styles.Ellipsis}
+            <Link to={Routes.HOUSE_CARD} className={styles.OrgLink}>
+              <IconTile icon={buildingIcon} tone="neutral" />
+              <Flex
+                className={styles.Grow}
+                align="stretch"
+                direction="column"
+                gapY={2}
               >
-                {house.org.name}
-              </Typography.Text>
-              <Typography.Text variant="description" color="secondary">
-                {house.org.reception_note ?? "Управляющая компания дома"}
-              </Typography.Text>
-            </Flex>
+                <Typography.Text
+                  variant="body-strong"
+                  color="primary"
+                  className={styles.Ellipsis}
+                >
+                  {house.org.name}
+                </Typography.Text>
+                <Typography.Text variant="description" color="secondary">
+                  {house.org.reception_note ?? "Управляющая компания дома"}
+                </Typography.Text>
+              </Flex>
+              <Chevron />
+            </Link>
             <IconButton
               asChild
               variant="secondary"
@@ -322,6 +323,8 @@ const HomePage = () => {
           )}
         </Card>
       )}
+
+      <OutagesPanel outages={house.outages} />
 
       {!connected && <EmergencyCard org={house.org} />}
 

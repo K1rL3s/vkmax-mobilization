@@ -109,7 +109,7 @@ const requests: MockRequest[] = [
     place: "house",
     status: "in_progress",
     created_at: minutes(-150),
-    deadline_at: minutes(90),
+    deadline_at: minutes(72 * 60 - 150),
     group_size: 7,
     group_id: 12,
     executor_name: "Сантехник Алексей Петров",

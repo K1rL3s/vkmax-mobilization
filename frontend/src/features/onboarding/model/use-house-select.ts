@@ -1,3 +1,7 @@
+import { useState } from "react";
+import { useLocation } from "react-router-dom";
+
+import { parseChangeFlat } from "@/features/flat-confirmation";
 import type { AutocompleteOption } from "@/shared/ui/autocomplete";
 import { houseOutlineIcon } from "@/shared/ui/icon";
 
@@ -7,13 +11,18 @@ import { useHouseLink } from "./use-house-link";
 import { useHouseSearch } from "./use-house-search";
 
 export const useHouseSelect = () => {
-  const houseSearch = useHouseSearch();
+  const { state } = useLocation();
+  const [changeFlat] = useState(() => parseChangeFlat(state));
+  const houseSearch = useHouseSearch(changeFlat?.house ?? null);
   const flatSearch = useFlatSearch(houseSearch.house);
-  const link = useHouseLink();
+  const link = useHouseLink(changeFlat?.returnTo);
 
   const { house } = houseSearch;
   const isAlreadyLinked =
-    house !== null && link.isLinked(house.id) && !link.isLinking;
+    house !== null &&
+    house.id !== changeFlat?.house.id &&
+    link.isLinked(house.id) &&
+    !link.isLinking;
   const isFlatChosen = flatSearch.flat !== null || flatSearch.number !== "";
 
   return {
@@ -57,6 +66,12 @@ export const useHouseSelect = () => {
     isLinking: link.isLinking,
     linkError: link.error,
     isSubmitDisabled: house === null || isAlreadyLinked || !isFlatChosen,
+    missing:
+      house === null
+        ? "Выберите дом"
+        : !isFlatChosen && !isAlreadyLinked
+          ? "Укажите номер квартиры"
+          : null,
     submit: () => {
       if (house) {
         link.submit(house, flatSearch.flat, flatSearch.number);

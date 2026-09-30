@@ -65,7 +65,7 @@ export const ProposalsSection = () => {
             <Typography.Text className={styles.Error} variant="description">
               {errorMessage(
                 view.sendError,
-                "Предложение не отправилось. Проверьте связь и попробуйте ещё раз.",
+                "Предложение не отправилось. Проверьте связь и попробуйте ещё раз",
               )}
             </Typography.Text>
           )}
@@ -136,7 +136,7 @@ export const ProposalsSection = () => {
         <Typography.Text className={styles.Error} variant="description">
           {errorMessage(
             view.loadError,
-            "Предложения не загрузились. Проверьте связь и попробуйте ещё раз.",
+            "Предложения не загрузились. Проверьте связь и попробуйте ещё раз",
           )}
         </Typography.Text>
       )}
@@ -163,7 +163,7 @@ export const ProposalsSection = () => {
             ? undefined
             : errorMessage(
                 answering.error,
-                "Ответ не отправился. Проверьте связь и попробуйте ещё раз.",
+                "Ответ не отправился. Проверьте связь и попробуйте ещё раз",
               )
         }
         isPending={answering.isPending}

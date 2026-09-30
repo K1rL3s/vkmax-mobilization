@@ -1,3 +1,4 @@
+export { changeFlatLink, parseChangeFlat } from "./domain/change-flat";
 export {
   confirmationCaption,
   confirmationLabel,

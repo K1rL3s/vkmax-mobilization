@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from dishka import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from maxo import Bot, Dispatcher
 from maxo.errors import MaxBotUnauthorizedError
@@ -99,7 +99,9 @@ def app_factory(
         try:
             if config.max.mode is BotMode.WEBHOOK:
                 engine = make_engine(dp, await container.get(Bot), config.max)
-                engine.register(app)
+                webhook = APIRouter(include_in_schema=False)
+                engine.register(webhook)
+                app.include_router(webhook)
                 await engine.on_startup(app)
                 await engine.set_webhook(update_types=list(collect_used_updates(dp)))
                 logger.info("Вебхук зарегистрирован на %s", config.max.webhook_url)
@@ -180,7 +182,7 @@ def setup_middlewares(
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["Content-Disposition"],
-        allow_credentials=True,
+        allow_credentials=bool(cors),
     )
 
     setup_dishka(container, app)

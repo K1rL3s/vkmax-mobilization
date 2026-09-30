@@ -178,7 +178,7 @@ const AdminRequestPage = () => {
           {request.channel !== "miniapp" && (
             <Fact label="Как поступила">{CHANNEL_LABEL[request.channel]}</Fact>
           )}
-          {request.executor_name && (
+          {request.executor_name && !isAssignable && (
             <Fact label="Исполнитель">{request.executor_name}</Fact>
           )}
         </dl>

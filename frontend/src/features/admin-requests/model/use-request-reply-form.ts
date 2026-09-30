@@ -82,7 +82,7 @@ export const useRequestReplyForm = (requestId: number) => {
     error: reply.isError
       ? errorMessage(
           reply.error,
-          "Не удалось отправить ответ. Попробуйте ещё раз.",
+          "Не удалось отправить ответ. Проверьте связь и попробуйте ещё раз",
         )
       : null,
     submit,

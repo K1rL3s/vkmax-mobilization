@@ -79,7 +79,7 @@ export const useAdminPollForm = () => {
       create.isError &&
       errorMessage(
         create.error,
-        "Опрос не создался. Проверьте связь и попробуйте ещё раз.",
+        "Опрос не создался. Проверьте связь и попробуйте ещё раз",
       ),
     submit: form.handleSubmit((draft) =>
       create.mutate({

@@ -11,5 +11,9 @@
   .Text {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+
+    a {
+      color: var(--text-themed);
+    }
   }
 }

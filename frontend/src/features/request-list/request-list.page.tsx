@@ -26,6 +26,11 @@ const RequestListPage = () => {
           icon={wrenchIcon}
           title="Заявки появятся вместе с УК"
           description="Дом ещё не подключён к сервису. Пока с управляющей компанией можно связаться напрямую - её контакты на главной."
+          action={
+            <Button asChild size="medium" variant="secondary">
+              <Link to={Routes.HOME}>На главную</Link>
+            </Button>
+          }
         />
       </Panel>
     );

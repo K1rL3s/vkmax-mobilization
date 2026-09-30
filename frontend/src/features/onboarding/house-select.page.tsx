@@ -31,24 +31,33 @@ const HouseSelectPage = () => {
     );
 
   const views = (
-    <div className={styles.Views}>
-      {(
-        [
-          ["map", "На карте"],
-          ["list", "Списком"],
-        ] as const
-      ).map(([id, label]) => (
-        <Button
-          key={id}
-          size="small"
-          variant={view === id ? "primary" : "secondary"}
-          aria-pressed={view === id}
-          onClick={() => switchTo(id)}
-        >
-          {label}
-        </Button>
-      ))}
-    </div>
+    <>
+      <div className={styles.Views}>
+        {(
+          [
+            ["map", "На карте"],
+            ["list", "Списком"],
+          ] as const
+        ).map(([id, label]) => (
+          <Button
+            key={id}
+            size="small"
+            variant={view === id ? "primary" : "secondary"}
+            aria-pressed={view === id}
+            onClick={() => switchTo(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      <Typography.Text
+        className={styles.Hint}
+        variant="description"
+        color="secondary"
+      >
+        Найдите свой дом и укажите номер квартиры
+      </Typography.Text>
+    </>
   );
 
   if (view === "map") {
@@ -80,7 +89,7 @@ const HouseSelectPage = () => {
           status={form.housesStatus}
           onRetry={form.retryHouses}
           loadingText="Ищем адреса…"
-          emptyDescription="Проверьте название улицы или попробуйте ввести только её часть"
+          emptyDescription="Проверьте название улицы или найдите дом «На карте» - там его можно добавить"
         />
 
         <Autocomplete
@@ -118,6 +127,16 @@ const HouseSelectPage = () => {
       </div>
 
       <div className={styles.Footer}>
+        {form.missing && (
+          <Typography.Text
+            className={styles.Missing}
+            variant="description"
+            color="secondary"
+          >
+            {form.missing}
+          </Typography.Text>
+        )}
+
         <Button
           size="large"
           stretched

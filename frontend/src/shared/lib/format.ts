@@ -62,7 +62,7 @@ export const plural = (
 
 export const duration = (ms: number) => {
   if (ms >= DAY) {
-    const days = Math.floor(ms / DAY);
+    const days = Math.round(ms / DAY);
 
     return `${days} ${plural(days, ["день", "дня", "дней"])}`;
   }

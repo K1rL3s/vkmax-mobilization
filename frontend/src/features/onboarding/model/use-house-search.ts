@@ -9,10 +9,13 @@ import {
 
 import type { House } from "./types";
 
-export const useHouseSearch = () => {
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useDebounceState("", 300);
-  const [house, setHouse] = useState<House | null>(null);
+export const useHouseSearch = (initial: House | null) => {
+  const [query, setQuery] = useState(initial?.address ?? "");
+  const [debouncedQuery, setDebouncedQuery] = useDebounceState(
+    initial?.address ?? "",
+    300,
+  );
+  const [house, setHouse] = useState<House | null>(initial);
 
   const isSearching = !house && debouncedQuery.trim().length >= 3;
 

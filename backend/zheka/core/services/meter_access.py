@@ -127,3 +127,9 @@ class MeterAccess:
         if house is None:
             raise EntityNotFound(FLAT_NOT_FOUND)
         return house
+
+    async def is_demo_flat(self, flat_id: FlatId) -> bool:
+        house = await self.house_of_flat(flat_id)
+        if house.org_id is None:
+            return False
+        return (await self._orgs.get_existing(house.org_id)).is_demo

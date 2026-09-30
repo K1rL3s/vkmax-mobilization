@@ -45,6 +45,16 @@
   overflow-y: auto;
   margin-right: -12px;
   padding-right: 12px;
+  background:
+    linear-gradient(var(--background-card) 30%, transparent) top / 100% 32px
+      no-repeat local,
+    linear-gradient(transparent, var(--background-card) 70%) bottom / 100% 32px
+      no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 20%), transparent) top /
+      100% 10px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 20%), transparent)
+      bottom / 100% 10px no-repeat scroll;
+  background-color: var(--background-card);
 }
 
 .Row {

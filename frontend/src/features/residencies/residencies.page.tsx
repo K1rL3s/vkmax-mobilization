@@ -101,7 +101,7 @@ const ResidenciesPage = () => {
           disabled={!switcher.marked}
           onClick={() => void switcher.confirm()}
         >
-          Подтвердить
+          Выбрать
         </Button>
       </div>
 

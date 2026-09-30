@@ -32,7 +32,7 @@ export const useRequestAssignment = (request: AdminRequest) => {
     error: assign.isError
       ? errorMessage(
           assign.error,
-          "Не удалось назначить исполнителя. Попробуйте ещё раз.",
+          "Не удалось назначить исполнителя. Проверьте связь и попробуйте ещё раз",
         )
       : null,
     retry: () => void executors.refetch(),

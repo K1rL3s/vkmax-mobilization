@@ -34,6 +34,7 @@ from zheka.infra.database.repos.meters import MetersRepo
 
 NOT_VERIFIED = "Подтвердите квартиру, чтобы видеть начисления"
 CANNOT_SEE_CHARGES = "Начисления недоступны для вашей роли"
+DEMO_PAYMENT_ONLY = "Оплатить квитанцию в приложении можно только в демо-УК"
 
 CONSUMPTION_POINTS = 6
 
@@ -240,6 +241,8 @@ class ChargesService:
 
     async def pay_demo(self, charge_id: ChargeId, user_id: UserId) -> PaymentResult:
         charge = await self._verified_charge(charge_id, user_id)
+        if not await self._access.is_demo_flat(charge.flat_id):
+            raise NotEnoughRights(DEMO_PAYMENT_ONLY)
         if charge.paid_at is not None:
             raise InvalidState("Квитанция уже оплачена")
         paid_at = datetime.now(UTC)

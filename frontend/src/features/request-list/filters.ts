@@ -30,7 +30,7 @@ export const groupRequests = (items: RequestListItem[], filterId: FilterId) => {
       items: visible.filter((item) => !isFinished(item.status)),
     },
     {
-      title: "Завершённые",
+      title: "Закрытые",
       items: visible.filter((item) => isFinished(item.status)),
     },
   ].filter((group) => group.items.length > 0);

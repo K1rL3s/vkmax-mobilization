@@ -115,7 +115,8 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
       </Flex>
 
       <Typography.Text variant="detail" color="secondary">
-        «Сделано плохо» создаст повторную заявку со ссылкой на эту
+        {form.rejectMissing ??
+          "«Сделано плохо» создаст повторную заявку со ссылкой на эту"}
       </Typography.Text>
     </div>
   );

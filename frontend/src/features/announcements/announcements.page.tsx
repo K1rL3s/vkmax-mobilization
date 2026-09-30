@@ -92,7 +92,17 @@ const AnnouncementsPage = () => {
               variant="body"
               color="primary"
             >
-              {item.text}
+              {item.text
+                .split(/(https?:\/\/[^\s]*[^\s.,;:!?)»])/)
+                .map((part, index) =>
+                  index % 2 === 1 ? (
+                    <a key={index} href={part} target="_blank" rel="noreferrer">
+                      {part}
+                    </a>
+                  ) : (
+                    part
+                  ),
+                )}
             </Typography.Text>
 
             <WorksDetails announcement={item} />

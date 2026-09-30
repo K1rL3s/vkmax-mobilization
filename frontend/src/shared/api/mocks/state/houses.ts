@@ -30,14 +30,14 @@ export type MockFlat = {
 
 export const ZHILSERVIS: Schemas["OrgContacts"] = {
   id: 1,
-  name: "ООО «Жилсервис»",
-  phone: "+7 843 200-10-10",
-  address: "Казань, ул. Баумана, 10",
-  email: "priem@zhilservis-kzn.ru",
-  site: "https://zhilservis-kzn.ru",
-  license_no: "16-000123",
+  name: "Демо-УК «Надежный дом»",
+  phone: "+7 (000) 000-00-03",
+  address: "Адрес вымышлен, организация создана для демо",
+  email: "priem-3@demo-uk.example.com",
+  site: "https://demo-uk-3.example.com",
+  license_no: null,
   reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
-  emergency_phone: "+7 843 200-10-11",
+  emergency_phone: "+7 (000) 000-01-03",
   is_demo: true,
   timezone: "Europe/Moscow",
 };

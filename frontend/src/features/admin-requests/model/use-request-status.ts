@@ -34,7 +34,7 @@ export const useRequestStatus = (target: StatusTarget) => {
     error: change.isError
       ? errorMessage(
           change.error,
-          "Не удалось сменить статус. Попробуйте ещё раз.",
+          "Не удалось сменить статус. Проверьте связь и попробуйте ещё раз",
         )
       : null,
     submit: () => {

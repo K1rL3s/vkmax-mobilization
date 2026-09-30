@@ -293,7 +293,7 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
       create.isError &&
       errorMessage(
         create.error,
-        "Не получилось отправить. Проверьте связь и попробуйте ещё раз.",
+        "Не получилось отправить. Проверьте связь и попробуйте ещё раз",
       ),
     send: () => {
       const draft = confirm.target;

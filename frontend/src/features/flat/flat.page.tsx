@@ -3,6 +3,7 @@ import { generatePath, Link, Navigate } from "react-router-dom";
 
 import { ChargesSection } from "@/features/charges";
 import {
+  changeFlatLink,
   confirmationLabel,
   confirmationTone,
   type ResidencyState,
@@ -45,17 +46,28 @@ const FlatPage = () => {
     }
 
     if (residency.flat_id == null) {
-      return residency.flat_number ? (
+      return (
         <EmptyState
           icon={homeIcon}
-          title="Квартиры пока нет в данных УК"
-          description="Номер указан вручную. Подтвердить квартиру и передавать показания получится, когда УК заведёт её в системе"
-        />
-      ) : (
-        <EmptyState
-          icon={homeIcon}
-          title="Квартира не выбрана"
-          description="Привяжитесь к дому заново и выберите квартиру - заявки и показания при этом останутся"
+          title={
+            residency.flat_number
+              ? "Квартиры пока нет в данных УК"
+              : "Квартира не выбрана"
+          }
+          description={
+            residency.flat_number
+              ? "Номер указан вручную. Подтвердить квартиру и передавать показания получится, когда УК заведёт её в системе. Если номер указан с ошибкой, исправьте его"
+              : "Укажите номер квартиры, чтобы подтвердить её и передавать показания"
+          }
+          action={
+            <Button asChild size="medium" variant="secondary">
+              <Link {...changeFlatLink(residency, Routes.FLAT)}>
+                {residency.flat_number
+                  ? "Изменить номер квартиры"
+                  : "Указать квартиру"}
+              </Link>
+            </Button>
+          }
         />
       );
     }
