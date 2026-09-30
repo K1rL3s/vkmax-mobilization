@@ -4,7 +4,7 @@ from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 
 VOICE_PENDING = "⏳ Разбираю голосовое"
-VOICE_FAILED = "🎙 Не разобрал голосовое, напишите текстом"
+VOICE_FAILED = "🎤 Не разобрал голосовое, напишите текстом"
 
 
 def publish_transcription(

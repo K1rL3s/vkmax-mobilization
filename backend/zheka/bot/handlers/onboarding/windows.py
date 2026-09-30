@@ -37,8 +37,8 @@ from zheka.bot.states import Onboarding
 PAGE = 8
 
 METHOD_TEXT = "🔎 Как будем искать дом?"
-CITY_TEXT = "🏙 Выберите город из списка или напишите его название"
-STREET_TEXT = "🛣 {city}: выберите улицу из списка или напишите ее название"
+CITY_TEXT = "🌆 Выберите город из списка или напишите его название"
+STREET_TEXT = "🚦 {city}: выберите улицу из списка или напишите ее название"
 HOUSE_TEXT = "🏢 {street}: выберите дом из списка или напишите его номер"
 NEARBY_TEXT = "📍 Дома рядом с вами: выберите свой из списка или напишите номер дома"
 NOTHING_NEAR_TEXT = "😔 Рядом ничего не нашлось, попробуйте выбрать адрес"
@@ -51,7 +51,7 @@ MISSED = Format(MISSED_TEXT, when=F["missed"])
 onboarding_dialog = Dialog(
     Window(
         Const(METHOD_TEXT),
-        SwitchTo(Const("🗺 Выбрать адрес"), id="by_address", state=Onboarding.city),
+        SwitchTo(Const("🧭 Выбрать адрес"), id="by_address", state=Onboarding.city),
         RequestLocation(Const("📍 По геолокации")),
         MessageInput(on_location, content_types=[AttachmentType.LOCATION]),
         TO_MENU,
@@ -61,7 +61,7 @@ onboarding_dialog = Dialog(
         Multi(Const(CITY_TEXT), MISSED, sep="\n\n"),
         ScrollingGroup(
             Select(
-                Format("🏙 {item}"),
+                Format("🌆 {item}"),
                 id="city",
                 item_id_getter=lambda city: city,
                 items="cities",
@@ -84,7 +84,7 @@ onboarding_dialog = Dialog(
         Multi(Format(STREET_TEXT), MISSED, sep="\n\n"),
         ScrollingGroup(
             Select(
-                Format("🛣 {item}"),
+                Format("🚦 {item}"),
                 id="street",
                 item_id_getter=lambda street: street,
                 items="streets",
@@ -164,7 +164,7 @@ onboarding_dialog = Dialog(
             hide_on_single_page=True,
         ),
         TextInput(id="flat_number", on_success=on_flat_number),
-        Button(Const("⏭ Пропустить"), id="skip_flat", on_click=on_flat_skip),
+        Button(Const("⏩ Пропустить"), id="skip_flat", on_click=on_flat_skip),
         Row(
             SwitchTo(
                 BACK,

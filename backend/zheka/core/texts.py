@@ -21,7 +21,7 @@ BLOCKED = "УК закрыла вам доступ к этому дому"
 OPEN_REQUEST = "📱 Открыть заявку"
 SUBMIT_READINGS = "📟 Передать показания"
 MY_METERS = "📟 Мои счетчики"
-VOTE = "🗳 Проголосовать"
+VOTE = "📮 Проголосовать"
 MY_APPOINTMENTS = "📅 Мои записи"
 OPEN_APP = "📱 Открыть приложение"
 CABINET_BUTTON = "🧑‍💼 Открыть кабинет УК"
@@ -140,7 +140,7 @@ def reading_window_closing(days: int) -> str:
 def proposal_for_chairman(text: str) -> str:
     return (
         "💡 Новое предложение по дому\n"
-        f"🖊 {escape(text)}\n"
+        f"📝 {escape(text)}\n"
         "👤 Автор скрыт: предложения анонимны"
     )
 
@@ -151,7 +151,7 @@ def proposal_answered(text: str, answer: str | None, *, accepted: bool) -> str:
         if accepted
         else "❌ Председатель отклонил ваше предложение"
     )
-    lines = [head, f"🖊 {escape(text)}"]
+    lines = [head, f"📝 {escape(text)}"]
     if answer is not None:
         lines.append(f"💬 {escape(answer)}")
     return "\n".join(lines)
@@ -159,14 +159,14 @@ def proposal_answered(text: str, answer: str | None, *, accepted: bool) -> str:
 
 def poll_reminder(title: str, ends_at: datetime) -> str:
     return (
-        f"🗳 Идет опрос «{escape(title)}», голосование закончится "
+        f"📮 Идет опрос «{escape(title)}», голосование закончится "
         f"{ends_at:%d.%m.%Y}. От вашей квартиры голоса еще нет"
     )
 
 
 def poll_chat_reminder(title: str, ends_at: datetime) -> str:
     return (
-        f"🗳 Идет опрос «{escape(title)}», голосование закончится "
+        f"📮 Идет опрос «{escape(title)}», голосование закончится "
         f"{ends_at:%d.%m.%Y}\n{POLL_HASHTAG}"
     )
 
@@ -180,7 +180,7 @@ def verification_soon(meter: str, serial: str, due: date, days: int) -> str:
 
 def verification_expired(meter: str, serial: str) -> str:
     return (
-        f"⚠️ Истекла поверка счетчика «{meter}» №{escape(serial)}: начисление "
+        f"❗ Истекла поверка счетчика «{meter}» №{escape(serial)}: начисление "
         "пойдет по нормативу, пока счетчик не поверят"
     )
 
@@ -222,7 +222,7 @@ def org_contact(name: str, phone: str) -> str:
 
 def flat_verification_revoked(address: str, reason: str, contact: str) -> str:
     return (
-        f"⚠️ УК отозвала подтверждение вашей квартиры в доме {escape(address)}\n\n"
+        f"❗ УК отозвала подтверждение вашей квартиры в доме {escape(address)}\n\n"
         f"Причина: {escape(reason)}\n\n{contact}"
     )
 
@@ -336,7 +336,7 @@ def _fitted(quote: str, frame: str) -> str:
 def request_escalated(request: Request, house: House, now: datetime) -> str:
     hours = max(1, ceil((now - request.deadline_at) / timedelta(hours=1)))
     return (
-        "⬆️ Житель просит руководство вмешаться: заявка "
+        "📢 Житель просит руководство вмешаться: заявка "
         f"{_request(request.id, request.category)} просрочена на {hours} ч\n"
         f"🏢 {escape(house.address)}\n{REQUEST_PLACE_LINES[request.place]}"
     )
@@ -344,7 +344,7 @@ def request_escalated(request: Request, house: House, now: datetime) -> str:
 
 def request_escalated_author(request: Request) -> str:
     return (
-        "⬆️ Руководство УК уведомлено о просрочке заявки "
+        "📢 Руководство УК уведомлено о просрочке заявки "
         f"{_request(request.id, request.category)}\n"
         "📄 Если ничего не изменится, можно подать жалобу в ГЖИ"
     )
@@ -449,9 +449,9 @@ def poll_card(
 ) -> str:
     author = POLL_AUTHORS[PollAuthor(role)]
     head = (
-        f"🗳 {author}: {escape(title)}"
+        f"📮 {author}: {escape(title)}"
         if ends_at is not None
-        else f"🗳 {author} завершен: {escape(title)}"
+        else f"📮 {author} завершен: {escape(title)}"
     )
     lines = [head]
     for number, row in enumerate(rows, start=1):
@@ -473,10 +473,10 @@ def vote_button(number: int, text: str) -> str:
 
 def chairman_offer(name: str, address: str) -> str:
     return (
-        f"🏛 {escape(name)} предлагает вам стать председателем совета дома "
+        f"🏦 {escape(name)} предлагает вам стать председателем совета дома "
         f"{escape(address)}\n\n"
         "✅ Вы сможете создавать опросы жителей и привязать чат дома\n\n"
-        "ℹ️ Председателя совета дома избирает общее собрание собственников "
+        "💡 Председателя совета дома избирает общее собрание собственников "
         "(ст. 161.1 ЖК РФ): приложение передает права в сервисе и не заменяет "
         "протокол собрания"
     )
@@ -534,7 +534,7 @@ def digest_poll(title: str, ends_at: datetime, voted: int) -> str:
     voices = (
         "голосов от квартир пока нет" if voted == 0 else f"{verb} {flats_count(voted)}"
     )
-    return f"🗳 Опрос «{escape(title)}» до {ends_at:%d.%m}, {voices}"
+    return f"📮 Опрос «{escape(title)}» до {ends_at:%d.%m}, {voices}"
 
 
 def digest_readings(day_to: int | None) -> str:
@@ -639,12 +639,14 @@ def danger_warning(kind: DangerKind, org: Organization | None) -> str:
 def gji_pdf_sent(request_id: RequestId) -> str:
     return (
         f"📄 Жалоба по заявке №{request_id} для ГЖИ\n"
-        "✍️ Впишите ФИО и адрес, распечатайте и подпишите"
+        "📝 Впишите ФИО и адрес, распечатайте и подпишите"
     )
 
 
 def poll_notice(title: str, ends_at: datetime) -> str:
-    return f"🗳 Новый опрос «{title}», голосование до {ends_at:%d.%m.%Y}\n{POLL_NOT_OSS}"
+    return (
+        f"📮 Новый опрос «{title}», голосование до {ends_at:%d.%m.%Y}\n{POLL_NOT_OSS}"
+    )
 
 
 ANNOUNCEMENT_HASHTAG = "#объявление"

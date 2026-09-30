@@ -90,7 +90,7 @@ TO_MENU = Start(
 )
 
 
-BACK = Const("⬅️ Назад")
+BACK = Const("↩️ Назад")
 
 
 CANCEL = Start(

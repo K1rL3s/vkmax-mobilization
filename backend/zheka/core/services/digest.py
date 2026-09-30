@@ -68,9 +68,13 @@ class DigestService:
         since = house.day_start(today - timedelta(days=DIGEST_DAYS - 1))
         until = house.day_start(today + timedelta(days=1))
         sections = [
-            *await self._request_lines(house, since, until, now),
-            *await self._announcement_lines(house, since),
-            *await self._poll_lines(house, now),
+            "\n".join(lines)
+            for lines in (
+                await self._request_lines(house, since, until, now),
+                await self._announcement_lines(house, since),
+                await self._poll_lines(house, now),
+            )
+            if lines
         ]
         if not sections:
             return None
@@ -82,7 +86,7 @@ class DigestService:
                     else settings.meter_window_day_to,
                 ),
             )
-        return "\n".join([texts.digest_head(house.address), *sections])
+        return "\n\n".join([texts.digest_head(house.address), *sections])
 
     async def send_weekly(self, now: datetime) -> int:
         sent = 0

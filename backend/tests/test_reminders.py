@@ -934,7 +934,7 @@ async def test_a_due_date_brings_one_verification_notice_per_stage(
         "⏰ Через 7 дней, 15.10.2026, истекает",
         "⏰ Через 1 день, 15.10.2026, истекает",
         "⏰ Сегодня последний день",
-        "⚠️ Истекла",
+        "❗ Истекла",
     ]
     assert await _warned_at(session, meter_id) == date(2026, 10, 16)
 

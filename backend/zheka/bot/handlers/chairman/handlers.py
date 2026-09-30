@@ -13,7 +13,7 @@ from zheka.bot.middlewares.user import dialog_user_id
 from zheka.core.errors import ZhekaError
 from zheka.core.services.chairman import ChairmanService
 
-ACCEPTED = "🏛 Вы председатель совета дома {address}"
+ACCEPTED = "🏦 Вы председатель совета дома {address}"
 DECLINED = "👌 Вы отказались от роли председателя, {name} об этом узнает"
 
 

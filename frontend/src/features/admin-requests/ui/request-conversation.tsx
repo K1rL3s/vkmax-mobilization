@@ -47,7 +47,7 @@ export const RequestConversation = ({ request }: { request: AdminRequest }) => {
             )}
             {canAsk && question && (
               <Typography.Text variant="description" color="secondary">
-                Житель получит вопрос в MAX с кнопкой «✍️ Ответить», а заявка
+                Житель получит вопрос в MAX с кнопкой «📝 Ответить», а заявка
                 будет ждать его ответа.
               </Typography.Text>
             )}

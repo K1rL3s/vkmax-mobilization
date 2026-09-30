@@ -25,9 +25,9 @@ WAIT_TEXT = "⏳ Распознаю показание"
 UNREADABLE_TEXT = (
     "📷 Не разобрал цифры: переснимите без блика или напишите показание числом"
 )
-MANUAL_TEXT = "✏️ Не удалось распознать, напишите показание числом, например 123,456"
+MANUAL_TEXT = "📝 Не удалось распознать, напишите показание числом, например 123,456"
 UNSAVED_TEXT = "📷 Фото не сохранилось, пришлите его еще раз"
-EDIT_TEXT = "✏️ Напишите показание числом, например 123,456"
+EDIT_TEXT = "📝 Напишите показание числом, например 123,456"
 
 meter_photo_dialog = Dialog(
     Window(
@@ -85,7 +85,7 @@ meter_photo_dialog = Dialog(
             on_click=on_send,
             when=F["can_send"] & ~F["ack"],
         ),
-        SwitchTo(Const("✏️ Исправить"), id="edit", state=MeterPhoto.edit),
+        SwitchTo(Const("📝 Исправить"), id="edit", state=MeterPhoto.edit),
         SwitchTo(Const("📷 Переснять"), id="rephoto", state=MeterPhoto.photo),
         TO_MENU,
         state=MeterPhoto.confirm,
@@ -99,7 +99,7 @@ meter_photo_dialog = Dialog(
             on_success=on_value,
             on_error=on_bad_value,
         ),
-        SwitchTo(Const("⬅️ Назад"), id="edit_back", state=MeterPhoto.confirm),
+        SwitchTo(Const("↩️ Назад"), id="edit_back", state=MeterPhoto.confirm),
         TO_MENU,
         state=MeterPhoto.edit,
     ),

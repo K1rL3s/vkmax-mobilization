@@ -22,9 +22,9 @@ from zheka.infra.database.repos.requests import OPEN_STATUSES
 CARD_TEXT = (
     "🛠 Заявка №{request_id}: {status_label}\n{place}\n{category}\n\n{description}"
 )
-NOT_YOURS_TEXT = "↪️ Заявка №{request_id} больше не у вас"
+NOT_YOURS_TEXT = "🔀 Заявка №{request_id} больше не у вас"
 RESULT_PHOTO_TEXT = "📷 Пришлите фото результата"
-DECLINE_TEXT = "✍️ Почему не получится?"
+DECLINE_TEXT = "📝 Почему не получится?"
 
 executor_dialog = Dialog(
     Window(

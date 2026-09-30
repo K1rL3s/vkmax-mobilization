@@ -22,7 +22,7 @@ from zheka.core.errors import ZhekaError
 logger = logging.getLogger(__name__)
 
 STALE_WINDOW = "🔄 Это окно устарело, открываю меню заново"
-UNEXPECTED = "⚠️ Что-то пошло не так, попробуйте еще раз"
+UNEXPECTED = "❗ Что-то пошло не так, попробуйте еще раз"
 
 router = Router(name=__name__)
 

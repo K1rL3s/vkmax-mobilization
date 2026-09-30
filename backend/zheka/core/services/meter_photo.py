@@ -25,10 +25,10 @@ UNKNOWN_METER = "Этот счетчик нельзя подать фото"
 
 METER_EMOJI: Mapping[MeterType, str] = {
     MeterType.COLD_WATER: "💧",
-    MeterType.HOT_WATER: "♨️",
+    MeterType.HOT_WATER: "🛁",
     MeterType.ELECTRICITY: "⚡",
     MeterType.GAS: "🔥",
-    MeterType.HEATING: "🌡",
+    MeterType.HEATING: "🌞",
 }
 METER_UNIT: Mapping[MeterType, str] = {
     MeterType.COLD_WATER: "м³",

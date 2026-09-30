@@ -396,7 +396,7 @@ SEND = InlineButtonTextLocator("📨 Отправить")
 TO_MENU = InlineButtonTextLocator("🏠 Меню")
 SEND_READING = InlineButtonTextLocator("✅ Отправить")
 SEND_ANYWAY = InlineButtonTextLocator("✅ Всё верно, отправить")
-EDIT_READING = InlineButtonTextLocator("✏️ Исправить")
+EDIT_READING = InlineButtonTextLocator("📝 Исправить")
 
 
 def _max_id() -> MaxUserId:
@@ -2276,7 +2276,7 @@ async def test_the_poll_card_votes_by_buttons_only_with_one_answer(
     )
 
     [sent] = pin_api.sent
-    assert sent["text"].startswith("🗳 Опрос УК: Ставим шлагбаум?\n1. Да - 0 кв., 0%")
+    assert sent["text"].startswith("📮 Опрос УК: Ставим шлагбаум?\n1. Да - 0 кв., 0%")
     assert "Голосуют собственники, это не ОСС" in sent["text"]
     [attachment] = sent["attachments"]
     rows = attachment.payload.buttons
@@ -2306,7 +2306,7 @@ async def test_a_chat_reminder_replies_to_the_poll_card(
         task_broker,
         broadcast_to_chats,
         chat_ids=[chat_id],
-        text="🗳 Идет опрос",
+        text="📮 Идет опрос",
         card_kind=ChatCardKind.POLL,
         card_ref_id=poll_id,
     )
@@ -2751,9 +2751,9 @@ async def test_the_org_name_is_escaped_in_the_invite_notice(
 
 
 FIND_HOUSE = InlineButtonTextLocator("🔎 Найти дом")
-BY_ADDRESS = InlineButtonTextLocator("🗺 Выбрать адрес")
-BACK_BUTTON = InlineButtonTextLocator("⬅️ Назад")
-NAVIGATION = ["⬅️ Назад", "🏠 Меню"]
+BY_ADDRESS = InlineButtonTextLocator("🧭 Выбрать адрес")
+BACK_BUTTON = InlineButtonTextLocator("↩️ Назад")
+NAVIGATION = ["↩️ Назад", "🏠 Меню"]
 
 
 async def _search_by_address(
@@ -2803,8 +2803,8 @@ async def test_typing_narrows_each_address_step_and_picks_a_single_match(
 
     await client.send(f"Ввод{tag}")
     assert _button_texts(message_manager.last_message()) == [
-        f"🏙 {city}",
-        f"🏙 {other_city}",
+        f"🌆 {city}",
+        f"🌆 {other_city}",
         *NAVIGATION,
     ]
     await client.send(f"Нет{tag}")
@@ -2814,8 +2814,8 @@ async def test_typing_narrows_each_address_step_and_picks_a_single_match(
 
     await client.send(f"Улица{tag}")
     assert _button_texts(message_manager.last_message()) == [
-        f"🛣 {street}",
-        f"🛣 {other_street}",
+        f"🚦 {street}",
+        f"🚦 {other_street}",
         *NAVIGATION,
     ]
     await client.click(message_manager.last_message(), BACK_BUTTON)
@@ -2926,7 +2926,7 @@ async def test_a_flat_picked_from_the_list_is_linked(
         "1",
         "2",
         "10",
-        "⏭ Пропустить",
+        "⏩ Пропустить",
         *NAVIGATION,
     ]
     await client.click(message_manager.last_message(), BACK_BUTTON)
@@ -3033,7 +3033,7 @@ async def test_a_list_whose_content_changed_opens_on_its_first_page(
     await client.send(city)
     await client.click(
         message_manager.last_message(),
-        InlineButtonTextLocator(f"🛣 {first}"),
+        InlineButtonTextLocator(f"🚦 {first}"),
     )
     await client.click(message_manager.last_message(), InlineButtonTextLocator("3"))
 
@@ -3044,7 +3044,7 @@ async def test_a_list_whose_content_changed_opens_on_its_first_page(
     await client.click(message_manager.last_message(), BACK_BUTTON)
     await client.click(
         message_manager.last_message(),
-        InlineButtonTextLocator(f"🛣 {second}"),
+        InlineButtonTextLocator(f"🚦 {second}"),
     )
     assert _button_texts(message_manager.last_message())[0] == "🏢 1"
 
@@ -3099,7 +3099,7 @@ async def test_a_deeplinked_flat_step_goes_back_to_the_method_and_forgets_the_li
     await client.send("1")
     await client.click(
         message_manager.last_message(),
-        InlineButtonTextLocator("⏭ Пропустить"),
+        InlineButtonTextLocator("⏩ Пропустить"),
     )
 
     user = await _user(bot_session, client)
@@ -3837,7 +3837,7 @@ async def test_a_chat_broadcast_carries_the_link_into_the_app(
         task_broker,
         broadcast_to_chats,
         chat_ids=[chat_id],
-        text="🗳 Опрос",
+        text="📮 Опрос",
         app_button=VOTE,
         app_path="/meetings/7",
     )
@@ -3987,8 +3987,8 @@ async def test_the_demo_command_sends_every_reminder_to_the_caller_only(
         "📟",
         "⏰",
         "⏰",
-        "⚠️",
-        "🗳",
+        "❗",
+        "📮",
         "📅",
     ]
     assert {message["user_id"] for message in sent} == {user_id}
@@ -5634,7 +5634,7 @@ async def test_the_gji_pdf_task_sends_the_complaint_file_to_its_author(
     assert (await file.read()).startswith(b"%PDF")
     assert text == (
         f"📄 Жалоба по заявке №{request_id} для ГЖИ\n"
-        "✍️ Впишите ФИО и адрес, распечатайте и подпишите"
+        "📝 Впишите ФИО и адрес, распечатайте и подпишите"
     )
 
 
@@ -5917,7 +5917,7 @@ async def test_a_leak_asks_where_the_problem_is_before_the_description(
     assert _button_texts(message_manager.last_message()) == [
         IN_FLAT,
         IN_HOUSE,
-        "⬅️ Назад",
+        "↩️ Назад",
         "🏠 Меню",
     ]
     await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)

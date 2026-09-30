@@ -66,7 +66,7 @@ async def test_escalation_reaches_everyone_on_the_request_once(
     await publisher.flush()
     [staff] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
     assert sorted(staff["user_ids"]) == sorted([creator, admin, employee])
-    assert staff["text"].startswith("⬆️ Житель просит руководство вмешаться")
+    assert staff["text"].startswith("📢 Житель просит руководство вмешаться")
     assert f"№{request.id}" in staff["text"]
     assert "просрочена на 5 ч" in staff["text"]
     assert REQUEST_PLACE_LINES[RequestPlace.FLAT] in staff["text"]
@@ -74,7 +74,7 @@ async def test_escalation_reaches_everyone_on_the_request_once(
     assert staff["app_path"] == f"/admin/requests/{request.id}"
     author, crew = broker.enqueued(TaskName.SEND_TO_USER)
     assert author["user_id"] == own.user_id
-    assert author["text"].startswith("⬆️ Руководство УК уведомлено")
+    assert author["text"].startswith("📢 Руководство УК уведомлено")
     assert author["app_path"] == f"/requests/{request.id}"
     assert crew["user_id"] == executor
     assert crew["text"] == staff["text"]
@@ -103,7 +103,7 @@ async def test_an_author_from_the_management_hears_only_the_confirmation(
     assert staff["user_ids"] == [admin]
     [author] = broker.enqueued(TaskName.SEND_TO_USER)
     assert author["user_id"] == own.user_id
-    assert author["text"].startswith("⬆️ Руководство УК уведомлено")
+    assert author["text"].startswith("📢 Руководство УК уведомлено")
 
 
 async def test_a_second_escalation_is_refused(

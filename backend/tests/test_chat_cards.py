@@ -483,7 +483,7 @@ async def test_the_poll_card_counts_flats_and_area_and_closes_without_buttons(
     assert view is not None
     lines = view.text.split("\n")
     assert lines[:3] == [
-        "🗳 Опрос УК: Ставим шлагбаум?",
+        "📮 Опрос УК: Ставим шлагбаум?",
         "1. Да - 1 кв., 25% площади",
         "2. Нет - 0 кв., 0% площади",
     ]
@@ -496,7 +496,7 @@ async def test_the_poll_card_counts_flats_and_area_and_closes_without_buttons(
     closed = await cards.render(ChatCardKind.POLL, card.poll.id)
 
     assert closed is not None
-    assert closed.text.startswith("🗳 Опрос УК завершен: Ставим шлагбаум?")
+    assert closed.text.startswith("📮 Опрос УК завершен: Ставим шлагбаум?")
     assert "до " not in closed.text.split("\n")[3]
     assert (closed.votes, closed.app_path, closed.join) == ((), None, True)
 

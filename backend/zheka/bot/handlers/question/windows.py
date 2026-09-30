@@ -9,8 +9,8 @@ from zheka.bot.handlers.question.handlers import get_question, on_answer, on_ans
 from zheka.bot.states import Question
 from zheka.core.texts import OPEN_REQUEST
 
-ANSWER_TEXT = "✍️ Напишите ответ для УК"
-ANSWER = "✍️ Ответить"
+ANSWER_TEXT = "📝 Напишите ответ для УК"
+ANSWER = "📝 Ответить"
 
 question_dialog = Dialog(
     Window(
