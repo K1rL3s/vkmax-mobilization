@@ -200,33 +200,31 @@ const ProfilePage = () => {
 
       <PhonePanel />
 
-      <div className={styles.Panel}>
-        <CellSimple
-          before={<Icon src={bellIcon} className={styles.CellIcon} />}
-          title="Уведомления и звук"
-          after={
-            notifications.isError && (
-              <span
-                role="img"
-                aria-label="Не удалось загрузить настройки"
-                className={styles.Attention}
-              >
-                !
-              </span>
-            )
-          }
-          showChevron
-          onClick={() => void navigate(Routes.NOTIFICATIONS)}
-        />
-      </div>
-
       <Flex asChild align="stretch" direction="column" gap={8}>
         <section>
           <Typography.Text asChild variant="title" color="primary">
-            <h2>Экран</h2>
+            <h2>Настройки</h2>
           </Typography.Text>
           <div className={styles.Panel}>
             <CellSimple
+              before={<Icon src={bellIcon} className={styles.CellIcon} />}
+              title="Уведомления и звук"
+              after={
+                notifications.isError && (
+                  <span
+                    role="img"
+                    aria-label="Не удалось загрузить настройки"
+                    className={styles.Attention}
+                  >
+                    !
+                  </span>
+                )
+              }
+              showChevron
+              onClick={() => void navigate(Routes.NOTIFICATIONS)}
+            />
+            <CellSimple
+              separator
               before={<Icon src={textSizeIcon} className={styles.CellIcon} />}
               title="Размер текста"
               subtitle="Обычный, крупный или очень крупный"
