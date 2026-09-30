@@ -1,0 +1,59 @@
+@startuml 05-deployment
+!include <C4/C4_Deployment>
+!include _style.iuml
+
+title Развертывание и доставка: VPS и GitHub Actions
+
+Deployment_Node(github, "GitHub") {
+  System_Ext(deploy, "Actions: deploy.yml", "push в master, заморозка после 30.09 12:00 МСК")
+  System_Ext(uptime, "Actions: uptime.yml", "каждые 15 минут, затем раз в час")
+}
+
+Deployment_Node(internet, "Интернет") {
+  System_Ext(max, "MAX", "клиенты и Bot API")
+  System_Ext(yandex, "Yandex Cloud", "AI Studio, Vision, SpeechKit")
+  System_Ext(osm, "OpenFreeMap, OSM, Nominatim")
+}
+
+Deployment_Node(vps, "VPS", "Linux, Docker Engine") {
+  Container(hostnginx, "nginx хоста", "nginx", "TLS :443, настроен вне репозитория")
+  Container(script, "deploy.sh, reseed.sh", "bash")
+  Deployment_Node(net, "docker compose") {
+    Container(nginx, "nginx", "nginx 1.27", ":80")
+    Container(web, "web", "nginx + статика SPA", ":80")
+    Container(api, "api", "gunicorn ASGI", ":7001, воркер на логический CPU, webhook")
+    Container(worker, "worker", "python -m zheka.broker")
+    ContainerDb(db, "database", "PostgreSQL 16.9")
+    ContainerDb(redis, "redis", "Redis 7.4")
+  }
+  Deployment_Node(disk, "Диск хоста") {
+    ContainerDb(vols, "тома", "docker volume", "zheka-postgres, zheka-redis, zheka-tiles")
+    ContainerDb(content, "backend/content", "bind mount -> /data/files")
+  }
+}
+
+Rel(deploy, script, "SSH")
+Rel(script, net, "git merge --ff-only, compose up --build")
+Rel(uptime, hostnginx, "healthcheck и коммит, главная, вебхук без секрета = 403")
+Rel(uptime, max, "при сбое POST /messages капитану", $tags="optional")
+Rel(max, hostnginx, "мини-приложение, /api, /files, /webhook", "HTTPS 443")
+Rel(hostnginx, nginx, "HTTP")
+Rel(nginx, web, "/")
+Rel(nginx, api, "/api/, /files/, /webhook")
+Rel(api, db, "SQL")
+Rel(api, redis, "FSM, задачи")
+Rel(worker, db, "SQL")
+Rel(worker, redis, "задачи")
+Rel(db, vols, "данные")
+Rel(redis, vols, "RDB-снимки")
+Rel(api, content, "файлы")
+Rel(worker, content, "файлы")
+Rel(api, max, "Bot API", "исходящий HTTPS")
+Rel(worker, max, "Bot API", "исходящий HTTPS")
+Rel(api, yandex, "LLM, OCR", $tags="optional")
+Rel(worker, yandex, "OCR, SpeechKit", $tags="optional")
+Rel(nginx, osm, "подложки", $tags="optional")
+Rel(api, osm, "геокодер", $tags="optional")
+
+SHOW_LEGEND()
+@enduml

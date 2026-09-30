@@ -1,0 +1,47 @@
+@startuml 02-containers
+!include <C4/C4_Container>
+!include _style.iuml
+
+title Контейнеры: docker compose
+
+Person(user, "Житель / сотрудник УК", "в клиенте MAX")
+System_Ext(botapi, "MAX Bot API", "platform-api2.max.ru")
+System_Ext(yandex, "Yandex Cloud", "AI Studio, Vision OCR, SpeechKit")
+System_Ext(tilesup, "OpenFreeMap, OSM", "подложки")
+System_Ext(nominatim, "Nominatim", "обратный геокодер")
+System_Ext(hosttls, "nginx хоста", "TLS :443, вне репозитория")
+
+System_Boundary(zheka, "Жэка Коммуналкин, docker compose") {
+  Container(nginx, "nginx", "nginx 1.27", "Единственный порт на хосте (NGINX_PORT, 80): /, /api/, /files/, /tiles/, = /webhook")
+  Container(web, "web", "nginx + статика", "SPA: React 19, Vite, @maxhub/max-ui, MapLibre")
+  Container(api, "api", "gunicorn ASGI, FastAPI, maxo", "REST мини-приложения и кабинета УК, бот в том же процессе. :7001")
+  Container(worker, "worker", "python -m zheka.broker", "Прием задач taskiq и шедулер в одном процессе")
+  Container(migrations, "migrations", "alembic", "Собирает образ zheka:local, upgrade head и выход")
+  ContainerDb(db, "database", "PostgreSQL 16.9", "41 таблица, события, ключи идемпотентности. Том zheka-postgres")
+  ContainerDb(redis, "redis", "Redis 7.4", "FSM и диалоги бота, очередь и расписание, кэш и слот Nominatim. Том zheka-redis")
+  ContainerDb(files, "files", "bind mount", "backend/content -> /data/files")
+  ContainerDb(tilecache, "zheka-tiles", "docker volume", "кэш подложек до 2 ГБ")
+}
+
+Rel(user, hosttls, "мини-приложение и API", "HTTPS")
+Rel(botapi, hosttls, "апдейты", "POST /webhook")
+Rel(hosttls, nginx, "проксирует", "HTTP")
+Rel(nginx, web, "/")
+Rel(nginx, api, "/api/, /files/, = /webhook")
+Rel(nginx, tilecache, "/tiles/ofm/, /tiles/osm/")
+Rel(nginx, tilesup, "промах кэша", "HTTPS", $tags="optional")
+Rel(api, db, "SQL", "psycopg")
+Rel(worker, db, "SQL", "psycopg")
+Rel(migrations, db, "DDL")
+Rel(api, redis, "FSM, задачи после коммита, кэш геокодера")
+Rel(worker, redis, "стрим задач, FSM")
+Rel(api, files, "фото, видео, PDF")
+Rel(worker, files, "файлы из сообщений, уборка")
+Rel(api, botapi, "ответы бота, опрос")
+Rel(worker, botapi, "рассылки, карточки, диалоги, keep_webhook")
+Rel(api, yandex, "LLM, OCR", "3 с", $tags="optional")
+Rel(worker, yandex, "OCR, SpeechKit", $tags="optional")
+Rel(api, nominatim, "reverse, 1 rps", $tags="optional")
+
+SHOW_LEGEND()
+@enduml

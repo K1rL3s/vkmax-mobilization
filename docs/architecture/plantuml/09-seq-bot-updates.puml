@@ -1,0 +1,39 @@
+@startuml 09-seq-bot-updates
+title Апдейты бота: вебхук и опрос
+autonumber
+
+participant "MAX Bot API" as M
+participant "nginx" as N
+participant "api: FastAPI + maxo" as A
+database "Redis" as R
+database "PostgreSQL" as D
+participant "worker" as W
+
+note over A : lifespan выбирает режим по MAX_BOT_MODE
+alt webhook, прод
+  A -> M : POST /subscriptions, url = MAX_WEBHOOK_URL
+  M -> N : POST /webhook, X-Max-Bot-Api-Secret
+  N -> A : proxy, read timeout 35 с
+  A -> A : проверка секрета
+  A --> M : 200 сразу, обработка в фоне
+else polling, локально
+  loop пока жив воркер api
+    A -> M : GET /updates
+    M --> A : апдейты
+  end
+end
+A -> A : ThrottlingMiddleware: пока идет апдейт\nпользователя, следующие пропускаются
+A -> R : FSM и стек диалогов maxo.dialogs
+A -> D : UserMiddleware, TransactionMiddleware
+A -> M : ответ через фасад апдейта
+opt Файлы, голосовое, фото счетчика
+  A -> R : задача после коммита
+  R -> W : bot_requests, meters
+end
+loop каждые 10 минут, только webhook
+  W -> M : GET /subscriptions
+  opt Вебхука нет в подписках
+    W -> M : POST /subscriptions заново
+  end
+end
+@enduml

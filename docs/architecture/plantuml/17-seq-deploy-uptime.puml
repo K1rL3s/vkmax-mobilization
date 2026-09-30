@@ -1,0 +1,26 @@
+@startuml 17-seq-deploy-uptime
+title Деплой и мониторинг стенда
+autonumber
+
+participant "Команда" as Dev
+participant "GitHub Actions" as GH
+participant "VPS" as V
+participant "docker compose" as C
+participant "Стенд, HTTPS" as S
+participant "MAX Bot API" as M
+
+Dev -> GH : push в master
+GH -> GH : проверка заморозки сдачи
+GH -> V : SSH deploy.sh
+V -> V : git fetch, merge --ff-only, BUILD_COMMIT
+V -> C : compose up -d --build, restart nginx
+loop uptime.yml по расписанию
+  GH -> S : GET /api/healthcheck, ждет ok и commit
+  GH -> S : GET /
+  GH -> S : POST /webhook без секрета, ждет 403
+  opt Любая проверка не прошла
+    GH -> M : POST /messages капитану
+  end
+end
+note over V : reseed.sh: бэкап, down -v, up, python -m zheka.seed,\nзатем прогрев проверок DATA-API
+@enduml

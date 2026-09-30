@@ -1,0 +1,33 @@
+@startuml 13-seq-voice
+title Голосовое в боте (SpeechKit)
+autonumber
+
+actor "Житель" as U
+participant "MAX Bot API" as M
+participant "api: бот" as BOT
+database "Redis" as R
+participant "worker" as W
+participant "SpeechClient" as S
+participant "Yandex SpeechKit" as Y
+
+U -> M : Голосовое с описанием заявки
+M -> BOT : апдейт
+BOT -> M : «Разбираю голосовое»
+BOT -> R : задача transcribe_voice после коммита
+R -> W : задача
+W -> W : пауза, чтобы MAX успел расшифровать
+W -> M : GET сообщения по mid
+alt MAX прислал расшифровку
+  M --> W : текст
+else Расшифровки нет, ключ задан и квота есть
+  W -> M : скачать аудио oggopus
+  W -> S : recognize(audio)
+  S -> Y : POST stt:recognize, таймаут 10 с
+  Y --> S : текст или ошибка
+end
+alt Текст есть
+  W -> M : черновик заявки с текстом
+else Пусто
+  W -> M : «Не разобрал голосовое, напишите текстом»
+end
+@enduml

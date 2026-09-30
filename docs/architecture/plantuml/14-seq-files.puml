@@ -1,0 +1,31 @@
+@startuml 14-seq-files
+title Загрузка и отдача файлов по подписанной ссылке
+autonumber
+
+participant "Мини-приложение" as F
+participant "nginx" as N
+participant "api: FilesService" as A
+database "/data/files" as FS
+
+F -> N : POST /api/files, до 60 МБ на nginx
+N -> A : proxy
+A -> A : согласие, квота 30 загрузок в час
+A -> FS : запись кусками,\nфото до 10 МБ, видео до 50 МБ
+A -> A : тип по первым байтам:\nJPEG, PNG, WEBP, HEIC, MP4, MOV
+alt Сигнатура не подошла
+  A -> FS : удалить
+  A --> F : 400
+else Файл принят
+  A --> F : name, url = /files/name?exp=...&sig=...
+end
+F -> N : GET /files/name?exp&sig из тега img
+N -> A : proxy, nosniff
+A -> A : имя по шаблону, срок, HMAC
+alt Подпись верна и срок не истек
+  A -> FS : чтение
+  A --> F : 200 файл
+else Подделка или истек срок
+  A --> F : 404 «Файл не найден»
+end
+note over FS : 03:30 уборка: черновики без ссылок старше суток,\nфото закрытых заявок и показаний старше 12 месяцев
+@enduml

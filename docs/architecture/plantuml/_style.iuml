@@ -1,0 +1,6 @@
+' Общие обозначения: синий - наша система, серый - внешняя реальная,
+' оранжевый - мок, заглушка, демо или фолбэк. Пунктир - необязательная связь,
+' фолбэк, подмена или разовая операция.
+AddElementTag("mock", $bgColor="#ffedd5", $fontColor="#431407", $borderColor="#c2410c", $legendText="мок, заглушка, демо, фолбэк")
+AddRelTag("optional", $lineStyle=DashedLine(), $legendText="необязательно или разово")
+AddRelTag("mock", $textColor="#c2410c", $lineColor="#c2410c", $lineStyle=DashedLine(), $legendText="подмена внешней системы")

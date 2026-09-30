@@ -1,0 +1,42 @@
+@startuml 10-seq-tasks-notifications
+title Транзакция, задачи и уведомления
+autonumber
+
+participant "Мини-приложение" as F
+participant "api: transaction_middleware" as A
+participant "Сервис" as S
+participant "TaskPublisher" as P
+database "PostgreSQL" as D
+database "Redis" as R
+participant "worker" as W
+participant "MaxSender" as X
+participant "MAX Bot API" as M
+
+F -> A : POST /api/requests, Idempotency-Key
+A -> S : создать заявку
+S -> D : запись в транзакции
+S -> P : publish(send_to_user, broadcast_to_chats, ...)
+alt Ответ ниже 400
+  A -> D : commit
+  A -> P : flush
+  P -> R : kiq задач
+else Ошибка
+  A -> D : rollback
+  note over P : задачи не уходят
+end
+A --> F : карточка заявки
+R -> W : задача
+W -> D : получатели, уровень из notification_settings
+loop по каждому получателю
+  W -> X : send_message, notify по настройке
+  X -> X : 30 rps на бот, 2 rps на чат
+  X -> M : POST /messages
+  alt 429
+    X -> M : один повтор через секунду
+  else Бот остановлен или не запускался
+    M --> X : 403 или 404
+    X --> W : пропуск
+  end
+end
+W -> D : CommitMiddleware
+@enduml

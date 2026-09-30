@@ -1,0 +1,61 @@
+@startuml 01-context
+!include <C4/C4_Context>
+!include _style.iuml
+
+title Системный контекст: Жэка Коммуналкин
+
+Person(resident, "Житель", "Собственник или арендатор")
+Person(staff, "Сотрудник УК", "creator / admin / employee")
+Person(executor, "Исполнитель", "executor, только в боте")
+Person(checker, "Проверяющий API", "DATA-API, тестовый токен")
+
+System(zheka, "Жэка Коммуналкин", "Мини-приложение MAX, бот, API и фоновые задачи: заявки, счетчики, начисления, опросы, кабинет УК")
+
+System_Boundary(max, "Платформа MAX") {
+  System_Ext(client, "Клиент MAX", "iOS / Android / desktop / web")
+  System_Ext(bridge, "MAX Bridge", "st.max.ru/js/max-web-app.js")
+  System_Ext(botapi, "MAX Bot API", "platform-api2.max.ru")
+}
+
+System_Boundary(yc, "Yandex Cloud, необязательно") {
+  System_Ext(llm, "AI Studio", "yandexgpt-5-lite: категория и риск аварии")
+  System_Ext(ocr, "Vision OCR", "показание счетчика по фото")
+  System_Ext(stt, "SpeechKit", "расшифровка голосового")
+}
+
+System_Boundary(osm, "Карта, необязательно") {
+  System_Ext(tiles, "OpenFreeMap, OpenStreetMap", "подложки карты")
+  System_Ext(nominatim, "Nominatim", "адрес по точке")
+}
+
+System_Boundary(open, "Открытые данные, офлайн") {
+  System_Ext(reforma, "Реформа ЖКХ", "дома и УК")
+  System_Ext(gis, "ГИС ЖКХ", "кадастр, износ, класс энергоэффективности")
+}
+
+System_Ext(gh, "GitHub Actions", "деплой и мониторинг стенда")
+System_Ext(gzhi, "ГЖИ", "жилищная инспекция, без API")
+System(pay, "Демо-оплата", "вместо эквайринга", $tags="mock")
+
+Rel(resident, client, "пользуется")
+Rel(staff, client, "пользуется")
+Rel(executor, client, "пользуется")
+Rel(client, bridge, "открывает мини-приложение")
+Rel(bridge, zheka, "HTTPS /api", "WebAppData")
+Rel(checker, zheka, "HTTPS /api", "Bearer API_TEST_TOKEN")
+Rel(botapi, zheka, "апдейты", "вебхук или опрос")
+Rel(zheka, botapi, "сообщения, карточки, закрепы, файлы")
+Rel(botapi, client, "доставляет сообщения")
+Rel(zheka, llm, "категория заявки", "3 с", $tags="optional")
+Rel(zheka, ocr, "фото счетчика", "3 с", $tags="optional")
+Rel(zheka, stt, "голосовое", "10 с", $tags="optional")
+Rel(zheka, tiles, "прокси /tiles/ с кэшем", $tags="optional")
+Rel(zheka, nominatim, "reverse, 1 rps", $tags="optional")
+Rel(reforma, zheka, "выгрузка в сид", "CSV", $tags="optional")
+Rel(gis, zheka, "выгрузка в сид", $tags="optional")
+Rel(gh, zheka, "деплой по SSH, проверки")
+Rel(resident, gzhi, "PDF жалобы от бота, подает сам", $tags="optional")
+Rel(zheka, pay, "оплата квитанции", $tags="mock")
+
+SHOW_LEGEND()
+@enduml

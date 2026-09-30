@@ -1,0 +1,36 @@
+@startuml 12-seq-ocr
+title Показание счетчика по фото (OCR)
+autonumber
+
+actor "Житель" as U
+participant "Мини-приложение" as F
+participant "Бот" as BOT
+participant "api" as A
+participant "worker" as W
+participant "VisionClient" as V
+participant "Yandex Vision OCR" as Y
+participant "MAX Bot API" as M
+
+alt Мини-приложение
+  U -> F : Фото в форме показаний
+  F -> A : POST /api/files,\nзатем /api/meters/readings/recognize
+  A -> V : recognize(photo_path), если квота есть
+else Бот
+  U -> BOT : Фото счетчика в диалог
+  BOT -> W : задача recognize_meter_photo
+  W -> M : скачать фото из сообщения
+  W -> V : recognize(photo_name), если квота есть
+end
+alt Ключ задан
+  V -> Y : POST recognizeText, таймаут 3 с
+  Y --> V : текст или ошибка
+  V -> V : первое число или None
+else Ключа нет
+  V -> V : None без похода в сеть
+end
+alt Мини-приложение
+  A --> F : values или null
+else Бот
+  W -> M : окно подтверждения с распознанным числом или пустым
+end
+@enduml

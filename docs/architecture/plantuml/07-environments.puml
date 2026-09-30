@@ -1,0 +1,53 @@
+@startuml 07-environments
+title Режимы окружения: где включаются моки и фолбэки
+
+skinparam componentStyle rectangle
+skinparam rectangle {
+  BackgroundColor<<mock>> #ffedd5
+  BorderColor<<mock>> #c2410c
+  BackgroundColor<<ext>> #e5e7eb
+  BorderColor<<ext>> #4b5563
+}
+
+rectangle "Прод: VPS" {
+  rectangle "Мини-приложение в клиенте MAX" as p_fe
+  rectangle "MAX Bot API" <<ext>> as p_max
+  rectangle "DATA-API" as p_chk
+  rectangle "nginx хоста :443" as p_tls
+  rectangle "nginx compose :80" as p_ng
+  rectangle "api\nMAX_BOT_MODE=webhook\nворкер на CPU" as p_api
+  rectangle "ключей Yandex нет:\nфолбэки" <<mock>> as p_yc
+  p_fe --> p_tls
+  p_max --> p_tls : POST /webhook
+  p_chk --> p_tls : Bearer API_TEST_TOKEN
+  p_tls --> p_ng
+  p_ng --> p_api
+  p_api ..> p_yc
+}
+
+rectangle "Локально: docker compose" {
+  rectangle "Браузер или DATA-API" as l_br
+  rectangle "nginx :80" as l_ng
+  rectangle "api\nMAX_BOT_MODE=polling\nодин воркер" as l_api
+  rectangle "MAX Bot API" <<ext>> as l_max
+  rectangle "YANDEX_* пусто\nили заданы" <<mock>> as l_yc
+  l_br --> l_ng
+  l_ng --> l_api
+  l_api --> l_max : GET /updates
+  l_api ..> l_yc
+}
+
+rectangle "Фронт отдельно: Vite dev" {
+  rectangle "Vite :5173" as d_vite
+  rectangle "DEV_API_TARGET" as d_target
+  rectangle "бэкенд за nginx\nhttp://localhost" as d_ng
+  rectangle "mock-config-server\nhttp://localhost:31299" <<mock>> as d_mock
+  rectangle "OpenFreeMap, OSM" <<ext>> as d_tiles
+  rectangle "удаленный хост\nс доменом для клиента MAX" <<ext>> as d_remote
+  d_vite --> d_target : прокси /api
+  d_target --> d_ng
+  d_target --> d_mock
+  d_vite --> d_tiles : прокси /tiles/ofm, /tiles/osm
+  d_vite ..> d_remote : pnpm tunnel, reverse SSH
+}
+@enduml

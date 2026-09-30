@@ -1,0 +1,22 @@
+@startuml 16-seq-demo-payment
+title Демо-оплата квитанции (подмена эквайринга)
+autonumber
+
+actor "Житель" as U
+participant "Мини-приложение" as F
+participant "api: ChargesService" as A
+database "PostgreSQL" as D
+
+U -> F : Оплатить квитанцию
+F -> A : POST /api/charges/{charge_id}/pay
+A -> D : квитанция и подтвержденный житель квартиры
+alt Нет права видеть начисления, например арендатор
+  A --> F : 403
+else Уже оплачена
+  A --> F : 409
+else Можно платить
+  A -> D : paid_at = now
+  A --> F : charge_id, paid_at
+end
+note over A, D : в проде здесь был бы вызов эквайринга\nи прием его callback
+@enduml

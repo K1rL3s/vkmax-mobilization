@@ -1,0 +1,40 @@
+@startuml 15-seq-map
+title Карта: подложки и геокодер
+autonumber
+
+actor "Житель" as U
+participant "Мини-приложение: MapLibre" as F
+participant "nginx /tiles/" as N
+participant "OpenFreeMap, OSM" as T
+participant "api" as A
+database "Redis" as R
+participant "Nominatim" as G
+
+F -> N : GET /tiles/ofm/... или /tiles/osm/...
+alt Есть в кэше zheka-tiles
+  N --> F : тайл, X-Cache HIT
+else Промах
+  N -> T : HTTPS, свой User-Agent
+  T --> N : тайл
+  N --> F : тайл, в кэш
+end
+note over F : нет WebGL или карта упала - выбор дома списком
+F -> A : GET /api/map/houses в рамке карты
+A --> F : дома справочника
+U -> F : Тап по зданию вне справочника
+F -> A : GET /api/houses/at?lat&lon, 60 в час
+A -> R : кэш по точке, 30 дней
+alt Есть в кэше
+  R --> A : адрес
+else Промах кэша
+  A -> R : слот 1 rps на приложение
+  alt Слот получен за 1,5 с
+    A -> G : reverse, таймаут 3 с
+    G --> A : адрес или ничего
+    A -> R : в кэш
+  else Слот не дождались
+    A --> F : ошибка геокодера
+  end
+end
+A --> F : дом, адрес или пусто
+@enduml

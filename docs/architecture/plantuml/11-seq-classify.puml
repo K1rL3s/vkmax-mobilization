@@ -1,0 +1,37 @@
+@startuml 11-seq-classify
+title Подсказка категории заявки (LLM)
+autonumber
+
+actor "Житель" as U
+participant "Мини-приложение" as F
+participant "api" as A
+participant "YandexQuota" as Q
+participant "YandexClassifier" as L
+participant "Yandex AI Studio" as Y
+
+U -> F : Описывает проблему своими словами
+F -> A : POST /api/requests/classify
+A -> Q : take(user_id), 60 в час
+alt Текст короткий или квота исчерпана
+  A --> F : без подсказки
+else Можно звать модель
+  A -> L : classify(text)
+  alt Нет ключа или ключ уже отвергнут
+    L --> A : пусто
+  else Ключ задан
+    L -> L : mask_pii: телефоны, e-mail, счета, «кв. 45»
+    L -> Y : completion, temperature 0, таймаут 3 с
+    alt Ответ JSON
+      Y --> L : category, emergency_probability
+    else 401 или 403
+      L -> L : выключить до перезапуска процесса
+    else Таймаут или мусор
+      Y --> L : ошибка
+    end
+    L --> A : категория или пусто
+  end
+  A -> A : danger(text): правила аварии поверх модели
+  A --> F : категория и признак аварии
+end
+note over F : кнопки категорий видны всегда, житель выбирает сам
+@enduml

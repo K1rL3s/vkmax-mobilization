@@ -1,0 +1,49 @@
+@startuml 04-frontend-components
+!include <C4/C4_Component>
+!include _style.iuml
+
+title Компоненты фронтенда: мини-приложение
+
+System_Ext(bridge, "MAX Bridge", "window.WebApp, max-web-app.js")
+Container_Ext(backend, "Бэкенд", "FastAPI за nginx", "/api/*")
+Container_Ext(tiles, "Прокси подложек", "nginx /tiles/ofm, /tiles/osm")
+Container(mockserver, "mock-config-server", "Node, :31299", "Мок бэкенда для разработки без него", $tags="mock")
+
+Container_Boundary(spa, "SPA: React 19 + Vite") {
+  Component(router, "app/router", "react-router 7", "Маршруты, анимация экранов")
+  Component(loaders, "app/loaders", "loader", "session, protected, deeplink: нет согласия или дома -> онбординг")
+  Component(resident, "features: житель", "React", "onboarding, house, house-map, new-request, request, meters, charges, flat-confirmation, meetings, appointments, profile")
+  Component(admin, "features: кабинет УК", "React", "admin-requests, admin-houses, admin-analytics, admin-announcements, admin-polls, admin-reception, admin-org")
+  Component(outside, "features/outside-max", "React", "Заглушка вне MAX", $tags="mock")
+  Component(apiinst, "shared/api/instance", "openapi-fetch, openapi-react-query", "authParams с WebAppData")
+  Component(gen, "shared/api/schema/generated.ts", "openapi-typescript", "Типы из openapi.yaml")
+  Component(mocks, "shared/api/mocks", "конфиги mock-config-server", "Около 25 файлов, почти весь API", $tags="mock")
+  Component(maxlib, "shared/lib/max", "TS", "launch, back-button, closing-confirmation, haptic, scan-code")
+  Component(idem, "shared/lib/idempotency", "TS", "Idempotency-Key")
+  Component(track, "shared/lib/analytics", "hook", "useTrack -> POST /api/events")
+  Component(map, "shared/ui/map", "MapLibre GL", "basemaps, tiles, настройки карты")
+}
+
+Rel(router, loaders, "запускает")
+Rel(loaders, apiinst, "GET /api/me")
+Rel(router, resident, "рендерит")
+Rel(router, admin, "рендерит")
+Rel(resident, apiinst, "запросы")
+Rel(admin, apiinst, "запросы")
+Rel(resident, map, "карта домов")
+Rel(admin, map, "карта УК")
+Rel(resident, maxlib, "BackButton, QR, телефон")
+Rel(resident, idem, "создающие действия")
+Rel(resident, track, "события")
+Rel(track, apiinst, "POST /api/events")
+Rel(apiinst, gen, "типы")
+Rel(apiinst, maxlib, "initData")
+Rel(maxlib, bridge, "initData, BackButton, HapticFeedback, openCodeReader, requestContact")
+Rel(apiinst, backend, "HTTP /api", "WebAppData")
+Rel(map, tiles, "подложки")
+Rel(apiinst, mockserver, "dev: прокси Vite, DEV_API_TARGET", $tags="mock")
+Rel(mocks, mockserver, "конфиги ручек", $tags="mock")
+Rel(gen, mocks, "типы ответов")
+
+SHOW_LEGEND()
+@enduml

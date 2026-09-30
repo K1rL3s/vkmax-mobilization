@@ -1,0 +1,36 @@
+@startuml 08-seq-miniapp-auth
+title Запуск мини-приложения и авторизация
+autonumber
+
+actor "Житель или сотрудник" as U
+participant "Клиент MAX" as C
+participant "MAX Bridge" as B
+participant "Мини-приложение" as F
+participant "nginx" as N
+participant "api" as A
+database "PostgreSQL" as D
+
+U -> C : Кнопка «Открыть приложение», QR или диплинк
+C -> F : Открывает мини-приложение
+F -> B : window.WebApp.initData, start_param
+alt Внутри MAX
+  B --> F : initData, подписанный MAX
+else Вне MAX
+  B --> F : пусто
+  note over F : dev-сборка шлет WebAppData = dev,\nпрод-сборка показывает outside-max
+end
+F -> N : GET /api/me, WebAppData,\nX-Org-Id при нескольких УК
+N -> A : proxy_pass api:7001
+alt Bearer совпал с API_TEST_TOKEN
+  A -> A : учетка «Проверяющий API»
+else WebAppData
+  A -> A : HMAC initData на токене бота
+end
+alt Нет данных или подпись неверна
+  A --> F : 401
+else Подпись верна
+  A -> D : аккаунт, согласие, жительства, роли в УК
+  A --> F : 200 профиль
+  note over F : session-loader: нет согласия или дома -> онбординг,\ndeeplink-loader разбирает start_param
+end
+@enduml
