@@ -22,16 +22,16 @@ import { cn } from "@/shared/lib/css";
 
 import styles from "./screen-transition.module.css";
 
+const OFFSCREEN = { x: "100%" };
+const BEHIND = { x: "-25%", opacity: 0.6 };
+const FADED = { opacity: 0 };
+
 const variants: Variants = {
   enter: (type: NavigationType) =>
-    type === "PUSH"
-      ? { y: window.innerHeight }
-      : { opacity: type === "POP" ? 0.6 : 0 },
-  shown: { y: 0, opacity: 1 },
+    ({ PUSH: OFFSCREEN, POP: BEHIND, REPLACE: FADED })[type],
+  shown: { x: "0%", opacity: 1 },
   leave: (type: NavigationType) =>
-    type === "POP"
-      ? { y: window.innerHeight }
-      : { opacity: type === "PUSH" ? 0.6 : 0 },
+    ({ POP: OFFSCREEN, PUSH: BEHIND, REPLACE: FADED })[type],
 };
 
 const Screen = ({

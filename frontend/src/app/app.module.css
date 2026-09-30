@@ -1,5 +1,6 @@
 .Frame {
   min-height: 100vh;
+  overflow-x: clip;
   background-color: var(--background-surface);
 }
 
