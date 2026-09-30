@@ -21,7 +21,7 @@ export const QuestionPanel = ({ request }: { request: RequestCard }) => {
           {question.text}
         </Typography.Text>
       )}
-      <ReplyForm requestId={request.id} />
+      <ReplyForm requestId={request.id} mode="secondary" />
     </section>
   );
 };

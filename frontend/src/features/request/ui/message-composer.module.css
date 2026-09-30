@@ -1,0 +1,43 @@
+.Composer {
+  position: relative;
+
+  textarea {
+    padding-right: 52px;
+  }
+}
+
+.Composer .primary {
+  background-color: var(--background-card);
+}
+
+.Composer .secondary {
+  background-color: var(--background-surface);
+}
+
+.Send {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: var(--button-primary);
+  color: var(--text-primary-inverse-static);
+  cursor: pointer;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+  }
+}
+
+.Send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

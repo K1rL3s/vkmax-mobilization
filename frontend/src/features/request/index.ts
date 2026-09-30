@@ -7,6 +7,7 @@ export {
 export { deadlineLeft, deadlineProgress } from "./domain/format";
 export { buildTimeline } from "./domain/timeline";
 export { DeadlinePanel } from "./ui/deadline-panel";
+export { MessageComposer } from "./ui/message-composer";
 export { MessageThread } from "./ui/message-thread";
 export { RequestAttachments } from "./ui/request-attachments";
 export { RequestTimeline } from "./ui/request-timeline";

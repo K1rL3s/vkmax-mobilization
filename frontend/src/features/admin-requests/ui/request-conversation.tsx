@@ -1,9 +1,8 @@
 import { useWatch } from "react-hook-form";
-import { Flex, Switch, Textarea, Typography } from "@maxhub/max-ui";
+import { Flex, Switch, Typography } from "@maxhub/max-ui";
 
-import { MessageThread } from "@/features/request";
+import { MessageComposer, MessageThread } from "@/features/request";
 import { FieldError } from "@/shared/ui/field-error";
-import { arrowUpIcon, Icon } from "@/shared/ui/icon";
 
 import { requestFormConstraints } from "../domain/request-form-constraints";
 import type { AdminRequest } from "../domain/request-workflow";
@@ -52,25 +51,13 @@ export const RequestConversation = ({ request }: { request: AdminRequest }) => {
                 будет ждать его ответа.
               </Typography.Text>
             )}
-            <div className={styles.Composer}>
-              <Textarea
-                rows={3}
-                maxLength={requestFormConstraints.reply}
-                autoComplete="off"
-                placeholder="Ответ жителю"
-                {...form.register("text")}
-                aria-invalid={!!fieldError}
-                aria-label="Текст ответа"
-              />
-              <button
-                className={styles.Send}
-                type="submit"
-                disabled={text.trim().length === 0}
-                aria-label="Отправить ответ"
-              >
-                <Icon src={arrowUpIcon} size={20} />
-              </button>
-            </div>
+            <MessageComposer
+              field={form.register("text")}
+              placeholder="Ответ жителю"
+              maxLength={requestFormConstraints.reply}
+              invalid={!!fieldError}
+              canSend={text.trim().length > 0}
+            />
             <FieldError message={fieldError?.message ?? model.error} />
           </form>
         </Flex>
