@@ -53,7 +53,12 @@ export const FilterBar = <N extends string>({
           </Button>
         ))}
         {onReset && (
-          <Button type="button" size="small" variant="ghost" onClick={onReset}>
+          <Button
+            type="button"
+            size="small"
+            variant="secondary"
+            onClick={onReset}
+          >
             Сбросить
           </Button>
         )}
