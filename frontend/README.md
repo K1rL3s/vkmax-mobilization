@@ -1,10 +1,10 @@
 # Фронтенд Жэки Коммуналкина
 
-Мини-приложение MAX: React, TypeScript, Vite, `@maxhub/max-ui`, TanStack Query, MapLibre GL. Типы API генерируются из `../openapi.yaml`. Правила кода - в [AGENTS.md](AGENTS.md).
+Мини-приложение MAX: React, TypeScript, Vite, `@maxhub/max-ui`, TanStack Query, MapLibre GL. Типы API генерируются из `../openapi.yaml`. Правила кода - в [AGENTS.md](AGENTS.md)
 
 ## Запуск
 
-Нужны Node 24.21.0 и pnpm.
+Нужны Node 24.21.0 и pnpm
 
 ```sh
 cp .env.local.example .env.local
@@ -12,9 +12,9 @@ pnpm i
 pnpm dev
 ```
 
-Vite проксирует `/api` на `DEV_API_TARGET` (по умолчанию `http://localhost`, бэкенд за nginx из `docker compose`), а `/tiles/ofm` и `/tiles/osm` - на OpenFreeMap и OpenStreetMap. Без бэкенда можно поднять мок-сервер `pnpm mock` на порту 31299 и указать `DEV_API_TARGET=http://localhost:31299`.
+Vite проксирует `/api` на `DEV_API_TARGET` (по умолчанию `http://localhost`, бэкенд за nginx из `docker compose`), а `/tiles/ofm` и `/tiles/osm` - на OpenFreeMap и OpenStreetMap. Без бэкенда можно поднять мок-сервер `pnpm mock` на порту 31299 и указать `DEV_API_TARGET=http://localhost:31299`
 
-API пускает только с подписанной `initData` из MAX, поэтому приложение целиком работает, только когда его открывает MAX по HTTPS. Чтобы открыть локальный dev-сервер в MAX, `pnpm tunnel` пробрасывает его на удаленный хост через reverse SSH tunnel (переменные `DEV_TUNNEL_*` в `.env.local`, справка - `pnpm tunnel --help`).
+API пускает только с подписанной `initData` из MAX, поэтому приложение целиком работает, только когда его открывает MAX по HTTPS. Чтобы открыть локальный dev-сервер в MAX, `pnpm tunnel` пробрасывает его на удаленный хост через reverse SSH tunnel (переменные `DEV_TUNNEL_*` в `.env.local`, справка - `pnpm tunnel --help`)
 
 ## Переменные
 
@@ -39,4 +39,4 @@ API пускает только с подписанной `initData` из MAX, �
 | `pnpm tunnel` | Reverse SSH tunnel к dev-серверу |
 | `pnpm pre-commit` | lint, format и `tsc -b` |
 
-В Docker образ `web` собирает статику командой `pnpm build` и отдает ее через nginx, см. `Dockerfile`.
+В Docker образ `web` собирает статику командой `pnpm build` и отдает ее через nginx, см. `Dockerfile`

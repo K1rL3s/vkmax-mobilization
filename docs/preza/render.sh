@@ -21,3 +21,4 @@ FONTCONFIG_FILE="$PWD/build/fonts.conf" "${SOFFICE:-soffice}" -env:UserInstallat
 rm -rf "$profile"
 rm -f build/slides/*.jpg
 pdftoppm -jpeg -r 100 "$out.pdf" build/slides/slide
+cp "$out.pdf" ../../Презентация.pdf
