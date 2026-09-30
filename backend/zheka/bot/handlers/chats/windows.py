@@ -1,7 +1,7 @@
 from magic_filter import F
 from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import TextInput
-from maxo.dialogs.widgets.kbd import Button, Column, Select
+from maxo.dialogs.widgets.kbd import Button, ScrollingGroup, Select
 from maxo.dialogs.widgets.text import Const, Format, Multi
 
 from zheka.bot.cards import CANCEL
@@ -23,11 +23,12 @@ CODE_TEXT = (
 )
 RIGHTS_TEXT = "🛡 Повысьте меня до администратора в чате «{title}» и нажмите «Готово»"
 NOTICE = Format("{notice}", when=F["notice"])
+HOUSES_PAGE = 20
 
 chat_binding_dialog = Dialog(
     Window(
         Format(HOUSE_TEXT),
-        Column(
+        ScrollingGroup(
             Select(
                 Format("🏢 {item.title}"),
                 id="house",
@@ -36,6 +37,10 @@ chat_binding_dialog = Dialog(
                 items="houses",
                 on_click=on_house,
             ),
+            id="houses_scroll",
+            width=1,
+            height=HOUSES_PAGE,
+            hide_on_single_page=True,
         ),
         state=ChatBinding.house,
         getter=get_houses,

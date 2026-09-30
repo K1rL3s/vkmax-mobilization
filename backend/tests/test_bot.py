@@ -82,7 +82,12 @@ from zheka.bot.handlers.access.handlers import PICKED
 from zheka.bot.handlers.access.windows import GONE_TEXT
 from zheka.bot.handlers.chats.handlers import BOUND_TEXT, NO_RIGHTS_YET
 from zheka.bot.handlers.chats.router import JOIN_TO_VOTE, UNPINNED, VOTE_UNWEIGHTED
-from zheka.bot.handlers.chats.windows import CODE_TEXT, HOUSE_TEXT, RIGHTS_TEXT
+from zheka.bot.handlers.chats.windows import (
+    CODE_TEXT,
+    HOUSES_PAGE,
+    HOUSE_TEXT,
+    RIGHTS_TEXT,
+)
 from zheka.bot.handlers.commands.deeplinks import (
     APP_BUTTON,
     DEMO_ADMIN_NOTICE,
@@ -6130,3 +6135,33 @@ async def test_help_and_faq_answer_in_one_message_listing_every_command(
     assert recorder.texts == [text]
     assert len(text.encode("utf-16-le")) // 2 <= texts.MESSAGE_LIMIT
     assert all(f"/{bot_command.name} " in HELP_TEXT for bot_command in BOT_COMMANDS)
+
+
+async def test_the_house_choice_for_a_chat_is_paged(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+) -> None:
+    user_id = await _started(bot_session, client)
+    org_id, _ = await _org_house(bot_session)
+    bot_session.add(OrgMember(org_id=org_id, user_id=user_id, role=OrgRole.ADMIN))
+    for _ in range(HOUSES_PAGE):
+        await _bot_house(bot_session, org_id=org_id)
+    await bot_session.commit()
+
+    await _added_by(task_broker, _chat_id(), initiator_max_user_id=client.user.id)
+
+    window = message_manager.last_message()
+    houses = [text for text in _button_texts(window) if text.startswith("🏢")]
+    assert len(houses) == HOUSES_PAGE
+    await client.click(window, InlineButtonTextLocator("^>$"))
+    rest = [
+        text
+        for text in _button_texts(message_manager.last_message())
+        if text.startswith("🏢")
+    ]
+    assert len(rest) == 1
+    assert rest[0] not in houses
+    assert chat_api.left == []
