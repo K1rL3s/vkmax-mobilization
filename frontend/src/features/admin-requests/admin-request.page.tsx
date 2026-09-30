@@ -5,7 +5,6 @@ import { generatePath, Link } from "react-router-dom";
 import {
   buildTimeline,
   CATEGORY_ICON,
-  currentActor,
   DeadlinePanel,
   isFinished,
   isOnReview,
@@ -66,7 +65,6 @@ const AdminRequestPage = () => {
 
   const tone = STATUS_TONE[request.status];
   const isRunning = !isFinished(request.status) && !isOnReview(request.status);
-  const actor = currentActor(request, "staff");
   const escalation = escalationNote(request);
   const thread = threadNote(request);
   const danger = dangerNote(request);
@@ -140,12 +138,6 @@ const AdminRequestPage = () => {
         {danger && request.danger_phrase && (
           <Typography.Text variant="description" color="secondary">
             По словам «{request.danger_phrase}»
-          </Typography.Text>
-        )}
-
-        {actor && (
-          <Typography.Text variant="description" color="secondary">
-            Сейчас: {actor}
           </Typography.Text>
         )}
       </Flex>
