@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from html import escape
 from typing import Any
@@ -38,9 +39,7 @@ from zheka.core.texts import (
     DIGEST_EMPTY,
     DIGEST_SUBSCRIBE,
     DIGEST_SUBSCRIBED,
-    NO_EMERGENCY_PHONE_TEXT,
     OPEN_APP,
-    ORG_PHONE_TEXT,
 )
 
 GREETING = "👋 Жэка Коммуналкин на связи"
@@ -57,20 +56,37 @@ HOUSE_MENU_TEXT = (
 )
 STAFF_TEXT = "🧑‍💼 Кабинет УК - в приложении"
 EMERGENCY_TEXT = (
-    "🚨 Угроза жизни, пожар или дым - звоните 112\n\n"
-    "🔥 Пахнет газом - не включайте свет и приборы, не зажигайте огонь, "
-    "откройте окна, выйдите и звоните 104 или 112\n\n"
-    "💧 Течет вода - перекройте кран на стояке или под раковиной, "
-    "не трогайте приборы мокрыми руками\n\n"
-    "⚡️ Искрит проводка или пахнет гарью - отключите автомат в щитке, "
-    "если это безопасно"
+    "🚨 <b>Что делать в аварийной ситуации</b>\n\n"
+    "<b>Пожар, дым или угроза жизни</b>\n"
+    "Немедленно звоните <b>112</b>.\n\n"
+    "🔥 <b>Запах газа</b>\n"
+    "Не включайте и не выключайте свет и электроприборы, не зажигайте огонь. "
+    "Откройте окна, покиньте помещение и позвоните <b>104</b> или <b>112</b> "
+    "из безопасного места.\n\n"
+    "💧 <b>Протечка воды</b>\n"
+    "Если это безопасно, перекройте подачу воды к месту протечки. "
+    "Не прикасайтесь к электроприборам мокрыми руками.\n\n"
+    "⚡️ <b>Искрит проводка или пахнет горелой изоляцией</b>\n"
+    "Отключите электричество автоматом в щитке, если это безопасно. "
+    "При появлении дыма или огня звоните <b>112</b>."
 )
-EMERGENCY_PHONE_TEXT = (
-    "🛠 Затем звоните в аварийную службу дома: {emergency_phone}. "
-    "Оператор обязан ответить за 5 минут (ПП 416 п. 13)"
+EMERGENCY_PHONE_TEXT = "<b>Аварийная служба:</b>\n<b>{emergency_phone}</b>"
+EMERGENCY_NO_PHONE_TEXT = (
+    "<b>Аварийная служба</b>\n"
+    "Номер указан в квитанции и на информационном стенде в подъезде."
 )
-CALL_NOTE_TEXT = "📝 Запишите время звонка и номер заявки, который назовет диспетчер"
+EMERGENCY_ORG_PHONE_TEXT = "<b>Телефон управляющей компании:</b>\n<b>{org_phone}</b>"
+CALL_NOTE_TEXT = (
+    "📝 <b>При обращении к диспетчеру</b>\n"
+    "Сообщите адрес и опишите проблему. Запишите время звонка и номер заявки."
+)
 JOINING_CHAT = "⏳ Добавляю вас в чат «{title}», напишу, как получится"
+RU_PHONE = re.compile(r"[78](\d{3})(\d{3})(\d{2})(\d{2})")
+
+
+def _pretty_phone(phone: str) -> str:
+    match = RU_PHONE.fullmatch(re.sub(r"\D", "", phone))
+    return phone if match is None else "+7 ({}) {}-{}-{}".format(*match.groups())
 
 
 @inject
@@ -132,9 +148,9 @@ async def get_emergency(
     emergency_phone = None if org is None else org.emergency_phone
     org_phone = None if org is None or emergency_phone else org.phone.strip()
     return {
-        "emergency_phone": emergency_phone and escape(emergency_phone),
+        "emergency_phone": emergency_phone and escape(_pretty_phone(emergency_phone)),
         "emergency_copy": emergency_phone,
-        "org_phone": org_phone and escape(org_phone),
+        "org_phone": org_phone and escape(_pretty_phone(org_phone)),
         "org_copy": org_phone,
         "connected": residency is not None and residency.is_connected,
     }
@@ -230,8 +246,8 @@ menu_dialog = Dialog(
         Multi(
             Const(EMERGENCY_TEXT),
             Format(EMERGENCY_PHONE_TEXT, when=F["emergency_phone"]),
-            Const(NO_EMERGENCY_PHONE_TEXT, when=~F["emergency_phone"]),
-            Format(ORG_PHONE_TEXT, when=F["org_phone"]),
+            Const(EMERGENCY_NO_PHONE_TEXT, when=~F["emergency_phone"]),
+            Format(EMERGENCY_ORG_PHONE_TEXT, when=F["org_phone"]),
             Const(CALL_NOTE_TEXT),
             sep="\n\n",
         ),

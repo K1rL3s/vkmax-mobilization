@@ -123,6 +123,8 @@ from zheka.bot.handlers.fallback import NOT_UNDERSTOOD
 from zheka.bot.handlers.forget.handlers import FORGOTTEN_TEXT
 from zheka.bot.handlers.menu.windows import (
     CALL_NOTE_TEXT,
+    EMERGENCY_NO_PHONE_TEXT,
+    EMERGENCY_ORG_PHONE_TEXT,
     EMERGENCY_PHONE_TEXT,
     EMERGENCY_TEXT,
     GREETING,
@@ -4107,8 +4109,8 @@ async def test_the_emergency_screen_labels_the_org_phone_of_a_registry_house(
     assert _text(message_manager) == "\n\n".join(
         [
             EMERGENCY_TEXT,
-            NO_EMERGENCY_PHONE_TEXT,
-            ORG_PHONE_TEXT.format(org_phone="+7 (000) 555-00-00"),
+            EMERGENCY_NO_PHONE_TEXT,
+            EMERGENCY_ORG_PHONE_TEXT.format(org_phone="+7 (000) 555-00-00"),
             CALL_NOTE_TEXT,
         ],
     )
@@ -4127,7 +4129,7 @@ async def test_the_emergency_screen_works_without_a_house(
     await client.click(message_manager.last_message(), EMERGENCY)
 
     assert _text(message_manager) == (
-        f"{EMERGENCY_TEXT}\n\n{NO_EMERGENCY_PHONE_TEXT}\n\n{CALL_NOTE_TEXT}"
+        f"{EMERGENCY_TEXT}\n\n{EMERGENCY_NO_PHONE_TEXT}\n\n{CALL_NOTE_TEXT}"
     )
     assert _button_texts(message_manager.last_message()) == ["🏠 Меню"]
 
@@ -5492,7 +5494,7 @@ async def test_a_short_danger_phrase_with_no_window_open_opens_the_emergency_scr
     await client.send("Искрит щиток")
 
     assert _text(message_manager) == (
-        f"{EMERGENCY_TEXT}\n\n{NO_EMERGENCY_PHONE_TEXT}\n\n{CALL_NOTE_TEXT}"
+        f"{EMERGENCY_TEXT}\n\n{EMERGENCY_NO_PHONE_TEXT}\n\n{CALL_NOTE_TEXT}"
     )
 
 
