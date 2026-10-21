@@ -48,6 +48,7 @@ import { IconTile } from "@/shared/ui/icon-tile";
 import { ErrorState, LoadingState } from "@/shared/ui/state";
 import { StatusPill } from "@/shared/ui/status-pill";
 
+import { ChatCard } from "./chat-card";
 import { DemandCard } from "./demand-card";
 import { useActiveRequest } from "./use-active-request";
 
@@ -323,6 +324,8 @@ const HomePage = () => {
           )}
         </Card>
       )}
+
+      <ChatCard house={house} updatedAt={card.dataUpdatedAt} />
 
       <OutagesPanel outages={house.outages} />
 

@@ -9,6 +9,7 @@ from zheka.core.errors import EntityNotFound
 from zheka.core.ids import MaxChatId, MaxUserId, UserId
 from zheka.infra.database.models import Appointment, Request, User, fresh_timestamp
 from zheka.infra.database.repos.base import BaseAlchemyRepo
+from zheka.infra.database.tables.chats import chat_members_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.reception import appointments_table
 from zheka.infra.database.tables.requests import requests_table
@@ -97,6 +98,7 @@ class UsersRepo(BaseAlchemyRepo):
 
     async def forget(self, user: User, max_user_id: MaxUserId) -> None:
         for table in (
+            chat_members_table,
             residents_table,
             flat_verification_requests_table,
             demand_signals_table,

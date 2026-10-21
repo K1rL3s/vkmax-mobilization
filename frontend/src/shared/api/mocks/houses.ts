@@ -16,6 +16,7 @@ import {
   houseCard,
   houseFlats,
   houseListItem,
+  joinHouseChat,
   removeResidency,
   residencySummary,
   residencyForHouse,
@@ -104,5 +105,22 @@ export const housesConfigs = [
     signalDemand(house.id);
 
     return ok({ house_id: house.id, total: demandTotal(house.id) });
+  }),
+  endpoint("post", "/houses/:house_id/chat/join", (request) => {
+    const house = findHouse(Number(request.params.house_id));
+
+    if (!house || !residencyForHouse(house.id)) {
+      return notFound("Дом не найден");
+    }
+
+    if (!houseCard(house).chat_join) {
+      return conflict(
+        "Вступить в чат дома можно с подтвержденной квартирой, когда УК или председатель привязали чат и сделали бота администратором",
+      );
+    }
+
+    joinHouseChat(house.id);
+
+    return ok({ ok: true });
   }),
 ];

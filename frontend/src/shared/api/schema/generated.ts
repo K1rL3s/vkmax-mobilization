@@ -232,6 +232,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/houses/{house_id}/chat/join": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Вступить в чат дома
+     * @description Бот добавляет подтвержденного жителя в привязанный чат дома и пишет ему в личку, получилось ли
+     */
+    post: operations["join_house_chat"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/houses/{house_id}/link": {
     parameters: {
       query?: never;
@@ -3875,6 +3895,8 @@ export interface components {
        * @default false
        */
       chat_bound: boolean;
+      /** @description Вступление в чат дома через бота: только подтвержденному незаблокированному жителю дома, когда чат привязан и бот в нем администратор */
+      chat_join?: components["schemas"]["HouseChatJoin"] | null;
       overhaul?: components["schemas"]["HouseOverhaul"] | null;
       /** Documents */
       documents: components["schemas"]["FileRef"][];
@@ -3892,6 +3914,24 @@ export interface components {
       services: components["schemas"]["CityServiceItem"][];
       /** @description Паспорт дома из справочника, у дома от жителя его нет */
       passport?: components["schemas"]["HousePassport"] | null;
+    };
+    /** HouseChatJoin */
+    HouseChatJoin: {
+      /**
+       * Title
+       * @description Название чата в MAX
+       */
+      title: string;
+      /**
+       * Joined
+       * @description Житель уже в чате
+       */
+      joined: boolean;
+      /**
+       * Link
+       * @description Ссылка-приглашение в чат, только уже вступившему: по ней войдет кто угодно
+       */
+      link?: string | null;
     };
     /** HouseListItem */
     HouseListItem: {
@@ -7313,6 +7353,93 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HouseCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  join_house_chat: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OkResponse"];
         };
       };
       /** @description Некорректный запрос */

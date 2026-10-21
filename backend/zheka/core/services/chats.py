@@ -14,7 +14,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
-from zheka.core.models import Chat, ChatPin, House
+from zheka.core.models import Chat, ChatPin, House, User
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.chats import ChatsRepo
@@ -26,6 +26,11 @@ from zheka.infra.database.repos.users import UsersRepo
 CHAT_TAKEN = "Этот чат уже привязан или бота из него удалили"
 WRONG_CODE = "Код не подошел. Проверьте его на карточке дома и пришлите еще раз"
 CHAT_NOT_BOUND = "Чат больше не привязан к дому"
+NO_CHAT_TO_JOIN = (
+    "Вступить в чат дома можно с подтвержденной квартирой, когда УК или "
+    "председатель привязали чат и сделали бота администратором"
+)
+ALREADY_JOINED = "Вы уже в чате дома"
 PIN_TEXT_LIMIT = 50
 MESSAGE_TEXT_LIMIT = 4000
 PINS_TITLE = "📌 Закреплено в чате:"
@@ -57,6 +62,19 @@ PINS_ERASED = (
 class MessageRef(ZhekaType):
     mid: str
     seq: int
+
+
+class ChatJoinOffer(ZhekaType):
+    chat_id: MaxChatId
+    title: str
+    link: str | None
+    joined: bool
+
+
+class ChatJoining(ZhekaType):
+    user: User
+    title: str
+    link: str | None
 
 
 class PinList(ZhekaType):
@@ -114,9 +132,15 @@ class ChatsService:
         residents = await self._residents.list_for_user(user_id)
         return any(r.status is ResidentStatus.ACTIVE for r in residents)
 
-    async def on_bot_added(self, chat_id: MaxChatId, title: str) -> None:
-        await self._chats.upsert_added(chat_id, title)
+    async def on_bot_added(
+        self,
+        chat_id: MaxChatId,
+        title: str,
+        link: str | None = None,
+    ) -> None:
+        await self._chats.upsert_added(chat_id, title, link)
         await self._chats.drop_cards(chat_id)
+        await self._chats.drop_members(chat_id)
         await self._chats.unpin(await self._chats.list_pins(chat_id), datetime.now(UTC))
 
     async def on_bot_removed(self, chat_id: MaxChatId) -> None:
@@ -179,9 +203,78 @@ class ChatsService:
             if user is None
             else await self._residents.get_for_house(user.id, house_id)
         )
+        if user is not None:
+            await self._chats.add_member(chat_id, user.id)
         if resident is not None and resident.status is ResidentStatus.ACTIVE:
             return
         self._notifications.welcome_chat(chat_id, house_id, member=name)
+
+    async def on_member_removed(
+        self,
+        chat_id: MaxChatId,
+        max_user_id: MaxUserId,
+    ) -> None:
+        user = await self._users.get_by_max_id(max_user_id)
+        if user is not None:
+            await self._chats.remove_member(chat_id, user.id)
+
+    async def join_offer(
+        self,
+        user_id: UserId,
+        house_id: HouseId,
+    ) -> ChatJoinOffer | None:
+        resident = await self._residents.get_for_house(user_id, house_id)
+        if (
+            resident is None
+            or resident.verified_at is None
+            or resident.status is not ResidentStatus.ACTIVE
+        ):
+            return None
+        chat = await self._chats.joinable(house_id)
+        if chat is None:
+            return None
+        return ChatJoinOffer(
+            chat_id=chat.chat_id,
+            title=chat.title or "",
+            link=chat.link,
+            joined=await self._chats.is_member(chat.chat_id, user_id),
+        )
+
+    async def request_join(self, user_id: UserId, house_id: HouseId) -> ChatJoinOffer:
+        offer = await self.join_offer(user_id, house_id)
+        if offer is None:
+            raise InvalidState(NO_CHAT_TO_JOIN)
+        if offer.joined:
+            raise InvalidState(ALREADY_JOINED)
+        self._notifications.join_house_chat(offer.chat_id, user_id)
+        return offer
+
+    async def joining(self, chat_id: MaxChatId, user_id: UserId) -> ChatJoining | None:
+        chat = await self._chats.get(chat_id)
+        user = await self._users.get_by_id(user_id)
+        if chat is None or chat.house_id is None or user is None:
+            return None
+        offer = await self.join_offer(user_id, chat.house_id)
+        if offer is None or offer.chat_id != chat_id:
+            return None
+        return ChatJoining(user=user, title=offer.title, link=offer.link)
+
+    async def on_joined(
+        self,
+        chat_id: MaxChatId,
+        user_id: UserId,
+        *,
+        added: bool,
+    ) -> None:
+        chat = await self._chats.get(chat_id)
+        await self._chats.add_member(chat_id, user_id)
+        if added:
+            await self._events.record(
+                EventType.CHAT_JOINED,
+                user_id=user_id,
+                chat_id=chat_id,
+                house_id=None if chat is None else chat.house_id,
+            )
 
     async def _free_chat(self, chat_id: MaxChatId) -> Chat:
         chat = await self._chats.get(chat_id)

@@ -33,6 +33,20 @@ chats_table = Table(
     Column("bound_at", DateTime(timezone=True), nullable=True),
     Column("status", String(16), nullable=False),
     Column("pins_mid", String, nullable=True),
+    Column("link", String, nullable=True),
+)
+
+chat_members_table = Table(
+    "chat_members",
+    metadata,
+    Column(
+        "chat_id",
+        BigInteger,
+        ForeignKey("chats.chat_id"),
+        primary_key=True,
+    ),
+    Column("user_id", BigInteger, ForeignKey("users.id"), primary_key=True),
+    created_at_column(),
 )
 
 chat_pins_table = Table(

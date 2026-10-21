@@ -163,6 +163,13 @@ class NotificationsService:
             member=member,
         )
 
+    def join_house_chat(self, chat_id: MaxChatId, user_id: UserId) -> None:
+        self._publisher.publish(
+            TaskName.JOIN_HOUSE_CHAT,
+            chat_id=chat_id,
+            user_id=user_id,
+        )
+
     def open_access_slots(self, access_request_id: AccessRequestId) -> None:
         self._publisher.publish(
             TaskName.BROADCAST_ACCESS_REQUEST,

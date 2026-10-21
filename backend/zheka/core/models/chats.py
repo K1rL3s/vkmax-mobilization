@@ -15,6 +15,7 @@ class Chat(ZhekaMutableType):
     bound_at: datetime | None = None
     status: str
     pins_mid: str | None = None
+    link: str | None = None
 
 
 class ChatPin(ZhekaMutableType):

@@ -13,6 +13,7 @@ from maxo.types import (
     MessageCreated,
     MessageRemoved,
     UserAddedToChat,
+    UserRemovedFromChat,
 )
 
 from zheka.bot.cards import VotePayload, refused
@@ -66,6 +67,19 @@ async def user_added_handler(
         MaxChatId(update.chat_id),
         MaxUserId(update.user.id),
         update.user.first_name,
+    )
+
+
+@router.user_removed_from_chat()
+async def user_removed_handler(
+    update: UserRemovedFromChat,
+    chats_service: FromDishka[ChatsService],
+) -> None:
+    if update.is_channel or update.user.is_bot:
+        return
+    await chats_service.on_member_removed(
+        MaxChatId(update.chat_id),
+        MaxUserId(update.user.id),
     )
 
 

@@ -17,6 +17,7 @@ from zheka.core.enums import (
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import ChairmanHandover, Flat
+from zheka.core.services.chats import ChatJoinOffer
 from zheka.core.services.house_point import HouseAtPoint
 from zheka.core.services.houses import (
     AdminHouseCardData,
@@ -199,6 +200,17 @@ class CityServiceItem(BaseSchema):
     note: str | None = None
 
 
+class HouseChatJoin(BaseSchema):
+    title: str = Field(description="Название чата в MAX")
+    joined: bool = Field(description="Житель уже в чате")
+    link: str | None = Field(
+        default=None,
+        description=(
+            "Ссылка-приглашение в чат, только уже вступившему: по ней войдет кто угодно"
+        ),
+    )
+
+
 class HouseCard(BaseSchema):
     id: HouseId
     address: str
@@ -223,6 +235,14 @@ class HouseCard(BaseSchema):
     my_residency: ResidencySummary | None = None
     chat_binding_code: str | None = None
     chat_bound: bool = False
+    chat_join: HouseChatJoin | None = Field(
+        default=None,
+        description=(
+            "Вступление в чат дома через бота: только подтвержденному "
+            "незаблокированному жителю дома, когда чат привязан и бот в нем "
+            "администратор"
+        ),
+    )
     overhaul: HouseOverhaul | None = None
     documents: list[FileRef]
     org_stats: OrgPublicStats | None = Field(
@@ -241,7 +261,12 @@ class HouseCard(BaseSchema):
     )
 
     @classmethod
-    def of(cls, card: HouseCardData, documents: list[FileRef]) -> Self:
+    def of(
+        cls,
+        card: HouseCardData,
+        documents: list[FileRef],
+        chat_join: ChatJoinOffer | None = None,
+    ) -> Self:
         house = card.house
         residency = card.residency
         is_chairman = residency is not None and residency.resident.is_chairman
@@ -268,6 +293,15 @@ class HouseCard(BaseSchema):
             ),
             chat_binding_code=house.chat_binding_code if is_chairman else None,
             chat_bound=card.is_chat_bound,
+            chat_join=(
+                None
+                if chat_join is None
+                else HouseChatJoin(
+                    title=chat_join.title,
+                    joined=chat_join.joined,
+                    link=chat_join.link if chat_join.joined else None,
+                )
+            ),
             overhaul=(
                 HouseOverhaul.model_validate(house.overhaul) if house.overhaul else None
             ),

@@ -13,13 +13,22 @@ from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 from maxo.types import MessageCallback
 
-from zheka.bot.cards import EMERGENCY, TO_MENU, app_payload, back_to_menu, web_app_name
+from zheka.bot.cards import (
+    EMERGENCY,
+    TO_MENU,
+    app_payload,
+    back_to_menu,
+    refused,
+    web_app_name,
+)
 from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.handlers.meter_photo.handlers import on_meter_photo
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.core.deeplinks import ADMIN_APP_PATH
 from zheka.core.enums import NotificationCategory, NotificationLevel
+from zheka.core.errors import ZhekaError
+from zheka.core.services.chats import NO_CHAT_TO_JOIN, ChatsService
 from zheka.core.services.digest import DigestService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.profile import ProfileService
@@ -61,6 +70,7 @@ EMERGENCY_PHONE_TEXT = (
     "Оператор обязан ответить за 5 минут (ПП 416 п. 13)"
 )
 CALL_NOTE_TEXT = "📝 Запишите время звонка и номер заявки, который назовет диспетчер"
+JOINING_CHAT = "⏳ Добавляю вас в чат «{title}», напишу, как получится"
 
 
 @inject
@@ -68,15 +78,46 @@ async def get_menu(
     bot: Bot,
     dialog_manager: DialogManager,
     profile_service: FromDishka[ProfileService],
+    chats_service: FromDishka[ChatsService],
     **_: Any,
 ) -> dict[str, Any]:
-    me = await profile_service.me(dialog_user_id(dialog_manager))
+    user_id = dialog_user_id(dialog_manager)
+    me = await profile_service.me(user_id)
     residency = me.latest_residency
+    offer = (
+        None
+        if residency is None
+        else await chats_service.join_offer(user_id, residency.house.id)
+    )
     return {
         "bot_username": web_app_name(bot),
         "address": None if residency is None else escape(residency.house.address),
         "staff": me.is_staff,
+        "can_join_chat": offer is not None and not offer.joined,
     }
+
+
+@inject
+async def on_join_chat(
+    callback: MessageCallback,
+    _button: Button,
+    dialog_manager: DialogManager,
+    profile_service: FromDishka[ProfileService],
+    chats_service: FromDishka[ChatsService],
+) -> None:
+    user_id = dialog_user_id(dialog_manager)
+    residency = (await profile_service.me(user_id)).latest_residency
+    if residency is None:
+        await callback.callback_answer(notification=NO_CHAT_TO_JOIN)
+        return
+    try:
+        offer = await chats_service.request_join(user_id, residency.house.id)
+    except ZhekaError as error:
+        await refused(callback, error)
+        return
+    await callback.callback_answer(
+        notification=JOINING_CHAT.format(title=offer.title),
+    )
 
 
 @inject
@@ -153,6 +194,12 @@ menu_dialog = Dialog(
             when=~F["address"],
         ),
         Start(Const("📝 Подать заявку"), id="new_request", state=NewRequest.category),
+        Button(
+            Const("💬 Чат дома"),
+            id="join_chat",
+            on_click=on_join_chat,
+            when=F["can_join_chat"],
+        ),
         SwitchTo(
             Const(DIGEST_BUTTON),
             id="digest",

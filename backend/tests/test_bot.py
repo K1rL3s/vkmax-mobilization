@@ -63,7 +63,11 @@ from maxo.types import (
     VideoUrls,
 )
 from maxo.types.chat import Chat as MaxChat
+from maxo.types.chat_member import ChatMember
+from maxo.types.chat_members_list import ChatMembersList
+from maxo.types.failed_user_details import FailedUserDetails
 from maxo.types.link_button import LinkButton
+from maxo.types.modify_members_result import ModifyMembersResult
 from maxo.types.simple_query_result import SimpleQueryResult
 from maxo.types.user import User as MaxUser
 from maxo.utils.deeplink import create_start_link, create_startapp_link
@@ -179,7 +183,7 @@ from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.states import Consent, Menu
 from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
 from zheka.broker.task_names import TaskName
-from zheka.broker.tasks import bot_requests, meters as meter_tasks
+from zheka.broker.tasks import bot_requests, chats as chat_tasks, meters as meter_tasks
 from zheka.broker.tasks.bot_requests import (
     NOT_REJECTED_UNEXPECTED,
     create_bot_request,
@@ -187,10 +191,16 @@ from zheka.broker.tasks.bot_requests import (
     transcribe_voice,
 )
 from zheka.broker.tasks.chats import (
+    ALREADY_JOINED_TEXT,
+    JOINED_TEXT,
+    JOIN_FAILED_TEXT,
     JOIN_HOUSE,
+    JOIN_PRIVACY_TEXT,
     LEFT_TEXT,
+    OPEN_CHAT,
     PINS_HERE,
     WELCOME_MEMBER_TEXT,
+    join_house_chat,
     on_bot_added,
     sync_chat_card,
     sync_chat_pins,
@@ -345,7 +355,12 @@ from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import residents_table
 from zheka.infra.database.tables.users import users_table
 from zheka.infra.max import MaxSender
-from zheka.infra.max.sender import _chat_rate_limit, dialog_notify, is_chat_admin
+from zheka.infra.max.sender import (
+    ChatJoinOutcome,
+    _chat_rate_limit,
+    dialog_notify,
+    is_chat_admin,
+)
 from zheka.infra.pdf import PdfDocument
 from zheka.infra.yandex import SpeechClient, YandexQuota
 from zheka.infra.yandex.vision import VisionClient
@@ -6165,3 +6180,201 @@ async def test_the_house_choice_for_a_chat_is_paged(
     assert len(rest) == 1
     assert rest[0] not in houses
     assert chat_api.left == []
+
+
+CHAT_LINK = "https://max.ru/join/sosedi"
+JOIN_CHAT = InlineButtonTextLocator("💬 Чат дома")
+
+
+async def _house_chat(
+    session: AsyncSession,
+    house_id: HouseId,
+    link: str | None = CHAT_LINK,
+) -> MaxChatId:
+    chat_id = _chat_id()
+    session.add(
+        Chat(
+            chat_id=chat_id,
+            house_id=house_id,
+            title=CHAT_TITLE,
+            bound_at=datetime.now(UTC),
+            bot_is_admin=True,
+            status=ChatStatus.ACTIVE,
+            link=link,
+        ),
+    )
+    await session.commit()
+    return chat_id
+
+
+async def _verify(session: AsyncSession, user_id: UserId, house_id: HouseId) -> None:
+    resident = await ResidentsRepo(session).get_for_house(user_id, house_id)
+    assert resident is not None
+    resident.verified_at = datetime.now(UTC)
+    await session.commit()
+
+
+async def test_the_menu_offers_the_house_chat_only_to_a_verified_resident(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    chat_id = await _house_chat(bot_session, house_id)
+    await client.send("/start")
+    assert JOIN_CHAT.find_button(message_manager.last_message()) is None
+    user_id = (await _user(bot_session, client)).id
+    await _verify(bot_session, user_id, house_id)
+    bot_broker.messages.clear()
+
+    await client.send("/start")
+    await client.click(message_manager.last_message(), JOIN_CHAT)
+
+    assert bot_broker.enqueued(TaskName.JOIN_HOUSE_CHAT) == [
+        {"chat_id": chat_id, "user_id": user_id},
+    ]
+
+
+@pytest.mark.parametrize(
+    ("outcome", "text", "joined", "rechecked"),
+    [
+        (ChatJoinOutcome.ADDED, JOINED_TEXT, True, False),
+        (ChatJoinOutcome.ALREADY, ALREADY_JOINED_TEXT, True, False),
+        (ChatJoinOutcome.PRIVACY, JOIN_PRIVACY_TEXT, False, False),
+        (ChatJoinOutcome.FAILED, JOIN_FAILED_TEXT, False, True),
+    ],
+    ids=["added", "already", "privacy", "failed"],
+)
+async def test_the_bot_adds_the_resident_and_writes_how_it_went(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
+    notices: _RecordingBot,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: ChatJoinOutcome,
+    text: str,
+    joined: bool,
+    rechecked: bool,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    chat_id = await _house_chat(bot_session, house_id)
+    user = await _user(bot_session, client)
+    user_id, max_user_id = user.id, user.max_user_id
+    await _verify(bot_session, user_id, house_id)
+    added: list[tuple[int, int]] = []
+    rechecks: list[int] = []
+
+    async def add_chat_member(_: Any, chat: int, max_user_id: int) -> ChatJoinOutcome:
+        added.append((chat, max_user_id))
+        return outcome
+
+    async def recheck(chat: int, *_: Any) -> None:
+        rechecks.append(chat)
+
+    monkeypatch.setattr(MaxSender, "add_chat_member", add_chat_member)
+    monkeypatch.setattr(chat_tasks, "recheck_chat_rights", recheck)
+
+    await _run(task_broker, join_house_chat, chat_id=chat_id, user_id=user_id)
+
+    assert added == [(chat_id, max_user_id)]
+    assert notices.texts == [text.format(title=CHAT_TITLE)]
+    links = [button for button in notices.buttons[0] if isinstance(button, LinkButton)]
+    assert [(b.text, b.url) for b in links] == (
+        [(OPEN_CHAT, CHAT_LINK)] if joined else []
+    )
+    assert await ChatsRepo(bot_session).is_member(chat_id, user_id) is joined
+    assert rechecks == ([chat_id] if rechecked else [])
+
+
+async def test_the_bot_adds_nobody_who_lost_the_verified_flat(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    task_broker: InMemoryBroker,
+    notices: _RecordingBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    chat_id = await _house_chat(bot_session, house_id)
+    user = await _user(bot_session, client)
+    adds = AsyncMock()
+    monkeypatch.setattr(MaxSender, "add_chat_member", adds)
+
+    await _run(task_broker, join_house_chat, chat_id=chat_id, user_id=user.id)
+
+    adds.assert_not_called()
+    assert notices.texts == []
+
+
+class _MembersApi:
+    def __init__(self, *, member: bool, result: ModifyMembersResult | None) -> None:
+        self.member = member
+        self.result = result
+
+    async def get_members(self, *, user_ids: list[int], **_: Any) -> ChatMembersList:
+        members = [
+            ChatMember(
+                user_id=user_ids[0],
+                first_name="Анна",
+                is_bot=False,
+                is_admin=False,
+                is_owner=False,
+                join_time=datetime.now(UTC),
+                last_access_time=datetime.now(UTC),
+            ),
+        ]
+        return ChatMembersList(members=members if self.member else [])
+
+    async def add_members(self, **_: Any) -> ModifyMembersResult:
+        if self.result is None:
+            raise MaxBotForbiddenError(code="chat.denied", error="", message="")
+        return self.result
+
+
+@pytest.mark.parametrize(
+    ("member", "result", "outcome"),
+    [
+        (True, None, ChatJoinOutcome.ALREADY),
+        (False, ModifyMembersResult(success=True), ChatJoinOutcome.ADDED),
+        (
+            False,
+            ModifyMembersResult(
+                success=True,
+                failed_user_ids=[1],
+                failed_user_details=[
+                    FailedUserDetails(
+                        error_code="add.participant.privacy",
+                        user_ids=[1],
+                    ),
+                ],
+            ),
+            ChatJoinOutcome.PRIVACY,
+        ),
+        (False, ModifyMembersResult(success=False), ChatJoinOutcome.FAILED),
+        (False, None, ChatJoinOutcome.FAILED),
+    ],
+    ids=["already", "added", "privacy", "refused", "forbidden"],
+)
+async def test_the_sender_tells_how_max_took_the_new_member(
+    member: bool,
+    result: ModifyMembersResult | None,
+    outcome: ChatJoinOutcome,
+) -> None:
+    api = _MembersApi(member=member, result=result)
+    sender = MaxSender(cast(Bot, api), cast(BgManagerFactory, None))
+
+    assert await sender.add_chat_member(_chat_id(), MaxUserId(1)) is outcome

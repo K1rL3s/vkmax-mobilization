@@ -12,6 +12,7 @@ from tests.conftest import (
     Fixture,
     OrgHouseFlatUser,
     RecordingBroker,
+    add_user,
     make_notifications_service,
 )
 
@@ -28,8 +29,10 @@ from zheka.core.enums import (
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import MaxChatId, MaxUserId
 from zheka.core.services.chats import (
+    ALREADY_JOINED,
     CHAT_TAKEN,
     MESSAGE_TEXT_LIMIT,
+    NO_CHAT_TO_JOIN,
     PINS_ERASED,
     PINS_FULL,
     PIN_DENIED,
@@ -45,7 +48,14 @@ from zheka.core.services.chats import (
     pins_text,
 )
 from zheka.core.services.events import EventsService
-from zheka.infra.database.models import Chat, ChatCard, ChatPin, Resident, User
+from zheka.infra.database.models import (
+    Chat,
+    ChatCard,
+    ChatPin,
+    OrgMember,
+    Resident,
+    User,
+)
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -682,3 +692,125 @@ async def test_a_deleted_card_and_a_re_add_forget_the_chat_cards(
 
     session.expire_all()
     assert await repo.get_card(chat_id, ChatCardKind.POLL, 1) is None
+
+
+async def _joinable(
+    session: AsyncSession,
+    data: OrgHouseFlatUser,
+    publisher: TaskPublisher | None = None,
+) -> tuple[ChatsService, MaxChatId]:
+    staff = await add_user(session, "Сотрудник")
+    session.add(OrgMember(org_id=data.org_id, user_id=staff, role=OrgRole.ADMIN))
+    chat_id = await _added(session)
+    service = _service(session, publisher)
+    await service.bind(staff, chat_id, data.house_id)
+    await service.set_admin(chat_id, True)
+    return service, chat_id
+
+
+async def _verified(session: AsyncSession, data: OrgHouseFlatUser) -> Resident:
+    resident = await ResidentsRepo(session).get_for_house(data.user_id, data.house_id)
+    assert resident is not None
+    resident.verified_at = datetime.now(UTC)
+    await session.flush()
+    return resident
+
+
+async def test_only_a_verified_active_resident_is_offered_the_chat(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service, chat_id = await _joinable(session, own)
+
+    assert await service.join_offer(own.user_id, own.house_id) is None
+    resident = await _verified(session, own)
+    offer = await service.join_offer(own.user_id, own.house_id)
+    assert offer is not None
+    assert (offer.chat_id, offer.title, offer.joined) == (chat_id, "Дом", False)
+    resident.status = ResidentStatus.BLOCKED
+    await session.flush()
+    assert await service.join_offer(own.user_id, own.house_id) is None
+
+
+@pytest.mark.parametrize("bound", [False, True])
+async def test_no_offer_without_a_bound_chat_the_bot_administers(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    bound: bool,
+) -> None:
+    await _verified(session, own)
+    chat_id = await _added(session)
+    chat = await _chat(session, chat_id)
+    if bound:
+        await ChatsRepo(session).bind(chat, own.house_id, own.user_id)
+    else:
+        await ChatsRepo(session).set_admin(chat, True)
+
+    assert await _service(session).join_offer(own.user_id, own.house_id) is None
+
+
+async def test_a_join_request_queues_the_bot_once_until_the_resident_is_in(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    service, chat_id = await _joinable(session, own, publisher)
+
+    with pytest.raises(InvalidState, match=re.escape(NO_CHAT_TO_JOIN)):
+        await service.request_join(own.user_id, own.house_id)
+    await _verified(session, own)
+    await service.request_join(own.user_id, own.house_id)
+    await service.on_joined(chat_id, own.user_id, added=True)
+
+    with pytest.raises(InvalidState, match=re.escape(ALREADY_JOINED)):
+        await service.request_join(own.user_id, own.house_id)
+    await publisher.flush()
+    assert broker.enqueued(TaskName.JOIN_HOUSE_CHAT) == [
+        {"chat_id": chat_id, "user_id": own.user_id},
+    ]
+
+
+@pytest.mark.parametrize(("added", "events"), [(True, 1), (False, 0)])
+async def test_a_join_by_the_bot_is_recorded_and_an_old_member_is_not(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    added: bool,
+    events: int,
+) -> None:
+    service, chat_id = await _joinable(session, own)
+    await _verified(session, own)
+
+    await service.on_joined(chat_id, own.user_id, added=added)
+
+    offer = await service.join_offer(own.user_id, own.house_id)
+    assert offer is not None
+    assert offer.joined is True
+    stmt = select(func.count()).where(
+        events_table.c.type == EventType.CHAT_JOINED,
+        events_table.c.user_id == own.user_id,
+    )
+    assert (await session.execute(stmt)).scalar_one() == events
+
+
+async def test_membership_follows_the_chat_and_a_re_add_forgets_it(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    service, chat_id = await _joinable(session, own)
+    await _verified(session, own)
+    user = await UsersRepo(session).get_by_id(own.user_id)
+    assert user is not None
+
+    async def joined() -> bool:
+        offer = await service.join_offer(own.user_id, own.house_id)
+        assert offer is not None
+        return offer.joined
+
+    await service.welcome_member(chat_id, user.max_user_id, user.name)
+    assert await joined() is True
+    await service.on_member_removed(chat_id, user.max_user_id)
+    assert await joined() is False
+    await service.on_joined(chat_id, own.user_id, added=True)
+    await service.on_bot_added(chat_id, "Дом")
+    assert await ChatsRepo(session).is_member(chat_id, own.user_id) is False

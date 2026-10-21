@@ -19,6 +19,10 @@ import {
 
 type Schemas = components["schemas"];
 
+const chatMembers = new Set<number>();
+
+export const joinHouseChat = (houseId: number) => chatMembers.add(houseId);
+
 export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
   const residency = residencyForHouse(house.id);
 
@@ -42,7 +46,17 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
     org: house.org,
     my_residency: residency ? residencySummary(residency) : null,
     chat_binding_code: null,
-    chat_bound: false,
+    chat_bound: house.is_connected,
+    chat_join:
+      house.is_connected && residency?.verified
+        ? {
+            title: `Соседи, ${house.street}, ${house.building}`,
+            joined: chatMembers.has(house.id),
+            link: chatMembers.has(house.id)
+              ? "https://max.ru/join/XC3bDdc56CtJ9269Tqrshg2p3I0e_dO8T7XYsHx_l-g"
+              : null,
+          }
+        : null,
     overhaul: null,
     documents: [],
     outages: [

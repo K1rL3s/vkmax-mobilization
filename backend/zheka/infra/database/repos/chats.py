@@ -1,7 +1,7 @@
 from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import and_, delete, exists, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import ChatCardKind, ChatStatus
@@ -10,6 +10,7 @@ from zheka.infra.database.models import Chat, ChatCard, ChatPin
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.chats import (
     chat_cards_table,
+    chat_members_table,
     chat_pins_table,
     chats_table,
 )
@@ -43,9 +44,15 @@ class ChatsRepo(BaseAlchemyRepo):
         chat: Chat | None = await self._session.scalar(stmt)
         return chat
 
-    async def upsert_added(self, chat_id: MaxChatId, title: str) -> None:
+    async def upsert_added(
+        self,
+        chat_id: MaxChatId,
+        title: str,
+        link: str | None,
+    ) -> None:
         fresh = {
             "title": title,
+            "link": link,
             "status": ChatStatus.ACTIVE,
             "bot_is_admin": False,
             "house_id": None,
@@ -77,6 +84,51 @@ class ChatsRepo(BaseAlchemyRepo):
     async def set_admin(self, chat: Chat, is_admin: bool) -> None:
         chat.bot_is_admin = is_admin
         await self._session.flush()
+
+    async def joinable(self, house_id: HouseId) -> Chat | None:
+        stmt = (
+            select(Chat)
+            .where(
+                chats_table.c.house_id == house_id,
+                BOUND_CHAT,
+                chats_table.c.bot_is_admin.is_(True),
+            )
+            .order_by(chats_table.c.bound_at.desc(), chats_table.c.chat_id)
+            .limit(1)
+        )
+        chat: Chat | None = await self._session.scalar(stmt)
+        return chat
+
+    async def is_member(self, chat_id: MaxChatId, user_id: UserId) -> bool:
+        stmt = select(
+            exists().where(
+                chat_members_table.c.chat_id == chat_id,
+                chat_members_table.c.user_id == user_id,
+            ),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+    async def add_member(self, chat_id: MaxChatId, user_id: UserId) -> None:
+        stmt = (
+            pg_insert(chat_members_table)
+            .values(chat_id=chat_id, user_id=user_id)
+            .on_conflict_do_nothing()
+        )
+        await self._session.execute(stmt)
+
+    async def remove_member(self, chat_id: MaxChatId, user_id: UserId) -> None:
+        stmt = delete(chat_members_table).where(
+            chat_members_table.c.chat_id == chat_id,
+            chat_members_table.c.user_id == user_id,
+        )
+        await self._session.execute(stmt)
+
+    async def drop_members(self, chat_id: MaxChatId) -> None:
+        stmt = delete(chat_members_table).where(
+            chat_members_table.c.chat_id == chat_id,
+        )
+        await self._session.execute(stmt)
 
     async def lock(self, chat_id: MaxChatId) -> Chat | None:
         stmt = (

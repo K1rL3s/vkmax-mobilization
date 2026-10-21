@@ -6,6 +6,7 @@ from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.dialogs import ShowMode
 from maxo.errors import MaxBotApiError, MaxBotNetworkError
+from maxo.omit import is_defined
 from maxo.types.buttons import InlineButtons
 from maxo.types.callback_button import CallbackButton
 from maxo.types.link_button import LinkButton
@@ -19,7 +20,7 @@ from zheka.broker.task_names import TaskName
 from zheka.core.deeplinks import house_category_payload, house_payload
 from zheka.core.enums import ChatCardKind
 from zheka.core.errors import ZhekaError
-from zheka.core.ids import HouseId, MaxChatId, MaxUserId
+from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.models import ChatCard
 from zheka.core.services.chat_cards import CardVote, ChatCardView, ChatCardsService
 from zheka.core.services.chats import ChatsService, pins_text
@@ -33,7 +34,7 @@ from zheka.core.texts import (
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
-from zheka.infra.max.sender import is_chat_admin
+from zheka.infra.max.sender import ChatJoinOutcome, is_chat_admin
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,21 @@ WELCOME_MEMBER_TEXT = (
     "личке со мной. Нажмите «Присоединиться к дому», чтобы начать"
 )
 JOIN_HOUSE = "🏠 Присоединиться к дому"
+OPEN_CHAT = "💬 Открыть чат"
+JOINED_TEXT = "✅ Добавил вас в чат «{title}»"
+ALREADY_JOINED_TEXT = "😊 Вы уже в чате «{title}»"
+JOIN_PRIVACY_TEXT = (
+    "🔒 MAX не дал добавить вас в чат «{title}»: в настройках "
+    "конфиденциальности запрещено добавлять вас в группы. Разрешите это и "
+    "нажмите «Чат дома» еще раз"
+)
+JOIN_FAILED_TEXT = "😔 Не получилось добавить вас в чат «{title}», попробуйте позже"
+_JOIN_TEXTS = {
+    ChatJoinOutcome.ADDED: JOINED_TEXT,
+    ChatJoinOutcome.ALREADY: ALREADY_JOINED_TEXT,
+    ChatJoinOutcome.PRIVACY: JOIN_PRIVACY_TEXT,
+    ChatJoinOutcome.FAILED: JOIN_FAILED_TEXT,
+}
 PINS_HERE = "📌 Список закрепленных никуда не делся, он здесь"
 LEFT_TEXT = (
     "🚪 Я вышел из чата «{title}»: привязать чат к дому может сотрудник УК, "
@@ -78,7 +94,9 @@ async def on_bot_added(
         await bot.leave_chat(chat_id=chat_id)
         return
 
-    title = (await bot.get_chat(chat_id=chat_id)).title or ""
+    chat = await bot.get_chat(chat_id=chat_id)
+    title = chat.title or ""
+    link = chat.link if is_defined(chat.link) else None
     if await chats_service.bindable_houses(user.id):
         state, stack_id = ChatBinding.house, chat_stack(chat_id)
     elif await chats_service.is_resident(user.id):
@@ -91,7 +109,7 @@ async def on_bot_added(
         )
         return
 
-    await chats_service.on_bot_added(chat_id, title)
+    await chats_service.on_bot_added(chat_id, title, link)
     await sender.start_dialog(
         state,
         user,
@@ -121,6 +139,41 @@ async def welcome_chat(
         chat_id=chat_id,
         notify=False,
         keyboard=_join_keyboard(bot, house_id),
+    )
+
+
+@async_shared_broker.task(task_name=TaskName.JOIN_HOUSE_CHAT.value)
+@inject(patch_module=True)
+async def join_house_chat(
+    chat_id: MaxChatId,
+    user_id: UserId,
+    bot: FromDishka[Bot],
+    chats_service: FromDishka[ChatsService],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> None:
+    joining = await chats_service.joining(chat_id, user_id)
+    if joining is None:
+        return
+    user = joining.user
+    outcome = await sender.add_chat_member(chat_id, user.max_user_id)
+    joined = outcome in {ChatJoinOutcome.ADDED, ChatJoinOutcome.ALREADY}
+    if joined:
+        await chats_service.on_joined(
+            chat_id,
+            user_id,
+            added=outcome is ChatJoinOutcome.ADDED,
+        )
+    elif outcome is ChatJoinOutcome.FAILED:
+        await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+    await sender.send_message(
+        _JOIN_TEXTS[outcome].format(title=escape(joining.title)),
+        user_id=user.max_user_id,
+        keyboard=(
+            [[LinkButton(text=OPEN_CHAT, url=joining.link)]]
+            if joined and joining.link
+            else None
+        ),
     )
 
 

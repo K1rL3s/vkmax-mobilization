@@ -1297,6 +1297,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/chat/join:
+    post:
+      tags:
+      - Дома
+      summary: Вступить в чат дома
+      description: Бот добавляет подтвержденного жителя в привязанный чат дома и пишет ему в личку, получилось ли
+      operationId: join_house_chat
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/houses/{house_id}/link:
     post:
       tags:
@@ -14594,6 +14667,11 @@ components:
           type: boolean
           title: Chat Bound
           default: false
+        chat_join:
+          anyOf:
+          - $ref: '#/components/schemas/HouseChatJoin'
+          - type: 'null'
+          description: 'Вступление в чат дома через бота: только подтвержденному незаблокированному жителю дома, когда чат привязан и бот в нем администратор'
         overhaul:
           anyOf:
           - $ref: '#/components/schemas/HouseOverhaul'
@@ -14642,6 +14720,27 @@ components:
       - outages
       - services
       title: HouseCard
+    HouseChatJoin:
+      properties:
+        title:
+          type: string
+          title: Title
+          description: Название чата в MAX
+        joined:
+          type: boolean
+          title: Joined
+          description: Житель уже в чате
+        link:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Link
+          description: 'Ссылка-приглашение в чат, только уже вступившему: по ней войдет кто угодно'
+      type: object
+      required:
+      - title
+      - joined
+      title: HouseChatJoin
     HouseListItem:
       properties:
         id:

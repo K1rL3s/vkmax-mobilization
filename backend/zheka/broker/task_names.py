@@ -14,6 +14,7 @@ class TaskName(StrEnum):
     ATTACH_RESULT_PHOTO = "attach_result_photo"
     ON_BOT_ADDED = "on_bot_added"
     WELCOME_CHAT = "welcome_chat"
+    JOIN_HOUSE_CHAT = "join_house_chat"
     REMIND_READINGS = "remind_readings"
     REMIND_POLLS = "remind_polls"
     CLOSE_EXPIRED_POLLS = "close_expired_polls"

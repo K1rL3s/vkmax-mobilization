@@ -39,6 +39,7 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId
+from zheka.core.services.chats import ChatJoinOffer
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService, ResidencyView
 from zheka.infra.database.models import Chat, Flat, House, Request, Resident
@@ -147,6 +148,31 @@ async def test_link_twice_returns_the_same_residency(
     assert await _count(session, residents_table.c.user_id, fixture.user_id) == 1
     assert (tenant_can_vote, second.resident.can_vote) == (False, True)
     assert second.resident.can_see_charges is True
+
+
+@pytest.mark.parametrize("joined", [False, True])
+async def test_the_chat_invite_link_goes_only_to_a_member(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    joined: bool,
+) -> None:
+    fixture = await make_org_house_flat_user()
+    data = await _make_service(session).house_card(
+        fixture.house_id,
+        fixture.user_id,
+        datetime.now(UTC),
+    )
+    offer = ChatJoinOffer(
+        chat_id=MaxChatId(-1),
+        title="Соседи",
+        link="https://max.ru/join/test",
+        joined=joined,
+    )
+
+    chat_join = HouseCard.of(data, [], offer).chat_join
+
+    assert chat_join is not None
+    assert chat_join.link == ("https://max.ru/join/test" if joined else None)
 
 
 async def test_demand_signal_counts_a_user_once(

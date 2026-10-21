@@ -3,6 +3,7 @@ import logging
 from collections.abc import Awaitable, Callable, Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
+from enum import StrEnum
 from functools import lru_cache, partial
 from pathlib import Path
 
@@ -37,6 +38,13 @@ BOT_RATE_LIMIT = RateLimiter(max_calls=30)
 RETRY_AFTER_429 = 1.0
 
 dialog_notify: ContextVar[bool] = ContextVar("dialog_notify", default=False)
+
+
+class ChatJoinOutcome(StrEnum):
+    ADDED = "added"
+    ALREADY = "already"
+    PRIVACY = "privacy"
+    FAILED = "failed"
 
 
 @lru_cache(maxsize=4096)
@@ -217,6 +225,40 @@ class MaxSender:
                     attachments=list(attachments),
                     notify=False,
                 )
+
+    async def add_chat_member(
+        self,
+        chat_id: MaxChatId,
+        max_user_id: MaxUserId,
+    ) -> ChatJoinOutcome:
+        try:
+            async with BOT_RATE_LIMIT:
+                found = await self._bot.get_members(
+                    chat_id=chat_id,
+                    user_ids=[max_user_id],
+                )
+                if any(member.user_id == max_user_id for member in found.members):
+                    return ChatJoinOutcome.ALREADY
+                result = await self._bot.add_members(
+                    chat_id=chat_id,
+                    user_ids=[max_user_id],
+                )
+        except (MaxBotNetworkError, MaxBotApiError):
+            logger.exception("MAX не добавил участника в чат %s", chat_id)
+            return ChatJoinOutcome.FAILED
+        details = (
+            result.failed_user_details
+            if is_defined(result.failed_user_details)
+            else None
+        )
+        codes = {detail.error_code for detail in details or ()}
+        if "add.participant.privacy" in codes:
+            return ChatJoinOutcome.PRIVACY
+        failed = result.failed_user_ids if is_defined(result.failed_user_ids) else None
+        if not result.success or codes or failed:
+            logger.warning("MAX не добавил участника в чат %s: %s", chat_id, result)
+            return ChatJoinOutcome.FAILED
+        return ChatJoinOutcome.ADDED
 
 
 async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:

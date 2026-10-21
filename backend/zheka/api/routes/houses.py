@@ -25,6 +25,7 @@ from zheka.api.schemas.houses import (
 from zheka.core.deeplinks import chairman_payload
 from zheka.core.ids import HouseId, ResidentId
 from zheka.core.services.chairman import ChairmanService
+from zheka.core.services.chats import ChatsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.house_point import HousePointService
 from zheka.core.services.houses import HousesService
@@ -112,6 +113,7 @@ async def get_house_card(
     house_id: HouseId,
     current_account: RequireConsentDep,
     houses_service: FromDishka[HousesService],
+    chats_service: FromDishka[ChatsService],
     files_service: FromDishka[FilesService],
 ) -> HouseCard:
     card = await houses_service.house_card(
@@ -120,7 +122,25 @@ async def get_house_card(
         datetime.now(UTC),
     )
     documents = [FileRef.signed(name, files_service) for name in card.house.documents]
-    return HouseCard.of(card, documents)
+    chat_join = await chats_service.join_offer(current_account.user_id, house_id)
+    return HouseCard.of(card, documents, chat_join)
+
+
+@router.post(
+    "/houses/{house_id}/chat/join",
+    summary="Вступить в чат дома",
+    description=(
+        "Бот добавляет подтвержденного жителя в привязанный чат дома и пишет "
+        "ему в личку, получилось ли"
+    ),
+)
+async def join_house_chat(
+    house_id: HouseId,
+    residency: ResidencyForHouseDep,
+    chats_service: FromDishka[ChatsService],
+) -> OkResponse:
+    await chats_service.request_join(residency.user_id, house_id)
+    return OkResponse()
 
 
 @router.post("/houses/{house_id}/link", summary="Привязать себя к дому")
