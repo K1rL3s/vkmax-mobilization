@@ -30,7 +30,7 @@ chat_binding_dialog = Dialog(
         Format(HOUSE_TEXT),
         ScrollingGroup(
             Select(
-                Format("🏢 {item.title}"),
+                Format("{item.title}"),
                 id="house",
                 item_id_getter=lambda house: house.id,
                 type_factory=int,

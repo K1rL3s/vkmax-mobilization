@@ -1320,7 +1320,7 @@ async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
     window = message_manager.last_message()
     assert HOUSE_TEXT.format(title=CHAT_TITLE) in (window.body.text or "")
     assert _shown(shows, HOUSE_TEXT.format(title=CHAT_TITLE))[0] is ShowMode.SEND
-    house_button = InlineButtonTextLocator(re.escape(f"🏢 {house.street_address}"))
+    house_button = InlineButtonTextLocator(re.escape(house.street_address))
     await client.click(window, house_button)
     await client.click(message_manager.last_message(), RIGHTS_DONE)
     assert NO_RIGHTS_YET in _text(message_manager)
@@ -2819,8 +2819,8 @@ async def test_typing_narrows_each_address_step_and_picks_a_single_match(
 
     await client.send(f"Ввод{tag}")
     assert _button_texts(message_manager.last_message()) == [
-        f"🌆 {city}",
-        f"🌆 {other_city}",
+        city,
+        other_city,
         *NAVIGATION,
     ]
     await client.send(f"Нет{tag}")
@@ -2830,8 +2830,8 @@ async def test_typing_narrows_each_address_step_and_picks_a_single_match(
 
     await client.send(f"Улица{tag}")
     assert _button_texts(message_manager.last_message()) == [
-        f"🚦 {street}",
-        f"🚦 {other_street}",
+        street,
+        other_street,
         *NAVIGATION,
     ]
     await client.click(message_manager.last_message(), BACK_BUTTON)
@@ -2845,8 +2845,8 @@ async def test_typing_narrows_each_address_step_and_picks_a_single_match(
 
     await client.send("5")
     assert _button_texts(message_manager.last_message()) == [
-        "🏢 5а",
-        "🏢 5б",
+        "5а",
+        "5б",
         *NAVIGATION,
     ]
     await client.send("7")
@@ -3022,15 +3022,15 @@ async def test_houses_near_a_location_are_listed_and_typing_filters_them_all(
     )
     assert NEARBY_TEXT in _text(message_manager)
     assert sorted(_button_texts(message_manager.last_message())) == sorted(
-        ["🏢 Сужения, 15", "🏢 Сужения, 51", "🏢 Сужения, 151", *NAVIGATION],
+        ["Сужения, 15", "Сужения, 51", "Сужения, 151", *NAVIGATION],
     )
     await client.send("51")
     assert sorted(_button_texts(message_manager.last_message())) == sorted(
-        ["🏢 Сужения, 51", "🏢 Сужения, 151", *NAVIGATION],
+        ["Сужения, 51", "Сужения, 151", *NAVIGATION],
     )
     await client.send("15")
     assert sorted(_button_texts(message_manager.last_message())) == sorted(
-        ["🏢 Сужения, 15", "🏢 Сужения, 151", *NAVIGATION],
+        ["Сужения, 15", "Сужения, 151", *NAVIGATION],
     )
 
 
@@ -3049,20 +3049,24 @@ async def test_a_list_whose_content_changed_opens_on_its_first_page(
     await client.send(city)
     await client.click(
         message_manager.last_message(),
-        InlineButtonTextLocator(f"🚦 {first}"),
+        InlineButtonTextLocator(first),
     )
-    await client.click(message_manager.last_message(), InlineButtonTextLocator("3"))
+    for _ in range(2):
+        await client.click(
+            message_manager.last_message(),
+            InlineButtonTextLocator(">"),
+        )
 
     await client.send("1")
-    assert _button_texts(message_manager.last_message())[0] == "🏢 1"
+    assert _button_texts(message_manager.last_message())[0] == "1"
 
     await client.click(message_manager.last_message(), InlineButtonTextLocator("2"))
     await client.click(message_manager.last_message(), BACK_BUTTON)
     await client.click(
         message_manager.last_message(),
-        InlineButtonTextLocator(f"🚦 {second}"),
+        InlineButtonTextLocator(second),
     )
-    assert _button_texts(message_manager.last_message())[0] == "🏢 1"
+    assert _button_texts(message_manager.last_message())[0] == "1"
 
 
 async def test_the_request_draft_escapes_the_address_and_the_description(
@@ -6121,6 +6125,9 @@ async def test_help_and_faq_answer_in_one_message_listing_every_command(
     assert all(f"/{bot_command.name} " in HELP_TEXT for bot_command in BOT_COMMANDS)
 
 
+PAGER = re.compile(r"\d+|<|>")
+
+
 async def test_the_house_choice_for_a_chat_is_paged(
     client: BotClient,
     task_broker: InMemoryBroker,
@@ -6138,13 +6145,13 @@ async def test_the_house_choice_for_a_chat_is_paged(
     await _added_by(task_broker, _chat_id(), initiator_max_user_id=client.user.id)
 
     window = message_manager.last_message()
-    houses = [text for text in _button_texts(window) if text.startswith("🏢")]
+    houses = [text for text in _button_texts(window) if not PAGER.fullmatch(text)]
     assert len(houses) == HOUSES_PAGE
     await client.click(window, InlineButtonTextLocator("^>$"))
     rest = [
         text
         for text in _button_texts(message_manager.last_message())
-        if text.startswith("🏢")
+        if not PAGER.fullmatch(text)
     ]
     assert len(rest) == 1
     assert rest[0] not in houses

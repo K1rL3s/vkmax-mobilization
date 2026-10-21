@@ -61,7 +61,7 @@ onboarding_dialog = Dialog(
         Multi(Const(CITY_TEXT), MISSED, sep="\n\n"),
         ScrollingGroup(
             Select(
-                Format("🌆 {item}"),
+                Format("{item}"),
                 id="city",
                 item_id_getter=lambda city: city,
                 items="cities",
@@ -84,7 +84,7 @@ onboarding_dialog = Dialog(
         Multi(Format(STREET_TEXT), MISSED, sep="\n\n"),
         ScrollingGroup(
             Select(
-                Format("🚦 {item}"),
+                Format("{item}"),
                 id="street",
                 item_id_getter=lambda street: street,
                 items="streets",
@@ -113,7 +113,7 @@ onboarding_dialog = Dialog(
         ),
         ScrollingGroup(
             Select(
-                Format("🏢 {item.title}"),
+                Format("{item.title}"),
                 id="house",
                 item_id_getter=lambda house: house.id,
                 type_factory=int,
