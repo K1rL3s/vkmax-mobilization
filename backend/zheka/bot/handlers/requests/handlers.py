@@ -10,7 +10,7 @@ from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import MessageCallback, MessageCreated
 
 from zheka.bot.cards import app_payload, back_to_menu, refused, web_app_name
-from zheka.bot.dialog_data import NewRequestData, transcript
+from zheka.bot.dialog_data import NewRequestData, transcript, voice_url
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import NewRequest
 from zheka.bot.voice import publish_transcription
@@ -175,7 +175,7 @@ async def on_description_voice(
     publish_transcription(
         publisher,
         dialog_user_id(dialog_manager),
-        update.message.body.mid,
+        voice_url(update.message.body),
         draft,
         in_draft=True,
     )

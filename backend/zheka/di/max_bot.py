@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterable
 
 from dishka import BaseScope, Provider, Scope, from_context, provide
-from maxo import Bot
+from maxo import Bot, Dispatcher
 from maxo.bot.defaults import BotDefaults
 from maxo.dialogs import BgManagerFactory
 from maxo.enums import TextFormat
@@ -14,6 +14,7 @@ class MaxBotProvider(Provider):
     scope: BaseScope | None = Scope.APP
 
     bg_manager_factory = from_context(BgManagerFactory)
+    dispatcher = from_context(Dispatcher, override=True)
 
     max_sender = provide(MaxSender)
 

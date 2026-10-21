@@ -10,7 +10,7 @@ VOICE_FAILED = "🎤 Не разобрал голосовое, напишите 
 def publish_transcription(
     publisher: TaskPublisher,
     user_id: int,
-    mid: str,
+    url: str | None,
     draft: dict[str, Any],
     *,
     in_draft: bool,
@@ -18,7 +18,7 @@ def publish_transcription(
     publisher.publish(
         TaskName.TRANSCRIBE_VOICE,
         user_id=user_id,
-        mid=mid,
+        url=url,
         draft=draft,
         in_draft=in_draft,
     )

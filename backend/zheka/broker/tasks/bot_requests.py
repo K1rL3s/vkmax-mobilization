@@ -1,4 +1,3 @@
-import asyncio
 import io
 import logging
 from collections.abc import Sequence
@@ -10,11 +9,10 @@ import aiohttp
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.dialogs import ShowMode
-from maxo.errors import MaxBotApiError, MaxBotNetworkError
 from maxo.omit import is_defined
 from taskiq import async_shared_broker
 
-from zheka.bot.dialog_data import NewRequestData, transcript, voice_url
+from zheka.bot.dialog_data import NewRequestData
 from zheka.bot.handlers.requests.handlers import (
     NOT_CREATED,
     NOT_CREATED_UNEXPECTED,
@@ -44,7 +42,6 @@ from zheka.infra.yandex import SpeechClient, YandexQuota
 logger = logging.getLogger(__name__)
 
 PHOTO_MIME = "image/jpeg"
-VOICE_RECHECK_SECONDS = 5
 NOT_REJECTED = "😔 Повторную заявку не удалось оформить: {reason}"
 NOT_REJECTED_UNEXPECTED = "😔 Повторную заявку не удалось оформить, попробуйте еще раз"
 
@@ -53,7 +50,7 @@ NOT_REJECTED_UNEXPECTED = "😔 Повторную заявку не удало�
 @inject(patch_module=True)
 async def transcribe_voice(
     user_id: UserId,
-    mid: str,
+    url: str | None,
     draft: dict[str, Any],
     in_draft: bool,
     bot: FromDishka[Bot],
@@ -65,7 +62,7 @@ async def transcribe_voice(
     user = await users_repo.get_by_id(user_id)
     if user is None:
         return False
-    text = await _read_transcript(bot, speech, quota, user_id, mid)
+    text = await _recognize_voice(bot, speech, quota, user_id, url)
     data = NewRequestData.retort.load(draft, NewRequestData)
     data.voice_pending = False
     if text:
@@ -87,31 +84,21 @@ async def transcribe_voice(
     return bool(text)
 
 
-async def _read_transcript(
+async def _recognize_voice(
     bot: Bot,
     speech: SpeechClient,
     quota: YandexQuota,
     user_id: UserId,
-    mid: str,
+    url: str | None,
 ) -> str:
-    await asyncio.sleep(VOICE_RECHECK_SECONDS)
-    try:
-        message = await bot.get_message_by_id(message_id=mid)
-    except (MaxBotApiError, MaxBotNetworkError):
-        logger.warning("Голосовое %s не перечитано", mid)
-        return ""
-    text = transcript(message.body)
-    if text:
-        return text
-    url = voice_url(message.body)
     if url is None or not (speech.configured and quota.take(user_id)):
-        logger.info("MAX не расшифровал голосовое %s", mid)
+        logger.info("Голосовое не отправлено в SpeechKit")
         return ""
     audio = io.BytesIO()
     try:
         await bot.download(url, audio)
     except (aiohttp.ClientError, TimeoutError):
-        logger.warning("Голосовое %s не скачано", mid)
+        logger.warning("Голосовое не скачано")
         return ""
     return await speech.recognize(audio.getvalue())
 

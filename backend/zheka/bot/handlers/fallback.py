@@ -10,6 +10,7 @@ from zheka.bot.dialog_data import (
     NewRequestData,
     has_voice,
     transcript,
+    voice_url,
 )
 from zheka.bot.meter_photo import start_meter_photo
 from zheka.bot.middlewares.user import USER_KEY
@@ -96,7 +97,7 @@ async def _transcribe(
     publish_transcription(
         publisher,
         user.id,
-        update.message.body.mid,
+        voice_url(update.message.body),
         NewRequestData().to_data(),
         in_draft=False,
     )
