@@ -9,7 +9,14 @@ from maxo import Bot
 from maxo.dialogs import Dialog, DialogManager, Window
 from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import MessageInput
-from maxo.dialogs.widgets.kbd import Button, CopyText, Start, SwitchTo, WebApp
+from maxo.dialogs.widgets.kbd import (
+    Button,
+    CopyText,
+    Start,
+    SwitchTo,
+    Url,
+    WebApp,
+)
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 from maxo.types import MessageCallback
@@ -110,6 +117,7 @@ async def get_menu(
         "address": None if residency is None else escape(residency.house.address),
         "staff": me.is_staff,
         "can_join_chat": offer is not None and not offer.joined,
+        "chat_link": offer.link if offer is not None and offer.joined else None,
     }
 
 
@@ -215,6 +223,11 @@ menu_dialog = Dialog(
             id="join_chat",
             on_click=on_join_chat,
             when=F["can_join_chat"],
+        ),
+        Url(
+            Const("💬 Чат дома"),
+            Format("{chat_link}"),
+            when=F["chat_link"],
         ),
         SwitchTo(
             Const(DIGEST_BUTTON),

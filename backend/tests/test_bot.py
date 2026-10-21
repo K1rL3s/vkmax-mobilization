@@ -62,6 +62,7 @@ from maxo.types import (
     VideoAttachmentDetails,
     VideoUrls,
 )
+from maxo.types.callback_button import CallbackButton
 from maxo.types.chat import Chat as MaxChat
 from maxo.types.chat_member import ChatMember
 from maxo.types.chat_members_list import ChatMembersList
@@ -6216,6 +6217,44 @@ async def test_the_menu_offers_the_house_chat_only_to_a_verified_resident(
     assert bot_broker.enqueued(TaskName.JOIN_HOUSE_CHAT) == [
         {"chat_id": chat_id, "user_id": user_id},
     ]
+
+
+@pytest.mark.parametrize(
+    ("joined", "link", "shown"),
+    [
+        (True, CHAT_LINK, [(LinkButton, CHAT_LINK)]),
+        (True, None, []),
+        (False, CHAT_LINK, [(CallbackButton, None)]),
+    ],
+    ids=["member", "member_without_link", "not_a_member"],
+)
+async def test_the_menu_opens_the_house_chat_only_for_a_member(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    joined: bool,
+    link: str | None,
+    shown: list[tuple[type, str | None]],
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    chat_id = await _house_chat(bot_session, house_id, link)
+    user_id = (await _user(bot_session, client)).id
+    await _verify(bot_session, user_id, house_id)
+    if joined:
+        await ChatsRepo(bot_session).add_member(chat_id, user_id)
+        await bot_session.commit()
+
+    await client.send("/start")
+
+    assert [
+        (type(button), getattr(button, "url", None))
+        for button in _buttons(message_manager.last_message())
+        if button.text == "💬 Чат дома"
+    ] == shown
 
 
 @pytest.mark.parametrize(
