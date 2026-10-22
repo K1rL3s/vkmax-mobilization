@@ -89,9 +89,12 @@ CALL_NOTE_TEXT = (
 )
 JOINING_CHAT = "⏳ Добавляю вас в чат «{title}», напишу, как получится"
 RU_PHONE = re.compile(r"[78](\d{3})(\d{3})(\d{2})(\d{2})")
+PHONE_CHARS = re.compile(r"[\d\s()+-]+")
 
 
 def _pretty_phone(phone: str) -> str:
+    if PHONE_CHARS.fullmatch(phone) is None:
+        return phone
     match = RU_PHONE.fullmatch(re.sub(r"\D", "", phone))
     return phone if match is None else "+7 ({}) {}-{}-{}".format(*match.groups())
 
