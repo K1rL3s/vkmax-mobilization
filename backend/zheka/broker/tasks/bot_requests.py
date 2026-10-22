@@ -92,13 +92,13 @@ async def _recognize_voice(
     url: str | None,
 ) -> str:
     if url is None or not (speech.configured and quota.take(user_id)):
-        logger.info("Голосовое не отправлено в SpeechKit")
+        logger.info("Голосовое пользователя %s не отправлено в SpeechKit", user_id)
         return ""
     audio = io.BytesIO()
     try:
         await bot.download(url, audio)
     except (aiohttp.ClientError, TimeoutError):
-        logger.warning("Голосовое не скачано")
+        logger.warning("Голосовое пользователя %s не скачано", user_id)
         return ""
     return await speech.recognize(audio.getvalue())
 
