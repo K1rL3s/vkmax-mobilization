@@ -255,7 +255,7 @@ class ChatsService:
         if chat is None or chat.house_id is None or user is None:
             return None
         offer = await self.join_offer(user_id, chat.house_id)
-        if offer is None or offer.chat_id != chat_id:
+        if offer is None or offer.chat_id != chat_id or offer.joined:
             return None
         return ChatJoining(user=user, title=offer.title, link=offer.link)
 
