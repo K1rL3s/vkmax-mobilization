@@ -1,12 +1,19 @@
 import type { HouseCard } from "@/features/house";
 import { authParams, rqClient } from "@/shared/api/instance";
+import { invalidatePaths } from "@/shared/api/query-client";
 import { getWebApp, haptic } from "@/shared/lib/max";
 
 export const useChatJoin = (house: HouseCard, updatedAt: number) => {
   const join = rqClient.useMutation(
     "post",
     "/api/houses/{house_id}/chat/join",
-    { onSuccess: () => haptic.success(), onError: haptic.error },
+    {
+      onSuccess: () => haptic.success(),
+      onError: () => {
+        haptic.error();
+        void invalidatePaths("/api/houses/{house_id}");
+      },
+    },
   );
   const chat = house.chat_join;
 
