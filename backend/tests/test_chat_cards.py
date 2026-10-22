@@ -616,7 +616,7 @@ async def test_a_bill_request_is_shared_without_the_join_call(
     shared = await service.share_to_chat(own.user_id, card.request.id)
 
     assert shared.share_payload == house_payload(own.house_id)
-    assert shared.share_text.endswith(f"{shared.house.address}.")
+    assert shared.share_text.endswith(f"\n{shared.house.address}")
 
 
 async def test_a_shared_request_calls_neighbours_to_join(
@@ -631,4 +631,6 @@ async def test_a_shared_request_calls_neighbours_to_join(
         own.house_id,
         request.category,
     )
-    assert shared.share_text.endswith("присоединяйтесь к заявке")
+    assert shared.share_text.endswith(
+        "\nЕсли у вас то же самое, присоединяйтесь к заявке",
+    )

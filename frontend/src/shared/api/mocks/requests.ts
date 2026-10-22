@@ -262,8 +262,8 @@ export const requestsConfigs = [
     const shared: Schemas["SharedRequestResponse"] = {
       posted: false,
       share_text: joinable
-        ? `Заявка №${item.id}. Если у вас то же самое, присоединяйтесь к заявке`
-        : `Заявка №${item.id}.`,
+        ? `Заявка №${item.id}\nЕсли у вас то же самое, присоединяйтесь к заявке`
+        : `Заявка №${item.id}`,
       share_link: joinable
         ? `https://max.ru/zheka_bot?startapp=house_${item.house_id}_${item.category}`
         : `https://max.ru/zheka_bot?startapp=house_${item.house_id}`,

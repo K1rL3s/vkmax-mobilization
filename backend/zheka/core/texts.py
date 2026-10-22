@@ -413,11 +413,11 @@ def request_card_grouped(request_id: RequestId, category: RequestCategory) -> st
 def request_share_text(request: Request, house: House, *, joinable: bool) -> str:
     text = (
         f"{CATEGORY_RULES[request.category].emoji} Заявка №{request.id} · "
-        f"{CATEGORY_RULES[request.category].label}, {house.address}."
+        f"{CATEGORY_RULES[request.category].label}\n{house.address}"
     )
     if not joinable:
         return text
-    return f"{text} Если у вас то же самое, присоединяйтесь к заявке"
+    return f"{text}\nЕсли у вас то же самое, присоединяйтесь к заявке"
 
 
 POLL_HASHTAG = "#опрос"
