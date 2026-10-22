@@ -4474,9 +4474,11 @@ async def test_a_voice_in_the_menu_starts_a_request_or_waits_for_the_transcript(
         description=VOICE,
     )
     await client.send("/start")
+    message_manager.reset_history()
     await _send(client, _voice())
 
     assert notices.texts[-1] == VOICE_PENDING
+    assert message_manager.sent_messages == []
     assert bot_broker.enqueued(TaskName.TRANSCRIBE_VOICE)[-1]["in_draft"] is False
 
 

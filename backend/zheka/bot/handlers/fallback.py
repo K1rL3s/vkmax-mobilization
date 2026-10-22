@@ -1,6 +1,6 @@
 from dishka import FromDishka
 from maxo import Router
-from maxo.dialogs import DialogManager, StartMode
+from maxo.dialogs import DialogManager, ShowMode, StartMode
 from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.input import MessageInput
 from maxo.types import MessageCreated
@@ -78,6 +78,7 @@ async def on_free_text(
     elif draft is None and danger is not None:
         await dialog_manager.start(Menu.emergency, mode=StartMode.RESET_STACK)
     elif draft is None and has_voice(update.message.body):
+        dialog_manager.show_mode = ShowMode.NO_UPDATE
         await _transcribe(update, publisher, user)
     elif draft is not None:
         await dialog_manager.start(
