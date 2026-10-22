@@ -153,7 +153,7 @@ async def join_house_chat(
     sender: FromDishka[MaxSender],
 ) -> None:
     joining = await chats_service.joining(chat_id, user_id)
-    if joining is None:
+    if joining is None or joining.user.max_user_id < 0:
         return
     user = joining.user
     outcome = await sender.add_chat_member(chat_id, user.max_user_id)
