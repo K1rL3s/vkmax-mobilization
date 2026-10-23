@@ -709,3 +709,54 @@ REQUEST_PLACE_LINES: Mapping[RequestPlace, str] = {
     RequestPlace.FLAT: "🏠 Личная: в квартире",
     RequestPlace.HOUSE: "👥 Общая: в доме",
 }
+
+
+SHORT_MONTHS = (
+    "янв",
+    "фев",
+    "мар",
+    "апр",
+    "мая",
+    "июн",
+    "июл",
+    "авг",
+    "сен",
+    "окт",
+    "ноя",
+    "дек",
+)
+
+
+def short_day(day: date) -> str:
+    return f"{day.day} {SHORT_MONTHS[day.month - 1]}"
+
+
+def visit_span(starts_at: datetime, minutes: int) -> str:
+    return f"{starts_at:%H:%M}–{starts_at + timedelta(minutes=minutes):%H:%M}"
+
+
+def visit_proposed_note(day: date, spans: Sequence[str]) -> str:
+    return (
+        f"Предлагаем время визита {short_day(day)}: {', '.join(spans)}. "
+        "Выберите удобное окно на карточке заявки"
+    )
+
+
+VISIT_NONE_FITS = "Ни одно предложенное время визита не подходит"
+VISIT_DECLINED = "✅ Передали УК, что время не подходит: она предложит другое"
+
+
+def visit_offer(request: Request, day: date) -> str:
+    return (
+        f"🔧 УК предлагает время визита по заявке №{request.id}: "
+        f"{CATEGORY_RULES[request.category].label}, {short_day(day)}"
+    )
+
+
+def visit_picked(request_id: RequestId, when: str, flat_number: str | None) -> str:
+    flat = "" if flat_number is None else f", кв. {escape(flat_number)}"
+    return f"🔧 Житель выбрал время визита по заявке №{request_id}: {when}{flat}"
+
+
+def visit_canceled(request: Request) -> str:
+    return f"❌ УК отменила визит по заявке {_request(request.id, request.category)}"

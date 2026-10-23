@@ -21,6 +21,7 @@ from zheka.api.schemas.requests import (
     ReplyToRequestRequest,
     RequestGroupCard,
 )
+from zheka.api.schemas.visits import ProposeVisitRequest
 from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
@@ -41,6 +42,7 @@ from zheka.core.services.admin_requests import (
     PhoneRequestDraft,
 )
 from zheka.core.services.files import FilesService
+from zheka.core.services.visits import VisitDraft, VisitService
 from zheka.infra.database.repos.requests import RequestFilters
 
 router = APIRouter(tags=["Админка: заявки"], route_class=DishkaRoute)
@@ -176,6 +178,50 @@ async def assign_request_executor(
         body.user_id,
         current_org.user_id,
     )
+    return _card(data, files_service, current_org)
+
+
+@router.post(
+    "/admin/requests/{request_id}/visit",
+    summary="Предложить время визита",
+    description=(
+        "Только личная открытая заявка с автором в MAX. Окна визита - окна "
+        "доступа на одну квартиру автора, по одному месту в окне. Новое "
+        "предложение заменяет действующее, житель получает его заново"
+    ),
+)
+async def propose_request_visit(
+    request_id: RequestId,
+    current_org: CurrentOrgDep,
+    visit_service: FromDishka[VisitService],
+    admin_requests_service: FromDishka[AdminRequestsService],
+    files_service: FromDishka[FilesService],
+    body: ProposeVisitRequest,
+) -> AdminRequestCard:
+    await visit_service.propose(
+        current_org.org_id,
+        request_id,
+        current_org.user_id,
+        VisitDraft(**body.model_dump()),
+    )
+    data = await admin_requests_service.card(current_org.org_id, request_id)
+    return _card(data, files_service, current_org)
+
+
+@router.delete(
+    "/admin/requests/{request_id}/visit",
+    summary="Отменить визит",
+    description="Житель получает сообщение об отмене. У закрытой заявки визита нет",
+)
+async def cancel_request_visit(
+    request_id: RequestId,
+    current_org: CurrentOrgDep,
+    visit_service: FromDishka[VisitService],
+    admin_requests_service: FromDishka[AdminRequestsService],
+    files_service: FromDishka[FilesService],
+) -> AdminRequestCard:
+    await visit_service.cancel(current_org.org_id, request_id, current_org.user_id)
+    data = await admin_requests_service.card(current_org.org_id, request_id)
     return _card(data, files_service, current_org)
 
 

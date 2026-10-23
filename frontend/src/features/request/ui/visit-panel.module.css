@@ -1,0 +1,29 @@
+.Panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.Grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.Grid > .Window {
+  min-width: 0;
+  padding-inline: 4px;
+}
+
+.Error {
+  color: var(--text-negative);
+}

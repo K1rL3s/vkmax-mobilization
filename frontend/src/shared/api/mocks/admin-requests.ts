@@ -16,6 +16,7 @@ import {
   findFlat,
   findHouse,
   houseRequests,
+  makeVisit,
   requestCard,
   requestMessages,
   requestCategories,
@@ -48,18 +49,30 @@ const executors: Schemas["ExecutorItem"][] = [
   },
 ];
 
+const OPEN: Schemas["RequestStatus"][] = ["new", "accepted", "in_progress"];
+
+const canProposeVisit = (request: Request) =>
+  request.place === "flat" &&
+  request.author_name != null &&
+  OPEN.includes(request.status);
+
 const fromResident = (
   item: ReturnType<typeof houseRequests>[number],
-): Request => ({
-  ...structuredClone(requestCard(item)),
-  messages: requestMessages(item),
-  is_staff_author: false,
-  author_name: "Гульнара Ахметзяновна Сафиуллина-Валиева",
-  caller_name: null,
-  caller_phone: null,
-  executor_user_id: item.executor_name ? 31 : null,
-  executor_name: item.executor_name ? executors[0].name : null,
-});
+): Request => {
+  const card: Request = {
+    ...structuredClone(requestCard(item)),
+    messages: requestMessages(item),
+    is_staff_author: false,
+    author_name: "Гульнара Ахметзяновна Сафиуллина-Валиева",
+    caller_name: null,
+    caller_phone: null,
+    executor_user_id: item.executor_name ? 31 : null,
+    executor_name: item.executor_name ? executors[0].name : null,
+    can_propose_visit: false,
+  };
+
+  return { ...card, can_propose_visit: canProposeVisit(card) };
+};
 
 const requests: Request[] = houseIds.flatMap((houseId) =>
   houseRequests(houseId, null).map(fromResident),
@@ -124,6 +137,7 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     can_demo_expire: false,
     rejection_needs_photo: true,
     can_demo_neighbours: false,
+    can_propose_visit: false,
     ...fields,
     place: category.place ?? fields.place ?? "house",
   };
@@ -249,6 +263,8 @@ const changeStatus = (
   });
   request.status = status;
   request.can_review = status === "on_review" && request.author_name != null;
+  if (status === "done") request.visit = null;
+  request.can_propose_visit = canProposeVisit(request);
   request.auto_close_at =
     status === "on_review"
       ? new Date(Date.now() + 48 * 3600000).toISOString()
@@ -343,6 +359,33 @@ export const adminRequestsConfigs = [
     if (request.body.question === true && item.author_name != null)
       item.question_asked_at = new Date().toISOString();
     item.resident_answered_at = null;
+    return ok(item);
+  }),
+  endpoint("post", "/admin/requests/:request_id/visit", (request) => {
+    const item = findRequest(request.params.request_id);
+    if (!item) return notFound("Заявка не найдена");
+    if (!canProposeVisit(item))
+      return conflict("Время визита сейчас предложить нельзя");
+    const body = request.body as Schemas["ProposeVisitRequest"];
+    if (body.starts.length < 1 || body.starts.length > 5)
+      return badRequest("Предложите от 1 до 5 окон");
+    if (body.starts.some((start) => Date.parse(start) <= Date.now()))
+      return badRequest("Окно визита уже началось или прошло");
+    item.visit = makeVisit(body.date, [...body.starts].sort(), body.minutes);
+    item.messages.push({
+      created_at: new Date().toISOString(),
+      author_role: "staff",
+      author_name: user.name,
+      text: "Предлагаем время визита. Выберите удобное окно на карточке заявки",
+      is_internal: false,
+    });
+    return ok(item);
+  }),
+  endpoint("delete", "/admin/requests/:request_id/visit", (request) => {
+    const item = findRequest(request.params.request_id);
+    if (!item) return notFound("Заявка не найдена");
+    if (!item.visit) return notFound("У заявки нет визита");
+    item.visit = null;
     return ok(item);
   }),
   endpoint("post", "/admin/requests/:request_id/assign", (request) => {

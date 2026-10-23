@@ -191,6 +191,8 @@ from zheka.bot.handlers.review.windows import (
     REJECTION_PHOTO_TEXT,
     REJECTION_TEXT,
 )
+from zheka.bot.handlers.visit.handlers import PICKED as VISIT_PICKED
+from zheka.bot.handlers.visit.windows import NONE_FITS
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.states import Consent, Menu
 from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
@@ -234,6 +236,7 @@ from zheka.broker.tasks.requests import (
     send_gji_pdf,
     send_question_card,
     send_review_card,
+    send_visit_card,
 )
 from zheka.broker.tasks.webhook import keep_webhook
 from zheka.core import texts
@@ -317,6 +320,11 @@ from zheka.core.services.requests import (
     REJECT_NOT_ON_REVIEW,
     RequestsService,
 )
+from zheka.core.services.visits import (
+    REQUEST_CLOSED,
+    VISIT_CANCELED,
+    VISIT_REPLACED,
+)
 from zheka.core.texts import (
     CABINET_BUTTON,
     DANGER_REQUEST_NOTE,
@@ -361,7 +369,10 @@ from zheka.infra.database.repos.polls import PollsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
-from zheka.infra.database.tables.access import access_targets_table
+from zheka.infra.database.tables.access import (
+    access_requests_table,
+    access_targets_table,
+)
 from zheka.infra.database.tables.announcements import (
     announcements_table,
     notice_deliveries_table,
@@ -1790,7 +1801,7 @@ async def _access_window(
     day = datetime.combine(request.date, time(10), tzinfo=ZoneInfo("Europe/Moscow"))
     [slot, _] = await access.add_slots(
         request.id,
-        [(day, 1), (day + timedelta(hours=1), 1)],
+        [(day, 1, None), (day + timedelta(hours=1), 1, None)],
     )
     await access.add_targets(request.id, [mine.id, other.id])
     ids = request.id, slot.id, other.id
@@ -1926,6 +1937,188 @@ async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
     assert await _demo_roles(bot_session, client) == ([], [houses[0].id])
     starts = await _starts_of(bot_session, client)
     assert starts.count({"source": EventSource.DEEPLINK.value}) == 1
+
+
+FIRST_WINDOW = InlineButtonTextLocator("🕐 10:00–12:00")
+NONE_FITS_BUTTON = InlineButtonTextLocator(NONE_FITS)
+
+
+async def _visit_window(
+    session: AsyncSession,
+    client: BotClient,
+    broker: InMemoryBroker,
+) -> tuple[RequestId, AccessRequestId, AccessSlotId]:
+    user_id = await _started(session, client)
+    org_id, house_id = await _org_house(session)
+    flat = Flat(house_id=house_id, number="7")
+    session.add(flat)
+    await session.flush()
+    session.add(
+        Resident(
+            user_id=user_id,
+            house_id=house_id,
+            flat_id=flat.id,
+            role=ResidentRole.OWNER,
+        ),
+    )
+    flat_id = flat.id
+    await session.commit()
+    request_id = await _request(
+        session,
+        house_id,
+        RequestStatus.ACCEPTED,
+        author=user_id,
+        flat=flat_id,
+    )
+    access = AccessRepo(session)
+    day = datetime.now(UTC).date() + timedelta(days=1)
+    visit = await access.create_request(
+        org_id,
+        house_id,
+        "Визит",
+        day,
+        user_id,
+        request_id=request_id,
+    )
+    start = datetime.combine(day, time(10), tzinfo=ZoneInfo("Europe/Moscow"))
+    [slot, _] = await access.add_slots(
+        visit.id,
+        [(start, 1, 120), (start + timedelta(hours=2), 1, 120)],
+    )
+    await access.add_targets(visit.id, [flat_id])
+    ids = request_id, visit.id, slot.id
+    await session.commit()
+    await _run(broker, send_visit_card, request_id=ids[0], visit_id=ids[1])
+    return ids
+
+
+async def test_the_visit_window_offers_each_window(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    request_id, _, _ = await _visit_window(bot_session, client, task_broker)
+
+    mode, text, _, _ = _shown(shows, "УК предлагает время визита")
+    assert mode is ShowMode.SEND
+    assert f"по заявке №{request_id}: Протечка" in (text or "")
+    window = message_manager.last_message()
+    assert FIRST_WINDOW.find_button(window) is not None
+    assert InlineButtonTextLocator("🕐 12:00–14:00").find_button(window) is not None
+    assert NONE_FITS_BUTTON.find_button(window) is not None
+
+
+async def test_a_tap_picks_the_visit_window(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    _, visit_id, slot_id = await _visit_window(bot_session, client, task_broker)
+
+    await client.click(message_manager.last_message(), FIRST_WINDOW)
+
+    picked = InlineButtonTextLocator(VISIT_PICKED.format(span="10:00–12:00"))
+    assert picked.find_button(message_manager.last_message()) is not None
+    bot_session.expire_all()
+    target = await AccessRepo(bot_session).visit_target(visit_id)
+    assert target.slot_id == slot_id
+
+
+async def test_none_fits_in_the_bot_reaches_the_conversation(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id, _, _ = await _visit_window(bot_session, client, task_broker)
+
+    await client.click(message_manager.last_message(), NONE_FITS_BUTTON)
+
+    assert texts.VISIT_DECLINED in _text(message_manager)
+    messages = await RequestsRepo(bot_session).list_messages(request_id)
+    assert [message.text for message in messages] == [texts.VISIT_NONE_FITS]
+
+
+async def test_a_replaced_visit_window_refuses_the_tap(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id, visit_id, _ = await _visit_window(bot_session, client, task_broker)
+    window = message_manager.last_message()
+    stmt = (
+        update(access_requests_table)
+        .where(access_requests_table.c.id == visit_id)
+        .values(canceled_at=datetime.now(UTC))
+    )
+    await bot_session.execute(stmt)
+    access = AccessRepo(bot_session)
+    old = await access.get(visit_id)
+    [target] = await access.list_targets(visit_id)
+    new = await access.create_request(
+        old.org_id,
+        old.house_id,
+        "Визит",
+        old.date,
+        old.created_by,
+        request_id=request_id,
+    )
+    await access.add_targets(new.id, [target.flat_id])
+    await bot_session.commit()
+
+    await client.click(window, FIRST_WINDOW)
+
+    assert VISIT_REPLACED in _text(message_manager)
+    assert NONE_FITS_BUTTON.find_button(message_manager.last_message()) is None
+
+
+async def test_a_canceled_visit_window_says_so(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    _, visit_id, _ = await _visit_window(bot_session, client, task_broker)
+    window = message_manager.last_message()
+    stmt = (
+        update(access_requests_table)
+        .where(access_requests_table.c.id == visit_id)
+        .values(canceled_at=datetime.now(UTC))
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(window, FIRST_WINDOW)
+
+    assert VISIT_CANCELED in _text(message_manager)
+    assert NONE_FITS_BUTTON.find_button(message_manager.last_message()) is None
+
+
+async def test_a_request_on_review_hides_the_visit_windows(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    request_id, _, _ = await _visit_window(bot_session, client, task_broker)
+    window = message_manager.last_message()
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(status=RequestStatus.ON_REVIEW)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(window, FIRST_WINDOW)
+
+    assert REQUEST_CLOSED in _text(message_manager)
+    assert FIRST_WINDOW.find_button(message_manager.last_message()) is None
+    assert NONE_FITS_BUTTON.find_button(message_manager.last_message()) is None
 
 
 async def test_a_demo_link_without_consent_asks_for_it_and_then_grants_access(

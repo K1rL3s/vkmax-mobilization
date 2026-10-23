@@ -19,6 +19,7 @@ export {
   STATUS_TONE,
   statusLabel,
 } from "./domain/status";
+export { visitLine } from "./domain/visit";
 export { useRequestCategories } from "./model/use-request-categories";
 export type {
   RequestCategory,

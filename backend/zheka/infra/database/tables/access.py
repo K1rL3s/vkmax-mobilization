@@ -22,6 +22,14 @@ access_requests_table = Table(
     Column("reason", Text, nullable=False),
     Column("date", Date, nullable=False),
     Column("created_by", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column(
+        "request_id",
+        BigInteger,
+        ForeignKey("requests.id"),
+        nullable=True,
+        index=True,
+    ),
+    Column("canceled_at", DateTime(timezone=True), nullable=True),
 )
 
 access_slots_table = Table(
@@ -36,6 +44,7 @@ access_slots_table = Table(
     ),
     Column("starts_at", DateTime(timezone=True), nullable=False),
     Column("capacity", Integer, nullable=False),
+    Column("minutes", Integer, nullable=True),
 )
 
 access_targets_table = Table(

@@ -7,6 +7,7 @@ from zheka.api.dependencies import CurrentOrg
 from zheka.api.schemas.announcements import PlannedWorks
 from zheka.api.schemas.base import BaseSchema, FreeText
 from zheka.api.schemas.files import FILES_DESCRIPTION, FileRef
+from zheka.api.schemas.visits import VisitItem
 from zheka.core.danger import detect_danger
 from zheka.core.enums import (
     CATEGORY_PLACES,
@@ -50,6 +51,7 @@ from zheka.core.services.requests import (
     RequestMessageView,
     RequestRow,
 )
+from zheka.core.services.visits import visit_refusal
 
 UNKNOWN_AUTHOR = "Пользователь"
 DEADLINE_TEXT = "Срок устранения от подачи заявки, например «3 суток»"
@@ -242,6 +244,10 @@ class RequestCard(RequestListItem):
             "соседей и собрать коллективную заявку"
         ),
     )
+    visit: VisitItem | None = Field(
+        default=None,
+        description="Время визита, предложенное УК; пусто у закрытой заявки",
+    )
 
     @classmethod
     def of(
@@ -285,6 +291,7 @@ class RequestCard(RequestListItem):
             can_demo_expire=card.can_demo_expire,
             rejection_needs_photo=rule.rejection_needs_photo,
             can_demo_neighbours=card.can_demo_neighbours,
+            visit=None if card.visit is None else VisitItem.of(card.visit),
         )
 
 
@@ -386,6 +393,13 @@ class AdminRequestCard(RequestCard):
     caller_name: str | None = None
     caller_phone: str | None = None
     executor_user_id: UserId | None = None
+    can_propose_visit: bool = Field(
+        default=False,
+        description=(
+            "Можно предложить время визита: личная открытая заявка с автором "
+            "в MAX. Новое предложение заменяет действующее"
+        ),
+    )
 
     @classmethod
     def of_admin(
@@ -405,6 +419,7 @@ class AdminRequestCard(RequestCard):
             caller_name=request.caller_name,
             caller_phone=request.caller_phone,
             executor_user_id=request.executor_user_id,
+            can_propose_visit=visit_refusal(request) is None,
         )
 
 

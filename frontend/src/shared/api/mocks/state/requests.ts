@@ -4,6 +4,7 @@ import { fileUrl } from "./files";
 import { addressOf, findHouse } from "./houses";
 import { residencyForHouse } from "./profile";
 import { days, minutes, shift } from "./time";
+import { visitOf } from "./visits";
 
 type Schemas = components["schemas"];
 
@@ -486,6 +487,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
       item.category,
     ),
     can_demo_neighbours: canDemoNeighbours(item),
+    visit: item.status === "done" ? null : visitOf(item.id),
   };
 };
 

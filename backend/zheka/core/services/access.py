@@ -139,7 +139,7 @@ class AccessService:
         await self._access.add_slots(
             access_request_id,
             [
-                (starts_at, slot.capacity)
+                (starts_at, slot.capacity, None)
                 for starts_at, slot in zip(starts, draft.slots, strict=True)
             ],
         )

@@ -87,6 +87,7 @@ from zheka.infra.database.models import (
     Tariff,
     User,
 )
+from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chairman import ChairmanRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
@@ -597,6 +598,7 @@ def requests_service(
         classifier or StubClassifier(None),
         category_executors_service(session, publisher),
         ChatsRepo(session),
+        AccessRepo(session),
     )
 
 
@@ -614,6 +616,7 @@ def admin_requests_service(
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
         category_executors_service(session, publisher),
+        AccessRepo(session),
     )
 
 

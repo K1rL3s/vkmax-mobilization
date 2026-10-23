@@ -15,11 +15,13 @@ import {
   canDemoExpire,
   canDemoNeighbours,
   createRequest,
+  declineVisit,
   findRequest,
   houseProblems,
   houseRequests,
   minutes,
   nextFileName,
+  pickVisitWindow,
   repeatRequest,
   requestCard,
   requestCategories,
@@ -123,6 +125,52 @@ export const requestsConfigs = [
 
     return item ? ok(requestCard(item)) : notFound("Заявка не найдена");
   }),
+  endpoint("post", "/requests/:request_id/visit/:slot_id", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
+
+    if (!["new", "accepted", "in_progress"].includes(item.status)) {
+      return conflict("Заявка уже не ждет визита");
+    }
+
+    const error = pickVisitWindow(item.id, Number(request.params.slot_id));
+
+    return error ? notFound(error) : ok(requestCard(item));
+  }),
+  endpoint(
+    "post",
+    "/requests/:request_id/visit/:visit_id/decline",
+    (request) => {
+      const item = findRequest(Number(request.params.request_id));
+
+      if (!item) {
+        return notFound("Заявка не найдена");
+      }
+
+      if (!["new", "accepted", "in_progress"].includes(item.status)) {
+        return conflict("Заявка уже не ждет визита");
+      }
+
+      const error = declineVisit(item.id, Number(request.params.visit_id));
+
+      if (error) {
+        return notFound(error);
+      }
+
+      item.messages.push({
+        after_minutes: (Date.now() - Date.parse(item.created_at)) / 60_000,
+        author_role: "resident",
+        author_name: user.name,
+        text: "Ни одно предложенное время визита не подходит",
+      });
+      item.resident_answered_at = new Date().toISOString();
+
+      return ok(requestCard(item));
+    },
+  ),
   endpoint("post", "/requests/:request_id/rating", (request) => {
     const item = findRequest(Number(request.params.request_id));
 

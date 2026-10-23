@@ -3,7 +3,15 @@ from datetime import date, datetime
 
 from sqlalchemy import func, select
 
-from zheka.core.ids import AccessRequestId, AccessSlotId, FlatId, HouseId, OrgId, UserId
+from zheka.core.ids import (
+    AccessRequestId,
+    AccessSlotId,
+    FlatId,
+    HouseId,
+    OrgId,
+    RequestId,
+    UserId,
+)
 from zheka.infra.database.models import AccessRequest, AccessSlot, AccessTarget
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.scopes import scoped_to_org
@@ -22,6 +30,7 @@ class AccessRepo(BaseAlchemyRepo):
         reason: str,
         on_date: date,
         created_by: UserId,
+        request_id: RequestId | None = None,
     ) -> AccessRequest:
         request = AccessRequest(
             org_id=org_id,
@@ -29,6 +38,7 @@ class AccessRepo(BaseAlchemyRepo):
             reason=reason,
             date=on_date,
             created_by=created_by,
+            request_id=request_id,
         )
         self._session.add(request)
         await self._session.flush()
@@ -49,6 +59,7 @@ class AccessRepo(BaseAlchemyRepo):
         stmt = scoped_to_org(
             select(AccessRequest).where(
                 access_requests_table.c.id == access_request_id,
+                access_requests_table.c.request_id.is_(None),
             ),
             access_requests_table.c.house_id,
             org_id,
@@ -61,7 +72,10 @@ class AccessRepo(BaseAlchemyRepo):
         org_id: OrgId,
         house_id: HouseId | None,
     ) -> Sequence[AccessRequest]:
-        stmt = select(AccessRequest).where(access_requests_table.c.org_id == org_id)
+        stmt = select(AccessRequest).where(
+            access_requests_table.c.org_id == org_id,
+            access_requests_table.c.request_id.is_(None),
+        )
         if house_id is not None:
             stmt = stmt.where(access_requests_table.c.house_id == house_id)
         stmt = stmt.order_by(access_requests_table.c.id.desc())
@@ -78,7 +92,10 @@ class AccessRepo(BaseAlchemyRepo):
                 access_targets_table,
                 access_targets_table.c.access_request_id == access_requests_table.c.id,
             )
-            .where(access_targets_table.c.flat_id == flat_id)
+            .where(
+                access_targets_table.c.flat_id == flat_id,
+                access_requests_table.c.request_id.is_(None),
+            )
             .order_by(access_requests_table.c.id.desc())
         )
         result = await self._session.execute(stmt)
@@ -87,15 +104,16 @@ class AccessRepo(BaseAlchemyRepo):
     async def add_slots(
         self,
         access_request_id: AccessRequestId,
-        slots: Sequence[tuple[datetime, int]],
+        slots: Sequence[tuple[datetime, int, int | None]],
     ) -> Sequence[AccessSlot]:
         rows = [
             AccessSlot(
                 access_request_id=access_request_id,
                 starts_at=starts_at,
                 capacity=capacity,
+                minutes=minutes,
             )
-            for starts_at, capacity in slots
+            for starts_at, capacity, minutes in slots
         ]
         self._session.add_all(rows)
         await self._session.flush()
@@ -141,9 +159,17 @@ class AccessRepo(BaseAlchemyRepo):
         access_request_id: AccessRequestId,
         flat_ids: Collection[FlatId],
     ) -> AccessTarget | None:
-        stmt = select(AccessTarget).where(
-            access_targets_table.c.access_request_id == access_request_id,
-            access_targets_table.c.flat_id.in_(flat_ids),
+        stmt = (
+            select(AccessTarget)
+            .join(
+                access_requests_table,
+                access_requests_table.c.id == access_targets_table.c.access_request_id,
+            )
+            .where(
+                access_targets_table.c.access_request_id == access_request_id,
+                access_targets_table.c.flat_id.in_(flat_ids),
+                access_requests_table.c.request_id.is_(None),
+            )
         )
         target: AccessTarget | None = await self._session.scalar(stmt)
         return target
@@ -217,3 +243,48 @@ class AccessRepo(BaseAlchemyRepo):
             AccessRequestId(request_id): (responded, total)
             for request_id, responded, total in result.tuples()
         }
+
+    async def current_visit(self, request_id: RequestId) -> AccessRequest | None:
+        stmt = (
+            select(AccessRequest)
+            .where(
+                access_requests_table.c.request_id == request_id,
+                access_requests_table.c.canceled_at.is_(None),
+            )
+            .order_by(access_requests_table.c.id.desc())
+            .limit(1)
+        )
+        visit: AccessRequest | None = await self._session.scalar(stmt)
+        return visit
+
+    async def visit_target(self, access_request_id: AccessRequestId) -> AccessTarget:
+        stmt = select(AccessTarget).where(
+            access_targets_table.c.access_request_id == access_request_id,
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+    async def lock_visit_slot(self, slot_id: AccessSlotId) -> AccessSlot | None:
+        stmt = (
+            select(AccessSlot)
+            .where(access_slots_table.c.id == slot_id)
+            .with_for_update()
+        )
+        slot: AccessSlot | None = await self._session.scalar(stmt)
+        return slot
+
+    async def find(self, access_request_id: AccessRequestId) -> AccessRequest | None:
+        stmt = select(AccessRequest).where(
+            access_requests_table.c.id == access_request_id,
+        )
+        request: AccessRequest | None = await self._session.scalar(stmt)
+        return request
+
+    async def decline(self, target: AccessTarget, at: datetime) -> None:
+        target.slot_id = None
+        target.responded_at = at
+        await self._session.flush()
+
+    async def cancel(self, visit: AccessRequest, at: datetime) -> None:
+        visit.canceled_at = at
+        await self._session.flush()

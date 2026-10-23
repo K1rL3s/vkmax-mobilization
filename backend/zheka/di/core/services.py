@@ -35,6 +35,7 @@ from zheka.core.services.reminders import RemindersService
 from zheka.core.services.request_groups import GroupingService
 from zheka.core.services.requests import RequestsService
 from zheka.core.services.retention import RetentionService
+from zheka.core.services.visits import VisitService
 from zheka.infra.quota import (
     HouseAddQuota,
     HouseLookupQuota,
@@ -69,6 +70,7 @@ class ServicesProvider(Provider):
         AnnouncementsService,
         ReceptionService,
         AccessService,
+        VisitService,
         ChatsService,
         ChatCardsService,
         MeterPhotoService,

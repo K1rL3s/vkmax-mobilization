@@ -41,11 +41,17 @@ from zheka.core.enums import (
     RequestStatus,
 )
 from zheka.core.errors import NotEnoughRights
-from zheka.core.ids import API_CHECKER_MAX_USER_ID, RequestId
+from zheka.core.ids import (
+    API_CHECKER_MAX_USER_ID,
+    AccessRequestId,
+    AccessSlotId,
+    RequestId,
+)
 from zheka.core.models import RequestAttachment
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.requests import RequestCardData, RequestDraft, RequestsService
+from zheka.core.services.visits import VisitService
 from zheka.core.texts import REQUEST_EXPORT_DISCLAIMER
 from zheka.infra.yandex import Classification, YandexQuota
 
@@ -162,6 +168,50 @@ async def get_request(
     requests_service: FromDishka[RequestsService],
     files_service: FromDishka[FilesService],
 ) -> RequestCard:
+    card = await requests_service.get_card(current_account.user_id, request_id)
+    return _card(card, files_service)
+
+
+@router.post(
+    "/requests/{request_id}/visit/{slot_id}",
+    summary="Выбрать окно визита",
+    description="Выбор можно сменить, пока заявка не сдана на приемку",
+)
+async def pick_visit_window(
+    request_id: RequestId,
+    slot_id: AccessSlotId,
+    current_account: RequireConsentDep,
+    visit_service: FromDishka[VisitService],
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+) -> RequestCard:
+    await visit_service.pick(current_account.user_id, request_id, slot_id)
+    card = await requests_service.get_card(current_account.user_id, request_id)
+    return _card(card, files_service)
+
+
+@router.post(
+    "/requests/{request_id}/visit/{visit_id}/decline",
+    summary="Ни одно время визита не подходит",
+    description=(
+        "Снимает выбранное окно и пишет сообщение жителя в переписку по заявке. "
+        "Повторный отказ без нового выбора ничего не пишет"
+    ),
+)
+async def decline_visit(
+    request_id: RequestId,
+    visit_id: AccessRequestId,
+    current_account: RequireConsentDep,
+    visit_service: FromDishka[VisitService],
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+) -> RequestCard:
+    await visit_service.decline(
+        current_account.user_id,
+        request_id,
+        visit_id,
+        RequestChannel.MINIAPP,
+    )
     card = await requests_service.get_card(current_account.user_id, request_id)
     return _card(card, files_service)
 

@@ -65,6 +65,8 @@ from zheka.core.services.request_groups import (
     problems_of,
     rules_of,
 )
+from zheka.core.services.visit_card import VisitData, visit_of
+from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -147,6 +149,7 @@ class RequestCardData(ZhekaType):
     auto_close_at: datetime | None
     can_demo_expire: bool
     can_demo_neighbours: bool
+    visit: VisitData | None = None
 
 
 class SharedRequest(ZhekaType):
@@ -175,6 +178,7 @@ class SharedRequest(ZhekaType):
 
 class RequestsService:
     __slots__ = (
+        "_access",
         "_category_executors",
         "_chats",
         "_classifier",
@@ -203,7 +207,9 @@ class RequestsService:
         classifier: YandexClassifier,
         category_executors_service: CategoryExecutorsService,
         chats_repo: ChatsRepo,
+        access_repo: AccessRepo,
     ) -> None:
+        self._access = access_repo
         self._chats = chats_repo
         self._requests = requests_repo
         self._houses = houses_repo
@@ -512,6 +518,7 @@ class RequestsService:
             self._houses,
             self._users,
             self._orgs,
+            self._access,
             request,
             house,
             authored=True,
@@ -1030,6 +1037,7 @@ async def build_card(
     houses_repo: HousesRepo,
     users_repo: UsersRepo,
     orgs_repo: OrgsRepo,
+    access_repo: AccessRepo,
     request: Request,
     house: House,
     *,
@@ -1108,6 +1116,7 @@ async def build_card(
                 datetime.now(UTC),
             ),
         ),
+        visit=await visit_of(access_repo, request),
     )
 
 

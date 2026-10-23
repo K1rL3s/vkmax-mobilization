@@ -3406,6 +3406,164 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/visit/{slot_id}:
+    post:
+      tags:
+      - Заявки
+      summary: Выбрать окно визита
+      description: Выбор можно сменить, пока заявка не сдана на приемку
+      operationId: pick_visit_window
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: slot_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Slot Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/visit/{visit_id}/decline:
+    post:
+      tags:
+      - Заявки
+      summary: Ни одно время визита не подходит
+      description: Снимает выбранное окно и пишет сообщение жителя в переписку по заявке. Повторный отказ без нового выбора ничего не пишет
+      operationId: decline_visit
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: visit_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Visit Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/requests/{request_id}/rating:
     post:
       tags:
@@ -9605,6 +9763,173 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/requests/{request_id}/visit:
+    post:
+      tags:
+      - 'Админка: заявки'
+      summary: Предложить время визита
+      description: Только личная открытая заявка с автором в MAX. Окна визита - окна доступа на одну квартиру автора, по одному месту в окне. Новое предложение заменяет действующее, житель получает его заново
+      operationId: propose_request_visit
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposeVisitRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+    delete:
+      tags:
+      - 'Админка: заявки'
+      summary: Отменить визит
+      description: Житель получает сообщение об отмене. У закрытой заявки визита нет
+      operationId: cancel_request_visit
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/admin/request-groups/{group_id}:
     get:
       tags:
@@ -12791,6 +13116,11 @@ components:
           type: boolean
           title: Can Demo Neighbours
           description: Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
+        visit:
+          anyOf:
+          - $ref: '#/components/schemas/VisitItem'
+          - type: 'null'
+          description: Время визита, предложенное УК; пусто у закрытой заявки
         is_staff_author:
           type: boolean
           title: Is Staff Author
@@ -12819,6 +13149,11 @@ components:
           - type: integer
           - type: 'null'
           title: Executor User Id
+        can_propose_visit:
+          type: boolean
+          title: Can Propose Visit
+          description: 'Можно предложить время визита: личная открытая заявка с автором в MAX. Новое предложение заменяет действующее'
+          default: false
       type: object
       required:
       - id
@@ -16629,6 +16964,29 @@ components:
       - accepted
       - declined
       title: ProposalStatus
+    ProposeVisitRequest:
+      properties:
+        date:
+          type: string
+          format: date
+          title: Date
+        starts:
+          items:
+            type: string
+            format: date-time
+          type: array
+          title: Starts
+          description: Начала окон в местном времени дома, от 1 до 5, все в один день
+        minutes:
+          type: integer
+          title: Minutes
+          description: Длина каждого окна, минут
+      type: object
+      required:
+      - date
+      - starts
+      - minutes
+      title: ProposeVisitRequest
     RateRequestRequest:
       properties:
         rating:
@@ -17122,6 +17480,11 @@ components:
           type: boolean
           title: Can Demo Neighbours
           description: Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
+        visit:
+          anyOf:
+          - $ref: '#/components/schemas/VisitItem'
+          - type: 'null'
+          description: Время визита, предложенное УК; пусто у закрытой заявки
       type: object
       required:
       - id
@@ -18090,6 +18453,51 @@ components:
       - auth_date
       - hash
       title: VerifyPhoneRequest
+    VisitItem:
+      properties:
+        id:
+          type: integer
+          title: Id
+        date:
+          type: string
+          format: date
+          title: Date
+        windows:
+          items:
+            $ref: '#/components/schemas/VisitWindowItem'
+          type: array
+          title: Windows
+        slot_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Slot Id
+          description: Окно, выбранное жителем; пусто - житель еще не выбрал
+      type: object
+      required:
+      - id
+      - date
+      - windows
+      title: VisitItem
+    VisitWindowItem:
+      properties:
+        id:
+          type: integer
+          title: Id
+        starts_at:
+          type: string
+          format: date-time
+          title: Starts At
+        minutes:
+          type: integer
+          title: Minutes
+          description: Длина окна, минут
+      type: object
+      required:
+      - id
+      - starts_at
+      - minutes
+      title: VisitWindowItem
     VoteRequest:
       properties:
         option_ids:

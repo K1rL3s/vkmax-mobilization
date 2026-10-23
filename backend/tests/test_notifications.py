@@ -41,6 +41,7 @@ from zheka.core.services.events import EventsService
 from zheka.core.services.request_status import transition_path
 from zheka.core.texts import OPEN_REQUEST, REQUEST_STATUS_NEWS
 from zheka.infra.database.models import Event, Request, RequestGroup, User
+from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
@@ -243,6 +244,7 @@ def _admin_service(
         make_notifications_service(session, publisher),
         EventsService(EventsRepo(session)),
         category_executors_service(session, publisher),
+        AccessRepo(session),
     )
 
 

@@ -60,6 +60,10 @@ class AccessSlots(StatesGroup):
     pick = State()
 
 
+class VisitWindows(StatesGroup):
+    pick = State()
+
+
 class Forget(StatesGroup):
     confirm = State()
 

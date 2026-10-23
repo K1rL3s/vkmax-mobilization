@@ -9,3 +9,4 @@ export * from "./reception-appointments";
 export * from "./reception-hours";
 export * from "./requests";
 export * from "./time";
+export * from "./visits";

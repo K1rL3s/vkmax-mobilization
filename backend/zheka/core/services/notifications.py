@@ -172,6 +172,17 @@ class NotificationsService:
             user_id=user_id,
         )
 
+    def open_visit_card(
+        self,
+        request_id: RequestId,
+        visit_id: AccessRequestId,
+    ) -> None:
+        self._publisher.publish(
+            TaskName.SEND_VISIT_CARD,
+            request_id=request_id,
+            visit_id=visit_id,
+        )
+
     def open_access_slots(self, access_request_id: AccessRequestId) -> None:
         self._publisher.publish(
             TaskName.BROADCAST_ACCESS_REQUEST,

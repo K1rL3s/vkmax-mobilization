@@ -75,6 +75,11 @@ class EventType(StrEnum):
     ACCESS_REQUEST_SENT = "access_request_sent"
     ACCESS_SLOT_PICKED = "access_slot_picked"
 
+    VISIT_PROPOSED = "visit_proposed"
+    VISIT_SLOT_PICKED = "visit_slot_picked"
+    VISIT_DECLINED = "visit_declined"
+    VISIT_CANCELED = "visit_canceled"
+
     CHARGE_BREAKDOWN_OPENED = "charge_breakdown_opened"
     CHARGE_DISPUTED = "charge_disputed"
 

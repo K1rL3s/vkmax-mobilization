@@ -173,6 +173,12 @@ class AccessSlotsData(BaseDialogData):
     notice: str | None = None
 
 
+class VisitWindowsData(BaseDialogData):
+    request_id: int
+    visit_id: int
+    notice: str | None = None
+
+
 class ChairmanData(BaseDialogData):
     code: str
     offer: str

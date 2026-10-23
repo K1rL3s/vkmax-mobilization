@@ -14,6 +14,7 @@ from zheka.bot.handlers.onboarding import onboarding_dialog
 from zheka.bot.handlers.question import question_dialog
 from zheka.bot.handlers.requests import request_dialog
 from zheka.bot.handlers.review import review_dialog
+from zheka.bot.handlers.visit import visit_dialog
 
 __all__ = (
     "access_dialog",
@@ -34,4 +35,5 @@ __all__ = (
     "question_dialog",
     "request_dialog",
     "review_dialog",
+    "visit_dialog",
 )

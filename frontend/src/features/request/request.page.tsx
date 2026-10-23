@@ -33,6 +33,7 @@ import { ReplyForm } from "./ui/reply-form";
 import { RequestAttachments } from "./ui/request-attachments";
 import { RequestTimeline } from "./ui/request-timeline";
 import { SharePanel } from "./ui/share-panel";
+import { VisitPanel } from "./ui/visit-panel";
 
 import styles from "./request.module.css";
 
@@ -123,6 +124,8 @@ const RequestPage = () => {
       </Flex>
 
       {request.question_asked_at && <QuestionPanel request={request} />}
+
+      {request.visit && <VisitPanel request={request} visit={request.visit} />}
 
       {isRunning && <DeadlinePanel request={request} />}
 

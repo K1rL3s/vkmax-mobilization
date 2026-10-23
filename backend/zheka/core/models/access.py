@@ -8,6 +8,7 @@ from zheka.core.ids import (
     FlatId,
     HouseId,
     OrgId,
+    RequestId,
     UserId,
 )
 
@@ -20,6 +21,8 @@ class AccessRequest(ZhekaMutableType):
     reason: str
     date: date
     created_by: UserId
+    request_id: RequestId | None = None
+    canceled_at: datetime | None = None
 
 
 class AccessSlot(ZhekaMutableType):
@@ -27,6 +30,7 @@ class AccessSlot(ZhekaMutableType):
     access_request_id: AccessRequestId
     starts_at: datetime
     capacity: int
+    minutes: int | None = None
 
 
 class AccessTarget(ZhekaMutableType):

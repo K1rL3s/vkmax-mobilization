@@ -35,6 +35,7 @@ export const Routes = {
   ADMIN_REQUESTS: "/admin/requests",
   ADMIN_REQUEST: "/admin/requests/:requestId",
   ADMIN_REQUEST_PHONE: "/admin/requests/phone",
+  ADMIN_REQUEST_VISIT: "/admin/requests/:requestId/visit",
   ADMIN_REQUEST_GROUP: "/admin/request-groups/:groupId",
   ADMIN_ANNOUNCEMENTS: "/admin/announcements",
   ADMIN_ANNOUNCEMENT_NEW: "/admin/announcements/new",

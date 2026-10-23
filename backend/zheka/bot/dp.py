@@ -32,6 +32,7 @@ from zheka.bot.handlers import (
     question_dialog,
     request_dialog,
     review_dialog,
+    visit_dialog,
 )
 from zheka.bot.message_manager import ZhekaMessageManager
 from zheka.bot.middlewares import (
@@ -102,6 +103,7 @@ def make_dispatcher(
         chat_binding_dialog,
         chairman_dialog,
         access_dialog,
+        visit_dialog,
         forget_dialog,
         meter_photo_dialog,
         fallback_router,

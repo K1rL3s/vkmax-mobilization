@@ -13,6 +13,7 @@ import {
   RequestTimeline,
   STATUS_TONE,
   statusLabel,
+  visitLine,
 } from "@/features/request";
 import { isForbidden } from "@/shared/api/errors";
 import { formatDayTime, plural } from "@/shared/lib/format";
@@ -33,6 +34,7 @@ import { NoOrgAccess } from "./ui/no-org-access";
 import { RequestAssignment } from "./ui/request-assignment";
 import { RequestConversation } from "./ui/request-conversation";
 import { RequestStatusAction } from "./ui/request-status-action";
+import { VisitActions } from "./ui/visit-actions";
 
 import styles from "./admin-requests.module.css";
 
@@ -68,6 +70,8 @@ const AdminRequestPage = () => {
   const escalation = escalationNote(request);
   const thread = threadNote(request);
   const danger = dangerNote(request);
+  const visit =
+    request.visit && (visitLine(request.visit) ?? "ждём ответа жителя");
   const isAssignable =
     request.status === "accepted" ||
     request.status === "in_progress" ||
@@ -173,7 +177,9 @@ const AdminRequestPage = () => {
           {request.executor_name && !isAssignable && (
             <Fact label="Исполнитель">{request.executor_name}</Fact>
           )}
+          {visit && <Fact label="Визит">{visit}</Fact>}
         </dl>
+        <VisitActions request={request} />
       </Card>
 
       <Flex asChild align="stretch" direction="column" gap={8}>

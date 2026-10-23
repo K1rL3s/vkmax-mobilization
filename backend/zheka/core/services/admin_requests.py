@@ -58,6 +58,7 @@ from zheka.core.services.requests import (
     placed,
     stated,
 )
+from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import (
@@ -121,6 +122,7 @@ class PhoneRequestDraft(ZhekaType):
 
 class AdminRequestsService:
     __slots__ = (
+        "_access",
         "_category_executors",
         "_events",
         "_grouping",
@@ -143,7 +145,9 @@ class AdminRequestsService:
         notifications_service: NotificationsService,
         events_service: EventsService,
         category_executors_service: CategoryExecutorsService,
+        access_repo: AccessRepo,
     ) -> None:
+        self._access = access_repo
         self._requests = requests_repo
         self._houses = houses_repo
         self._users = users_repo
@@ -438,6 +442,7 @@ class AdminRequestsService:
                 self._houses,
                 self._users,
                 self._orgs,
+                self._access,
                 request,
                 await self._house(request.house_id),
                 with_internal=True,

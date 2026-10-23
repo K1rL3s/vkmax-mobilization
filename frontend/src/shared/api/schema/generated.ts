@@ -619,6 +619,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/visit/{slot_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Выбрать окно визита
+     * @description Выбор можно сменить, пока заявка не сдана на приемку
+     */
+    post: operations["pick_visit_window"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/requests/{request_id}/visit/{visit_id}/decline": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Ни одно время визита не подходит
+     * @description Снимает выбранное окно и пишет сообщение жителя в переписку по заявке. Повторный отказ без нового выбора ничего не пишет
+     */
+    post: operations["decline_visit"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/requests/{request_id}/rating": {
     parameters: {
       query?: never;
@@ -1834,6 +1874,30 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/admin/requests/{request_id}/visit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Предложить время визита
+     * @description Только личная открытая заявка с автором в MAX. Окна визита - окна доступа на одну квартиру автора, по одному месту в окне. Новое предложение заменяет действующее, житель получает его заново
+     */
+    post: operations["propose_request_visit"];
+    /**
+     * Отменить визит
+     * @description Житель получает сообщение об отмене. У закрытой заявки визита нет
+     */
+    delete: operations["cancel_request_visit"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/admin/request-groups/{group_id}": {
     parameters: {
       query?: never;
@@ -2767,6 +2831,8 @@ export interface components {
        * @description Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
        */
       can_demo_neighbours: boolean;
+      /** @description Время визита, предложенное УК; пусто у закрытой заявки */
+      visit?: components["schemas"]["VisitItem"] | null;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -2779,6 +2845,12 @@ export interface components {
       caller_phone?: string | null;
       /** Executor User Id */
       executor_user_id?: number | null;
+      /**
+       * Can Propose Visit
+       * @description Можно предложить время визита: личная открытая заявка с автором в MAX. Новое предложение заменяет действующее
+       * @default false
+       */
+      can_propose_visit: boolean;
     };
     /** AdminRequestListItem */
     AdminRequestListItem: {
@@ -5035,6 +5107,24 @@ export interface components {
      * @enum {string}
      */
     ProposalStatus: "new" | "accepted" | "declined";
+    /** ProposeVisitRequest */
+    ProposeVisitRequest: {
+      /**
+       * Date
+       * Format: date
+       */
+      date: string;
+      /**
+       * Starts
+       * @description Начала окон в местном времени дома, от 1 до 5, все в один день
+       */
+      starts: string[];
+      /**
+       * Minutes
+       * @description Длина каждого окна, минут
+       */
+      minutes: number;
+    };
     /** RateRequestRequest */
     RateRequestRequest: {
       /** Rating */
@@ -5373,6 +5463,8 @@ export interface components {
        * @description Автор открытой заявки в демо-УК может добавить к ней модельных соседей и собрать коллективную заявку
        */
       can_demo_neighbours: boolean;
+      /** @description Время визита, предложенное УК; пусто у закрытой заявки */
+      visit?: components["schemas"]["VisitItem"] | null;
     };
     /**
      * RequestCategory
@@ -5941,6 +6033,38 @@ export interface components {
       auth_date: string;
       /** Hash */
       hash: string;
+    };
+    /** VisitItem */
+    VisitItem: {
+      /** Id */
+      id: number;
+      /**
+       * Date
+       * Format: date
+       */
+      date: string;
+      /** Windows */
+      windows: components["schemas"]["VisitWindowItem"][];
+      /**
+       * Slot Id
+       * @description Окно, выбранное жителем; пусто - житель еще не выбрал
+       */
+      slot_id?: number | null;
+    };
+    /** VisitWindowItem */
+    VisitWindowItem: {
+      /** Id */
+      id: number;
+      /**
+       * Starts At
+       * Format: date-time
+       */
+      starts_at: string;
+      /**
+       * Minutes
+       * @description Длина окна, минут
+       */
+      minutes: number;
     };
     /** VoteRequest */
     VoteRequest: {
@@ -9697,6 +9821,182 @@ export interface operations {
       };
       path: {
         request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  pick_visit_window: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+        slot_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  decline_visit: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+        visit_id: number;
       };
       cookie?: never;
     };
@@ -16483,6 +16783,186 @@ export interface operations {
         "application/json": components["schemas"]["AssignExecutorRequest"];
       };
     };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminRequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  propose_request_visit: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ProposeVisitRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdminRequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  cancel_request_visit: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
     responses: {
       /** @description Successful Response */
       200: {

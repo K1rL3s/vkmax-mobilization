@@ -9,14 +9,19 @@ from maxo.fsm import State
 from maxo.utils.upload_media import BufferedInputFile
 from taskiq import async_shared_broker
 
-from zheka.bot.dialog_data import ExecutorCardData, QuestionData, ReviewData
-from zheka.bot.states import ExecutorCard, Question, Review
+from zheka.bot.dialog_data import (
+    ExecutorCardData,
+    QuestionData,
+    ReviewData,
+    VisitWindowsData,
+)
+from zheka.bot.states import ExecutorCard, Question, Review, VisitWindows
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.bot_requests import save_photos
 from zheka.core import texts
 from zheka.core.enums import NotificationCategory, RequestStatus
 from zheka.core.errors import ZhekaError
-from zheka.core.ids import RequestId, UserId
+from zheka.core.ids import AccessRequestId, RequestId, UserId
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.notifications import NotificationsService
@@ -187,6 +192,31 @@ async def send_question_card(
         Question.card,
         f"question-{request_id}",
         QuestionData(request_id=request_id).to_data(),
+        ShowMode.SEND,
+    )
+
+
+@async_shared_broker.task(task_name=TaskName.SEND_VISIT_CARD.value)
+@inject(patch_module=True)
+async def send_visit_card(
+    request_id: RequestId,
+    visit_id: AccessRequestId,
+    requests_repo: FromDishka[RequestsRepo],
+    users_repo: FromDishka[UsersRepo],
+    notifications_service: FromDishka[NotificationsService],
+    sender: FromDishka[MaxSender],
+) -> None:
+    request = await requests_repo.get(request_id)
+    if request is None or request.author_user_id is None:
+        return
+    await open_card(
+        users_repo,
+        notifications_service,
+        sender,
+        request.author_user_id,
+        VisitWindows.pick,
+        f"visit-{request_id}",
+        VisitWindowsData(request_id=request_id, visit_id=visit_id).to_data(),
         ShowMode.SEND,
     )
 

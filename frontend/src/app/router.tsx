@@ -310,6 +310,11 @@ const router = createBrowserRouter([
                       import("@/features/admin-requests/admin-request-phone.page"),
                   },
                   {
+                    path: Routes.ADMIN_REQUEST_VISIT,
+                    lazy: () =>
+                      import("@/features/admin-requests/admin-request-visit.page"),
+                  },
+                  {
                     path: Routes.ADMIN_REQUEST_GROUP,
                     lazy: () =>
                       import("@/features/admin-requests/admin-request-group.page"),
