@@ -104,6 +104,7 @@ class AdminHouseCardData(ZhekaType):
     chat_bound: bool
     chat_title: str | None
     chairman_name: str | None
+    chat_bot_is_admin: bool
 
 
 class HousesService:
@@ -451,6 +452,7 @@ class HousesService:
             chat_bound=house_id in chats,
             chat_title=chats.get(house_id),
             chairman_name=None if chairman_user is None else chairman_user.name,
+            chat_bot_is_admin=await self._houses.has_admin_bot_chat(house_id),
         )
 
     async def rotate_binding_code(self, org_id: OrgId, house_id: HouseId) -> House:

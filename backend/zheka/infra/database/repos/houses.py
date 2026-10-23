@@ -375,6 +375,17 @@ class HousesRepo(BaseAlchemyRepo):
         stmt = select(func.pg_advisory_xact_lock(ADD_HOUSE_LOCK))
         await self._session.execute(stmt)
 
+    async def has_admin_bot_chat(self, house_id: HouseId) -> bool:
+        stmt = select(
+            exists().where(
+                chats_table.c.house_id == house_id,
+                BOUND_CHAT,
+                chats_table.c.bot_is_admin.is_(True),
+            ),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
 
 def address_matches(query: str) -> list[ColumnElement[bool]]:
     address = func.concat_ws(

@@ -829,3 +829,37 @@ async def test_a_tenant_leaving_closes_their_tenancy(
     [tenancy] = await residents.list_tenancies(own.flat_id)
     assert tenancy.ended_at is not None
     assert tenancy.ended_by == own.user_id
+
+
+@pytest.mark.parametrize(
+    ("status", "bot_is_admin", "shown"),
+    [
+        (ChatStatus.ACTIVE, True, True),
+        (ChatStatus.ACTIVE, False, False),
+        (ChatStatus.REMOVED, True, False),
+    ],
+    ids=["admin", "not_admin", "removed"],
+)
+async def test_the_admin_card_tells_whether_the_bot_runs_the_chat(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    status: ChatStatus,
+    bot_is_admin: bool,
+    shown: bool,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    session.add(
+        Chat(
+            chat_id=MaxChatId(secrets.randbits(48)),
+            house_id=data.house_id,
+            title="Дом",
+            bound_at=datetime.now(UTC),
+            bot_is_admin=bot_is_admin,
+            status=status,
+        ),
+    )
+    await session.flush()
+
+    card = await _make_service(session).admin_card(data.org_id, data.house_id)
+
+    assert AdminHouseCard.of(card, []).chat_bot_is_admin is shown

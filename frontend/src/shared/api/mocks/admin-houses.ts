@@ -283,6 +283,7 @@ export const adminHousesConfigs = [
       chairman_name:
         list.find((resident) => resident.is_chairman)?.name ?? null,
       chat_title: item.chat_bound ? CHAT_TITLES[house.id] : null,
+      chat_bot_is_admin: item.chat_bound,
     } satisfies Schemas["AdminHouseCard"]);
   }),
   endpoint("post", "/admin/houses/:house_id/binding-code", (request) => {

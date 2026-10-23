@@ -2390,6 +2390,12 @@ export interface components {
       chairman_name?: string | null;
       /** Chat Title */
       chat_title?: string | null;
+      /**
+       * Chat Bot Is Admin
+       * @description Бот администратор в привязанном чате. Без этого объявления, карточки и опросы в чат не уходят
+       * @default false
+       */
+      chat_bot_is_admin: boolean;
     };
     /** AdminHouseListItem */
     AdminHouseListItem: {

@@ -7,7 +7,13 @@ import type { components } from "@/shared/api/schema/generated";
 import { orgParams } from "@/shared/model/session";
 import { Card } from "@/shared/ui/card";
 import { ConfirmDialog, useConfirm } from "@/shared/ui/confirm-dialog";
-import { checkIcon, copyIcon, Icon, usersIcon } from "@/shared/ui/icon";
+import {
+  checkIcon,
+  copyIcon,
+  Icon,
+  lockIcon,
+  usersIcon,
+} from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
 import styles from "./chat-section.module.css";
@@ -17,7 +23,11 @@ type HouseCard = components["schemas"]["AdminHouseCard"];
 const Bound = ({ house }: { house: HouseCard }) => (
   <Card>
     <Flex align="center" gap={12}>
-      <IconTile icon={checkIcon} tone="positive" />
+      {house.chat_bot_is_admin ? (
+        <IconTile icon={checkIcon} tone="positive" />
+      ) : (
+        <IconTile icon={lockIcon} tone="negative" />
+      )}
 
       <Flex className={styles.Grow} align="stretch" direction="column" gapY={2}>
         <Typography.Text variant="body-strong" color="primary">
@@ -25,7 +35,9 @@ const Bound = ({ house }: { house: HouseCard }) => (
         </Typography.Text>
 
         <Typography.Text variant="description" color="secondary">
-          Чат привязан: сюда бот присылает объявления УК для этого дома
+          {house.chat_bot_is_admin
+            ? "Чат привязан: сюда бот присылает объявления УК для этого дома"
+            : "У бота нет прав администратора в чате, поэтому объявления УК туда не уходят. Сделайте бота администратором с правом закреплять сообщения"}
         </Typography.Text>
       </Flex>
     </Flex>

@@ -419,6 +419,13 @@ class AdminHouseCard(BaseSchema):
     )
     chairman_name: str | None = None
     chat_title: str | None = None
+    chat_bot_is_admin: bool = Field(
+        default=False,
+        description=(
+            "Бот администратор в привязанном чате. Без этого объявления, карточки "
+            "и опросы в чат не уходят"
+        ),
+    )
 
     @classmethod
     def of(
@@ -451,6 +458,7 @@ class AdminHouseCard(BaseSchema):
             area=house.area,
             chairman_name=card.chairman_name,
             chat_title=card.chat_title,
+            chat_bot_is_admin=card.chat_bot_is_admin,
         )
 
 
