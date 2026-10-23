@@ -1592,6 +1592,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/org-invite:
+    get:
+      tags:
+      - Дома
+      summary: Приглашение УК неподключенного дома
+      description: Текст и ссылка регистрации, выданная на УК дома, для нативного шеринга MAX и письма в УК. 404 - УК дома неизвестна, 409 - дом подключен
+      operationId: get_org_invite
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgInviteResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/houses/{house_id}/flats:
     get:
       tags:
@@ -15694,6 +15767,21 @@ components:
       - revoked_at
       - deeplink
       title: OrgInviteItem
+    OrgInviteResponse:
+      properties:
+        text:
+          type: string
+          title: Text
+          description: Текст приглашения, число ждущих - на момент запроса
+        link:
+          type: string
+          title: Link
+          description: Ссылка бота reg_<код>, код выдан на УК дома
+      type: object
+      required:
+      - text
+      - link
+      title: OrgInviteResponse
     OrgLookupRequest:
       properties:
         inn:
@@ -15706,6 +15794,12 @@ components:
           - type: string
           - type: 'null'
           title: License No
+        deeplink_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Deeplink Code
+          description: Код из ссылки регистрации. Код, выданный на конкретную УК, без ИНН и лицензии находит ее сам, а с чужим ИНН дает 403; общий код без ИНН ничего не находит
       type: object
       title: OrgLookupRequest
     OrgLookupResponse:

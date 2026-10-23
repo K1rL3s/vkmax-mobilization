@@ -4,7 +4,7 @@ import { test } from "node:test";
 process.env.TZ = "Europe/Moscow";
 
 const ukLetterUrl = new URL(
-  "../src/features/home/uk-letter.ts",
+  "../src/features/home/domain/uk-letter.ts",
   import.meta.url,
 ).href;
 

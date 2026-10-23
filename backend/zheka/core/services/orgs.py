@@ -1,7 +1,5 @@
 import re
-import secrets
 from datetime import UTC, datetime, timedelta
-from typing import cast
 from urllib.parse import urlsplit
 
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +16,7 @@ from zheka.core.errors import (
 )
 from zheka.core.ids import OrgId, UserId
 from zheka.core.models import OrgInvite, OrgMember, OrgSettings, Organization, User
+from zheka.core.register_codes import is_shared_register_code, signed_register_org
 from zheka.core.services.demo import DEMO_LOCKED
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HouseFound, is_connected
@@ -34,6 +33,7 @@ MIN_GROUP_THRESHOLD = 2
 MIN_GROUP_WINDOW_HOURS = 1
 MAX_GROUP_WINDOW_HOURS = 168
 INVITE_USED_UP = "Код приглашения истек, отозван или исчерпан"
+OTHER_ORG_CODE = "Ссылка выдана для другой УК"
 
 
 def checked_email(email: str | None) -> str | None:
@@ -96,17 +96,33 @@ class OrgsService:
         self._events = events_service
         self._deeplinks = deeplinks
 
-    async def lookup(self, inn: str | None, license_no: str | None) -> OrgLookupView:
-        if (inn is None) == (license_no is None):
-            raise InvalidRequest("Укажите или ИНН, или номер лицензии")
-
-        org = (
-            await self._orgs.get_by_inn(inn)
-            if inn is not None
-            else await self._orgs.get_by_license(cast("str", license_no))
+    async def lookup(
+        self,
+        inn: str | None,
+        license_no: str | None,
+        deeplink_code: str | None = None,
+    ) -> OrgLookupView:
+        code_org = (
+            None
+            if deeplink_code is None
+            else signed_register_org(self._deeplinks.org_register, deeplink_code)
         )
+        if inn is not None and license_no is not None:
+            raise InvalidRequest("Укажите или ИНН, или номер лицензии")
+        if inn is not None:
+            org = await self._orgs.get_by_inn(inn)
+        elif license_no is not None:
+            org = await self._orgs.get_by_license(license_no)
+        elif code_org is not None:
+            org = await self._orgs.get(code_org)
+        elif deeplink_code is not None:
+            org = None
+        else:
+            raise InvalidRequest("Укажите или ИНН, или номер лицензии")
         if org is None:
             return OrgLookupView(org=None, houses=[])
+        if code_org is not None and org.id != code_org:
+            raise NotEnoughRights(OTHER_ORG_CODE)
 
         houses = await self._houses.list_for_org(org.id)
         return OrgLookupView(
@@ -127,10 +143,9 @@ class OrgsService:
         phone: str,
         address: str,
     ) -> OrgCardView:
-        if not deeplink_code.isascii() or not secrets.compare_digest(
-            deeplink_code,
-            self._deeplinks.org_register,
-        ):
+        secret = self._deeplinks.org_register
+        code_org = signed_register_org(secret, deeplink_code)
+        if code_org is None and not is_shared_register_code(secret, deeplink_code):
             raise NotEnoughRights("Неверный код регистрации организации")
 
         org = await self._orgs.get_by_inn(inn)
@@ -138,6 +153,8 @@ class OrgsService:
             org = await self._orgs.get_by_license(license_no)
         if org is None:
             raise EntityNotFound("Организация не найдена в реестре")
+        if code_org is not None and org.id != code_org:
+            raise NotEnoughRights(OTHER_ORG_CODE)
         if org.registered_at is not None:
             raise InvalidState("Организация уже зарегистрирована")
 

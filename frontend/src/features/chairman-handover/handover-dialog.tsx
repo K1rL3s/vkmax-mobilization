@@ -4,7 +4,7 @@ import { useCopy } from "@siberiacancode/reactuse";
 import { authParams } from "@/shared/api/instance";
 import { errorMessage } from "@/shared/api/errors";
 import { duration, formatDayTime } from "@/shared/lib/format";
-import { getWebApp } from "@/shared/lib/max";
+import { getWebApp, shareToMax } from "@/shared/lib/max";
 import { BottomSheet } from "@/shared/ui/bottom-sheet";
 
 import {
@@ -97,12 +97,10 @@ export const HandoverDialog = ({
                 variant="secondary"
                 disabled={!webApp}
                 onClick={() =>
-                  void webApp
-                    ?.shareMaxContent({
-                      text: "Предлагаю вам стать председателем совета нашего дома",
-                      link: live.deeplink,
-                    })
-                    .catch(() => undefined)
+                  shareToMax({
+                    text: "Предлагаю вам стать председателем совета нашего дома",
+                    link: live.deeplink,
+                  })
                 }
               >
                 Поделиться

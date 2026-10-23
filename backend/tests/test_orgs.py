@@ -1,3 +1,4 @@
+import re
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -41,6 +42,7 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import MaxUserId, UserId
+from zheka.core.register_codes import org_register_code
 from zheka.core.services.demo import DEMO_LOCKED
 from zheka.core.services.events import EventsService
 from zheka.core.services.moderation import SPARE_CHAIRMAN, ModerationService
@@ -266,6 +268,65 @@ async def test_register(
             "+79990000000",
             "новый адрес",
         )
+
+
+async def test_a_code_signed_for_an_org_registers_only_that_org(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    seeded = await make_org_house_flat_user(registered=False)
+    other = await make_org_house_flat_user(registered=False)
+    orgs_service = make_orgs_service(session)
+    org = await OrgsRepo(session).get(seeded.org_id)
+    other_org = await OrgsRepo(session).get(other.org_id)
+    assert org is not None
+    assert other_org is not None
+    code = org_register_code("test-register-code", seeded.org_id)
+    assert len(code) <= 64
+    assert re.fullmatch(r"[A-Za-z0-9_-]+", code)
+
+    assert (await orgs_service.lookup(None, None, "test-register-code")).org is None
+    found = await orgs_service.lookup(None, None, code)
+    assert found.org is not None
+    assert found.org.id == seeded.org_id
+    with pytest.raises(NotEnoughRights, match="другой УК"):
+        await orgs_service.lookup(other_org.inn, None, code)
+    for forged in (
+        org_register_code("another-secret", seeded.org_id),
+        f"{other.org_id}-{code.partition('-')[2]}",
+    ):
+        with pytest.raises(NotEnoughRights, match="Неверный код"):
+            await orgs_service.register(
+                seeded.user_id,
+                forged,
+                org.inn,
+                None,
+                "УК",
+                "+7",
+                "адрес",
+            )
+    with pytest.raises(NotEnoughRights, match="другой УК"):
+        await orgs_service.register(
+            seeded.user_id,
+            code,
+            other_org.inn,
+            None,
+            "УК",
+            "+7",
+            "адрес",
+        )
+
+    card = await orgs_service.register(
+        seeded.user_id,
+        code,
+        org.inn,
+        None,
+        "УК Позванная",
+        "+79990000000",
+        "адрес",
+    )
+    assert card.org.id == seeded.org_id
+    assert card.org.registered_at is not None
 
 
 async def test_moderation(

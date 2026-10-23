@@ -24,7 +24,13 @@ async def lookup_org(
     orgs_service: FromDishka[OrgsService],
     body: OrgLookupRequest,
 ) -> OrgLookupResponse:
-    return OrgLookupResponse.of(await orgs_service.lookup(body.inn, body.license_no))
+    return OrgLookupResponse.of(
+        await orgs_service.lookup(
+            body.inn,
+            body.license_no,
+            body.deeplink_code,
+        ),
+    )
 
 
 @router.post("/orgs", summary="Зарегистрировать УК")

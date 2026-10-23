@@ -410,6 +410,20 @@ def request_card_grouped(request_id: RequestId, category: RequestCategory) -> st
     )
 
 
+def org_invite_text(address: str, waiting: int) -> str:
+    if waiting >= 3:  # noqa: PLR2004
+        residents = "жителю" if waiting % 10 == 1 and waiting % 100 != 11 else "жителям"  # noqa: PLR2004
+        return (
+            f"Жители дома {address} зовут управляющую компанию в Жэку: сервис "
+            f"нужен уже {waiting} {residents}. Подключите дом по ссылке - заявки, "
+            "показания и объявления жителей придут в кабинет УК в MAX"
+        )
+    return (
+        f"Жители дома {address} просят подключить его к Жэке - сервису заявок, "
+        "показаний и объявлений в MAX. Подключить дом можно по ссылке"
+    )
+
+
 def request_share_text(request: Request, house: House, *, joinable: bool) -> str:
     text = (
         f"{CATEGORY_RULES[request.category].emoji} Заявка №{request.id} · "

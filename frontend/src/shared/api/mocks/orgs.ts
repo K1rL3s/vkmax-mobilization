@@ -18,9 +18,22 @@ const REGISTRY = [
   },
 ];
 
+const codeOrg = (code: string | null | undefined) => {
+  const match = /^(\d+)-mock$/.exec(code ?? "");
+  return match ? Number(match[1]) : null;
+};
+
 export const orgsConfigs = [
   endpoint("post", "/orgs/lookup", (request) => {
-    const org = REGISTRY.find((item) => item.inn === request.body.inn);
+    const body = request.body as Schemas["OrgLookupRequest"];
+    const signed = codeOrg(body.deeplink_code);
+    const org = body.inn
+      ? REGISTRY.find((item) => item.inn === body.inn)
+      : REGISTRY.find((item) => item.id === signed);
+
+    if (org && signed !== null && org.id !== signed) {
+      return forbidden("Ссылка выдана для другой УК");
+    }
 
     return ok({
       found: org !== undefined,
@@ -37,12 +50,18 @@ export const orgsConfigs = [
     const body = request.body as Schemas["RegisterOrgRequest"];
     const org = REGISTRY.find((item) => item.inn === body.inn);
 
-    if (body.deeplink_code !== "demo") {
+    const signed = codeOrg(body.deeplink_code);
+
+    if (body.deeplink_code !== "demo" && signed === null) {
       return forbidden("Неверный код регистрации организации");
     }
 
     if (!org) {
       return notFound("Организация не найдена в реестре");
+    }
+
+    if (signed !== null && org.id !== signed) {
+      return forbidden("Ссылка выдана для другой УК");
     }
 
     if (org.registered) {

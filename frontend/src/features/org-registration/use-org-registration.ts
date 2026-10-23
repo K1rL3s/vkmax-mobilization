@@ -23,9 +23,17 @@ const innSchema = z.object({
 
 export const useOrgRegistration = (code: string) => {
   const navigate = useNavigate();
+  const invited = rqClient.useQuery(
+    "post",
+    "/api/orgs/lookup",
+    { params: authParams(), body: { deeplink_code: code } },
+    { retry: false, staleTime: Infinity },
+  );
+  const preset = invited.data?.found ? invited.data : null;
   const form = useForm<z.infer<typeof innSchema>>({
     resolver: zodResolver(innSchema),
     defaultValues: { inn: "" },
+    values: preset?.inn ? { inn: preset.inn } : undefined,
   });
 
   const lookup = rqClient.useMutation("post", "/api/orgs/lookup");
@@ -39,13 +47,25 @@ export const useOrgRegistration = (code: string) => {
     },
   });
 
-  const found = lookup.data?.found ? lookup.data : null;
+  const shownOrg = () => {
+    if (lookup.data?.found) {
+      return lookup.data;
+    }
+    if (lookup.isIdle && !form.formState.isDirty) {
+      return preset;
+    }
+    return null;
+  };
+  const found = shownOrg();
 
   return {
     innField: form.register("inn", { onChange: () => lookup.reset() }),
     innError: form.formState.errors.inn?.message,
     search: form.handleSubmit(({ inn }) =>
-      lookup.mutate({ params: authParams(), body: { inn } }),
+      lookup.mutate({
+        params: authParams(),
+        body: { inn, deeplink_code: code },
+      }),
     ),
     isSearching: lookup.isPending,
     searchError:

@@ -4,7 +4,7 @@ import { useCopy } from "@siberiacancode/reactuse";
 
 import { cn } from "@/shared/lib/css";
 import { formatDayTime } from "@/shared/lib/format";
-import { getWebApp } from "@/shared/lib/max";
+import { getWebApp, shareToMax } from "@/shared/lib/max";
 import { Icon, trashIcon } from "@/shared/ui/icon";
 import { StatusPill, type StatusPillTone } from "@/shared/ui/status-pill";
 
@@ -60,12 +60,10 @@ export const InviteCard = ({
   };
 
   const share = () =>
-    void webApp
-      ?.shareMaxContent({
-        text: `Приглашение в команду управляющей компании, роль: ${ROLE_LABEL[invite.role].toLowerCase()}`,
-        link: invite.deeplink,
-      })
-      .catch(() => undefined);
+    shareToMax({
+      text: `Приглашение в команду управляющей компании, роль: ${ROLE_LABEL[invite.role].toLowerCase()}`,
+      link: invite.deeplink,
+    });
 
   return (
     <Flex

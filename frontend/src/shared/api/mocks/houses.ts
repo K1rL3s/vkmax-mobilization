@@ -17,6 +17,7 @@ import {
   houseFlats,
   houseListItem,
   joinHouseChat,
+  orgInviteLink,
   removeResidency,
   residencySummary,
   residencyForHouse,
@@ -105,6 +106,25 @@ export const housesConfigs = [
     signalDemand(house.id);
 
     return ok({ house_id: house.id, total: demandTotal(house.id) });
+  }),
+  endpoint("get", "/houses/:house_id/org-invite", (request) => {
+    const house = findHouse(Number(request.params.house_id));
+    const link = house ? orgInviteLink(house) : null;
+
+    if (!house || !link) {
+      return notFound("УК дома неизвестна");
+    }
+
+    const total = demandTotal(house.id);
+    const where = houseCard(house).address;
+
+    return ok({
+      link,
+      text:
+        total >= 3
+          ? `Жители дома ${where} зовут управляющую компанию в Жэку: сервис нужен уже ${total} ${total % 10 === 1 && total % 100 !== 11 ? "жителю" : "жителям"}. Подключите дом по ссылке - заявки, показания и объявления жителей придут в кабинет УК в MAX`
+          : `Жители дома ${where} просят подключить его к Жэке - сервису заявок, показаний и объявлений в MAX. Подключить дом можно по ссылке`,
+    });
   }),
   endpoint("post", "/houses/:house_id/chat/join", (request) => {
     const house = findHouse(Number(request.params.house_id));

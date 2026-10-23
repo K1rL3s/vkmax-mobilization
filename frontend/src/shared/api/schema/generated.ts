@@ -303,6 +303,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/houses/{house_id}/org-invite": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Приглашение УК неподключенного дома
+     * @description Текст и ссылка регистрации, выданная на УК дома, для нативного шеринга MAX и письма в УК. 404 - УК дома неизвестна, 409 - дом подключен
+     */
+    get: operations["get_org_invite"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/houses/{house_id}/flats": {
     parameters: {
       query?: never;
@@ -4495,12 +4515,30 @@ export interface components {
       /** Deeplink */
       deeplink: string;
     };
+    /** OrgInviteResponse */
+    OrgInviteResponse: {
+      /**
+       * Text
+       * @description Текст приглашения, число ждущих - на момент запроса
+       */
+      text: string;
+      /**
+       * Link
+       * @description Ссылка бота reg_<код>, код выдан на УК дома
+       */
+      link: string;
+    };
     /** OrgLookupRequest */
     OrgLookupRequest: {
       /** Inn */
       inn?: string | null;
       /** License No */
       license_no?: string | null;
+      /**
+       * Deeplink Code
+       * @description Код из ссылки регистрации. Код, выданный на конкретную УК, без ИНН и лицензии находит ее сам, а с чужим ИНН дает 403; общий код без ИНН ничего не находит
+       */
+      deeplink_code?: string | null;
     };
     /** OrgLookupResponse */
     OrgLookupResponse: {
@@ -7716,6 +7754,93 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DemandSignalResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  get_org_invite: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OrgInviteResponse"];
         };
       };
       /** @description Некорректный запрос */

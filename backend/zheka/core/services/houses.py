@@ -67,6 +67,12 @@ class ResidencyView(ZhekaType):
         return is_connected(self.house, self.org)
 
 
+class OrgInviteView(ZhekaType):
+    house: House
+    org: Organization
+    waiting: int
+
+
 class HouseCardData(ZhekaType):
     house: House
     org: Organization | None
@@ -330,15 +336,29 @@ class HousesService:
         if is_connected(house, await self._org_of(house)):
             raise InvalidState("У дома уже есть подключенная УК")
 
-        await self._houses.add_demand_signal(house_id, user_id)
+        added = await self._houses.add_demand_signal(house_id, user_id)
         total = await self._houses.count_demand(house_id)
-        await self._events.record(
-            EventType.DEMAND_SIGNAL,
-            user_id=user_id,
-            house_id=house_id,
-            total=total,
-        )
+        if added:
+            await self._events.record(
+                EventType.DEMAND_SIGNAL,
+                user_id=user_id,
+                house_id=house_id,
+                total=total,
+            )
         return total
+
+    async def org_invite(self, house_id: HouseId) -> OrgInviteView:
+        house = await self._get_house(house_id)
+        org = await self._org_of(house)
+        if org is None:
+            raise EntityNotFound("УК дома неизвестна")
+        if is_connected(house, org):
+            raise InvalidState("У дома уже есть подключенная УК")
+        return OrgInviteView(
+            house=house,
+            org=org,
+            waiting=await self._houses.count_demand(house_id),
+        )
 
     async def flats(
         self,

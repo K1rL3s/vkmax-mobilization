@@ -2,17 +2,19 @@ import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from maxo.dialogs.test_tools.bot_client import FakeBot
-from maxo.utils.deeplink import create_startapp_link
+from maxo.utils.deeplink import create_start_link, create_startapp_link
 from sqlalchemy import Column, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import OrgHouseFlatUser, add_user
 
 from zheka.api.routes.admin.houses import object_qrs
+from zheka.api.routes.houses import get_org_invite
 from zheka.api.schemas.houses import (
     AdminHouseCard,
     AdminHouseListItem,
@@ -20,11 +22,18 @@ from zheka.api.schemas.houses import (
     HouseCard,
     ResidencySummary,
 )
+from zheka.config import DeeplinksConfig
 from zheka.core.consent import CONSENT_VERSION
-from zheka.core.deeplinks import OBJECT_QR_CATEGORIES
+from zheka.core.deeplinks import (
+    OBJECT_QR_CATEGORIES,
+    Deeplink,
+    DeeplinkKind,
+    parse_deeplink,
+)
 from zheka.core.enums import (
     ChatStatus,
     EventSource,
+    EventType,
     OrgRole,
     RequestCategory,
     RequestChannel,
@@ -39,9 +48,11 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId
+from zheka.core.register_codes import org_register_code
 from zheka.core.services.chats import ChatJoinOffer
 from zheka.core.services.events import EventsService
 from zheka.core.services.houses import HousesService, ResidencyView
+from zheka.core.texts import org_invite_text
 from zheka.infra.database.models import Chat, Flat, House, Request, Resident
 from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.events import EventsRepo
@@ -50,6 +61,7 @@ from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
+from zheka.infra.database.tables.events import events_table
 from zheka.infra.database.tables.residents import demand_signals_table, residents_table
 
 
@@ -200,6 +212,50 @@ async def test_demand_signal_counts_a_user_once(
         [],
     )
     assert (card.demand_count, card.demand_sent, card.org) == (1, True, None)
+
+
+async def test_the_uk_invite_carries_a_link_signed_for_that_uk(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+    fake_bot: FakeBot,
+) -> None:
+    fixture = await make_org_house_flat_user(registered=False)
+    service = _make_service(session)
+    account = cast("Any", SimpleNamespace(user_id=fixture.user_id))
+    deeplinks = DeeplinksConfig(org_register="test-register-code")
+    for _ in range(2):
+        await service.demand_signal(fixture.user_id, fixture.house_id)
+
+    invite = await get_org_invite(
+        fixture.house_id,
+        account,
+        service,
+        fake_bot,
+        deeplinks,
+    )
+
+    code = org_register_code("test-register-code", fixture.org_id)
+    assert invite.link == create_start_link(fake_bot, f"reg_{code}")
+    assert parse_deeplink(f"reg_{code}") == Deeplink(
+        kind=DeeplinkKind.ORG_REGISTER,
+        value=code,
+    )
+    house = await HousesRepo(session).get(fixture.house_id)
+    assert house is not None
+    assert invite.text == org_invite_text(house.address, 1)
+    stmt = select(func.count()).where(events_table.c.type == EventType.DEMAND_SIGNAL)
+    assert (await session.execute(stmt)).scalar_one() == 1
+
+    house.org_id = None
+    await session.flush()
+    with pytest.raises(EntityNotFound):
+        await service.org_invite(fixture.house_id)
+
+
+def test_the_invitation_names_the_crowd_from_three_residents() -> None:
+    assert "просят подключить" in org_invite_text("Казань, Баумана, 12", 2)
+    assert "нужен уже 3 жителям" in org_invite_text("Казань, Баумана, 12", 3)
+    assert "нужен уже 21 жителю" in org_invite_text("Казань, Баумана, 12", 21)
 
 
 async def test_search_by_query_or_by_address_parts(

@@ -357,6 +357,11 @@ class DemandSignalResponse(BaseSchema):
     total: int
 
 
+class OrgInviteResponse(BaseSchema):
+    text: str = Field(description="Текст приглашения, число ждущих - на момент запроса")
+    link: str = Field(description="Ссылка бота reg_<код>, код выдан на УК дома")
+
+
 class AdminHouseListItem(BaseSchema):
     id: HouseId
     address: str

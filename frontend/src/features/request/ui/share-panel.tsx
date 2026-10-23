@@ -2,7 +2,7 @@ import { Button, Flex, Typography } from "@maxhub/max-ui";
 
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
-import { getWebApp, haptic } from "@/shared/lib/max";
+import { haptic, shareToMax } from "@/shared/lib/max";
 
 import type { RequestCard } from "../domain/types";
 
@@ -16,9 +16,7 @@ export const SharePanel = ({ request }: { request: RequestCard }) => {
       onSuccess: ({ posted, share_text, share_link }) => {
         haptic.success();
         if (!posted) {
-          void getWebApp()
-            ?.shareMaxContent({ text: share_text, link: share_link })
-            .catch(() => undefined);
+          shareToMax({ text: share_text, link: share_link });
         }
       },
       onError: haptic.error,

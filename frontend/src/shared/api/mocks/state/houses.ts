@@ -229,5 +229,10 @@ export const isDemandSent = (houseId: number): boolean =>
 export const demandTotal = (houseId: number): number =>
   demand.get(houseId) ?? 0;
 
+export const orgInviteLink = (house: MockHouse): string | null =>
+  !house.is_connected && house.org
+    ? `https://max.ru/t260_hakaton_max_bot?start=reg_${house.org.id}-mock`
+    : null;
+
 export const orgHouses = (orgId: number): MockHouse[] =>
   HOUSES.filter((house) => house.org?.id === orgId);

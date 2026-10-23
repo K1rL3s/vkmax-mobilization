@@ -3,14 +3,13 @@ import { Button, Flex, Textarea, Typography } from "@maxhub/max-ui";
 import { useBoolean, useCopy } from "@siberiacancode/reactuse";
 
 import type { HouseCard } from "@/features/house";
-import { errorMessage } from "@/shared/api/errors";
-import { authParams, rqClient } from "@/shared/api/instance";
 import { Card } from "@/shared/ui/card";
 import { FieldError } from "@/shared/ui/field-error";
 import { alertIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
-import { ukLetter, ukMailto } from "./uk-letter";
+import { ukLetter, ukMailto } from "../domain/uk-letter";
+import { useUkInvite } from "../model/use-uk-invite";
 
 import styles from "./demand-card.module.css";
 
@@ -21,14 +20,14 @@ type DemandCardProps = {
 };
 
 export const DemandCard = ({ house, flat, onSent }: DemandCardProps) => {
-  const demand = rqClient.useMutation("post", "/api/houses/{house_id}/demand", {
-    onSuccess: onSent,
-  });
+  const { org } = house;
+  const invite = useUkInvite(house, onSent);
   const [writing, write] = useBoolean();
   const [text, setText] = useState("");
   const copy = useCopy(2000);
-  const { org } = house;
-  const letter = org ? ukLetter(org, house.address, flat, text) : null;
+  const letter = org
+    ? ukLetter(org, house.address, flat, text, invite.inviteLink)
+    : null;
 
   return (
     <Flex asChild align="stretch" direction="column" gap={12}>
@@ -52,22 +51,29 @@ export const DemandCard = ({ house, flat, onSent }: DemandCardProps) => {
         </Flex>
 
         {house.demand_sent ? (
-          <Typography.Text variant="description" color="secondary">
-            Мы передадим спрос управляющей компании. Сервиса здесь ждут:{" "}
-            {house.demand_count}
-          </Typography.Text>
+          <>
+            <Typography.Text variant="description" color="secondary">
+              {invite.status}
+            </Typography.Text>
+            {invite.resend && (
+              <Button
+                size="medium"
+                variant="secondary"
+                stretched
+                onClick={invite.resend}
+              >
+                Отправить приглашение ещё раз
+              </Button>
+            )}
+          </>
         ) : (
           <Button
             size="medium"
             stretched
-            loading={demand.isPending}
-            onClick={() =>
-              demand.mutate({
-                params: { ...authParams(), path: { house_id: house.id } },
-              })
-            }
+            loading={invite.isCalling}
+            onClick={invite.call}
           >
-            Мне нужен
+            {org ? "Позвать УК в Жэку" : "Хочу Жэку в доме"}
           </Button>
         )}
 
@@ -130,14 +136,7 @@ export const DemandCard = ({ house, flat, onSent }: DemandCardProps) => {
           </>
         )}
 
-        {demand.isError && (
-          <FieldError
-            message={errorMessage(
-              demand.error,
-              "Не получилось отправить. Попробуйте ещё раз",
-            )}
-          />
-        )}
+        {invite.error && <FieldError message={invite.error} />}
       </Card>
     </Flex>
   );

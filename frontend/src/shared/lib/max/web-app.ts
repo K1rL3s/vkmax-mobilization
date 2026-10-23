@@ -1,4 +1,4 @@
-interface MaxShareText {
+export interface MaxShareText {
   text?: string;
   link?: string;
 }

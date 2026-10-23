@@ -7,7 +7,7 @@ import { FieldError } from "@/shared/ui/field-error";
 import { usersIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
-import { useChatJoin } from "./use-chat-join";
+import { useChatJoin } from "../model/use-chat-join";
 
 import styles from "./chat-card.module.css";
 

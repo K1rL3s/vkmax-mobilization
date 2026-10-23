@@ -67,6 +67,14 @@ class OrgCard(BaseSchema):
 class OrgLookupRequest(BaseSchema):
     inn: str | None = None
     license_no: str | None = None
+    deeplink_code: str | None = Field(
+        default=None,
+        description=(
+            "Код из ссылки регистрации. Код, выданный на конкретную УК, без ИНН и "
+            "лицензии находит ее сам, а с чужим ИНН дает 403; общий код без ИНН "
+            "ничего не находит"
+        ),
+    )
 
 
 class OrgLookupResponse(BaseSchema):

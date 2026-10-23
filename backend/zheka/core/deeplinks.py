@@ -47,6 +47,10 @@ APPOINTMENTS_APP_PATH = "/appointments"
 MEETINGS_APP_PATH = "/meetings"
 
 
+def org_register_payload(code: str) -> str:
+    return f"{DeeplinkKind.ORG_REGISTER}_{code}"
+
+
 def org_invite_payload(code: str) -> str:
     return f"{DeeplinkKind.ORG_INVITE}_{code}"
 

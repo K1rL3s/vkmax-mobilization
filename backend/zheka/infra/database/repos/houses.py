@@ -175,7 +175,7 @@ class HousesRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
-    async def add_demand_signal(self, house_id: HouseId, user_id: UserId) -> None:
+    async def add_demand_signal(self, house_id: HouseId, user_id: UserId) -> bool:
         stmt = (
             pg_insert(DemandSignal)
             .values(house_id=house_id, user_id=user_id)
@@ -185,8 +185,10 @@ class HousesRepo(BaseAlchemyRepo):
                     demand_signals_table.c.user_id,
                 ],
             )
+            .returning(demand_signals_table.c.user_id)
         )
-        await self._session.execute(stmt)
+        result = await self._session.execute(stmt)
+        return result.first() is not None
 
     async def has_demand_signal(self, house_id: HouseId, user_id: UserId) -> bool:
         stmt = select(

@@ -20,15 +20,19 @@ from zheka.api.schemas.houses import (
     HouseCard,
     HouseListItem,
     LinkHouseRequest,
+    OrgInviteResponse,
     ResidencySummary,
 )
-from zheka.core.deeplinks import chairman_payload
+from zheka.config import DeeplinksConfig
+from zheka.core.deeplinks import chairman_payload, org_register_payload
 from zheka.core.ids import HouseId, ResidentId
+from zheka.core.register_codes import org_register_code
 from zheka.core.services.chairman import ChairmanService
 from zheka.core.services.chats import ChatsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.house_point import HousePointService
 from zheka.core.services.houses import HousesService
+from zheka.core.texts import org_invite_text
 
 router = APIRouter(tags=["Дома"], route_class=DishkaRoute)
 
@@ -180,6 +184,29 @@ async def create_demand_signal(
 ) -> DemandSignalResponse:
     total = await houses_service.demand_signal(current_account.user_id, house_id)
     return DemandSignalResponse(house_id=house_id, total=total)
+
+
+@router.get(
+    "/houses/{house_id}/org-invite",
+    summary="Приглашение УК неподключенного дома",
+    description=(
+        "Текст и ссылка регистрации, выданная на УК дома, для нативного шеринга "
+        "MAX и письма в УК. 404 - УК дома неизвестна, 409 - дом подключен"
+    ),
+)
+async def get_org_invite(
+    house_id: HouseId,
+    current_account: RequireConsentDep,  # noqa: ARG001
+    houses_service: FromDishka[HousesService],
+    bot: FromDishka[Bot],
+    deeplinks: FromDishka[DeeplinksConfig],
+) -> OrgInviteResponse:
+    invite = await houses_service.org_invite(house_id)
+    code = org_register_code(deeplinks.org_register, invite.org.id)
+    return OrgInviteResponse(
+        text=org_invite_text(invite.house.address, invite.waiting),
+        link=create_start_link(bot, org_register_payload(code)),
+    )
 
 
 @router.get("/houses/{house_id}/flats", summary="Квартиры дома")

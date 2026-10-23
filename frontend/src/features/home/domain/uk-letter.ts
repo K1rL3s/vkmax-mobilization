@@ -13,9 +13,9 @@ export const ukLetter = (
   address: string,
   flat: string | null | undefined,
   text: string,
-): UkLetter => ({
-  subject: `Обращение жителя дома ${address}`,
-  body: [
+  inviteLink: string | undefined,
+): UkLetter => {
+  const body = [
     `Кому: ${[org.name, org.address].filter(Boolean).join(", ")}`,
     `От: [ФИО], ${address}, кв. ${flat || "[номер]"}, тел. [телефон]`,
     "",
@@ -24,8 +24,15 @@ export const ukLetter = (
     "Прошу ответить в срок не более 10 рабочих дней тем же способом, которым отправлено обращение (ПП РФ № 416, п. 35, 36).",
     "",
     `Дата: ${docDate.format(Date.now())}`,
-  ].join("\n"),
-});
+  ].join("\n");
+
+  return {
+    subject: `Обращение жителя дома ${address}`,
+    body: inviteLink
+      ? `${body}\n\nP. S. Подключите дом к Жэке - заявки жителей будут приходить в кабинет УК в MAX: ${inviteLink}`
+      : body,
+  };
+};
 
 export const ukMailto = (email: string, letter: UkLetter) =>
   `mailto:${email}?subject=${encodeURIComponent(letter.subject)}&body=${encodeURIComponent(letter.body)}`;
