@@ -73,6 +73,14 @@ PINS_ERASED = (
     "🗑 Сообщение со списком закрепленных удалили, и я очистил список. "
     "Закрепить заново можно командой /pin в ответ на нужное сообщение"
 )
+ADMIN_BACK = (
+    "✅ Мне вернули права администратора: снова присылаю сюда объявления УК и "
+    "веду список закрепленных"
+)
+ADMIN_BACK_WITHOUT_PINS = (
+    "✅ Мне вернули права администратора: снова присылаю сюда объявления УК. "
+    "Права закреплять сообщения нет, поэтому список закрепленных вести не смогу"
+)
 
 
 class MessageRef(ZhekaType):
@@ -192,6 +200,7 @@ class ChatsService:
             raise InvalidState(CHAT_NOT_BOUND)
         chat, house_id = bound
         granted = rights.is_admin and not chat.bot_is_admin
+        lost = chat.bot_is_admin and not rights.is_admin
         could_pin = chat.bot_can_pin
         await self._chats.set_admin(chat, rights)
         if granted:
@@ -201,14 +210,21 @@ class ChatsService:
                 chat_id=chat_id,
                 house_id=house_id,
             )
+        if granted and not chat.bot_welcomed:
+            await self._chats.set_welcomed(chat)
             self._notifications.welcome_chat(
                 chat_id,
                 house_id,
                 can_pin=chat.bot_can_pin,
             )
+        elif granted:
+            text = ADMIN_BACK if chat.bot_can_pin else ADMIN_BACK_WITHOUT_PINS
+            self._notifications.notify_chats([chat_id], text)
         elif chat.bot_can_pin != could_pin:
             text = PINS_ALLOWED if chat.bot_can_pin else PINS_REVOKED
             self._notifications.notify_chats([chat_id], text)
+        if lost:
+            self._notifications.ask_chat_rights(chat_id)
         return chat
 
     async def welcome_member(

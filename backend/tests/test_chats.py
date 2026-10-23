@@ -30,6 +30,8 @@ from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import MaxChatId, MaxUserId
 from zheka.core.models import BotRights
 from zheka.core.services.chats import (
+    ADMIN_BACK,
+    ADMIN_BACK_WITHOUT_PINS,
     ALREADY_JOINED,
     CHAT_TAKEN,
     MESSAGE_TEXT_LIMIT,
@@ -324,6 +326,7 @@ async def test_a_re_add_clears_the_binding_and_drops_the_list_without_events(
     assert chat.bound_at is None
     assert chat.bot_is_admin is False
     assert chat.bot_can_pin is False
+    assert chat.bot_welcomed is False
     assert chat.pins_mid is None
     assert await _listed(session, chat_id) == []
     assert await _pin_events(session, chat_id, EventType.CHAT_UNPINNED) == []
@@ -855,3 +858,34 @@ async def test_the_chat_hears_when_the_bot_gains_or_loses_the_pin_right(
     texts = [task["text"] for task in broker.enqueued(TaskName.BROADCAST_TO_CHATS)]
     assert texts == [PINS_ALLOWED, PINS_REVOKED, PINS_ALLOWED, PINS_REVOKED]
     assert (await _chat(session, chat_id)).bot_can_pin is False
+    assert broker.enqueued(TaskName.ASK_CHAT_RIGHTS) == [{"chat_id": chat_id}]
+
+
+@pytest.mark.parametrize(
+    ("rights", "text"),
+    [
+        (ADMIN, ADMIN_BACK),
+        (BotRights(is_admin=True, can_pin=False), ADMIN_BACK_WITHOUT_PINS),
+    ],
+    ids=["pin", "no_pin"],
+)
+async def test_a_repeat_promotion_is_told_briefly_instead_of_the_welcome(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    rights: BotRights,
+    text: str,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _added(session)
+    service = _service(session, publisher)
+    await service.bind(data.user_id, chat_id, data.house_id)
+
+    for step in (ADMIN, NOT_ADMIN, rights):
+        await service.set_admin(chat_id, step)
+
+    await publisher.flush()
+    assert len(broker.enqueued(TaskName.WELCOME_CHAT)) == 1
+    texts = [task["text"] for task in broker.enqueued(TaskName.BROADCAST_TO_CHATS)]
+    assert texts == [PINS_REVOKED, text]

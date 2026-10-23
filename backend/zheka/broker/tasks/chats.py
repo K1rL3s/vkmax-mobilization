@@ -18,7 +18,7 @@ from zheka.bot.dialog_data import ChatBindingData
 from zheka.bot.states import ChatBinding
 from zheka.broker.task_names import TaskName
 from zheka.core.deeplinks import house_category_payload, house_payload
-from zheka.core.enums import ChatCardKind
+from zheka.core.enums import ChatCardKind, ChatStatus
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.models import ChatCard
@@ -160,7 +160,6 @@ async def join_house_chat(
     user_id: UserId,
     bot: FromDishka[Bot],
     chats_service: FromDishka[ChatsService],
-    users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
 ) -> None:
     joining = await chats_service.joining(chat_id, user_id)
@@ -176,7 +175,7 @@ async def join_house_chat(
             added=outcome is ChatJoinOutcome.ADDED,
         )
     elif outcome is ChatJoinOutcome.FAILED:
-        await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+        await recheck_chat_rights(chat_id, bot, chats_service)
     text = _JOIN_TEXTS[outcome] if joined or not joining.link else JOIN_BY_LINK_TEXT
     await sender.send_message(
         text.format(title=escape(joining.title)),
@@ -195,7 +194,6 @@ async def sync_chat_pins(
     bot: FromDishka[Bot],
     chats_service: FromDishka[ChatsService],
     chats_repo: FromDishka[ChatsRepo],
-    users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
     resend: bool = False,
 ) -> None:
@@ -209,7 +207,7 @@ async def sync_chat_pins(
             return
         await chats_repo.set_pins_mid(chat, None)
         if not await sender.delete_message(chat_id, mid):
-            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+            await recheck_chat_rights(chat_id, bot, chats_service)
         return
 
     text = pins_text(chat_id, listed.pins)
@@ -231,14 +229,14 @@ async def sync_chat_pins(
             keyboard=keyboard,
         )
         if sent is None:
-            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+            await recheck_chat_rights(chat_id, bot, chats_service)
             return
         old, mid = mid, sent.message.body.mid
         await chats_repo.set_pins_mid(chat, mid)
         if old is not None:
             await sender.delete_message(chat_id, old)
     if not await sender.pin_message(chat_id, mid, notify=notify):
-        await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+        await recheck_chat_rights(chat_id, bot, chats_service)
 
 
 @async_shared_broker.task(task_name=TaskName.SYNC_CHAT_CARD.value)
@@ -251,7 +249,6 @@ async def sync_chat_card(
     cards: FromDishka[ChatCardsService],
     chats_service: FromDishka[ChatsService],
     chats_repo: FromDishka[ChatsRepo],
-    users_repo: FromDishka[UsersRepo],
     sender: FromDishka[MaxSender],
 ) -> None:
     chats = await chats_repo.lock_for_card(kind, ref_id)
@@ -280,7 +277,7 @@ async def sync_chat_card(
         else:
             continue
         if not done:
-            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+            await recheck_chat_rights(chat_id, bot, chats_service)
 
 
 def _card_keyboard(bot: Bot, view: ChatCardView) -> list[Sequence[InlineButtons]]:
@@ -307,20 +304,35 @@ async def recheck_chat_rights(
     chat_id: MaxChatId,
     bot: Bot,
     chats_service: ChatsService,
-    users_repo: UsersRepo,
-    sender: MaxSender,
 ) -> None:
     try:
-        rights = await bot_rights(bot, chat_id)
-        chat = await chats_service.set_admin(chat_id, rights)
+        await chats_service.set_admin(chat_id, await bot_rights(bot, chat_id))
     except (MaxBotApiError, MaxBotNetworkError, ZhekaError):
         logger.exception("Права бота в чате %s не перепроверены", chat_id)
+
+
+def _join_keyboard(bot: Bot, house_id: HouseId) -> list[list[LinkButton]]:
+    url = create_start_link(bot, house_payload(house_id))
+    return [[LinkButton(text=JOIN_HOUSE, url=url)]]
+
+
+@async_shared_broker.task(task_name=TaskName.ASK_CHAT_RIGHTS.value)
+@inject(patch_module=True)
+async def ask_chat_rights(
+    chat_id: MaxChatId,
+    chats_repo: FromDishka[ChatsRepo],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> None:
+    chat = await chats_repo.get(chat_id)
+    if (
+        chat is None
+        or chat.bot_is_admin
+        or chat.bound_by is None
+        or chat.status != ChatStatus.ACTIVE
+    ):
         return
-    binder = (
-        None
-        if rights.is_admin or chat.bound_by is None
-        else await users_repo.get_by_id(chat.bound_by)
-    )
+    binder = await users_repo.get_by_id(chat.bound_by)
     if binder is None:
         return
     await sender.start_dialog(
@@ -331,8 +343,3 @@ async def recheck_chat_rights(
         stack_id=chat_stack(chat_id),
         show_mode=ShowMode.SEND,
     )
-
-
-def _join_keyboard(bot: Bot, house_id: HouseId) -> list[list[LinkButton]]:
-    url = create_start_link(bot, house_payload(house_id))
-    return [[LinkButton(text=JOIN_HOUSE, url=url)]]

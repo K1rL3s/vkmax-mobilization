@@ -13,6 +13,7 @@ class Chat(ZhekaMutableType):
     bound_by: UserId | None = None
     bot_is_admin: bool = False
     bot_can_pin: bool = False
+    bot_welcomed: bool = False
     bound_at: datetime | None = None
     status: str
     pins_mid: str | None = None

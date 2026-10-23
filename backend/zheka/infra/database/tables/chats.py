@@ -37,6 +37,13 @@ chats_table = Table(
         server_default=false(),
         nullable=False,
     ),
+    Column(
+        "bot_welcomed",
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
+    ),
     Column("bound_at", DateTime(timezone=True), nullable=True),
     Column("status", String(16), nullable=False),
     Column("pins_mid", String, nullable=True),

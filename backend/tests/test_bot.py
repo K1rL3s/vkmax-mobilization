@@ -210,6 +210,7 @@ from zheka.broker.tasks.chats import (
     OPEN_CHAT,
     PINS_HERE,
     WELCOME_MEMBER_TEXT,
+    ask_chat_rights,
     join_house_chat,
     on_bot_added,
     sync_chat_card,
@@ -1557,6 +1558,7 @@ async def _broadcast(broker: InMemoryBroker, chat_id: MaxChatId) -> int:
 async def test_a_failed_chat_send_asks_the_binder_only_for_lost_rights(
     client: BotClient,
     task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
     chat_api: _ChatApi,
     bot_session: AsyncSession,
     shows: list[Show],
@@ -1566,6 +1568,7 @@ async def test_a_failed_chat_send_asks_the_binder_only_for_lost_rights(
     chat_id = await _bound_chat(bot_session, client)
 
     assert await _broadcast(task_broker, chat_id) == 0
+    await _ask_rights(task_broker, bot_broker, chat_id)
 
     bot_session.expire_all()
     chat = await ChatsRepo(bot_session).get(chat_id)
@@ -2469,6 +2472,7 @@ async def test_a_list_the_bot_cannot_post_asks_the_binder_for_the_rights(
     task_broker: InMemoryBroker,
     pin_api: _PinApi,  # noqa: ARG001
     chat_api: _ChatApi,  # noqa: ARG001
+    bot_broker: RecordingBroker,
     fake_bot: FakeBot,
     monkeypatch: pytest.MonkeyPatch,
     bot_session: AsyncSession,
@@ -2481,6 +2485,7 @@ async def test_a_list_the_bot_cannot_post_asks_the_binder_for_the_rights(
     chat_id, _ = await _listed_chat(bot_session, client, *texts, pins_mid=pins_mid)
 
     await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
+    await _ask_rights(task_broker, bot_broker, chat_id)
 
     _, _, recipient, notify = _shown(shows, RIGHTS_TEXT.format(title=CHAT_TITLE))
     assert recipient == client.chat.chat_id
@@ -6580,3 +6585,49 @@ async def test_the_welcome_says_whether_the_bot_keeps_the_pins(
     [text] = notices.texts
     assert text is not None
     assert text.endswith(f"\n\n{line}")
+
+
+async def _ask_rights(
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
+    chat_id: MaxChatId,
+) -> None:
+    for kwargs in bot_broker.enqueued(TaskName.ASK_CHAT_RIGHTS):
+        if kwargs["chat_id"] == chat_id:
+            await _run(task_broker, ask_chat_rights, **kwargs)
+
+
+async def test_a_demoted_bot_asks_the_binder_once_for_the_rights(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_broker: RecordingBroker,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+
+    for _ in range(2):
+        await _rights_changed(client, chat_id, is_admin=False, permissions=None)
+    await _ask_rights(task_broker, bot_broker, chat_id)
+
+    asks = bot_broker.enqueued(TaskName.ASK_CHAT_RIGHTS)
+    assert [ask for ask in asks if ask["chat_id"] == chat_id] == [{"chat_id": chat_id}]
+    rights = RIGHTS_TEXT.format(title=CHAT_TITLE)
+    asked = [
+        (mode, to, sound) for mode, text, to, sound in shows if rights in (text or "")
+    ]
+    assert asked == [(ShowMode.SEND, client.chat.chat_id, True)]
+
+
+async def test_the_binder_is_not_asked_once_the_bot_is_admin_again(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    shows: list[Show],
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+
+    await _run(task_broker, ask_chat_rights, chat_id=chat_id)
+
+    rights = RIGHTS_TEXT.format(title=CHAT_TITLE)
+    assert [text for _, text, _, _ in shows if rights in (text or "")] == []

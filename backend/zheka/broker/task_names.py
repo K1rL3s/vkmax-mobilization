@@ -33,3 +33,4 @@ class TaskName(StrEnum):
     SEND_QUESTION_CARD = "send_question_card"
     SEND_GJI_PDF = "send_gji_pdf"
     SEND_REGISTER_PDF = "send_register_pdf"
+    ASK_CHAT_RIGHTS = "ask_chat_rights"

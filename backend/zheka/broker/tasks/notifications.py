@@ -136,7 +136,6 @@ async def broadcast_to_chats(
     sender: FromDishka[MaxSender],
     bot: FromDishka[Bot],
     chats_service: FromDishka[ChatsService],
-    users_repo: FromDishka[UsersRepo],
     announcements_repo: FromDishka[AnnouncementsRepo],
     chats_repo: FromDishka[ChatsRepo],
     app_button: str | None = None,
@@ -166,7 +165,7 @@ async def broadcast_to_chats(
             reply_to=None if card is None else card.mid,
         )
         if result is None:
-            await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+            await recheck_chat_rights(chat_id, bot, chats_service)
         else:
             sent += 1
 

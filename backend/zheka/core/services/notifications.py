@@ -238,3 +238,6 @@ class NotificationsService:
             house_id=house_id,
             unmarked_only=unmarked_only,
         )
+
+    def ask_chat_rights(self, chat_id: MaxChatId) -> None:
+        self._publisher.publish(TaskName.ASK_CHAT_RIGHTS, chat_id=chat_id)

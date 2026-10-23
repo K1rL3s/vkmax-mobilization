@@ -57,6 +57,7 @@ class ChatsRepo(BaseAlchemyRepo):
             "status": ChatStatus.ACTIVE,
             "bot_is_admin": False,
             "bot_can_pin": False,
+            "bot_welcomed": False,
             "house_id": None,
             "bound_by": None,
             "bound_at": None,
@@ -212,3 +213,7 @@ class ChatsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+    async def set_welcomed(self, chat: Chat) -> None:
+        chat.bot_welcomed = True
+        await self._session.flush()
