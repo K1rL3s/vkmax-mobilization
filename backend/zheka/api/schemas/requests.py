@@ -83,6 +83,13 @@ class RequestCategoryItem(BaseSchema):
         default=None,
         description="Где проблема у категории; пусто - житель выбирает сам",
     )
+    owner_zone: str | None = Field(
+        default=None,
+        description=(
+            "Подсказка, где кончается ответственность УК, для проблемы в квартире; "
+            "пусто - подсказки нет"
+        ),
+    )
 
     @classmethod
     def of(cls, category: RequestCategory, rule: CategoryRule) -> Self:
@@ -95,6 +102,7 @@ class RequestCategoryItem(BaseSchema):
             deadline_basis=rule.basis,
             pp290_refs=rule.pp290_refs,
             place=CATEGORY_PLACES.get(category),
+            owner_zone=rule.owner_zone,
         )
 
 

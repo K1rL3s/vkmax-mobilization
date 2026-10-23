@@ -78,6 +78,7 @@ class CategoryRule(ZhekaType):
     basis: str | None = None
     rejection_needs_photo: bool = True
     pp290_refs: tuple[str, ...] = ()
+    owner_zone: str | None = None
 
     @property
     def caption(self) -> str:
@@ -127,6 +128,11 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
             "заявки, устранить - не более 3 суток с даты аварии"
         ),
         pp290_refs=("п. 18", "п. 28"),
+        owner_zone=(
+            "Если течёт после первого крана на отводе от стояка, это зона "
+            "собственника (ПП 491, п. 5). УК может помочь платно, аварийная "
+            "служба перекроет стояк"
+        ),
     ),
     RequestCategory.ELEVATOR: CategoryRule(
         label="Лифт",
@@ -174,6 +180,10 @@ CATEGORY_RULES: Mapping[RequestCategory, CategoryRule] = {
             "источнике питания, 2 часа при двух"
         ),
         pp290_refs=("п. 20", "п. 28"),
+        owner_zone=(
+            "Если не работает после автомата в квартирном щитке, это зона "
+            "собственника (ПП 491, п. 7). УК может помочь платно"
+        ),
     ),
     RequestCategory.ENTRANCE: CategoryRule(
         label="Подъезд",

@@ -17106,6 +17106,12 @@ components:
           - $ref: '#/components/schemas/RequestPlace'
           - type: 'null'
           description: Где проблема у категории; пусто - житель выбирает сам
+        owner_zone:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Zone
+          description: Подсказка, где кончается ответственность УК, для проблемы в квартире; пусто - подсказки нет
       type: object
       required:
       - category

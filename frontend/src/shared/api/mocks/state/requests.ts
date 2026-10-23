@@ -253,6 +253,7 @@ const CATEGORY_RULES: Record<
     react?: string;
     basis?: string;
     pp290?: string[];
+    ownerZone?: string;
   }
 > = {
   leak: {
@@ -264,6 +265,8 @@ const CATEGORY_RULES: Record<
     basis:
       "ПП РФ № 416, п. 13: локализовать аварию - за 30 минут с регистрации заявки, устранить - не более 3 суток с даты аварии",
     pp290: ["п. 18", "п. 28"],
+    ownerZone:
+      "Если течёт после первого крана на отводе от стояка, это зона собственника (ПП 491, п. 5). УК может помочь платно, аварийная служба перекроет стояк",
   },
   elevator: {
     label: "Лифт",
@@ -305,6 +308,8 @@ const CATEGORY_RULES: Record<
     basis:
       "ПП РФ № 354, прил. 1, п. 9: допустимый перерыв - 24 часа при одном источнике питания, 2 часа при двух",
     pp290: ["п. 20", "п. 28"],
+    ownerZone:
+      "Если не работает после автомата в квартирном щитке, это зона собственника (ПП 491, п. 7). УК может помочь платно",
   },
   entrance: {
     label: "Подъезд",
@@ -604,6 +609,7 @@ export const requestCategories = (): Schemas["RequestCategoryItem"][] =>
     deadline_basis: rule.basis ?? null,
     pp290_refs: rule.pp290 ?? [],
     place: FIXED_PLACES[category as Schemas["RequestCategory"]] ?? null,
+    owner_zone: rule.ownerZone ?? null,
   }));
 
 export const categoryDeadline = (category: Schemas["RequestCategory"]) =>

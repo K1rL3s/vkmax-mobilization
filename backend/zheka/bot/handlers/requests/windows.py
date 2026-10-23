@@ -111,6 +111,7 @@ request_dialog = Dialog(
         Multi(
             Const(VOICE_FAILED, when=F["voice_failed"]),
             Format(WORKS_TEXT, when=F["works_until"]),
+            Format("ℹ️ {owner_zone}", when=F["owner_zone"]),
             Const(DESCRIPTION_TEXT),
             Format(DESCRIPTION_ATTACHMENTS_TEXT, when=F["attachments"]),
             Format("🎬 Видео: {videos}", when=F["videos"]),
@@ -129,6 +130,7 @@ request_dialog = Dialog(
     ),
     Window(
         Format("{error}", when=F["error"]),
+        Format("ℹ️ {owner_zone}\n", when=F["owner_zone"]),
         Format(ATTACHMENTS_TEXT),
         Format("🎬 Видео: {videos}", when=F["videos"]),
         MessageInput(

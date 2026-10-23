@@ -3440,7 +3440,7 @@ async def test_a_photo_at_the_description_step_is_kept_and_its_caption_describes
     await _resident_of_a_connected_house(bot_session, client, message_manager)
     await client.click(message_manager.last_message(), NEW_REQUEST)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
-    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
 
     await _send_photo(client, None)
     assert _text(message_manager) == (
@@ -3695,7 +3695,7 @@ async def test_a_free_text_quotes_the_problem_and_skips_the_description(
         description=PROBLEM,
     )
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
-    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
     assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), SEND)
@@ -3721,7 +3721,7 @@ async def test_a_photo_with_a_caption_starts_a_request_with_the_photo(
         description=PROBLEM,
     )
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
-    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
     assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=1)
 
 
@@ -4391,7 +4391,7 @@ async def _on_description(
     await client.send("/start")
     await client.click(message_manager.last_message(), NEW_REQUEST)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
-    await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
     assert DESCRIPTION_TEXT in _text(message_manager)
 
 
@@ -5777,7 +5777,32 @@ async def test_the_description_window_warns_about_planned_works_of_the_category(
     await client.click(message_manager.last_message(), BACK_BUTTON)
     await client.click(message_manager.last_message(), BACK_BUTTON)
     await client.click(message_manager.last_message(), FIRST_CATEGORY)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
+    assert _text(message_manager) == DESCRIPTION_TEXT
+
+
+@pytest.mark.parametrize(
+    "category",
+    [RequestCategory.LEAK, RequestCategory.ELECTRICITY],
+)
+async def test_a_flat_problem_shows_where_the_owner_zone_starts(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    category: RequestCategory,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    rule = CATEGORY_RULES[category]
+    caption = InlineButtonTextLocator(rule.caption)
+
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), caption)
     await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
+    assert _text(message_manager) == f"ℹ️ {rule.owner_zone}\n\n{DESCRIPTION_TEXT}"
+
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    await client.click(message_manager.last_message(), IN_HOUSE_BUTTON)
     assert _text(message_manager) == DESCRIPTION_TEXT
 
 
@@ -6000,7 +6025,10 @@ async def test_a_free_text_draft_asks_where_then_goes_to_the_attachments(
 
     assert _text(message_manager) == PLACE_TEXT
     await client.click(message_manager.last_message(), IN_FLAT_BUTTON)
-    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
+    assert _text(message_manager) == (
+        f"ℹ️ {CATEGORY_RULES[RequestCategory.LEAK].owner_zone}\n\n"
+        f"{ATTACHMENTS_TEXT.format(attachments=0)}"
+    )
     await client.click(message_manager.last_message(), NEXT)
     await client.click(message_manager.last_message(), SEND)
 

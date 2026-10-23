@@ -1,19 +1,25 @@
 import { Flex, Typography } from "@maxhub/max-ui";
 
 import type { EmergencyContact } from "@/features/emergency";
-import { ZONE_LABEL, type RequestCategoryItem } from "@/features/request";
+import {
+  ZONE_LABEL,
+  type RequestCategoryItem,
+  type RequestPlace,
+} from "@/features/request";
 import { alertIcon, buildingIcon, clockIcon, Icon } from "@/shared/ui/icon";
 
 import styles from "./category-info.module.css";
 
 type CategoryInfoProps = {
   category: RequestCategoryItem;
+  place: RequestPlace | null;
   orgName: string | null;
   emergency: EmergencyContact | null;
 };
 
 export const CategoryInfo = ({
   category,
+  place,
   orgName,
   emergency,
 }: CategoryInfoProps) => {
@@ -33,6 +39,11 @@ export const CategoryInfo = ({
           <Typography.Text variant="body-strong" color="primary">
             {responsible}
           </Typography.Text>
+          {place === "flat" && category.owner_zone && (
+            <Typography.Text variant="description" color="secondary">
+              {category.owner_zone}
+            </Typography.Text>
+          )}
         </Flex>
       </Flex>
 

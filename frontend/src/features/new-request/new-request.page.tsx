@@ -146,6 +146,7 @@ const NewRequestPage = () => {
         {selected && (
           <CategoryInfo
             category={selected}
+            place={form.place}
             orgName={house.data?.org?.name ?? null}
             emergency={emergencyContact(house.data?.org)}
           />

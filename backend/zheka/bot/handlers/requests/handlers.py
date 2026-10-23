@@ -90,9 +90,13 @@ async def get_category(
 
 async def get_draft(dialog_manager: DialogManager, **_: Any) -> dict[str, Any]:
     data = NewRequestData.load(dialog_manager)
+    rule = None if data.category is None else CATEGORY_RULES[data.category]
     return {
-        "category": (
-            None if data.category is None else CATEGORY_RULES[data.category].caption
+        "category": None if rule is None else rule.caption,
+        "owner_zone": (
+            rule.owner_zone
+            if rule is not None and data.place is RequestPlace.FLAT
+            else None
         ),
         "description": escape(data.description),
         "attachments": len(data.photos) + len(data.videos),

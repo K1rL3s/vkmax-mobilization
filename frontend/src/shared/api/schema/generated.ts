@@ -5381,6 +5381,11 @@ export interface components {
       pp290_refs: string[];
       /** @description Где проблема у категории; пусто - житель выбирает сам */
       place?: components["schemas"]["RequestPlace"] | null;
+      /**
+       * Owner Zone
+       * @description Подсказка, где кончается ответственность УК, для проблемы в квартире; пусто - подсказки нет
+       */
+      owner_zone?: string | null;
     };
     /**
      * RequestChannel
