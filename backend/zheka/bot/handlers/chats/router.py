@@ -1,8 +1,10 @@
+from collections.abc import Awaitable, Callable
+
 from dishka import FromDishka
 from magic_filter import F
 from maxo import Router
 from maxo.enums import ChatType, MessageLinkType
-from maxo.integrations.magic_filter import MagicData
+from maxo.integrations.magic_filter import MagicData, MagicFilter
 from maxo.omit import is_defined
 from maxo.routing.filters import Command
 from maxo.routing.filters.command import CommandObject
@@ -23,7 +25,7 @@ from zheka.broker.task_names import TaskName
 from zheka.core.errors import EntityNotFound, ZhekaError
 from zheka.core.ids import MaxChatId, MaxUserId, PollId, PollOptionId
 from zheka.core.models import User
-from zheka.core.services.chats import ChatsService, MessageRef
+from zheka.core.services.chats import ChatsService, MessageRef, PinRightsMissing
 from zheka.core.services.polls import PollsService
 from zheka.infra.max.sender import bot_rights, rights_of
 
@@ -86,24 +88,29 @@ async def user_removed_handler(
 
 
 IN_CHAT = MagicData(F.update_context.chat_type == ChatType.CHAT)
+OWN_TEXT = MagicFilter(F.message.body.text)
 
 
-@router.message_created(Command("pin"), IN_CHAT)
+@router.message_created(Command("pin"), IN_CHAT, OWN_TEXT)
 async def pin_handler(
     update: MessageCreated,
     command: CommandObject,
     chats_service: FromDishka[ChatsService],
     user: User | None = None,
 ) -> None:
-    await chats_service.pin(
-        None if user is None else user.id,
-        MaxChatId(update.message.recipient.unsafe_chat_id),
-        _replied(update),
-        command.args,
+    await _with_fresh_rights(
+        update,
+        chats_service,
+        lambda: chats_service.pin(
+            None if user is None else user.id,
+            MaxChatId(update.message.recipient.unsafe_chat_id),
+            _replied(update),
+            command.args,
+        ),
     )
 
 
-@router.message_created(Command("unpin"), IN_CHAT)
+@router.message_created(Command("unpin"), IN_CHAT, OWN_TEXT)
 async def unpin_handler(
     update: MessageCreated,
     command: CommandObject,
@@ -111,11 +118,15 @@ async def unpin_handler(
     user: User | None = None,
 ) -> None:
     args = (command.args or "").strip()
-    unpinned = await chats_service.unpin(
-        None if user is None else user.id,
-        MaxChatId(update.message.recipient.unsafe_chat_id),
-        _replied(update),
-        int(args) if args.isdecimal() else None,
+    unpinned = await _with_fresh_rights(
+        update,
+        chats_service,
+        lambda: chats_service.unpin(
+            None if user is None else user.id,
+            MaxChatId(update.message.recipient.unsafe_chat_id),
+            _replied(update),
+            int(args) if args.isdecimal() else None,
+        ),
     )
     if unpinned:
         await update.reply_text(UNPINNED, notify=False)
@@ -133,18 +144,26 @@ def _replied(update: MessageCreated) -> MessageRef | None:
     link = update.message.link
     if not is_defined(link) or link.type is not MessageLinkType.REPLY:
         return None
-    return MessageRef(mid=link.message.mid, seq=link.message.seq)
+    return MessageRef(
+        mid=link.message.mid,
+        seq=link.message.seq,
+        text=link.message.text,
+    )
 
 
-@router.message_created(Command("repin"), IN_CHAT)
+@router.message_created(Command("repin"), IN_CHAT, OWN_TEXT)
 async def repin_handler(
     update: MessageCreated,
     chats_service: FromDishka[ChatsService],
     user: User | None = None,
 ) -> None:
-    await chats_service.repin(
-        None if user is None else user.id,
-        MaxChatId(update.message.recipient.unsafe_chat_id),
+    await _with_fresh_rights(
+        update,
+        chats_service,
+        lambda: chats_service.repin(
+            None if user is None else user.id,
+            MaxChatId(update.message.recipient.unsafe_chat_id),
+        ),
     )
 
 
@@ -187,3 +206,16 @@ async def bot_rights_handler(
         permissions = update.permissions if is_defined(update.permissions) else None
         rights = rights_of(is_admin=update.is_admin, permissions=permissions)
     await chats_service.set_admin(chat_id, rights)
+
+
+async def _with_fresh_rights[T](
+    update: MessageCreated,
+    chats_service: ChatsService,
+    call: Callable[[], Awaitable[T]],
+) -> T:
+    try:
+        return await call()
+    except PinRightsMissing:
+        chat_id = MaxChatId(update.message.recipient.unsafe_chat_id)
+        await chats_service.set_admin(chat_id, await bot_rights(update.bot, chat_id))
+    return await call()

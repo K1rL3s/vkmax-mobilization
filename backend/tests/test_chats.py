@@ -45,14 +45,17 @@ from zheka.core.services.chats import (
     PIN_NEEDS_RIGHTS,
     PIN_TEXT_LIMIT,
     PIN_THE_LIST,
+    PIN_WITHOUT_TEXT,
     UNPIN_HINT,
     UNPIN_THE_LIST,
     WRONG_CODE,
     ChatsService,
     MessageRef,
+    pin_caption,
     pins_text,
 )
 from zheka.core.services.events import EventsService
+from zheka.core.texts import ANNOUNCEMENT_HASHTAG
 from zheka.infra.database.models import (
     Chat,
     ChatCard,
@@ -490,19 +493,22 @@ async def test_a_pin_needs_a_reply_and_the_bot_rights(
     assert await _listed(session, chat_id) == []
 
 
-async def test_a_repeat_pin_replaces_the_text_of_its_item(
+async def test_a_repeat_pin_keeps_the_text_unless_it_brings_a_new_one(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
     service = _service(session)
+    reply = MessageRef(mid="m-1", seq=1, text="Во вторник отключат воду")
 
-    await service.pin(data.user_id, chat_id, REPLY, "в" * (PIN_TEXT_LIMIT + 5))
+    await service.pin(data.user_id, chat_id, reply, "в" * (PIN_TEXT_LIMIT + 5))
     assert await _listed(session, chat_id) == [("m-1", "в" * PIN_TEXT_LIMIT)]
-    await service.pin(data.user_id, chat_id, REPLY, None)
+    await service.pin(data.user_id, chat_id, reply, " ")
+    assert await _listed(session, chat_id) == [("m-1", "в" * PIN_TEXT_LIMIT)]
+    await service.pin(data.user_id, chat_id, reply, "Вода")
 
-    assert await _listed(session, chat_id) == [("m-1", None)]
+    assert await _listed(session, chat_id) == [("m-1", "Вода")]
     assert len(await _pin_events(session, chat_id, EventType.CHAT_PINNED)) == 1
 
 
@@ -555,7 +561,7 @@ async def test_unpin_by_number_or_by_reply_and_the_numbers_close_up(
 
     await service.unpin(data.user_id, chat_id, None, 1)
     await service.unpin(data.user_id, chat_id, None, 2)
-    assert await _listed(session, chat_id) == [("m-2", None)]
+    assert await _listed(session, chat_id) == [("m-2", PIN_WITHOUT_TEXT)]
     await service.unpin(data.user_id, chat_id, MessageRef(mid="m-2", seq=2), None)
 
     assert await _listed(session, chat_id) == []
@@ -650,7 +656,7 @@ async def test_the_list_itself_is_neither_pinned_nor_unpinned(
     with pytest.raises(InvalidRequest, match=re.escape(UNPIN_THE_LIST)):
         await service.unpin(data.user_id, chat_id, the_list, None)
 
-    assert await _listed(session, chat_id) == [("m-1", None)]
+    assert await _listed(session, chat_id) == [("m-1", PIN_WITHOUT_TEXT)]
 
 
 def _utf16_units(text: str) -> int:
@@ -889,3 +895,28 @@ async def test_a_repeat_promotion_is_told_briefly_instead_of_the_welcome(
     assert len(broker.enqueued(TaskName.WELCOME_CHAT)) == 1
     texts = [task["text"] for task in broker.enqueued(TaskName.BROADCAST_TO_CHATS)]
     assert texts == [PINS_REVOKED, text]
+
+
+@pytest.mark.parametrize(
+    ("text", "caption"),
+    [
+        ("\n  Во вторник отключат воду  \nс 9 до 18", "Во вторник отключат воду"),
+        (
+            (
+                "📢 Объявление от УК Дом\n📍 Подъезд 2\n\nОтключат воду\nс 9 до 18"
+                f"\n\n{ANNOUNCEMENT_HASHTAG}"
+            ),
+            "Отключат воду",
+        ),
+        ("Вода\n\n#вода", "Вода"),
+        ("я" * (PIN_TEXT_LIMIT + 5), "я" * PIN_TEXT_LIMIT),
+        ("  \n ", PIN_WITHOUT_TEXT),
+        (None, PIN_WITHOUT_TEXT),
+    ],
+    ids=["first_line", "announcement", "other_hashtag", "long", "blank", "no_text"],
+)
+def test_a_pin_without_a_caption_takes_the_first_line_of_the_message(
+    text: str | None,
+    caption: str,
+) -> None:
+    assert pin_caption(text) == caption

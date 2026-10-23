@@ -49,6 +49,7 @@ from maxo.types import (
     DialogMuted,
     DialogUnmuted,
     GetPinnedMessageResult,
+    LinkedMessage,
     LocationAttachment,
     MediaAttachmentPayload,
     Message,
@@ -292,6 +293,7 @@ from zheka.core.services.chats import (
     PINS_NOT_ALLOWED,
     PINS_REVOKED,
     PINS_TITLE,
+    PIN_NEEDS_RIGHTS,
     UNPIN_HINT,
     WRONG_CODE,
 )
@@ -6631,3 +6633,82 @@ async def test_the_binder_is_not_asked_once_the_bot_is_admin_again(
 
     rights = RIGHTS_TEXT.format(title=CHAT_TITLE)
     assert [text for _, text, _, _ in shows if rights in (text or "")] == []
+
+
+async def test_a_bare_pin_is_captioned_with_the_replied_text(
+    client: BotClient,
+    bot_setup: BotSetup,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    group = _in_chat(bot_setup, _RecordingBot(), chat_id, client.user.id)
+
+    await group.send("/pin", reply_to=_chat_message(chat_id, "m-7", 7))
+
+    bot_session.expire_all()
+    [pin] = await ChatsRepo(bot_session).list_pins(chat_id)
+    assert pin.text == "Во вторник отключат воду"
+
+
+@pytest.mark.parametrize(
+    ("permissions", "pinned"),
+    [([ChatAdminPermission.PIN_MESSAGE], True), ([ChatAdminPermission.WRITE], False)],
+    ids=["granted_meanwhile", "still_missing"],
+)
+async def test_a_pin_refused_for_the_rights_asks_max_once_more(
+    client: BotClient,
+    bot_setup: BotSetup,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    permissions: list[ChatAdminPermission],
+    pinned: bool,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    chat.bot_can_pin = False
+    await bot_session.commit()
+    recorder = _RecordingBot()
+    api = _ChatApi()
+    api.is_admin, api.permissions = True, permissions
+    monkeypatch.setattr(recorder, "get_membership", api.get_membership)
+    group = _in_chat(bot_setup, recorder, chat_id, client.user.id)
+
+    await group.send("/pin Вода", reply_to=_chat_message(chat_id, "m-7", 7))
+
+    bot_session.expire_all()
+    pins = await ChatsRepo(bot_session).list_pins(chat_id)
+    assert [pin.text for pin in pins] == (["Вода"] if pinned else [])
+    assert recorder.texts == ([] if pinned else [PIN_NEEDS_RIGHTS])
+
+
+async def test_a_forwarded_pin_command_does_nothing(
+    client: BotClient,
+    bot_setup: BotSetup,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    chat_id, _ = await _listed_chat(bot_session, client, None)
+    group = _in_chat(bot_setup, _RecordingBot(), chat_id, client.user.id)
+    synced = len(bot_broker.enqueued(TaskName.SYNC_CHAT_PINS))
+    forward = LinkedMessage(
+        type=MessageLinkType.FORWARD,
+        message=MessageBody(mid="f-1", seq=1, text="/unpin 1"),
+    )
+
+    await _feed(
+        group,
+        MessageCreated(
+            message=Message(
+                sender=group.user,
+                recipient=Recipient(chat_type=ChatType.CHAT, chat_id=chat_id),
+                timestamp=datetime.now(UTC),
+                body=MessageBody(mid="m-8", seq=8, text=None),
+                link=forward,
+            ),
+            timestamp=datetime.now(UTC),
+        ),
+    )
+
+    assert await _pin_mids(bot_session, chat_id) == ["m-1"]
+    assert len(bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)) == synced

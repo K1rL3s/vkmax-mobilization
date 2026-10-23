@@ -17,6 +17,7 @@ from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.models import BotRights, Chat, ChatPin, House, User
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
+from zheka.core.texts import ANNOUNCEMENT_HASHTAG
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -73,6 +74,7 @@ PINS_ERASED = (
     "🗑 Сообщение со списком закрепленных удалили, и я очистил список. "
     "Закрепить заново можно командой /pin в ответ на нужное сообщение"
 )
+PIN_WITHOUT_TEXT = "Сообщение без текста"
 ADMIN_BACK = (
     "✅ Мне вернули права администратора: снова присылаю сюда объявления УК и "
     "веду список закрепленных"
@@ -86,6 +88,7 @@ ADMIN_BACK_WITHOUT_PINS = (
 class MessageRef(ZhekaType):
     mid: str
     seq: int
+    text: str | None = None
 
 
 class ChatJoinOffer(ZhekaType):
@@ -376,6 +379,8 @@ class ChatsService:
         text = (text or "").strip()[:PIN_TEXT_LIMIT] or None
         pins = await self._chats.list_pins(chat_id)
         listed = next((pin for pin in pins if pin.mid == target.mid), None)
+        if text is None:
+            text = pin_caption(target.text) if listed is None else listed.text
         pin = ChatPin(
             chat_id=chat_id,
             mid=target.mid,
@@ -494,7 +499,7 @@ class ChatsService:
         if user_id is None or binder is None:
             raise NotEnoughRights(PIN_DENIED)
         if not chat.bot_can_pin:
-            raise InvalidState(PIN_NEEDS_RIGHTS)
+            raise PinRightsMissing
         return user_id, binder
 
     async def repin(self, user_id: UserId | None, chat_id: MaxChatId) -> None:
@@ -515,3 +520,17 @@ def pins_text(chat_id: MaxChatId, pins: Sequence[ChatPin]) -> str:
         link = url if pin.text is None else f'<a href="{url}">{escape(pin.text)}</a>'
         lines.append(f"{number}. {link}")
     return "\n".join(lines)
+
+
+def pin_caption(text: str | None) -> str:
+    paragraphs = [part for part in (text or "").split("\n\n") if part.strip()]
+    if len(paragraphs) > 1 and paragraphs[-1].strip() == ANNOUNCEMENT_HASHTAG:
+        paragraphs = paragraphs[1:-1]
+    for line in "\n".join(paragraphs).splitlines():
+        if line.strip():
+            return line.strip()[:PIN_TEXT_LIMIT].rstrip()
+    return PIN_WITHOUT_TEXT
+
+
+class PinRightsMissing(InvalidState):
+    message = PIN_NEEDS_RIGHTS
