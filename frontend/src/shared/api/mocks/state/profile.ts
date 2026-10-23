@@ -36,6 +36,7 @@ export const user = {
   consent_version: null as string | null,
   phone: null as string | null,
   text_size: "normal" as Schemas["TextSize"],
+  theme: "system" as Schemas["Theme"],
 };
 
 const residencyList: MockResidency[] = [];
@@ -232,6 +233,7 @@ export const forgetUser = (): void => {
     consent_version: null,
     phone: null,
     text_size: "normal",
+    theme: "system",
   });
   residencyList.length = 0;
   orgs.length = 0;

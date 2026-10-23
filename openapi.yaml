@@ -608,7 +608,7 @@ paths:
     put:
       tags:
       - Профиль
-      summary: Изменить размер текста в мини-приложении
+      summary: Изменить размер текста и тему мини-приложения
       operationId: update_appearance
       security:
       - ApiTestToken: []
@@ -15544,6 +15544,9 @@ components:
         text_size:
           $ref: '#/components/schemas/TextSize'
           description: 'Размер текста в мини-приложении: обычный, крупный, очень крупный'
+        theme:
+          $ref: '#/components/schemas/Theme'
+          description: 'Тема мини-приложения: как на телефоне, светлая или темная'
       type: object
       required:
       - user_id
@@ -15554,6 +15557,7 @@ components:
       - orgs
       - is_demo
       - text_size
+      - theme
       title: MeResponse
     MeterItem:
       properties:
@@ -18194,6 +18198,13 @@ components:
       - large
       - xlarge
       title: TextSize
+    Theme:
+      type: string
+      enum:
+      - system
+      - light
+      - dark
+      title: Theme
     TrackEventRequest:
       properties:
         type:
@@ -18241,10 +18252,16 @@ components:
     UpdateAppearanceRequest:
       properties:
         text_size:
-          $ref: '#/components/schemas/TextSize'
+          anyOf:
+          - $ref: '#/components/schemas/TextSize'
+          - type: 'null'
+          description: Пусто - не менять
+        theme:
+          anyOf:
+          - $ref: '#/components/schemas/Theme'
+          - type: 'null'
+          description: Пусто - не менять
       type: object
-      required:
-      - text_size
       title: UpdateAppearanceRequest
     UpdateMeterRequest:
       properties:

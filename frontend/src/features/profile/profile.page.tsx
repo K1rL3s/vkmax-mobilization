@@ -226,8 +226,8 @@ const ProfilePage = () => {
             <CellSimple
               separator
               before={<Icon src={textSizeIcon} className={styles.CellIcon} />}
-              title="Размер текста"
-              subtitle="Обычный, крупный или очень крупный"
+              title="Внешний вид"
+              subtitle="Размер текста и тема"
               showChevron
               onClick={() => void navigate(Routes.APPEARANCE)}
             />

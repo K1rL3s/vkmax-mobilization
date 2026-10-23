@@ -120,7 +120,7 @@ export interface paths {
       cookie?: never;
     };
     get?: never;
-    /** Изменить размер текста в мини-приложении */
+    /** Изменить размер текста и тему мини-приложения */
     put: operations["update_appearance"];
     post?: never;
     delete?: never;
@@ -4257,6 +4257,8 @@ export interface components {
       phone?: string | null;
       /** @description Размер текста в мини-приложении: обычный, крупный, очень крупный */
       text_size: components["schemas"]["TextSize"];
+      /** @description Тема мини-приложения: как на телефоне, светлая или темная */
+      theme: components["schemas"]["Theme"];
     };
     /** MeterItem */
     MeterItem: {
@@ -5904,6 +5906,11 @@ export interface components {
      * @enum {string}
      */
     TextSize: "normal" | "large" | "xlarge";
+    /**
+     * Theme
+     * @enum {string}
+     */
+    Theme: "system" | "light" | "dark";
     /** TrackEventRequest */
     TrackEventRequest: {
       /**
@@ -5928,7 +5935,10 @@ export interface components {
     };
     /** UpdateAppearanceRequest */
     UpdateAppearanceRequest: {
-      text_size: components["schemas"]["TextSize"];
+      /** @description Пусто - не менять */
+      text_size?: components["schemas"]["TextSize"] | null;
+      /** @description Пусто - не менять */
+      theme?: components["schemas"]["Theme"] | null;
     };
     /** UpdateMeterRequest */
     UpdateMeterRequest: {

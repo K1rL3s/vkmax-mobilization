@@ -13,6 +13,7 @@ from zheka.core.enums import (
     NotificationCategory,
     NotificationLevel,
     TextSize,
+    Theme,
 )
 from zheka.core.ids import AnnouncementId, UserId
 from zheka.core.services.profile import MeView
@@ -33,6 +34,9 @@ class MeResponse(BaseSchema):
     text_size: TextSize = Field(
         description="Размер текста в мини-приложении: обычный, крупный, очень крупный",
     )
+    theme: Theme = Field(
+        description="Тема мини-приложения: как на телефоне, светлая или темная",
+    )
 
     @classmethod
     def of(cls, view: MeView) -> Self:
@@ -48,6 +52,7 @@ class MeResponse(BaseSchema):
             is_demo=view.is_demo,
             phone=view.user.phone,
             text_size=view.user.text_size,
+            theme=view.user.theme,
         )
 
 
@@ -91,4 +96,5 @@ class TrackEventRequest(BaseSchema):
 
 
 class UpdateAppearanceRequest(BaseSchema):
-    text_size: TextSize
+    text_size: TextSize | None = Field(default=None, description="Пусто - не менять")
+    theme: Theme | None = Field(default=None, description="Пусто - не менять")

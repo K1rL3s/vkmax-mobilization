@@ -1,4 +1,3 @@
-import { MaxUI } from "@maxhub/max-ui";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useIsPresent } from "motion/react";
 import {
@@ -11,6 +10,7 @@ import { App } from "./app";
 import { Component as ErrorPage } from "@/features/error/error.page";
 
 import { protectedLoader } from "./protected-loader";
+import { ThemedMaxUI } from "./themed-max-ui";
 import { deeplinkLoader } from "./deeplink-loader";
 import {
   adminLoader,
@@ -34,11 +34,11 @@ const PushedPage = () => {
 const router = createBrowserRouter([
   {
     element: (
-      <MaxUI resetBody>
+      <ThemedMaxUI>
         <QueryClientProvider client={queryClient}>
           <App />
         </QueryClientProvider>
-      </MaxUI>
+      </ThemedMaxUI>
     ),
     children: [
       {

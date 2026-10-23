@@ -9,7 +9,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-from zheka.core.enums import NotificationCategory, NotificationLevel, TextSize
+from zheka.core.enums import NotificationCategory, NotificationLevel, TextSize, Theme
 from zheka.infra.database.tables._columns import (
     created_at_column,
     id_column,
@@ -42,6 +42,17 @@ users_table = Table(
             values_callable=lambda sizes: [size.value for size in sizes],
         ),
         server_default=TextSize.NORMAL.value,
+        nullable=False,
+    ),
+    Column(
+        "theme",
+        Enum(
+            Theme,
+            native_enum=False,
+            length=8,
+            values_callable=lambda themes: [theme.value for theme in themes],
+        ),
+        server_default=Theme.SYSTEM.value,
         nullable=False,
     ),
 )

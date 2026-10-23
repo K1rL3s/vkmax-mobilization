@@ -341,6 +341,56 @@ async def test_a_consent_is_recorded_with_its_source(
     ]
 
 
+async def test_a_theme_is_kept_apart_from_the_text_size(
+    bot_database_url: str,  # noqa: ARG001
+) -> None:
+    app = _app(CHECKER_TOKEN, make_bot_config().db)
+    reader = {
+        "WebAppData": signed_init_data(
+            datetime.now(UTC),
+            user=json.dumps({"id": secrets.randbits(40), "first_name": "Жека"}),
+        ),
+    }
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        await client.post(
+            "/api/me/consent",
+            headers=reader,
+            json={"version": CONSENT_VERSION},
+        )
+        fresh = await client.get("/api/me", headers=reader)
+        await client.put(
+            "/api/me/appearance",
+            headers=reader,
+            json={"text_size": "large"},
+        )
+        dark = await client.put(
+            "/api/me/appearance",
+            headers=reader,
+            json={"theme": "dark"},
+        )
+        unknown = await client.put(
+            "/api/me/appearance",
+            headers=reader,
+            json={"theme": "sepia"},
+        )
+        await client.put(
+            "/api/me/appearance",
+            headers=reader,
+            json={"text_size": "xlarge"},
+        )
+        relaunched = await client.get("/api/me", headers=reader)
+
+    assert fresh.json()["theme"] == "system"
+    assert dark.json()["text_size"] == "large"
+    assert unknown.status_code == 400
+    assert relaunched.json()["theme"] == "dark"
+    assert relaunched.json()["text_size"] == "xlarge"
+
+
 async def test_a_text_size_is_kept_for_its_own_account_only(
     bot_database_url: str,  # noqa: ARG001
 ) -> None:

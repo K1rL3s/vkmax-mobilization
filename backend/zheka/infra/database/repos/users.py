@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from zheka.core.enums import AppointmentStatus, TextSize
+from zheka.core.enums import AppointmentStatus, TextSize, Theme
 from zheka.core.errors import EntityNotFound
 from zheka.core.ids import MaxChatId, MaxUserId, UserId
 from zheka.infra.database.models import Appointment, Request, User, fresh_timestamp
@@ -145,6 +145,14 @@ class UsersRepo(BaseAlchemyRepo):
         user.phone_verified_at = at
         await self._session.flush()
 
-    async def set_text_size(self, user: User, text_size: TextSize) -> None:
-        user.text_size = text_size
+    async def set_appearance(
+        self,
+        user: User,
+        text_size: TextSize | None,
+        theme: Theme | None,
+    ) -> None:
+        if text_size is not None:
+            user.text_size = text_size
+        if theme is not None:
+            user.theme = theme
         await self._session.flush()

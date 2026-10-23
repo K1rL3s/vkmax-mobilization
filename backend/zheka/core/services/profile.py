@@ -7,6 +7,7 @@ from zheka.core.enums import (
     EventType,
     OrgRole,
     TextSize,
+    Theme,
     VerificationStatus,
 )
 from zheka.core.errors import EntityNotFound, InvalidRequest, NotEnoughRights
@@ -182,9 +183,14 @@ class ProfileService:
         await self._users.forget(user, MaxUserId(API_CHECKER_MAX_USER_ID - user_id))
         await self._events.record(EventType.ACCOUNT_DELETED, user_id=user_id)
 
-    async def set_text_size(self, user_id: UserId, text_size: TextSize) -> MeView:
+    async def set_appearance(
+        self,
+        user_id: UserId,
+        text_size: TextSize | None,
+        theme: Theme | None,
+    ) -> MeView:
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise EntityNotFound("Пользователь не найден")
-        await self._users.set_text_size(user, text_size)
+        await self._users.set_appearance(user, text_size, theme)
         return await self.me(user_id)

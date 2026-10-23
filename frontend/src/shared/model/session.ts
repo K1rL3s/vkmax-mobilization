@@ -152,6 +152,12 @@ export const useSession = () => {
   };
 };
 
+export const useTheme = () =>
+  useSyncExternalStore(
+    (onChange) => queryClient.getQueryCache().subscribe(onChange),
+    () => cachedSession()?.theme ?? "system",
+  );
+
 export const useTextSize = () =>
   useSyncExternalStore(
     (onChange) => queryClient.getQueryCache().subscribe(onChange),

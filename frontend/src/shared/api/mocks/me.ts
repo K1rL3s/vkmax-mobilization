@@ -1,3 +1,5 @@
+import type { components } from "../schema/generated";
+
 import { badRequest, endpoint, ok } from "./reply";
 import {
   acceptConsent,
@@ -6,6 +8,8 @@ import {
   me,
   user,
 } from "./state";
+
+type Schemas = components["schemas"];
 
 export const meConfigs = [
   endpoint("get", "/me", () => ok(me())),
@@ -37,13 +41,21 @@ export const meConfigs = [
     return ok(me());
   }),
   endpoint("put", "/me/appearance", (request) => {
-    const size = request.body.text_size;
+    const body = request.body as Schemas["UpdateAppearanceRequest"];
 
-    if (!["normal", "large", "xlarge"].includes(String(size))) {
+    if (
+      body.text_size &&
+      !["normal", "large", "xlarge"].includes(body.text_size)
+    ) {
       return badRequest("Неизвестный размер текста");
     }
 
-    user.text_size = size as typeof user.text_size;
+    if (body.theme && !["system", "light", "dark"].includes(body.theme)) {
+      return badRequest("Неизвестная тема");
+    }
+
+    user.text_size = body.text_size ?? user.text_size;
+    user.theme = body.theme ?? user.theme;
 
     return ok(me());
   }),

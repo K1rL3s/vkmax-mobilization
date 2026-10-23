@@ -12,12 +12,22 @@ const SIZES: { size: components["schemas"]["TextSize"]; title: string }[] = [
   { size: "xlarge", title: "Очень крупный" },
 ];
 
+const THEMES: { theme: components["schemas"]["Theme"]; title: string }[] = [
+  { theme: "system", title: "Как на телефоне" },
+  { theme: "light", title: "Светлая" },
+  { theme: "dark", title: "Тёмная" },
+];
+
+type Appearance = components["schemas"]["UpdateAppearanceRequest"];
+
 const AppearancePage = () => {
   const { session, save } = useSession();
   const update = rqClient.useMutation("put", "/api/me/appearance");
-  const current = update.isPending
-    ? update.variables.body.text_size
-    : session?.text_size;
+  const pending: Appearance = update.isPending ? update.variables.body : {};
+  const current = pending.text_size ?? session?.text_size;
+  const theme = pending.theme ?? session?.theme;
+  const change = (body: Appearance) =>
+    update.mutate({ params: authParams(), body }, { onSuccess: save });
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -37,12 +47,32 @@ const AppearancePage = () => {
                   <Radio
                     name="text_size"
                     checked={current === size}
-                    onChange={() =>
-                      update.mutate(
-                        { params: authParams(), body: { text_size: size } },
-                        { onSuccess: save },
-                      )
-                    }
+                    onChange={() => change({ text_size: size })}
+                  />
+                }
+              />
+            ))}
+          </div>
+        </section>
+      </Flex>
+
+      <Flex asChild align="stretch" direction="column" gap={8}>
+        <section>
+          <Typography.Text asChild variant="title" color="primary">
+            <h2>Тема</h2>
+          </Typography.Text>
+          <div className={styles.Panel}>
+            {THEMES.map((item, index) => (
+              <CellSimple
+                key={item.theme}
+                as="label"
+                separator={index > 0}
+                title={item.title}
+                after={
+                  <Radio
+                    name="theme"
+                    checked={theme === item.theme}
+                    onChange={() => change({ theme: item.theme })}
                   />
                 }
               />
@@ -53,7 +83,7 @@ const AppearancePage = () => {
 
       {update.isError && (
         <Typography.Text variant="description" className={styles.Error}>
-          Не получилось сохранить размер. Проверьте связь и выберите ещё раз
+          Не получилось сохранить. Проверьте связь и выберите ещё раз
         </Typography.Text>
       )}
 
@@ -75,8 +105,8 @@ const AppearancePage = () => {
       </Flex>
 
       <Typography.Text variant="description" color="tertiary">
-        Размер сохранится в вашем профиле. Текст в чате с ботом настраивается в
-        самом MAX
+        Размер и тема сохранятся в вашем профиле. Чат с ботом и подложка карты
+        настраиваются отдельно
       </Typography.Text>
     </Panel>
   );

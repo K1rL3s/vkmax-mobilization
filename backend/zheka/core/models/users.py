@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from zheka.base import UNSET, ZhekaMutableType
-from zheka.core.enums import NotificationCategory, NotificationLevel, TextSize
+from zheka.core.enums import NotificationCategory, NotificationLevel, TextSize, Theme
 from zheka.core.ids import MaxChatId, MaxUserId, NotificationSettingId, UserId
 
 
@@ -19,6 +19,7 @@ class User(ZhekaMutableType):
     phone: str | None = None
     phone_verified_at: datetime | None = None
     text_size: TextSize = TextSize.NORMAL
+    theme: Theme = Theme.SYSTEM
 
     @property
     def in_dialog(self) -> bool:
