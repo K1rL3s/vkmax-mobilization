@@ -202,6 +202,7 @@ from zheka.broker.tasks.bot_requests import (
 from zheka.broker.tasks.chats import (
     ALREADY_JOINED_TEXT,
     JOINED_TEXT,
+    JOIN_BY_LINK_TEXT,
     JOIN_FAILED_TEXT,
     JOIN_HOUSE,
     JOIN_PRIVACY_TEXT,
@@ -6288,14 +6289,25 @@ async def test_the_menu_opens_the_house_chat_only_for_a_member(
 
 
 @pytest.mark.parametrize(
-    ("outcome", "text", "joined", "rechecked"),
+    ("outcome", "link", "text", "joined", "rechecked"),
     [
-        (ChatJoinOutcome.ADDED, JOINED_TEXT, True, False),
-        (ChatJoinOutcome.ALREADY, ALREADY_JOINED_TEXT, True, False),
-        (ChatJoinOutcome.PRIVACY, JOIN_PRIVACY_TEXT, False, False),
-        (ChatJoinOutcome.FAILED, JOIN_FAILED_TEXT, False, True),
+        (ChatJoinOutcome.ADDED, CHAT_LINK, JOINED_TEXT, True, False),
+        (ChatJoinOutcome.ALREADY, CHAT_LINK, ALREADY_JOINED_TEXT, True, False),
+        (ChatJoinOutcome.PRIVACY, CHAT_LINK, JOIN_BY_LINK_TEXT, False, False),
+        (ChatJoinOutcome.FAILED, CHAT_LINK, JOIN_BY_LINK_TEXT, False, True),
+        (ChatJoinOutcome.ADDED, None, JOINED_TEXT, True, False),
+        (ChatJoinOutcome.PRIVACY, None, JOIN_PRIVACY_TEXT, False, False),
+        (ChatJoinOutcome.FAILED, None, JOIN_FAILED_TEXT, False, True),
     ],
-    ids=["added", "already", "privacy", "failed"],
+    ids=[
+        "added",
+        "already",
+        "privacy_by_link",
+        "failed_by_link",
+        "added_without_link",
+        "privacy_without_link",
+        "failed_without_link",
+    ],
 )
 async def test_the_bot_adds_the_resident_and_writes_how_it_went(
     client: BotClient,
@@ -6305,6 +6317,7 @@ async def test_the_bot_adds_the_resident_and_writes_how_it_went(
     notices: _RecordingBot,
     monkeypatch: pytest.MonkeyPatch,
     outcome: ChatJoinOutcome,
+    link: str | None,
     text: str,
     joined: bool,
     rechecked: bool,
@@ -6314,7 +6327,7 @@ async def test_the_bot_adds_the_resident_and_writes_how_it_went(
         client,
         message_manager,
     )
-    chat_id = await _house_chat(bot_session, house_id)
+    chat_id = await _house_chat(bot_session, house_id, link)
     user = await _user(bot_session, client)
     user_id, max_user_id = user.id, user.max_user_id
     await _verify(bot_session, user_id, house_id)
@@ -6337,7 +6350,7 @@ async def test_the_bot_adds_the_resident_and_writes_how_it_went(
     assert notices.texts == [text.format(title=CHAT_TITLE)]
     links = [button for button in notices.buttons[0] if isinstance(button, LinkButton)]
     assert [(b.text, b.url) for b in links] == (
-        [(OPEN_CHAT, CHAT_LINK)] if joined else []
+        [(OPEN_CHAT, CHAT_LINK)] if link else []
     )
     assert await ChatsRepo(bot_session).is_member(chat_id, user_id) is joined
     assert rechecks == ([chat_id] if rechecked else [])

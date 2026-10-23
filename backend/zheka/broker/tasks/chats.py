@@ -71,6 +71,9 @@ _JOIN_TEXTS = {
     ChatJoinOutcome.PRIVACY: JOIN_PRIVACY_TEXT,
     ChatJoinOutcome.FAILED: JOIN_FAILED_TEXT,
 }
+JOIN_BY_LINK_TEXT = (
+    "💬 Не получилось добавить вас в чат «{title}», вступите в него по ссылке"
+)
 PINS_HERE = "📌 Список закрепленных никуда не делся, он здесь"
 LEFT_TEXT = (
     "🚪 Я вышел из чата «{title}»: привязать чат к дому может сотрудник УК, "
@@ -174,13 +177,12 @@ async def join_house_chat(
         )
     elif outcome is ChatJoinOutcome.FAILED:
         await recheck_chat_rights(chat_id, bot, chats_service, users_repo, sender)
+    text = _JOIN_TEXTS[outcome] if joined or not joining.link else JOIN_BY_LINK_TEXT
     await sender.send_message(
-        _JOIN_TEXTS[outcome].format(title=escape(joining.title)),
+        text.format(title=escape(joining.title)),
         user_id=user.max_user_id,
         keyboard=(
-            [[LinkButton(text=OPEN_CHAT, url=joining.link)]]
-            if joined and joining.link
-            else None
+            [[LinkButton(text=OPEN_CHAT, url=joining.link)]] if joining.link else None
         ),
     )
 
