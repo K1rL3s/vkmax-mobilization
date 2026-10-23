@@ -1,3 +1,4 @@
+import csv
 import runpy
 from pathlib import Path
 
@@ -188,3 +189,72 @@ def test_a_broken_gis_answer_is_dropped_and_stops_the_gis_requests(
     assert SCRIPT["_gis_json"]("gis-2.json", "https://gis/2") is None
     assert urls == ["https://gis/1"]
     assert list(tmp_path.iterdir()) == []
+
+
+def test_a_card_is_read_only_from_the_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def refuse(url: str) -> bytes:
+        raise AssertionError(url)
+
+    script = SCRIPT["_card"].__globals__
+    monkeypatch.setitem(script, "CACHE_DIR", tmp_path)
+    monkeypatch.setitem(script, "_get", refuse)
+
+    assert SCRIPT["_card"]("1") == (None, None)
+    (tmp_path / "card-1.html").write_text(CARD_WITH_CONTRACT, encoding="utf-8")
+    assert SCRIPT["_card"]("1") == (14, 'ООО "НЕГА-М"')
+
+
+def test_an_old_street_keeps_its_rows_without_a_request(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def refuse(url: str) -> bytes:
+        raise AssertionError(url)
+
+    script = SCRIPT["main"].__globals__
+    old = next(street for street in script["STREETS"] if not street.live)
+    house = dict.fromkeys(script["HOUSE_FIELDS"], "")
+    house |= {"city": old.city, "street": old.street, "lat": "55.7", "org_inn": "7"}
+    org = dict.fromkeys(script["ORG_FIELDS"], "") | {"inn": "7", "name": "УК"}
+    for name, fields, row in (
+        ("houses.csv", script["HOUSE_FIELDS"], house),
+        ("organizations.csv", script["ORG_FIELDS"], org),
+    ):
+        with (tmp_path / name).open("w", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fields, lineterminator="\n")
+            writer.writeheader()
+            writer.writerow(row)
+    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+    monkeypatch.setitem(script, "DATA_DIR", tmp_path)
+    monkeypatch.setitem(script, "CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setitem(script, "STREETS", (old,))
+    monkeypatch.setitem(script, "_get", refuse)
+    monkeypatch.setitem(script, "_export_rows", lambda _export_id: iter(()))
+
+    SCRIPT["main"]()
+
+    assert {path.name: path.read_bytes() for path in tmp_path.glob("*.csv")} == before
+
+
+def test_an_unlisted_manager_comes_from_its_gis_card() -> None:
+    card = {
+        "inn": "1660333833",
+        "shortName": 'ООО "УК АЗИНО-СЕРВИС"',
+        "phone": "78435585802",
+        "orgAddress": "420100, Г. КАЗАНЬ, УЛ. ЗАКИЕВА, д. 9А",
+        "orgEmail": "Azinoservis@mail.ru",
+        "url": "www.azinoservice.ru",
+    }
+
+    assert SCRIPT["gis_org"](card, "Europe/Moscow") == {
+        "inn": "1660333833",
+        "name": 'ООО "УК АЗИНО-СЕРВИС"',
+        "phone": "+78435585802",
+        "address": "420100, Г. КАЗАНЬ, УЛ. ЗАКИЕВА, д. 9А",
+        "email": "azinoservis@mail.ru",
+        "site": "https://www.azinoservice.ru",
+        "timezone": "Europe/Moscow",
+    }

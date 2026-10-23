@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import datetime
 from decimal import Decimal
 from math import ceil
@@ -25,8 +25,14 @@ REFORMA = "https://www.reformagkh.ru"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 OVERPASS = "https://overpass-api.de/api/interpreter"
 GIS = "https://dom.gosuslugi.ru/homemanagement/api/rest/services/houses/public"
+GIS_ORGS = "https://dom.gosuslugi.ru/ppa/api/rest/services/ppa/public/organizations"
 USER_AGENT = "zheka-seed-fetch/1.0 (MAX hackathon demo seed, one-off run)"
-REQUEST_INTERVAL = 1.1
+REQUEST_INTERVAL = 1.5
+HOST_INTERVALS = {
+    "www.reformagkh.ru": 3.0,
+    "nominatim.openstreetmap.org": 2.0,
+    "overpass-api.de": 10.0,
+}
 RETRIES = 5
 RETRY_PAUSE = 30
 TOO_MANY_REQUESTS = 429
@@ -48,7 +54,163 @@ class Street(NamedTuple):
     prefix: str
     mun_obr: str
     timezone: str
+    live: bool = False
 
+
+KAZAN_STREETS = (
+    ("улица Гагарина", "ул. Гагарина, д. "),
+    ("улица Короленко", "ул. Короленко, д. "),
+    ("улица Четаева", "ул. Четаева, д. "),
+    ("Гвардейская улица", "ул. Гвардейская, д. "),
+    ("улица Мира", "ул. Мира, д. "),
+    ("Дубравная улица", "ул. Дубравная, д. "),
+    ("улица Академика Глушко", "ул. Академика Глушко, д. "),
+    ("Авангардная улица", "ул. Авангардная, д. "),
+    ("улица Братьев Касимовых", "ул. Братьев Касимовых, д. "),
+    ("улица Академика Королева", "ул. Академика Королева, д. "),
+    ("Октябрьская улица", "ул. Октябрьская, д. "),
+    ("улица Шамиля Усманова", "ул. Шамиля Усманова, д. "),
+    ("улица Гаврилова", "ул. Гаврилова, д. "),
+    ("улица Карбышева", "ул. Карбышева, д. "),
+    ("улица Хусаина Мавлютова", "ул. Хусаина Мавлютова, д. "),
+    ("улица Аделя Кутуя", "ул. Аделя Кутуя, д. "),
+    ("улица Академика Губкина", "ул. Академика Губкина, д. "),
+    ("Минская улица", "ул. Минская, д. "),
+    ("улица Белинского", "ул. Белинского, д. "),
+    ("улица Ноксинский Спуск", "ул. Ноксинский Спуск, д. "),
+    ("улица Гудованцева", "ул. Гудованцева, д. "),
+    ("улица Лукина", "ул. Лукина, д. "),
+    ("Волгоградская улица", "ул. Волгоградская, д. "),
+    ("улица Мусина", "ул. Мусина, д. "),
+    ("улица Чапаева", "ул. Чапаева, д. "),
+    ("Даурская улица", "ул. Даурская, д. "),
+    ("улица Сафиуллина", "ул. Сафиуллина, д. "),
+    ("Сибирский тракт", "тракт. Сибирский, д. "),
+    ("улица Латышских Стрелков", "ул. Латышских Стрелков, д. "),
+    ("улица Патриса Лумумбы", "ул. Патриса Лумумбы, д. "),
+    ("улица Челюскина", "ул. Челюскина, д. "),
+    ("улица Павлюхина", "ул. Павлюхина, д. "),
+    ("улица Химиков", "ул. Химиков, д. "),
+    ("улица Хайдара Бигичева", "ул. Хайдара Бигичева, д. "),
+    ("улица Кулахметова", "ул. Кулахметова, д. "),
+    ("Советская улица", "ул. Советская, д. "),
+    ("улица Бондаренко", "ул. Бондаренко, д. "),
+    ("улица Татарстан", "ул. Татарстан, д. "),
+    ("улица Серова", "ул. Серова, д. "),
+    ("улица Кул Гали", "ул. Кул Гали, д. "),
+    ("улица Нурсултана Назарбаева", "ул. Нурсултана Назарбаева, д. "),
+    ("улица Хади Такташа", "ул. Хади Такташа, д. "),
+    ("Меридианная улица", "ул. Меридианная, д. "),
+    ("улица Красной Позиции", "ул. Красной Позиции, д. "),
+    ("Беломорская улица", "ул. Беломорская, д. "),
+    ("Большая Красная улица", "ул. Большая Красная, д. "),
+    ("Краснококшайская улица", "ул. Краснококшайская, д. "),
+    ("улица Комиссара Габишева", "ул. Комиссара Габишева, д. "),
+    ("Парковая улица", "ул. Парковая, д. "),
+    ("улица Айдарова", "ул. Айдарова, д. "),
+    ("улица Батыршина", "ул. Батыршина, д. "),
+    ("Горьковское шоссе", "ш. Горьковское, д. "),
+    ("улица Голубятникова", "ул. Голубятникова, д. "),
+    ("улица Академика Завойского", "ул. Академика Завойского, д. "),
+    ("улица Халезова", "ул. Халезова, д. "),
+    ("Ленинградская улица", "ул. Ленинградская, д. "),
+    ("улица Карла Маркса", "ул. Карла Маркса, д. "),
+    ("улица Николая Ершова", "ул. Николая Ершова, д. "),
+    ("улица Зур Урам", "ул. Зур Урам, д. "),
+    ("улица Дементьева", "ул. Дементьева, д. "),
+    ("Главная улица", "ул. Главная, д. "),
+    ("улица Заря", "ул. Заря, д. "),
+    ("улица Липатова", "ул. Липатова, д. "),
+    ("Отрадная улица", "ул. Отрадная, д. "),
+    ("улица Волкова", "ул. Волкова, д. "),
+    ("улица Достоевского", "ул. Достоевского, д. "),
+    ("улица Щапова", "ул. Щапова, д. "),
+    ("улица Тунакова", "ул. Тунакова, д. "),
+    ("улица Абсалямова", "ул. Абсалямова, д. "),
+    ("улица Гарифьянова", "ул. Гарифьянова, д. "),
+    ("улица Академика Сахарова", "ул. Академика Сахарова, д. "),
+    ("Ломжинская улица", "ул. Ломжинская, д. "),
+    ("улица Восход", "ул. Восход, д. "),
+    ("улица Максимова", "ул. Максимова, д. "),
+    ("Бирюзовая улица", "ул. Бирюзовая, д. "),
+    ("улица Сыртлановой", "ул. Сыртлановой, д. "),
+    ("улица Вишневского", "ул. Вишневского, д. "),
+    ("улица Гоголя", "ул. Гоголя, д. "),
+    ("улица Чехова", "ул. Чехова, д. "),
+    ("улица Академика Лаврентьева", "ул. Академика Лаврентьева, д. "),
+    ("улица Академика Кирпичникова", "ул. Академика Кирпичникова, д. "),
+    ("улица Закиева", "ул. Закиева, д. "),
+    ("улица Рашида Вагапова", "ул. Рашида Вагапова, д. "),
+    ("улица Академика Павлова", "ул. Академика Павлова, д. "),
+    ("улица Олега Кошевого", "ул. Олега Кошевого, д. "),
+    ("улица Побежимова", "ул. Побежимова, д. "),
+    ("улица Галимджана Баруди", "ул. Галимджана Баруди, д. "),
+    ("улица Лейтенанта Красикова", "ул. Лейтенанта Красикова, д. "),
+    ("улица Воровского", "ул. Воровского, д. "),
+    ("Курская улица", "ул. Курская, д. "),
+    ("улица Маяковского", "ул. Маяковского, д. "),
+    ("улица Муштари", "ул. Муштари, д. "),
+    ("улица Железнодорожников", "ул. Железнодорожников, д. "),
+    ("Окольная улица", "ул. Окольная, д. "),
+    ("Привокзальная улица", "ул. Привокзальная, д. "),
+    ("Шоссейная улица", "ул. Шоссейная, д. "),
+    ("Коломенская улица", "ул. Коломенская, д. "),
+    ("улица Сибгата Хакима", "ул. Сибгата Хакима, д. "),
+    ("улица Журналистов", "ул. Журналистов, д. "),
+    ("улица Новаторов", "ул. Новаторов, д. "),
+    ("улица Жуковского", "ул. Жуковского, д. "),
+    ("2-я Юго-Западная улица", "ул. Юго-Западная 2-я, д. "),
+    ("улица Курчатова", "ул. Курчатова, д. "),
+    ("улица Карима Тинчурина", "ул. Карима Тинчурина, д. "),
+    ("улица Можайского", "ул. Можайского, д. "),
+    ("проспект Альберта Камалеева", "пр-кт. Альберта Камалеева, д. "),
+    ("улица Галии Кайбицкой", "ул. Галии Кайбицкой, д. "),
+    ("Каштановая улица", "ул. Каштановая, д. "),
+    ("Ново-Азинская улица", "ул. Ново-Азинская, д. "),
+    ("улица Лядова", "ул. Лядова, д. "),
+    ("улица Заслонова", "ул. Заслонова, д. "),
+    ("Спартаковская улица", "ул. Спартаковская, д. "),
+    ("улица 40 лет Октября", "ул. 40 лет Октября, д. "),
+    ("Залесная улица", "ул. Залесная, д. "),
+    ("улица Ильича", "ул. Ильича, д. "),
+    ("улица Лушникова", "ул. Лушникова, д. "),
+    ("Осиновская улица", "ул. Осиновская, д. "),
+    ("Революционная улица", "ул. Революционная, д. "),
+    ("улица Академика Парина", "ул. Академика Парина, д. "),
+    ("Начальная улица", "ул. Начальная, д. "),
+    ("улица Бутлерова", "ул. Бутлерова, д. "),
+    ("улица Зинина", "ул. Зинина, д. "),
+    ("улица Некрасова", "ул. Некрасова, д. "),
+    ("улица Наиля Юсупова", "ул. Наиля Юсупова, д. "),
+    ("улица Сабан", "ул. Сабан, д. "),
+    ("Светлая улица", "ул. Светлая, д. "),
+    ("улица Фрунзе", "ул. Фрунзе, д. "),
+    ("улица Хасана Туфана", "ул. Хасана Туфана, д. "),
+    ("Хлебозаводская улица", "ул. Хлебозаводская, д. "),
+    ("Безоблачная улица", "ул. Безоблачная, д. "),
+    ("улица Профессора Камая", "ул. Профессора Камая, д. "),
+    ("улица Рауиса Гареева", "ул. Рауиса Гареева, д. "),
+    ("улица Салиха Батыева", "ул. Салиха Батыева, д. "),
+    ("2-я Азинская улица", "ул. Азинская 2-я, д. "),
+    ("2-я Даурская улица", "ул. Даурская 2-я, д. "),
+    ("улица Джаудата Файзи", "ул. Джаудата Файзи, д. "),
+)
+MOSCOW_STREETS = (
+    ("Южнобутовская улица", "Южнобутовская ул. "),
+    ("Бескудниковский бульвар", "Бескудниковский бульв. "),
+    ("Ленинградское шоссе", "Ленинградское шоссе "),
+    ("Хорошёвское шоссе", "Хорошевское шоссе "),
+    ("Первомайская улица", "Первомайская ул. "),
+    ("улица Свободы", "Свободы ул. "),
+)
+SPB_STREETS = (
+    ("набережная реки Фонтанки", "Фонтанки реки наб., д. "),
+    ("Ленинский проспект", "Ленинский пр., д. "),
+    ("Дачный проспект", "Дачный пр., д. "),
+    ("улица Седова", "Седова ул., д. "),
+    ("Будапештская улица", "Будапештская ул., д. "),
+    ("улица Марата", "Марата ул., д. "),
+)
 
 STREETS = (
     Street(
@@ -411,6 +573,48 @@ STREETS = (
         mun_obr="г. Казань",
         timezone="Europe/Moscow",
     ),
+    *(
+        Street(
+            export_id=220,
+            subject_rf="Республика Татарстан",
+            region="Республика Татарстан",
+            city="Казань",
+            street=street,
+            prefix=prefix,
+            mun_obr="г. Казань",
+            timezone="Europe/Moscow",
+            live=True,
+        )
+        for street, prefix in KAZAN_STREETS
+    ),
+    *(
+        Street(
+            export_id=184,
+            subject_rf="город Москва",
+            region="Москва",
+            city="Москва",
+            street=street,
+            prefix=prefix,
+            mun_obr="",
+            timezone="Europe/Moscow",
+            live=True,
+        )
+        for street, prefix in MOSCOW_STREETS
+    ),
+    *(
+        Street(
+            export_id=250,
+            subject_rf="город Санкт-Петербург",
+            region="Санкт-Петербург",
+            city="Санкт-Петербург",
+            street=street,
+            prefix=prefix,
+            mun_obr="",
+            timezone="Europe/Moscow",
+            live=True,
+        )
+        for street, prefix in SPB_STREETS
+    ),
 )
 
 HOUSE_FIELDS = (
@@ -447,19 +651,19 @@ FULL_DIGITS = 11
 LOCAL_DIGITS = 7
 AREA_CODES = {"город Санкт-Петербург": "812", "Республика Татарстан": "843"}
 
-_last_request = 0.0
-_cards_blocked = False
+_last_request: dict[str, float] = {}
 _gis_blocked = False
 
 
 def _get(url: str) -> bytes:
-    global _last_request  # noqa: PLW0603
-    wait = _last_request + REQUEST_INTERVAL - time.monotonic()
-    if wait > 0:
-        time.sleep(wait)
+    host = urllib.parse.urlsplit(url).netloc
+    interval = HOST_INTERVALS.get(host, REQUEST_INTERVAL)
     headers = {"User-Agent": USER_AGENT, "Accept": "*/*"}
     request = urllib.request.Request(url, headers=headers)  # noqa: S310
     for attempt in range(RETRIES):
+        wait = _last_request.get(host, 0.0) + interval - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
         try:
             with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
                 return bytes(response.read())
@@ -472,10 +676,11 @@ def _get(url: str) -> bytes:
                 raise
             if attempt == RETRIES - 1:
                 raise
-            log.info("%s, повтор через %s с", error, RETRY_PAUSE)
-            time.sleep(RETRY_PAUSE)
+            pause = RETRY_PAUSE * 2**attempt
+            log.info("%s, повтор через %s с", error, pause)
+            time.sleep(pause)
         finally:
-            _last_request = time.monotonic()
+            _last_request[host] = time.monotonic()
     raise AssertionError
 
 
@@ -483,7 +688,7 @@ def _cached(name: str, url: str) -> bytes:
     path = CACHE_DIR / name
     if not path.exists():
         log.info("GET %s", url)
-        path.write_bytes(_get(url))
+        _store(path, _get(url))
     return path.read_bytes()
 
 
@@ -511,18 +716,10 @@ def _building_key(building: str) -> tuple[int, str]:
 
 
 def _card(source_id: str) -> tuple[int | None, str | None]:
-    global _cards_blocked  # noqa: PLW0603
-    name = f"card-{source_id}.html"
-    if _cards_blocked and not (CACHE_DIR / name).exists():
+    path = CACHE_DIR / f"card-{source_id}.html"
+    if not path.exists():
         return None, None
-    try:
-        page = _cached(name, f"{REFORMA}/myhouse/profile/view/{source_id}").decode(
-            "utf-8",
-        )
-    except urllib.error.URLError as error:
-        log.info("карточки недоступны до конца прогона: %s", error)
-        _cards_blocked = True
-        return None, None
+    page = path.read_text(encoding="utf-8")
     entrances, manager = parse_card(page)
     if manager is None and "Домом управляет" in page:
         log.info("карточка %s называет УК, но имя не разобрано", source_id)
@@ -637,10 +834,25 @@ def main() -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     registry = _registry()
-
-    houses = []
+    by_ogrn = _registry_by_ogrn()
+    kept_houses = _previous("houses.csv")
+    kept_orgs = {org["inn"]: org for org in _previous("organizations.csv")}
+    by_street: dict[Street, Sequence[Mapping[str, object]]] = {}
     orgs: dict[str, dict[str, str]] = {}
     for street in STREETS:
+        kept = [
+            house
+            for house in kept_houses
+            if (house["city"], house["street"]) == (street.city, street.street)
+        ]
+        if kept and not street.live:
+            by_street[street] = kept
+            orgs.update(
+                (house["org_inn"], kept_orgs[house["org_inn"]])
+                for house in kept
+                if house["org_inn"]
+            )
+            continue
         street_houses: list[dict[str, str | int]] = []
         picked = _pick(street)
         found = _gis_lookup(street, [row["houseguid"] for row in picked])
@@ -657,27 +869,28 @@ def main() -> None:
             if not entrances:
                 entrances = max(1, ceil(living_flats / (floors * 4)))
                 log.info("нет подъездов в карточке %s, оценка %s", building, entrances)
-            org_inn = ""
+            gis, detail = _gis(found.get(row["houseguid"]))
+            ogrn = gis_manager(detail)
+            listed = None
             if manager is not None:
-                matches = {
-                    candidate["inn"]: candidate
-                    for candidate in registry.get(
-                        (street.subject_rf, manager.lower()),
-                        [],
-                    )
-                }
-                if len(matches) == 1:
-                    ((org_inn, org),) = matches.items()
-                    orgs[org_inn] = _org(org, street.timezone)
-                else:
-                    log.info(
-                        "УК %r у %s: совпадений %s",
-                        manager,
-                        building,
-                        len(matches),
-                    )
+                listed = unique_org(
+                    registry.get((street.subject_rf, manager.lower()), []),
+                )
+                if listed is None:
+                    log.info("УК %r у %s не сопоставлена с реестром", manager, building)
+            if street.live and listed is None and ogrn:
+                listed = unique_org(by_ogrn.get(ogrn, []))
+            org = None if listed is None else _org(listed, street.timezone)
+            if street.live and org is None and ogrn:
+                org = _gis_org(detail, street.timezone)
+            if street.live and org is None and (manager or ogrn):
+                log.info("УК дома %s не найдена по ИНН, дом пропущен", building)
+                continue
+            org_inn = ""
+            if org is not None:
+                org_inn = org["inn"]
+                orgs.setdefault(org_inn, org)
             lat, lon = _geocode(street, building)
-            gis = _gis(found.get(row["houseguid"]))
             street_houses.append(
                 {
                     "region": street.region,
@@ -705,7 +918,9 @@ def main() -> None:
                 },
             )
         _fill_from_osm(street, street_houses)
-        houses.extend(street_houses)
+        by_street[street] = street_houses
+        log.info("%s, %s: домов %s", street.city, street.street, len(street_houses))
+    houses = [house for street in STREETS for house in by_street[street]]
 
     with (DATA_DIR / "houses.csv").open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, HOUSE_FIELDS, lineterminator="\n")
@@ -808,14 +1023,18 @@ def _gis_lookup(street: Street, guids: list[str]) -> dict[str, dict[str, Any]]:
     )
 
 
-def _gis(found: dict[str, Any] | None) -> dict[str, str | int]:
+def _gis(
+    found: dict[str, Any] | None,
+) -> tuple[dict[str, str | int], dict[str, Any]]:
     if found is None:
-        return {}
+        return {}, {}
     detail = _gis_json(
         f"gis-{found['guid']}.json",
         f"{GIS}/{found['houseType']['code']}/{found['guid']}",
     )
-    return {} if detail is None else parse_gis(found, detail)
+    if detail is None:
+        return {}, {}
+    return parse_gis(found, detail), detail
 
 
 def _gis_json(name: str, url: str) -> Any:
@@ -852,6 +1071,71 @@ def gis_houses(raw: Any) -> dict[str, dict[str, Any]]:
         if item.get("status") != "CANCELLED":
             found.setdefault(item["house"]["code"], item)
     return found
+
+
+def _store(path: Path, data: bytes) -> None:
+    part = path.with_name(f"{path.name}.part")
+    part.write_bytes(data)
+    part.replace(path)
+
+
+def _registry_by_ogrn() -> dict[str, list[dict[str, str]]]:
+    by_ogrn: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for row in _export_rows(REGISTRY_EXPORT):
+        if row["orn"]:
+            by_ogrn[row["orn"]].append(row)
+    return by_ogrn
+
+
+def _previous(name: str) -> list[dict[str, str]]:
+    path = DATA_DIR / name
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as file:
+        return list(csv.DictReader(file))
+
+
+def unique_org(candidates: list[dict[str, str]]) -> dict[str, str] | None:
+    by_inn = {candidate["inn"]: candidate for candidate in candidates}
+    return next(iter(by_inn.values())) if len(by_inn) == 1 else None
+
+
+def gis_manager(detail: dict[str, Any]) -> str:
+    return str((detail.get("managementOrganization") or {}).get("ogrn") or "")
+
+
+def _gis_org(detail: dict[str, Any], timezone: str) -> dict[str, str] | None:
+    guid = (detail.get("managementOrganization") or {}).get("guid")
+    if not guid:
+        return None
+    path = CACHE_DIR / f"gis-org-{guid}.json"
+    if not path.exists():
+        if _gis_blocked:
+            return None
+        url = f"{GIS_ORGS}/orgByGuid?organizationGuid={guid}"
+        log.info("GET %s", url)
+        try:
+            raw = _get(url)
+            card = json.loads(raw)
+        except (OSError, ValueError) as error:
+            log.info("карточка УК %s из ГИС ЖКХ не получена: %s", guid, error)
+            return None
+        if not isinstance(card, dict) or not card.get("inn"):
+            return None
+        _store(path, raw)
+    return gis_org(json.loads(path.read_bytes()), timezone)
+
+
+def gis_org(card: dict[str, Any], timezone: str) -> dict[str, str]:
+    return {
+        "inn": str(card["inn"]),
+        "name": _clean(card.get("shortName") or card.get("fullName") or ""),
+        "phone": phone(str(card.get("phone") or ""), None),
+        "address": _clean(card.get("orgAddress") or ""),
+        "email": email(str(card.get("orgEmail") or "")),
+        "site": site(str(card.get("url") or "")),
+        "timezone": timezone,
+    }
 
 
 if __name__ == "__main__":
