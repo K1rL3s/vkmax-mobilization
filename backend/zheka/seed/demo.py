@@ -34,7 +34,13 @@ from zheka.core.enums import (
     ServiceType,
     VerificationStatus,
 )
-from zheka.core.ids import FlatId, HouseId, MaxUserId, UserId
+from zheka.core.ids import (
+    DEMO_TENANT_MAX_ID_BASE,
+    FlatId,
+    HouseId,
+    MaxUserId,
+    UserId,
+)
 from zheka.core.models import (
     Announcement,
     Appointment,
@@ -72,7 +78,17 @@ from zheka.core.services.demo import (
 from zheka.core.services.readings import current_period
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.seed.directory import DATA_DIR, DirectoryHouse, load_directory
+from zheka.infra.database.tables.residents import (
+    demand_signals_table,
+    residents_table,
+)
+from zheka.infra.database.tables.users import users_table
+from zheka.seed.directory import (
+    DATA_DIR,
+    DirectoryHouse,
+    extend_directory,
+    load_directory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -562,41 +578,29 @@ class Seeder:
         "_today",
     )
 
-    def __init__(self, session: AsyncSession, demo: DemoService, now: datetime) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        demo: DemoService,
+        now: datetime,
+        max_id: int = -1,
+    ) -> None:
         self._session = session
         self._demo = demo
         self._today = now.date()
         self._now = datetime.combine(self._today, time(), UTC)
         self._seeded_at = now
-        self._max_ids: Iterator[int] = itertools.count(-1, -1)
+        self._max_ids: Iterator[int] = itertools.count(max_id, -1)
         self._names = Random("names")
 
     async def run(self, directory: Sequence[DirectoryHouse]) -> None:
-        free = _history_houses(directory)
-        profiles = (*PROFILES, *BACKGROUND_PROFILES)
-        voters: list[User] = []
-        taken: set[HouseId] = set()
-        for number, profile in enumerate(profiles, start=1):
-            neighbours = [other for other in profiles if other.city == profile.city]
-            items = self._territory(
-                free[profile.city],
-                neighbours.index(profile),
-                len(neighbours),
-                profile.houses,
-            )
-            org = await self._org(profile, number, items[0].house.timezone)
-            staff = await self._staff(org, profile)
-            for item in items:
-                item.house.org_id = org.id
-                taken.add(item.house.id)
-            await self._session.flush()
-            by_id = {item.house.id: item for item in items}
-            ordered = [
-                by_id[house.id]
-                for house in await HousesRepo(self._session).list_for_org(org.id)
-            ]
-            voters.extend(await self._houses(profile, org, staff, ordered))
+        voters, taken = await self._territories(
+            _history_houses(directory[:FIRST_DIRECTORY_HOUSES]),
+            (*PROFILES, *BACKGROUND_PROFILES),
+            1,
+        )
         await self._demand(directory, taken, voters)
+        await self.add(directory)
 
     async def _user(self) -> User:
         return (await self._users(1))[0]
@@ -1579,6 +1583,58 @@ class Seeder:
         works.documents = [{"name": WORKS_ORDER, "title": WORKS_ORDER_TITLE}]
         await self._session.flush()
 
+    async def add(self, directory: Sequence[DirectoryHouse]) -> None:
+        stmt = (
+            select(residents_table.c.house_id)
+            .join(users_table, users_table.c.id == residents_table.c.user_id)
+            .where(users_table.c.max_user_id > 0)
+            .union(
+                select(demand_signals_table.c.house_id)
+                .join(users_table, users_table.c.id == demand_signals_table.c.user_id)
+                .where(users_table.c.max_user_id > 0),
+            )
+        )
+        claimed = set((await self._session.execute(stmt)).scalars())
+        free = {
+            city: [item for item in items if item.house.id not in claimed]
+            for city, items in _history_houses(directory).items()
+        }
+        await self._territories(
+            free,
+            ADDED_PROFILES,
+            len(PROFILES) + len(BACKGROUND_PROFILES) + 1,
+        )
+
+    async def _territories(
+        self,
+        free: dict[str, list[DirectoryHouse]],
+        profiles: Sequence[OrgProfile],
+        first_number: int,
+    ) -> tuple[list[User], set[HouseId]]:
+        voters: list[User] = []
+        taken: set[HouseId] = set()
+        for number, profile in enumerate(profiles, start=first_number):
+            neighbours = [other for other in profiles if other.city == profile.city]
+            items = self._territory(
+                free[profile.city],
+                neighbours.index(profile),
+                len(neighbours),
+                profile.houses,
+            )
+            org = await self._org(profile, number, items[0].house.timezone)
+            staff = await self._staff(org, profile)
+            for item in items:
+                item.house.org_id = org.id
+                taken.add(item.house.id)
+            await self._session.flush()
+            by_id = {item.house.id: item for item in items}
+            ordered = [
+                by_id[house.id]
+                for house in await HousesRepo(self._session).list_for_org(org.id)
+            ]
+            voters.extend(await self._houses(profile, org, staff, ordered))
+        return voters, taken
+
 
 COMMON_DESCRIPTIONS = frozenset(
     {
@@ -1587,4 +1643,173 @@ COMMON_DESCRIPTIONS = frozenset(
         "Искрит розетка в щитке на этаже",
         "Не работает домофон",
     },
+)
+
+
+async def extend(
+    session: AsyncSession,
+    demo: DemoService,
+    files_dir: Path,
+    now: datetime,
+) -> bool:
+    stmt = select(func.pg_advisory_xact_lock(SEED_LOCK))
+    await session.execute(stmt)
+    orgs = OrgsRepo(session)
+    if await orgs.get_by_inn(DEMO_INN) is None:
+        logger.info("Сида нет, дополнять нечего")
+        return False
+    _copy_files(files_dir)
+    directory = await extend_directory(session)
+    if await orgs.get_by_inn(ADDED_PROFILES[0].inn) is None:
+        stmt = select(func.min(users_table.c.max_user_id)).where(
+            users_table.c.max_user_id > DEMO_TENANT_MAX_ID_BASE,
+        )
+        lowest = (await session.execute(stmt)).scalar_one()
+        await Seeder(session, demo, now, min(lowest or 0, 0) - 1).add(directory)
+    logger.info("Сид дополнен: домов в справочнике %s", len(directory))
+    return True
+
+
+FIRST_DIRECTORY_HOUSES = 1980
+ADDED_PROFILES = (
+    OrgProfile(
+        name="Демо-УК «Белые дворы»",
+        inn="9900000210",
+        city="Казань",
+        houses=15,
+        accept_minutes=40,
+        phone_percent=14,
+        repeat_percent=6,
+        recent_repeats=1,
+        auto_close_percent=11,
+        ratings=(5, 5, 4, 4, 5),
+        overdue=1,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Тихий Кабан»",
+        inn="9900000220",
+        city="Казань",
+        houses=14,
+        accept_minutes=120,
+        phone_percent=45,
+        repeat_percent=17,
+        recent_repeats=3,
+        auto_close_percent=41,
+        ratings=(3, 2, 4, 3, 3),
+        overdue=3,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Казанская слобода»",
+        inn="9900000230",
+        city="Казань",
+        houses=13,
+        accept_minutes=55,
+        phone_percent=18,
+        repeat_percent=7,
+        recent_repeats=1,
+        auto_close_percent=14,
+        ratings=(4, 5, 4, 4),
+        overdue=1,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Заречный квартал»",
+        inn="9900000250",
+        city="Казань",
+        houses=15,
+        accept_minutes=90,
+        phone_percent=33,
+        repeat_percent=12,
+        recent_repeats=2,
+        auto_close_percent=30,
+        ratings=(4, 3, 3, 4, 2),
+        overdue=2,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Ново-Савиновский двор»",
+        inn="9900000260",
+        city="Казань",
+        houses=12,
+        accept_minutes=30,
+        phone_percent=8,
+        repeat_percent=4,
+        recent_repeats=0,
+        auto_close_percent=7,
+        ratings=(5, 5, 5, 4),
+        overdue=0,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Камские зори»",
+        inn="9900000270",
+        city="Казань",
+        houses=14,
+        accept_minutes=70,
+        phone_percent=24,
+        repeat_percent=9,
+        recent_repeats=2,
+        auto_close_percent=21,
+        ratings=(4, 4, 3, 5, 4),
+        overdue=2,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Тверской квартал»",
+        inn="9900000280",
+        city="Москва",
+        houses=11,
+        accept_minutes=50,
+        phone_percent=16,
+        repeat_percent=8,
+        recent_repeats=1,
+        auto_close_percent=13,
+        ratings=(4, 5, 4, 3),
+        overdue=1,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Северная слобода»",
+        inn="9900000290",
+        city="Москва",
+        houses=10,
+        accept_minutes=110,
+        phone_percent=38,
+        repeat_percent=14,
+        recent_repeats=2,
+        auto_close_percent=35,
+        ratings=(3, 4, 2, 3),
+        overdue=2,
+        requests_per_week=1,
+    ),
+    OrgProfile(
+        name="Демо-УК «Невская линия»",
+        inn="9900000300",
+        city="Санкт-Петербург",
+        houses=12,
+        accept_minutes=60,
+        phone_percent=20,
+        repeat_percent=9,
+        recent_repeats=1,
+        auto_close_percent=18,
+        ratings=(4, 4, 5, 3, 4),
+        overdue=1,
+        requests_per_week=2,
+    ),
+    OrgProfile(
+        name="Демо-УК «Петроградский двор»",
+        inn="9900000310",
+        city="Санкт-Петербург",
+        houses=10,
+        accept_minutes=95,
+        phone_percent=30,
+        repeat_percent=13,
+        recent_repeats=2,
+        auto_close_percent=28,
+        ratings=(3, 4, 3, 4),
+        overdue=2,
+        requests_per_week=1,
+    ),
 )

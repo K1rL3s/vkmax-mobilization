@@ -13,7 +13,17 @@ import pytest_asyncio
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.script import ScriptDirectory
-from sqlalchemy import Connection, Row, String, cast, func, insert, select, update
+from sqlalchemy import (
+    Connection,
+    Row,
+    String,
+    cast,
+    delete,
+    func,
+    insert,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
 from tests.conftest import alembic_config, make_config, requests_service
@@ -87,11 +97,13 @@ from zheka.infra.database.tables.requests import (
     requests_table,
 )
 from zheka.infra.database.tables.residents import (
+    demand_signals_table,
     flat_verification_requests_table,
     residents_table,
 )
 from zheka.infra.database.tables.users import users_table
 from zheka.seed.demo import (
+    ADDED_PROFILES,
     ANNOUNCEMENTS,
     BACKGROUND_PROFILES,
     MAP_STATES,
@@ -100,6 +112,7 @@ from zheka.seed.demo import (
     RESULT_PHOTOS,
     WORKS_ORDER,
     WORKS_ORDER_TITLE,
+    extend,
     seed,
 )
 from zheka.seed.directory import DATA_DIR
@@ -213,7 +226,7 @@ async def test_every_seeded_user_is_unreachable(db: AsyncSession) -> None:
 
 def test_every_fictional_inn_fails_the_checksum() -> None:
     weights = (2, 4, 10, 3, 5, 9, 4, 6, 8)
-    for profile in (*PROFILES, *BACKGROUND_PROFILES):
+    for profile in (*PROFILES, *BACKGROUND_PROFILES, *ADDED_PROFILES):
         digits = [int(char) for char in profile.inn]
         checksum = sum(w * d for w, d in zip(weights, digits, strict=False)) % 11 % 10
         assert checksum != digits[9], profile.inn
@@ -662,7 +675,9 @@ async def test_every_demo_organization_is_a_compact_territory(
     for org_id, lat, lon in (await db.execute(stmt)).tuples():
         points.setdefault(org_id, []).append((float(lat), float(lon)))
 
-    assert len(points) == len(PROFILES) + len(BACKGROUND_PROFILES)
+    assert len(points) == len(PROFILES) + len(BACKGROUND_PROFILES) + len(
+        ADDED_PROFILES,
+    )
     for territory in points.values():
         lats = [lat for lat, _lon in territory]
         lons = [lon for _lat, lon in territory]
@@ -790,7 +805,7 @@ async def test_every_seeded_announcement_has_a_register_matching_its_counts(
 async def test_the_first_house_of_every_demo_org_has_water_works_under_way(
     db: AsyncSession,
 ) -> None:
-    for profile in (*PROFILES, *BACKGROUND_PROFILES):
+    for profile in (*PROFILES, *BACKGROUND_PROFILES, *ADDED_PROFILES):
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
         [first, *_others] = await HousesRepo(db).list_for_org(org.id)
@@ -1026,3 +1041,35 @@ async def test_the_place_migration_gives_seeded_requests_their_seeded_place(
 
     assert {place for _, place in seeded_places} == set(RequestPlace)
     assert migrated == seeded_places
+
+
+async def test_extending_a_seeded_base_changes_nothing(db: AsyncSession) -> None:
+    before = await _counts(db)
+
+    assert await extend(db, _demo(db), FILES, NOW)
+
+    assert await _counts(db) == before
+
+
+async def test_extending_puts_back_a_missing_directory_house(db: AsyncSession) -> None:
+    stmt = (
+        select(houses_table.c.id, houses_table.c.street, houses_table.c.building)
+        .where(
+            houses_table.c.org_id.is_(None),
+            houses_table.c.id.not_in(select(demand_signals_table.c.house_id)),
+        )
+        .order_by(houses_table.c.id.desc())
+        .limit(1)
+    )
+    house_id, street, building = (await db.execute(stmt)).one()
+    before = await _counts(db)
+    await db.execute(delete(houses_table).where(houses_table.c.id == house_id))
+
+    assert await extend(db, _demo(db), FILES, NOW)
+
+    assert await _counts(db) == before
+    stmt = select(func.count()).where(
+        houses_table.c.street == street,
+        houses_table.c.building == building,
+    )
+    assert (await db.execute(stmt)).scalar_one() == 1

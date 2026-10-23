@@ -1,3 +1,4 @@
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from zheka.core.services.demo import DemoService
 from zheka.di import make_container
 from zheka.logger import setup_logger
 from zheka.runner import run
-from zheka.seed.demo import seed
+from zheka.seed.demo import extend, seed
 
 
 async def main() -> None:
@@ -19,7 +20,8 @@ async def main() -> None:
         async with container() as request_container:
             session = await request_container.get(AsyncSession)
             demo = await request_container.get(DemoService)
-            if await seed(
+            fill = extend if sys.argv[1:] == ["extend"] else seed
+            if await fill(
                 session,
                 demo,
                 Path(config.files.dir),
