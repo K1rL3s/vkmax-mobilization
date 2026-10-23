@@ -21,7 +21,12 @@ from maxo.dialogs.context.media_storage import MediaIdStorage
 from maxo.dialogs.test_tools import BotClient, MockMessageManager
 from maxo.dialogs.test_tools.bot_client import FakeBot
 from maxo.dialogs.test_tools.keyboard import InlineButtonTextLocator
-from maxo.enums import ChatStatus as MaxChatStatus, ChatType, MessageLinkType
+from maxo.enums import (
+    ChatAdminPermission,
+    ChatStatus as MaxChatStatus,
+    ChatType,
+    MessageLinkType,
+)
 from maxo.errors import (
     MaxBotForbiddenError,
     MaxBotNetworkError,
@@ -34,6 +39,7 @@ from maxo.routing.signals import MaxoUpdate
 from maxo.types import (
     AudioAttachment,
     BotAddedToChat,
+    BotAdminPermissionsChanged,
     BotCommand,
     BotRemovedFromChat,
     BotStarted,
@@ -280,6 +286,9 @@ from zheka.core.services.chairman import NOT_A_NEIGHBOUR
 from zheka.core.services.chats import (
     CHAT_NOT_BOUND,
     CHAT_TAKEN,
+    PINS_ALLOWED,
+    PINS_NOT_ALLOWED,
+    PINS_REVOKED,
     PINS_TITLE,
     UNPIN_HINT,
     WRONG_CODE,
@@ -362,8 +371,8 @@ from zheka.infra.max import MaxSender
 from zheka.infra.max.sender import (
     ChatJoinOutcome,
     _chat_rate_limit,
+    bot_rights,
     dialog_notify,
-    is_chat_admin,
 )
 from zheka.infra.pdf import PdfDocument
 from zheka.infra.yandex import SpeechClient, YandexQuota
@@ -1187,6 +1196,9 @@ class _ChatApi:
     def __init__(self) -> None:
         self.left: list[int] = []
         self.is_admin = False
+        self.permissions: list[ChatAdminPermission] | None = [
+            ChatAdminPermission.PIN_MESSAGE,
+        ]
 
     async def leave_chat(self, *, chat_id: int, **_: Any) -> SimpleQueryResult:
         self.left.append(chat_id)
@@ -1204,7 +1216,11 @@ class _ChatApi:
         )
 
     async def get_membership(self, *, chat_id: int, **_: Any) -> Any:  # noqa: ARG002
-        return type("Membership", (), {"is_admin": self.is_admin})()
+        return type(
+            "Membership",
+            (),
+            {"is_admin": self.is_admin, "permissions": self.permissions},
+        )()
 
 
 CHAT_TITLE = "Соседи"
@@ -1341,6 +1357,7 @@ async def test_staff_binds_the_chat_by_one_tap_and_the_welcome_follows(
         "chat_id": chat_id,
         "house_id": house_id,
         "member": None,
+        "can_pin": True,
     }
     assert chat_api.left == []
 
@@ -1407,7 +1424,7 @@ async def test_a_bot_that_is_no_longer_in_the_chat_is_not_its_admin(
 ) -> None:
     monkeypatch.setattr(fake_bot, "get_membership", _forbidden)
 
-    assert await is_chat_admin(fake_bot, _chat_id()) is False
+    assert (await bot_rights(fake_bot, _chat_id())).is_admin is False
 
 
 async def _member_added(
@@ -1451,7 +1468,12 @@ async def test_a_member_added_to_a_bound_chat_is_welcomed_by_name(
     await _member_added(client, chat_id, is_bot=True)
 
     assert _welcomes(bot_broker, chat_id) == [
-        {"chat_id": chat_id, "house_id": chat.house_id, "member": "Анна <3"},
+        {
+            "chat_id": chat_id,
+            "house_id": chat.house_id,
+            "member": "Анна <3",
+            "can_pin": None,
+        },
     ]
     assert await UsersRepo(bot_session).get_by_max_id(MaxUserId(member.user.id)) is None
 
@@ -1487,7 +1509,12 @@ async def test_the_member_welcome_escapes_the_name(
     assert notices.texts == [WELCOME_MEMBER_TEXT.format(name="Анна &lt;3")]
 
 
-async def _bound_chat(session: AsyncSession, client: BotClient) -> MaxChatId:
+async def _bound_chat(
+    session: AsyncSession,
+    client: BotClient,
+    *,
+    admin: bool = True,
+) -> MaxChatId:
     house_id = await _staff(session, client)
     user = await _user(session, client)
     chat_id = _chat_id()
@@ -1498,7 +1525,8 @@ async def _bound_chat(session: AsyncSession, client: BotClient) -> MaxChatId:
             title=CHAT_TITLE,
             bound_by=user.id,
             bound_at=datetime.now(UTC),
-            bot_is_admin=True,
+            bot_is_admin=admin,
+            bot_can_pin=admin,
             status=ChatStatus.ACTIVE,
         ),
     )
@@ -6403,3 +6431,139 @@ async def test_keep_webhook_gets_the_dispatcher_in_a_worker_task(
     task_broker: InMemoryBroker,
 ) -> None:
     await _run(task_broker, keep_webhook)
+
+
+async def _rights_changed(
+    client: BotClient,
+    chat_id: MaxChatId,
+    *,
+    is_admin: bool,
+    permissions: Any,
+) -> None:
+    await _feed(
+        client,
+        BotAdminPermissionsChanged(
+            bot_id=1,
+            chat_id=chat_id,
+            user_id=client.user.id,
+            is_admin=is_admin,
+            is_channel=False,
+            permissions=permissions,
+            timestamp=datetime.now(UTC),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("permissions", "membership", "can_pin"),
+    [
+        ([ChatAdminPermission.WRITE, ChatAdminPermission.PIN_MESSAGE], None, True),
+        ([ChatAdminPermission.WRITE], [ChatAdminPermission.PIN_MESSAGE], False),
+        (Omitted(), [ChatAdminPermission.PIN_MESSAGE], True),
+        (Omitted(), [ChatAdminPermission.WRITE], False),
+    ],
+    ids=["pin", "no_pin", "asked_pin", "asked_no_pin"],
+)
+async def test_the_bot_notices_its_promotion_without_the_button(
+    client: BotClient,
+    chat_api: _ChatApi,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    permissions: Any,
+    membership: list[ChatAdminPermission] | None,
+    can_pin: bool,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client, admin=False)
+    chat_api.is_admin = True
+    chat_api.permissions = membership
+
+    await _rights_changed(client, chat_id, is_admin=True, permissions=permissions)
+
+    bot_session.expire_all()
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert (chat.bot_is_admin, chat.bot_can_pin) == (True, can_pin)
+    assert bot_broker.enqueued(TaskName.WELCOME_CHAT)[-1] == {
+        "chat_id": chat_id,
+        "house_id": chat.house_id,
+        "member": None,
+        "can_pin": can_pin,
+    }
+
+
+@pytest.mark.parametrize(
+    "permissions",
+    [None, [ChatAdminPermission.PIN_MESSAGE]],
+    ids=["cleared", "stale_list"],
+)
+async def test_the_bot_tells_the_chat_it_lost_the_pin_right(
+    client: BotClient,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    permissions: list[ChatAdminPermission] | None,
+) -> None:
+    chat_id = await _bound_chat(bot_session, client)
+
+    await _rights_changed(client, chat_id, is_admin=False, permissions=permissions)
+
+    bot_session.expire_all()
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert (chat.bot_is_admin, chat.bot_can_pin) == (False, False)
+    texts = [
+        task["text"]
+        for task in bot_broker.enqueued(TaskName.BROADCAST_TO_CHATS)
+        if task["chat_ids"] == [chat_id]
+    ]
+    assert texts == [PINS_REVOKED]
+
+
+async def test_rights_in_an_unbound_chat_change_nothing(
+    client: BotClient,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    chat_id = _chat_id()
+    await ChatsRepo(bot_session).upsert_added(chat_id, CHAT_TITLE, None)
+    await bot_session.commit()
+
+    await _rights_changed(
+        client,
+        chat_id,
+        is_admin=True,
+        permissions=[ChatAdminPermission.PIN_MESSAGE],
+    )
+
+    bot_session.expire_all()
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    assert chat.bot_is_admin is False
+    welcomed = [
+        task
+        for task in bot_broker.enqueued(TaskName.WELCOME_CHAT)
+        if task["chat_id"] == chat_id
+    ]
+    assert welcomed == []
+
+
+@pytest.mark.parametrize(
+    ("can_pin", "line"),
+    [(True, PINS_ALLOWED), (False, PINS_NOT_ALLOWED)],
+)
+async def test_the_welcome_says_whether_the_bot_keeps_the_pins(
+    task_broker: InMemoryBroker,
+    notices: _RecordingBot,
+    can_pin: bool,
+    line: str,
+) -> None:
+    await _run(
+        task_broker,
+        welcome_chat,
+        chat_id=_chat_id(),
+        house_id=1,
+        can_pin=can_pin,
+    )
+
+    [text] = notices.texts
+    assert text is not None
+    assert text.endswith(f"\n\n{line}")

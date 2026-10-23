@@ -155,12 +155,14 @@ class NotificationsService:
         house_id: HouseId,
         *,
         member: str | None = None,
+        can_pin: bool | None = None,
     ) -> None:
         self._publisher.publish(
             TaskName.WELCOME_CHAT,
             chat_id=chat_id,
             house_id=house_id,
             member=member,
+            can_pin=can_pin,
         )
 
     def join_house_chat(self, chat_id: MaxChatId, user_id: UserId) -> None:

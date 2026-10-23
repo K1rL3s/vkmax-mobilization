@@ -28,13 +28,16 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import MaxChatId, MaxUserId
+from zheka.core.models import BotRights
 from zheka.core.services.chats import (
     ALREADY_JOINED,
     CHAT_TAKEN,
     MESSAGE_TEXT_LIMIT,
     NO_CHAT_TO_JOIN,
+    PINS_ALLOWED,
     PINS_ERASED,
     PINS_FULL,
+    PINS_REVOKED,
     PIN_DENIED,
     PIN_HINT,
     PIN_NEEDS_RIGHTS,
@@ -64,6 +67,9 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.chats import chat_pins_table
 from zheka.infra.database.tables.events import events_table
+
+ADMIN = BotRights(is_admin=True, can_pin=True)
+NOT_ADMIN = BotRights(is_admin=False, can_pin=False)
 
 
 def _service(
@@ -215,8 +221,8 @@ async def test_the_rights_are_granted_once_over_two_grants(
     service = _service(session, publisher)
     await service.bind(data.user_id, chat_id, data.house_id)
 
-    await service.set_admin(chat_id, True)
-    await service.set_admin(chat_id, True)
+    await service.set_admin(chat_id, ADMIN)
+    await service.set_admin(chat_id, ADMIN)
 
     stmt = select(func.count()).where(
         events_table.c.type == EventType.CHAT_ADMIN_GRANTED,
@@ -226,7 +232,12 @@ async def test_the_rights_are_granted_once_over_two_grants(
     assert (await _chat(session, chat_id)).bot_is_admin is True
     await publisher.flush()
     assert broker.enqueued(TaskName.WELCOME_CHAT) == [
-        {"chat_id": chat_id, "house_id": data.house_id, "member": None},
+        {
+            "chat_id": chat_id,
+            "house_id": data.house_id,
+            "member": None,
+            "can_pin": True,
+        },
     ]
 
 
@@ -247,7 +258,7 @@ async def test_a_new_member_is_welcomed_unless_already_living_in_the_house(
     chat_id = await _added(session)
     service = _service(session, publisher)
     await service.bind(staff.user_id, chat_id, staff.house_id)
-    await service.set_admin(chat_id, True)
+    await service.set_admin(chat_id, ADMIN)
     user = User(max_user_id=MaxUserId(secrets.randbits(48)), name="Анна")
     session.add(user)
     await session.flush()
@@ -297,7 +308,7 @@ async def test_a_re_add_clears_the_binding_and_drops_the_list_without_events(
     chat_id = await _added(session)
     service = _service(session)
     await service.bind(data.user_id, chat_id, data.house_id)
-    await service.set_admin(chat_id, True)
+    await service.set_admin(chat_id, ADMIN)
     await service.pin(data.user_id, chat_id, REPLY, None)
     await ChatsRepo(session).set_pins_mid(await _chat(session, chat_id), "list-1")
     if removed:
@@ -312,6 +323,7 @@ async def test_a_re_add_clears_the_binding_and_drops_the_list_without_events(
     assert chat.bound_by is None
     assert chat.bound_at is None
     assert chat.bot_is_admin is False
+    assert chat.bot_can_pin is False
     assert chat.pins_mid is None
     assert await _listed(session, chat_id) == []
     assert await _pin_events(session, chat_id, EventType.CHAT_UNPINNED) == []
@@ -345,7 +357,7 @@ async def _pinning_chat(session: AsyncSession, data: OrgHouseFlatUser) -> MaxCha
     chat_id = await _added(session)
     chat = await _chat(session, chat_id)
     await ChatsRepo(session).bind(chat, data.house_id, data.user_id)
-    await ChatsRepo(session).set_admin(chat, True)
+    await ChatsRepo(session).set_admin(chat, ADMIN)
     return chat_id
 
 
@@ -452,9 +464,15 @@ async def test_a_chat_without_a_house_ignores_pins(
     assert broker.enqueued(TaskName.SYNC_CHAT_PINS) == []
 
 
+@pytest.mark.parametrize(
+    "rights",
+    [NOT_ADMIN, BotRights(is_admin=True, can_pin=False)],
+    ids=["not_admin", "admin_without_pin"],
+)
 async def test_a_pin_needs_a_reply_and_the_bot_rights(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
+    rights: BotRights,
 ) -> None:
     data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
     chat_id = await _pinning_chat(session, data)
@@ -462,7 +480,7 @@ async def test_a_pin_needs_a_reply_and_the_bot_rights(
 
     with pytest.raises(InvalidRequest, match=re.escape(PIN_HINT)):
         await service.pin(data.user_id, chat_id, None, "Вода")
-    await ChatsRepo(session).set_admin(await _chat(session, chat_id), False)
+    await ChatsRepo(session).set_admin(await _chat(session, chat_id), rights)
     with pytest.raises(InvalidState, match=re.escape(PIN_NEEDS_RIGHTS)):
         await service.pin(data.user_id, chat_id, REPLY, None)
 
@@ -704,7 +722,7 @@ async def _joinable(
     chat_id = await _added(session)
     service = _service(session, publisher)
     await service.bind(staff, chat_id, data.house_id)
-    await service.set_admin(chat_id, True)
+    await service.set_admin(chat_id, ADMIN)
     return service, chat_id
 
 
@@ -744,7 +762,7 @@ async def test_no_offer_without_a_bound_chat_the_bot_administers(
     if bound:
         await ChatsRepo(session).bind(chat, own.house_id, own.user_id)
     else:
-        await ChatsRepo(session).set_admin(chat, True)
+        await ChatsRepo(session).set_admin(chat, ADMIN)
 
     assert await _service(session).join_offer(own.user_id, own.house_id) is None
 
@@ -814,3 +832,26 @@ async def test_membership_follows_the_chat_and_a_re_add_forgets_it(
     await service.on_joined(chat_id, own.user_id, added=True)
     await service.on_bot_added(chat_id, "Дом")
     assert await ChatsRepo(session).is_member(chat_id, own.user_id) is False
+
+
+async def test_the_chat_hears_when_the_bot_gains_or_loses_the_pin_right(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _added(session)
+    service = _service(session, publisher)
+    await service.bind(data.user_id, chat_id, data.house_id)
+    no_pin = BotRights(is_admin=True, can_pin=False)
+
+    for rights in (no_pin, ADMIN, ADMIN, no_pin, ADMIN, NOT_ADMIN, NOT_ADMIN):
+        await service.set_admin(chat_id, rights)
+
+    await publisher.flush()
+    welcomes = broker.enqueued(TaskName.WELCOME_CHAT)
+    assert [task["can_pin"] for task in welcomes] == [False]
+    texts = [task["text"] for task in broker.enqueued(TaskName.BROADCAST_TO_CHATS)]
+    assert texts == [PINS_ALLOWED, PINS_REVOKED, PINS_ALLOWED, PINS_REVOKED]
+    assert (await _chat(session, chat_id)).bot_can_pin is False

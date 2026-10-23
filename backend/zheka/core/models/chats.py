@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from zheka.base import UNSET, ZhekaMutableType
+from zheka.base import UNSET, ZhekaMutableType, ZhekaType
 from zheka.core.enums import ChatCardKind
 from zheka.core.ids import ChatCardId, ChatPinId, HouseId, MaxChatId, UserId
 
@@ -12,6 +12,7 @@ class Chat(ZhekaMutableType):
     title: str | None = None
     bound_by: UserId | None = None
     bot_is_admin: bool = False
+    bot_can_pin: bool = False
     bound_at: datetime | None = None
     status: str
     pins_mid: str | None = None
@@ -36,3 +37,8 @@ class ChatCard(ZhekaMutableType):
     kind: ChatCardKind
     ref_id: int
     mid: str
+
+
+class BotRights(ZhekaType):
+    is_admin: bool
+    can_pin: bool

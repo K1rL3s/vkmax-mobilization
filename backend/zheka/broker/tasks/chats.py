@@ -23,7 +23,12 @@ from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.models import ChatCard
 from zheka.core.services.chat_cards import CardVote, ChatCardView, ChatCardsService
-from zheka.core.services.chats import ChatsService, pins_text
+from zheka.core.services.chats import (
+    PINS_ALLOWED,
+    PINS_NOT_ALLOWED,
+    ChatsService,
+    pins_text,
+)
 from zheka.core.texts import (
     ANNOUNCEMENT_HASHTAG,
     CARD_HASHTAG,
@@ -34,7 +39,7 @@ from zheka.core.texts import (
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
-from zheka.infra.max.sender import ChatJoinOutcome, is_chat_admin
+from zheka.infra.max.sender import ChatJoinOutcome, bot_rights
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +133,15 @@ async def welcome_chat(
     bot: FromDishka[Bot],
     sender: FromDishka[MaxSender],
     member: str | None = None,
+    can_pin: bool | None = None,
 ) -> None:
     text = (
         WELCOME_TEXT
         if member is None
         else WELCOME_MEMBER_TEXT.format(name=escape(member))
     )
+    if can_pin is not None:
+        text += "\n\n" + (PINS_ALLOWED if can_pin else PINS_NOT_ALLOWED)
     await sender.send_message(
         text,
         chat_id=chat_id,
@@ -301,14 +309,14 @@ async def recheck_chat_rights(
     sender: MaxSender,
 ) -> None:
     try:
-        is_admin = await is_chat_admin(bot, chat_id)
-        chat = await chats_service.set_admin(chat_id, is_admin)
+        rights = await bot_rights(bot, chat_id)
+        chat = await chats_service.set_admin(chat_id, rights)
     except (MaxBotApiError, MaxBotNetworkError, ZhekaError):
         logger.exception("Права бота в чате %s не перепроверены", chat_id)
         return
     binder = (
         None
-        if is_admin or chat.bound_by is None
+        if rights.is_admin or chat.bound_by is None
         else await users_repo.get_by_id(chat.bound_by)
     )
     if binder is None:

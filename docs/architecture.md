@@ -452,7 +452,7 @@ PlantUML: [`05-deployment.puml`](architecture/plantuml/05-deployment.puml)
 
 ## Стек
 
-Бэкенд (`backend/pyproject.toml`): Python 3.12, FastAPI 0.141.1, Pydantic 2.13.5, gunicorn 26.2.0 без uvicorn, maxo 0.9.0 (бот и диалоги), dishka 1.10.1 (DI), SQLAlchemy 2.0.53 с psycopg 3.3.5, alembic 1.20.0, taskiq 0.12.6 на Redis, aiohttp 3.14.3 для внешних API, fpdf2 2.8.8 для PDF. Проверки: ruff, black, mypy strict, bandit, slotscheck, pytest с testcontainers
+Бэкенд (`backend/pyproject.toml`): Python 3.12, FastAPI 0.141.1, Pydantic 2.13.5, gunicorn 26.2.0 без uvicorn, maxo 0.10.0 (бот и диалоги), dishka 1.10.1 (DI), SQLAlchemy 2.0.53 с psycopg 3.3.5, alembic 1.20.0, taskiq 0.12.6 на Redis, aiohttp 3.14.3 для внешних API, fpdf2 2.8.8 для PDF. Проверки: ruff, black, mypy strict, bandit, slotscheck, pytest с testcontainers
 
 Фронтенд (`frontend/package.json`): React 19, TypeScript 6, Vite 8, `@maxhub/max-ui` 0.5, react-router 7, TanStack Query 5 с `openapi-fetch` по типам из `openapi.yaml`, react-hook-form и zod, MapLibre GL 6.11, recharts 3, motion, `qrcode.react`. MAX Bridge подключается скриптом `st.max.ru/js/max-web-app.js`
 
@@ -765,10 +765,10 @@ PlantUML: [`10-seq-tasks-notifications.puml`](architecture/plantuml/10-seq-tasks
 - Вебхук должен ответить 200 за 30 секунд: скачивание файлов, OCR и расшифровка уходят в задачи
 - 30 сообщений в секунду на бота и 2 в секунду в один чат, массовой отправки нет: рассылка - цикл через очередь с ограничителями, при массовой рассылке сообщения просто ждут
 - Бот не пишет первым тому, кто его не запускал: у заявки по звонку обратный канал только телефон
-- События о смене прав бота в чате нет: права проверяются по кнопке «Готово» и после каждой неудачной отправки в чат
+- О смене своих прав в чате бот узнает из события `bot_admin_permissions_changed`, кнопка «Готово» и проверка после неудачной отправки в чат страхуют пропущенное событие
 - События о ручном закрепе нет: бот ведет свой список закрепов и не спорит с чужим
 - Текст сообщения до 4000 символов, к заявке до 12 вложений
-- maxo 0.9.0 доставляет текст и фото только в основной стек диалогов, поэтому окна ввода открываются там
+- maxo 0.10.0 доставляет текст и фото только в основной стек диалогов, поэтому окна ввода открываются там
 
 ### Апдейты бота: вебхук и опрос
 

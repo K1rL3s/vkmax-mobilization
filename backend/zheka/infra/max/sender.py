@@ -9,7 +9,7 @@ from pathlib import Path
 
 from maxo import Bot
 from maxo.dialogs import BgManagerFactory, Data, ShowMode, StartMode
-from maxo.enums import ChatType, MessageLinkType, UploadType
+from maxo.enums import ChatAdminPermission, ChatType, MessageLinkType, UploadType
 from maxo.errors import (
     MaxBotApiError,
     MaxBotForbiddenError,
@@ -29,7 +29,7 @@ from maxo.types.send_message_result import SendMessageResult
 from maxo.utils.upload_media import FSInputFile, InputFile
 
 from zheka.core.ids import MaxChatId, MaxUserId
-from zheka.core.models import User
+from zheka.core.models import BotRights, User
 from zheka.infra.max.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -261,13 +261,13 @@ class MaxSender:
         return ChatJoinOutcome.ADDED
 
 
-async def is_chat_admin(bot: Bot, chat_id: MaxChatId) -> bool:
+async def bot_rights(bot: Bot, chat_id: MaxChatId) -> BotRights:
     try:
         async with BOT_RATE_LIMIT:
             member = await bot.get_membership(chat_id=chat_id)
     except (MaxBotForbiddenError, MaxBotNotFoundError):
-        return False
-    return member.is_admin
+        return rights_of(is_admin=False, permissions=None)
+    return rights_of(is_admin=member.is_admin, permissions=member.permissions)
 
 
 def keyboard_attachments(
@@ -287,3 +287,12 @@ async def _once_more_on_429[T](
     await asyncio.sleep(RETRY_AFTER_429)
     async with BOT_RATE_LIMIT, _chat_rate_limit(recipient):
         return await call()
+
+
+def rights_of(
+    *,
+    is_admin: bool,
+    permissions: Sequence[ChatAdminPermission] | None,
+) -> BotRights:
+    can_pin = ChatAdminPermission.PIN_MESSAGE in (permissions or ())
+    return BotRights(is_admin=is_admin, can_pin=can_pin)

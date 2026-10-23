@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import ChatCardKind, ChatStatus
 from zheka.core.ids import HouseId, MaxChatId, UserId
+from zheka.core.models import BotRights
 from zheka.infra.database.models import Chat, ChatCard, ChatPin
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.chats import (
@@ -55,6 +56,7 @@ class ChatsRepo(BaseAlchemyRepo):
             "link": link,
             "status": ChatStatus.ACTIVE,
             "bot_is_admin": False,
+            "bot_can_pin": False,
             "house_id": None,
             "bound_by": None,
             "bound_at": None,
@@ -71,7 +73,7 @@ class ChatsRepo(BaseAlchemyRepo):
         stmt = (
             update(chats_table)
             .where(chats_table.c.chat_id == chat_id)
-            .values(status=ChatStatus.REMOVED, bot_is_admin=False)
+            .values(status=ChatStatus.REMOVED, bot_is_admin=False, bot_can_pin=False)
         )
         await self._session.execute(stmt)
 
@@ -81,8 +83,9 @@ class ChatsRepo(BaseAlchemyRepo):
         chat.bound_at = datetime.now(UTC)
         await self._session.flush()
 
-    async def set_admin(self, chat: Chat, is_admin: bool) -> None:
-        chat.bot_is_admin = is_admin
+    async def set_admin(self, chat: Chat, rights: BotRights) -> None:
+        chat.bot_is_admin = rights.is_admin
+        chat.bot_can_pin = rights.is_admin and rights.can_pin
         await self._session.flush()
 
     async def joinable(self, house_id: HouseId) -> Chat | None:

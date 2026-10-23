@@ -8,6 +8,7 @@ from maxo.routing.filters import Command
 from maxo.routing.filters.command import CommandObject
 from maxo.types import (
     BotAddedToChat,
+    BotAdminPermissionsChanged,
     BotRemovedFromChat,
     MessageCallback,
     MessageCreated,
@@ -24,6 +25,7 @@ from zheka.core.ids import MaxChatId, MaxUserId, PollId, PollOptionId
 from zheka.core.models import User
 from zheka.core.services.chats import ChatsService, MessageRef
 from zheka.core.services.polls import PollsService
+from zheka.infra.max.sender import bot_rights, rights_of
 
 router = Router(name=__name__)
 
@@ -171,3 +173,17 @@ async def vote_handler(
     await update.callback_answer(
         notification=VOTE_COUNTED if counted else VOTE_UNWEIGHTED,
     )
+
+
+@router.bot_admin_permissions_changed()
+async def bot_rights_handler(
+    update: BotAdminPermissionsChanged,
+    chats_service: FromDishka[ChatsService],
+) -> None:
+    chat_id = MaxChatId(update.chat_id)
+    if update.is_admin and not is_defined(update.permissions):
+        rights = await bot_rights(update.bot, chat_id)
+    else:
+        permissions = update.permissions if is_defined(update.permissions) else None
+        rights = rights_of(is_admin=update.is_admin, permissions=permissions)
+    await chats_service.set_admin(chat_id, rights)

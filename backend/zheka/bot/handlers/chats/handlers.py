@@ -16,7 +16,7 @@ from zheka.bot.states import ChatBinding
 from zheka.core.errors import InvalidRequest, ZhekaError
 from zheka.core.ids import HouseId, MaxChatId
 from zheka.core.services.chats import ChatsService
-from zheka.infra.max.sender import is_chat_admin
+from zheka.infra.max.sender import bot_rights
 
 NO_RIGHTS_YET = "🤔 Пока не вижу прав, проверьте и нажмите еще раз"
 BOUND_TEXT = "✅ Чат «{title}» привязан, приветствие отправил туда"
@@ -103,16 +103,16 @@ async def on_rights(
 ) -> None:
     data = ChatBindingData.load(dialog_manager)
     chat_id = MaxChatId(data.chat_id)
-    is_admin = await is_chat_admin(callback.bot, chat_id)
+    rights = await bot_rights(callback.bot, chat_id)
     try:
-        await chats_service.set_admin(chat_id, is_admin)
+        await chats_service.set_admin(chat_id, rights)
     except ZhekaError as error:
         if dialog_manager.current_stack().id == DEFAULT_STACK_ID:
             await back_to_menu(dialog_manager, str(error))
             return
         await refused(callback, error)
         return
-    if not is_admin:
+    if not rights.is_admin:
         with ChatBindingData.proxy(dialog_manager) as binding:
             binding.notice = NO_RIGHTS_YET
         return

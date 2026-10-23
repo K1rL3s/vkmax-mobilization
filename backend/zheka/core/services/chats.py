@@ -14,7 +14,7 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
-from zheka.core.models import Chat, ChatPin, House, User
+from zheka.core.models import BotRights, Chat, ChatPin, House, User
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
 from zheka.infra.database.repos.chats import ChatsRepo
@@ -35,7 +35,23 @@ PIN_TEXT_LIMIT = 50
 MESSAGE_TEXT_LIMIT = 4000
 PINS_TITLE = "📌 Закреплено в чате:"
 PIN_DENIED = "🚫 Закреплять в этом чате могут председатель и сотрудники УК"
-PIN_NEEDS_RIGHTS = "🔐 Чтобы закреплять сообщения, сделайте бота администратором чата"
+PIN_NEEDS_RIGHTS = (
+    "🔐 Чтобы закреплять сообщения, сделайте бота администратором чата с правом "
+    "закреплять сообщения"
+)
+PINS_ALLOWED = (
+    "📌 Теперь у меня есть право закреплять сообщения, и я могу вести список "
+    "закрепленных: ответьте командой /pin на нужное сообщение"
+)
+PINS_NOT_ALLOWED = (
+    "🔐 Права закреплять сообщения у меня нет, поэтому список закрепленных вести "
+    "не смогу. Право можно выдать в настройках администраторов чата"
+)
+PINS_REVOKED = (
+    "🔐 У меня забрали право закреплять сообщения, поэтому вести список "
+    "закрепленных больше не могу. Право можно вернуть в настройках "
+    "администраторов чата"
+)
 PIN_HINT = "💡 Ответьте командой /pin на сообщение, которое нужно закрепить"
 PINS_FULL = (
     "📌 Список закрепленных не помещается в одно сообщение. Открепите лишнее "
@@ -170,13 +186,14 @@ class ChatsService:
             raise InvalidRequest(WRONG_CODE)
         await self._bind(chat, house.id, user_id, ChatBinder.CODE)
 
-    async def set_admin(self, chat_id: MaxChatId, is_admin: bool) -> Chat:
+    async def set_admin(self, chat_id: MaxChatId, rights: BotRights) -> Chat:
         bound = await self._bound(chat_id)
         if bound is None:
             raise InvalidState(CHAT_NOT_BOUND)
         chat, house_id = bound
-        granted = is_admin and not chat.bot_is_admin
-        await self._chats.set_admin(chat, is_admin)
+        granted = rights.is_admin and not chat.bot_is_admin
+        could_pin = chat.bot_can_pin
+        await self._chats.set_admin(chat, rights)
         if granted:
             await self._events.record(
                 EventType.CHAT_ADMIN_GRANTED,
@@ -184,7 +201,14 @@ class ChatsService:
                 chat_id=chat_id,
                 house_id=house_id,
             )
-            self._notifications.welcome_chat(chat_id, house_id)
+            self._notifications.welcome_chat(
+                chat_id,
+                house_id,
+                can_pin=chat.bot_can_pin,
+            )
+        elif chat.bot_can_pin != could_pin:
+            text = PINS_ALLOWED if chat.bot_can_pin else PINS_REVOKED
+            self._notifications.notify_chats([chat_id], text)
         return chat
 
     async def welcome_member(
@@ -453,7 +477,7 @@ class ChatsService:
         binder = None if user_id is None else await self._binder(user_id, house_id)
         if user_id is None or binder is None:
             raise NotEnoughRights(PIN_DENIED)
-        if not chat.bot_is_admin:
+        if not chat.bot_can_pin:
             raise InvalidState(PIN_NEEDS_RIGHTS)
         return user_id, binder
 

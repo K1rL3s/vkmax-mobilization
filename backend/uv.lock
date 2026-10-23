@@ -688,7 +688,7 @@ wheels = [
 
 [[package]]
 name = "maxo"
-version = "0.9.0"
+version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "adaptix" },
@@ -698,9 +698,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "unihttp", extra = ["aiohttp"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/33/b5/72597b3d316d9a01a8041a62c8b04f7feca411cf5f17c9b8fcb7871d5383/maxo-0.9.0.tar.gz", hash = "sha256:a7b44738ca715c0e4fda2bc2b5aa857e1e9d9091afc2347a4f600ba77547afc2", size = 229115, upload-time = "2026-09-15T16:04:33.645Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/e4/5294408bd31b6601ac863b810998f97999b4e971349ad26d4964373a11ba/maxo-0.10.0.tar.gz", hash = "sha256:e17f0dad5948cf2d5779e46b44192550c1cb8219de489ccaa72284c008ce9955", size = 231872, upload-time = "2026-10-22T23:43:46.095Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/89/f9/b605e907f3cc76f192a0cba1c6ba83d16caec13c0743cb44d0a7d15c383b/maxo-0.9.0-py3-none-any.whl", hash = "sha256:738c398a1d7e4c1c463eae9206e00cf5924b2793bd7d3d172fa04694edfe5ded", size = 432276, upload-time = "2026-09-15T16:04:31.739Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/d6/ad71b0d210c1ed32deafc4b3c1b464510e6ed641d6e96ea6f5bb6fb1d5fa/maxo-0.10.0-py3-none-any.whl", hash = "sha256:1e27d58d142e123038ea01921648e3ab84dd5b07321a46d9fa961c5f4bb79917", size = 438331, upload-time = "2026-10-22T23:43:44.38Z" },
 ]
 
 [package.optional-dependencies]
@@ -1474,7 +1474,7 @@ requires-dist = [
     { name = "fpdf2", specifier = "==2.8.8" },
     { name = "greenlet", specifier = "==3.5.6" },
     { name = "gunicorn", specifier = "==26.2.0" },
-    { name = "maxo", extras = ["dishka", "fastapi", "magic-filter", "redis"], specifier = "==0.9.0" },
+    { name = "maxo", extras = ["dishka", "fastapi", "magic-filter", "redis"], specifier = "==0.10.0" },
     { name = "psycopg", extras = ["binary"], specifier = "==3.3.5" },
     { name = "pydantic", specifier = "==2.13.5" },
     { name = "python-multipart", specifier = "==0.0.31" },
