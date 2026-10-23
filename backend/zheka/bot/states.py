@@ -11,6 +11,7 @@ class Menu(StatesGroup):
     main = State()
     emergency = State()
     digest = State()
+    contacts = State()
 
 
 def entry_state(user: User) -> State:

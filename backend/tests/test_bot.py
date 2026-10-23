@@ -131,6 +131,8 @@ from zheka.bot.handlers.fallback import NOT_UNDERSTOOD
 from zheka.bot.handlers.forget.handlers import FORGOTTEN_TEXT
 from zheka.bot.handlers.menu.windows import (
     CALL_NOTE_TEXT,
+    CONTACTS_BUTTON,
+    CONTACTS_TEXT,
     EMERGENCY_NO_PHONE_TEXT,
     EMERGENCY_ORG_PHONE_TEXT,
     EMERGENCY_PHONE_TEXT,
@@ -675,6 +677,7 @@ async def _bot_started(client: BotClient, payload: Omittable[str | None]) -> Non
 async def _bot_house(
     session: AsyncSession,
     *,
+    region: str = "Тестовая область",
     city: str = "Тестоград",
     street: str = "Диплинковая",
     building: str | None = None,
@@ -685,7 +688,7 @@ async def _bot_house(
     house = House(
         timezone="Europe/Moscow",
         org_id=org_id,
-        region="Тестовая область",
+        region=region,
         city=city,
         street=street,
         building=building or secrets.token_hex(2),
@@ -3349,6 +3352,7 @@ async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
     assert _button_texts(message_manager.last_message()) == [
         "🚨 Авария",
         "📝 Подать заявку",
+        CONTACTS_BUTTON,
         DIGEST_BUTTON,
         "📱 Открыть приложение",
         "🔎 Другой дом",
@@ -4169,6 +4173,87 @@ async def test_the_emergency_screen_works_without_a_house(
         f"{EMERGENCY_TEXT}\n\n{EMERGENCY_NO_PHONE_TEXT}\n\n{CALL_NOTE_TEXT}"
     )
     assert _button_texts(message_manager.last_message()) == ["🏠 Меню"]
+
+
+CONTACTS = InlineButtonTextLocator(CONTACTS_BUTTON)
+
+
+async def test_where_to_call_lists_the_house_lines_city_services_and_112(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    org_id = await _org(
+        bot_session,
+        name="УК Казанская",
+        phone="+78430000000",
+        emergency_phone="+7 (843) 000-11-22",
+    )
+    house_id, address = await _bot_house(
+        bot_session,
+        region="Республика Татарстан",
+        city="Казань",
+        org_id=org_id,
+    )
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    await client.send("/start")
+
+    await client.click(message_manager.last_message(), CONTACTS)
+
+    lines = _text(message_manager).split("\n\n")
+    assert lines[:4] == [
+        "📞 <b>Куда звонить</b>",
+        f"🏢 {address}",
+        "<b>Аварийная служба дома</b> - +7 (843) 000-11-22",
+        "<b>УК Казанская</b> - +7 (843) 000-00-00",
+    ]
+    assert lines[4].startswith("<b>Единая дежурно-диспетчерская служба Казани</b>")
+    assert lines[-2] == (
+        "<b>Государственная жилищная инспекция Республики Татарстан</b> - "
+        "+7 (843) 222-02-77 - жалоба на УК"
+    )
+    assert lines[-1] == "<b>Экстренные службы</b> - 112"
+    assert _copied(message_manager.last_message()) == [
+        ("📋 Номер аварийной службы", "+7 (843) 000-11-22"),
+        ("📋 Телефон УК", "+78430000000"),
+    ]
+
+
+async def test_where_to_call_of_a_registry_house_outside_the_directory(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    org_id = await _org(bot_session, registered_at=None, name="УК Реестровая")
+    house_id, address = await _bot_house(bot_session, org_id=org_id)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+    await client.send("/start")
+
+    await client.click(message_manager.last_message(), CONTACTS)
+
+    assert _text(message_manager) == CONTACTS_TEXT.format(
+        address=address,
+        contacts=(
+            "<b>Аварийная служба дома</b> - номер в квитанции и на стенде в "
+            "подъезде\n\n<b>УК Реестровая</b> - +7 (000) 000-00-00\n\n"
+            "<b>Экстренные службы</b> - 112"
+        ),
+    )
+    assert _button_texts(message_manager.last_message()) == [
+        "📋 Телефон УК",
+        "🏠 Меню",
+    ]
+
+
+async def test_where_to_call_waits_for_a_house(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await _consented(client, message_manager)
+
+    assert CONTACTS.find_button(message_manager.last_message()) is None
 
 
 async def test_a_free_text_on_the_emergency_screen_starts_a_request(
