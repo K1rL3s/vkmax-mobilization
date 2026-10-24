@@ -258,3 +258,32 @@ def test_an_unlisted_manager_comes_from_its_gis_card() -> None:
         "site": "https://www.azinoservice.ru",
         "timezone": "Europe/Moscow",
     }
+
+
+def test_a_new_street_counts_a_geocode_only_on_its_own_road_and_region() -> None:
+    street = next(street for street in SCRIPT["STREETS"] if street.batch)
+    region = SCRIPT["ISO_REGIONS"][street.export_id]
+    road = street.street.replace("ё", "е")
+
+    assert SCRIPT["on_street"](
+        street,
+        {"road": f"{road} (дублёр)", "ISO3166-2-lvl4": region},
+    )
+    assert not SCRIPT["on_street"](
+        street,
+        {"road": "Другая улица", "ISO3166-2-lvl4": region},
+    )
+    assert not SCRIPT["on_street"](
+        street,
+        {"road": street.street, "ISO3166-2-lvl4": "RU-XX"},
+    )
+
+
+def test_a_suburb_street_has_its_own_cache_name() -> None:
+    suburb = next(
+        street
+        for street in SCRIPT["STREETS"]
+        if street.city not in SCRIPT["MAIN_CITIES"]
+    )
+
+    assert suburb.city in suburb.cache_name

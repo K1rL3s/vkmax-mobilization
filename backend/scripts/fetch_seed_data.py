@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import re
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -40,6 +41,8 @@ SERVER_ERROR = 500
 REGISTRY_EXPORT = 1
 BBOX_PAD = 0.01
 HOUSES_PER_STREET = 55
+MAIN_CITIES = ("Москва", "Санкт-Петербург", "Казань")
+ISO_REGIONS = {184: "RU-MOW", 250: "RU-SPE", 220: "RU-TA"}
 DASHES = re.compile("[" + chr(0x2010) + "-" + chr(0x2015) + chr(0x2212) + "]")
 
 log = logging.getLogger("fetch_seed_data")
@@ -55,6 +58,13 @@ class Street(NamedTuple):
     mun_obr: str
     timezone: str
     live: bool = False
+    batch: int = 0
+
+    @property
+    def cache_name(self) -> str:
+        if self.city in MAIN_CITIES:
+            return f"{self.export_id}-{self.street}"
+        return f"{self.export_id}-{self.city}-{self.street}"
 
 
 KAZAN_STREETS = (
@@ -211,6 +221,26 @@ SPB_STREETS = (
     ("Будапештская улица", "Будапештская ул., д. "),
     ("улица Марата", "Марата ул., д. "),
 )
+LATER_STREETS = Path(__file__).with_name("later_streets.csv")
+SUBJECTS = {
+    184: ("город Москва", "Москва"),
+    250: ("город Санкт-Петербург", "Санкт-Петербург"),
+    220: ("Республика Татарстан", "Республика Татарстан"),
+}
+
+
+def _later_streets() -> Iterator[tuple[int, int, str, str, str, str]]:
+    with LATER_STREETS.open(encoding="utf-8") as file:
+        for row in csv.DictReader(file):
+            yield (
+                int(row["batch"]),
+                int(row["export_id"]),
+                row["city"],
+                row["mun_obr"],
+                row["street"],
+                row["prefix"],
+            )
+
 
 STREETS = (
     Street(
@@ -615,6 +645,21 @@ STREETS = (
         )
         for street, prefix in SPB_STREETS
     ),
+    *(
+        Street(
+            export_id=export_id,
+            subject_rf=SUBJECTS[export_id][0],
+            region=SUBJECTS[export_id][1],
+            city=city,
+            street=street,
+            prefix=prefix,
+            mun_obr=mun_obr,
+            timezone="Europe/Moscow",
+            live=True,
+            batch=batch,
+        )
+        for batch, export_id, city, mun_obr, street, prefix in _later_streets()
+    ),
 )
 
 HOUSE_FIELDS = (
@@ -653,6 +698,7 @@ AREA_CODES = {"город Санкт-Петербург": "812", "Республ
 
 _last_request: dict[str, float] = {}
 _gis_blocked = False
+_osm_failed: list[str] = []
 
 
 def _get(url: str) -> bytes:
@@ -764,6 +810,8 @@ def _geocode(street: Street, building: str) -> tuple[str, str]:
         house_number(found[0].get("address", {}).get("house_number", "")) != number
     ):
         return "", ""
+    if street.batch and not on_street(street, found[0].get("address", {})):
+        return "", ""
     return found[0]["lat"], found[0]["lon"]
 
 
@@ -829,7 +877,9 @@ def site(value: str) -> str:
     )
 
 
-def main() -> None:
+def main(batch: int | None = None) -> None:
+    if batch is None:
+        batch = max(street.batch for street in STREETS)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -840,12 +890,14 @@ def main() -> None:
     by_street: dict[Street, Sequence[Mapping[str, object]]] = {}
     orgs: dict[str, dict[str, str]] = {}
     for street in STREETS:
+        if street.batch > batch:
+            continue
         kept = [
             house
             for house in kept_houses
             if (house["city"], house["street"]) == (street.city, street.street)
         ]
-        if kept and not street.live:
+        if kept and (not street.live or street.batch < batch):
             by_street[street] = kept
             orgs.update(
                 (house["org_inn"], kept_orgs[house["org_inn"]])
@@ -920,7 +972,9 @@ def main() -> None:
         _fill_from_osm(street, street_houses)
         by_street[street] = street_houses
         log.info("%s, %s: домов %s", street.city, street.street, len(street_houses))
-    houses = [house for street in STREETS for house in by_street[street]]
+    if _gis_blocked or _osm_failed:
+        raise SystemExit("ГИС ЖКХ или Overpass отказали, CSV не записаны: повторите")
+    houses = [house for street in by_street for house in by_street[street]]
 
     with (DATA_DIR / "houses.csv").open("w", encoding="utf-8", newline="") as file:
         writer = csv.DictWriter(file, HOUSE_FIELDS, lineterminator="\n")
@@ -973,10 +1027,15 @@ def _fill_from_osm(street: Street, houses: list[dict[str, str | int]]) -> None:
         f"({south:.3f},{west:.3f},{north:.3f},{east:.3f});"
         "out center tags;"
     )
-    raw = _cached(
-        f"osm-{street.export_id}-{street.street}.json",
-        f"{OVERPASS}?{urllib.parse.urlencode({'data': query})}",
-    )
+    try:
+        raw = _cached(
+            f"osm-{street.cache_name}.json",
+            f"{OVERPASS}?{urllib.parse.urlencode({'data': query})}",
+        )
+    except OSError as error:
+        log.info("Overpass не ответил по %s: %s", street.street, error)
+        _osm_failed.append(street.street)
+        return
     addresses = {}
     for element in sorted(
         json.loads(raw)["elements"],
@@ -1016,7 +1075,7 @@ def _gis_lookup(street: Street, guids: list[str]) -> dict[str, dict[str, Any]]:
     codes = ",".join(guid for guid in guids if guid)
     return gis_houses(
         _gis_json(
-            f"gis-{street.export_id}-{street.street}.json",
+            f"gis-{street.cache_name}.json",
             f"{GIS}/houses/searchByFiasHouseCodeList/{codes}"
             "?useReadOnlyDataSource=true",
         ),
@@ -1138,5 +1197,12 @@ def gis_org(card: dict[str, Any], timezone: str) -> dict[str, str]:
     }
 
 
+def on_street(street: Street, address: dict[str, str]) -> bool:
+    road = re.sub(r" \(.*\)$", "", address.get("road", ""))
+    return address.get("ISO3166-2-lvl4") == ISO_REGIONS[street.export_id] and (
+        road.lower().replace("ё", "е") == street.street.lower().replace("ё", "е")
+    )
+
+
 if __name__ == "__main__":
-    main()
+    main(int(sys.argv[1]) if len(sys.argv) > 1 else None)
