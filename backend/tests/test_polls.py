@@ -134,6 +134,7 @@ async def test_create_poll_refuses_a_plain_resident_and_a_blocked_chairman(
         (_draft(ends_at=datetime.now(UTC) - timedelta(days=1)), InvalidValue),
         (_draft(options=["Один вариант"]), InvalidRequest),
         (_draft(options=["Да", "Да", ""]), InvalidRequest),
+        (_draft(options=[f"Вариант {i}" for i in range(11)]), InvalidRequest),
     ],
 )
 async def test_create_poll_refuses_a_bad_draft(

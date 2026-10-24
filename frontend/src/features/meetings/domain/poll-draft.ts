@@ -5,7 +5,7 @@ export const pollFormConstraints = {
   option: 80,
   description: 500,
   optionsMin: 2,
-  optionsMax: 6,
+  optionsMax: 10,
 };
 
 export const endOfDay = (date: string) => new Date(`${date}T23:59:59`);

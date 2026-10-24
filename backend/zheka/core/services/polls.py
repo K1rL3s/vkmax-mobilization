@@ -31,6 +31,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 
 _ALL_FLATS_LIMIT = 10_000
 MIN_POLL_OPTIONS = 2
+MAX_POLL_OPTIONS = 10
 INITIATIVE_DAYS = 14
 INITIATIVE_OPTIONS = ("👍 Поддерживаю", "👎 Против")
 
@@ -43,6 +44,7 @@ EMPTY_VOTE = "Выберите хотя бы один вариант ответ�
 UNKNOWN_OPTION = "Вариант не относится к этому опросу"
 SINGLE_CHOICE_ONLY = "В этом опросе можно выбрать только один вариант"
 NEED_TWO_OPTIONS = "Добавьте минимум два разных варианта ответа"
+TOO_MANY_OPTIONS = f"Можно указать не больше {MAX_POLL_OPTIONS} вариантов ответа"
 ENDS_IN_PAST = "Дата окончания опроса должна быть в будущем"
 NOT_INITIATOR = "Доступно только организатору опроса"
 NOT_AN_OWNER = "Инициативу дома предлагает собственник подтвержденной квартиры"
@@ -106,6 +108,8 @@ def _clean_options(options: Sequence[str]) -> list[str]:
     cleaned = [text.strip() for text in options if text.strip()]
     if len(cleaned) < MIN_POLL_OPTIONS or len(set(cleaned)) != len(cleaned):
         raise InvalidRequest(NEED_TWO_OPTIONS)
+    if len(cleaned) > MAX_POLL_OPTIONS:
+        raise InvalidRequest(TOO_MANY_OPTIONS)
     return cleaned
 
 
