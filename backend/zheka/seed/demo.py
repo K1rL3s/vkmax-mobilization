@@ -596,11 +596,10 @@ class Seeder:
     async def run(self, directory: Sequence[DirectoryHouse]) -> None:
         voters, taken = await self._territories(
             _history_houses(directory[:FIRST_DIRECTORY_HOUSES]),
-            (*PROFILES, *BACKGROUND_PROFILES),
-            1,
+            list(enumerate((*PROFILES, *BACKGROUND_PROFILES), start=1)),
         )
         await self._demand(directory, taken, voters)
-        await self.add(directory)
+        await self.add(directory, ADDED_PROFILES)
 
     async def _user(self) -> User:
         return (await self._users(1))[0]
@@ -1583,7 +1582,11 @@ class Seeder:
         works.documents = [{"name": WORKS_ORDER, "title": WORKS_ORDER_TITLE}]
         await self._session.flush()
 
-    async def add(self, directory: Sequence[DirectoryHouse]) -> None:
+    async def add(
+        self,
+        directory: Sequence[DirectoryHouse],
+        profiles: Sequence[OrgProfile],
+    ) -> None:
         stmt = (
             select(residents_table.c.house_id)
             .join(users_table, users_table.c.id == residents_table.c.user_id)
@@ -1599,22 +1602,23 @@ class Seeder:
             city: [item for item in items if item.house.id not in claimed]
             for city, items in _history_houses(directory).items()
         }
+        first = len(PROFILES) + len(BACKGROUND_PROFILES) + 1
         await self._territories(
             free,
-            ADDED_PROFILES,
-            len(PROFILES) + len(BACKGROUND_PROFILES) + 1,
+            [(first + ADDED_PROFILES.index(profile), profile) for profile in profiles],
         )
 
     async def _territories(
         self,
         free: dict[str, list[DirectoryHouse]],
-        profiles: Sequence[OrgProfile],
-        first_number: int,
+        profiles: Sequence[tuple[int, OrgProfile]],
     ) -> tuple[list[User], set[HouseId]]:
         voters: list[User] = []
         taken: set[HouseId] = set()
-        for number, profile in enumerate(profiles, start=first_number):
-            neighbours = [other for other in profiles if other.city == profile.city]
+        for number, profile in profiles:
+            neighbours = [
+                other for _number, other in profiles if other.city == profile.city
+            ]
             items = self._territory(
                 free[profile.city],
                 neighbours.index(profile),
@@ -1660,12 +1664,20 @@ async def extend(
         return False
     _copy_files(files_dir)
     directory = await extend_directory(session)
-    if await orgs.get_by_inn(ADDED_PROFILES[0].inn) is None:
+    missing = [
+        profile
+        for profile in ADDED_PROFILES
+        if await orgs.get_by_inn(profile.inn) is None
+    ]
+    if missing:
         stmt = select(func.min(users_table.c.max_user_id)).where(
             users_table.c.max_user_id > DEMO_TENANT_MAX_ID_BASE,
         )
         lowest = (await session.execute(stmt)).scalar_one()
-        await Seeder(session, demo, now, min(lowest or 0, 0) - 1).add(directory)
+        await Seeder(session, demo, now, min(lowest or 0, 0) - 1).add(
+            directory,
+            missing,
+        )
     logger.info("Сид дополнен: домов в справочнике %s", len(directory))
     return True
 
