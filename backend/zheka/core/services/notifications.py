@@ -232,6 +232,13 @@ class NotificationsService:
             request_id=request_id,
         )
 
+    def send_neighbour_leaflet(self, user_id: UserId, house_id: HouseId) -> None:
+        self._publisher.publish(
+            TaskName.SEND_NEIGHBOUR_LEAFLET,
+            user_id=user_id,
+            house_id=house_id,
+        )
+
     def send_register_pdf(
         self,
         user_id: UserId,

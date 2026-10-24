@@ -34,6 +34,7 @@ dependencies = [
     "python-multipart==0.0.31",
     "aiohttp==3.14.3",
     "fpdf2==2.8.8",
+    "segno==1.6.6",
 ]
 
 [dependency-groups]

@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from zheka.api.dependencies import CurrentOrgDep
 from zheka.api.schemas.analytics import (
+    ArrivalsResponse,
     BenchmarkResponse,
     ChannelsSplitResponse,
     DashboardResponse,
@@ -100,6 +101,29 @@ async def get_channels_split(
         datetime.now(UTC),
     )
     return ChannelsSplitResponse.model_validate(channels)
+
+
+@router.get(
+    "/admin/analytics/arrivals",
+    summary="Откуда пришли жители",
+    description=(
+        "Привязки к домам за период по домам, которые сейчас у УК: ушедшие из "
+        "дома и пришедшие до подключения УК тоже считаются"
+    ),
+)
+async def get_arrivals(
+    current_org: CurrentOrgDep,
+    analytics_service: FromDishka[AnalyticsService],
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> ArrivalsResponse:
+    arrivals = await analytics_service.arrivals(
+        current_org.org_id,
+        date_from,
+        date_to,
+        datetime.now(UTC),
+    )
+    return ArrivalsResponse.model_validate(arrivals)
 
 
 @router.get("/admin/analytics/benchmark", summary="Обезличенный бенчмарк платформы")

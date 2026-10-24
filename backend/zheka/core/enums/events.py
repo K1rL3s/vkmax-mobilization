@@ -97,3 +97,4 @@ class EventSource(StrEnum):
     CHAT = "chat"
     DEEPLINK = "deeplink"
     MINIAPP = "miniapp"
+    INVITE = "invite"

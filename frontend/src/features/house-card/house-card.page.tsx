@@ -38,6 +38,7 @@ import {
   phoneIcon,
   starIcon,
   trashIcon,
+  usersIcon,
   wrenchIcon,
 } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
@@ -421,6 +422,20 @@ const HouseCardPage = () => {
         state="plain"
         subtitle={`${house.region} · многоквартирный дом`}
       />
+
+      {house.my_residency && (
+        <div className={styles.Panel}>
+          <CellSimple
+            before={<Icon src={usersIcon} className={styles.CellIcon} />}
+            title="Позвать соседей"
+            subtitle="Ссылка, QR и листовка для подъезда"
+            showChevron
+            asChild
+          >
+            <Link to={Routes.HOUSE_INVITE} />
+          </CellSimple>
+        </div>
+      )}
 
       <OutagesPanel outages={house.outages} />
 

@@ -146,6 +146,27 @@ const channels = (scale: number): Schemas["ChannelsSplitResponse"] => {
   };
 };
 
+const arrivals = (scale: number): Schemas["ArrivalsResponse"] => {
+  const items = (
+    [
+      ["self", 17],
+      ["qr", 12],
+      ["chat", 4],
+      ["invite", 8],
+    ] as const
+  ).map(([source, count]) => ({ source, count: count * scale }));
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+
+  return {
+    total,
+    items: items.map((item) => ({
+      ...item,
+      share: Math.round((item.count / total) * 10000),
+    })),
+    is_empty: false,
+  };
+};
+
 const executor = (
   user_id: number,
   name: string,
@@ -270,6 +291,9 @@ export const adminAnalyticsConfigs = [
   }),
   endpoint("get", "/admin/analytics/channels", (request) =>
     ok(channels(periodDays(request.query.date_from) === 90 ? 3 : 1)),
+  ),
+  endpoint("get", "/admin/analytics/arrivals", (request) =>
+    ok(arrivals(periodDays(request.query.date_from) === 90 ? 3 : 1)),
   ),
   endpoint("get", "/admin/analytics/executors", (request) =>
     ok(

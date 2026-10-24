@@ -362,6 +362,17 @@ class OrgInviteResponse(BaseSchema):
     link: str = Field(description="Ссылка бота reg_<код>, код выдан на УК дома")
 
 
+class NeighbourInviteResponse(BaseSchema):
+    address: str
+    is_connected: bool
+    text: str = Field(
+        description="Текст для нативного шеринга MAX, ссылка идет отдельно",
+    )
+    link: str = Field(
+        description="Постоянная ссылка бота nb_<дом>, квартиру сосед укажет сам",
+    )
+
+
 class AdminHouseListItem(BaseSchema):
     id: HouseId
     address: str

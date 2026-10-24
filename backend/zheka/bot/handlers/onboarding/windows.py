@@ -43,8 +43,9 @@ HOUSE_TEXT = "🏢 {street}: выберите дом из списка или н
 NEARBY_TEXT = "📍 Дома рядом с вами: выберите свой из списка или напишите номер дома"
 NOTHING_NEAR_TEXT = "😔 Рядом ничего не нашлось, попробуйте выбрать адрес"
 MISSED_TEXT = "😔 Не нашлось «{missed}», попробуйте написать иначе"
-FLAT_NUMBER_TEXT = "🏢 {address}\n\n🚪 Напишите номер квартиры или пропустите этот шаг"
-FLAT_LIST_TEXT = "🏢 {address}\n\n🚪 Выберите квартиру из списка или напишите ее номер"
+INVITED_TEXT = "👋 Сосед позвал вас в дом {address}"
+FLAT_NUMBER_TEXT = "🚪 Напишите номер квартиры или пропустите этот шаг"
+FLAT_LIST_TEXT = "🚪 Выберите квартиру из списка или напишите ее номер"
 
 MISSED = Format(MISSED_TEXT, when=F["missed"])
 
@@ -147,8 +148,13 @@ onboarding_dialog = Dialog(
         getter=get_houses,
     ),
     Window(
-        Format(FLAT_LIST_TEXT, when=F["flats"]),
-        Format(FLAT_NUMBER_TEXT, when=~F["flats"]),
+        Multi(
+            Format(INVITED_TEXT, when=F["invited"]),
+            Format("🏢 {address}", when=~F["invited"]),
+            Const(FLAT_LIST_TEXT, when=F["flats"]),
+            Const(FLAT_NUMBER_TEXT, when=~F["flats"]),
+            sep="\n\n",
+        ),
         ScrollingGroup(
             Select(
                 Format("{item.number}"),

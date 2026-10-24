@@ -102,8 +102,26 @@ const residencyIn = async (houseId: number) =>
     (residency) => residency.house_id === houseId,
   );
 
+const linkBody = (
+  command: Extract<StartParam, { kind: "house" | "qr" | "neighbour" | "obj" }>,
+) => {
+  switch (command.kind) {
+    case "house":
+      return { role: "owner", source: "chat" } as const;
+    case "neighbour":
+      return { role: "owner", source: "invite" } as const;
+    case "qr":
+    case "obj":
+      return {
+        role: "owner",
+        source: "qr",
+        entrance: command.entrance,
+      } as const;
+  }
+};
+
 const executeHouseDeeplink = async (
-  command: Extract<StartParam, { kind: "house" | "qr" | "obj" }>,
+  command: Extract<StartParam, { kind: "house" | "qr" | "neighbour" | "obj" }>,
 ): Promise<DeeplinkExecution> => {
   const existing =
     command.kind === "obj" ||
@@ -120,11 +138,7 @@ const executeHouseDeeplink = async (
   const { data, error } = await fetchClient
     .POST("/api/houses/{house_id}/link", {
       params: { ...authParams(), path: { house_id: command.houseId } },
-      body: {
-        role: "owner",
-        source: command.kind === "house" ? "chat" : "qr",
-        ...(command.kind === "house" ? {} : { entrance: command.entrance }),
-      },
+      body: linkBody(command),
     })
     .catch(expectedFailure);
 
@@ -190,6 +204,7 @@ export const executeDeeplink = (
       return executeDemoDeeplink(command);
     case "house":
     case "qr":
+    case "neighbour":
     case "obj":
       return executeHouseDeeplink(command);
   }

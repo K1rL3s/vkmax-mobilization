@@ -23,6 +23,7 @@ export const Routes = {
   CHARGES: "/charges",
   CHARGE: "/charges/:chargeId",
   HOUSE_CARD: "/house",
+  HOUSE_INVITE: "/house/invite",
   HOUSE_MAP: "/house/map",
   HOUSE_PROBLEMS: "/house/problems",
   APPOINTMENTS: "/appointments",

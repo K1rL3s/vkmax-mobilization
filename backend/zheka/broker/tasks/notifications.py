@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from dishka.integrations.taskiq import FromDishka, inject
 from maxo import Bot
 from maxo.types.buttons import InlineButtons
+from maxo.utils.deeplink import create_start_link
 from maxo.utils.upload_media import BufferedInputFile
 from taskiq import async_shared_broker
 
@@ -12,17 +13,19 @@ from zheka.bot.cards import app_link, open_app
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.chats import recheck_chat_rights
 from zheka.core import texts
+from zheka.core.deeplinks import neighbour_invite_payload
 from zheka.core.enums import ChatCardKind, NoticeStatus, NotificationCategory
 from zheka.core.ids import AnnouncementId, HouseId, MaxChatId, OrgId, UserId
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.chats import ChatsService
+from zheka.core.services.neighbour_invite import NeighbourInviteService
 from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
-from zheka.infra.pdf import NoticeRegisterPdf
+from zheka.infra.pdf import NeighbourLeaflet, NoticeRegisterPdf
 
 logger = logging.getLogger(__name__)
 
@@ -211,4 +214,33 @@ async def send_register_pdf(
             register.house.local(register.announcement.announcement.created_at),
             register.house.address,
         ),
+    )
+
+
+@async_shared_broker.task(task_name=TaskName.SEND_NEIGHBOUR_LEAFLET.value)
+@inject(patch_module=True)
+async def send_neighbour_leaflet(
+    user_id: UserId,
+    house_id: HouseId,
+    neighbour_invite_service: FromDishka[NeighbourInviteService],
+    users_repo: FromDishka[UsersRepo],
+    bot: FromDishka[Bot],
+    sender: FromDishka[MaxSender],
+) -> None:
+    user = await users_repo.get_by_id(user_id)
+    if user is None:
+        return
+    invite = await neighbour_invite_service.invite(house_id)
+    await sender.send_file(
+        user,
+        BufferedInputFile.file(
+            NeighbourLeaflet(
+                invite.house.address,
+                create_start_link(bot, neighbour_invite_payload(house_id)),
+                connected=invite.is_connected,
+                demo=invite.is_demo,
+            ).render(),
+            f"listovka-{house_id}.pdf",
+        ),
+        texts.neighbour_leaflet_sent(invite.house.address),
     )

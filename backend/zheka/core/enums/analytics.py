@@ -18,3 +18,11 @@ class AnalyticsMetric(StrEnum):
     RATING = "rating"
     ON_TIME_SHARE = "on_time_share"
     ACCEPT_TIME_MEDIAN = "accept_time_median"
+
+
+class ArrivalSource(StrEnum):
+    SELF = "self"
+    QR = "qr"
+    CHAT = "chat"
+    INVITE = "invite"
+    OTHER = "other"

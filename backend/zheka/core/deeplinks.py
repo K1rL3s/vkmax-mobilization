@@ -14,6 +14,7 @@ class DeeplinkKind(StrEnum):
     CHAIRMAN = "chair"
     HOUSE = "house"
     ENTRANCE_QR = "qr"
+    NEIGHBOUR_INVITE = "nb"
     DEMO_ADMIN = "demo_admin"
     DEMO_STAFF = "demo_staff"
     DEMO_RESIDENT = "demo_resident"
@@ -32,6 +33,7 @@ class Deeplink(ZhekaType):
 _SOURCES = {
     DeeplinkKind.HOUSE: EventSource.CHAT,
     DeeplinkKind.ENTRANCE_QR: EventSource.QR,
+    DeeplinkKind.NEIGHBOUR_INVITE: EventSource.INVITE,
 }
 _DEMO = (
     DeeplinkKind.DEMO_ADMIN,
@@ -69,6 +71,10 @@ def house_payload(house_id: HouseId) -> str:
 
 def house_category_payload(house_id: HouseId, category: RequestCategory) -> str:
     return f"{DeeplinkKind.HOUSE}_{house_id}_{category}"
+
+
+def neighbour_invite_payload(house_id: HouseId) -> str:
+    return f"{DeeplinkKind.NEIGHBOUR_INVITE}_{house_id}"
 
 
 def entrance_qr_payload(house_id: HouseId, entrance: int) -> str:

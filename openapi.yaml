@@ -1665,6 +1665,152 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/neighbour-invite:
+    get:
+      tags:
+      - Дома
+      summary: 'Позвать соседей: ссылка в дом'
+      description: 'Только житель дома, в том числе с неподтвержденной квартирой; чужой дом - 404. Ссылка постоянная, без пригласившего: сосед попадает в бота с выбранным домом, вход считается с источником invite'
+      operationId: get_neighbour_invite
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NeighbourInviteResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/houses/{house_id}/neighbour-invite/leaflet:
+    post:
+      tags:
+      - Дома
+      summary: Листовка дома в чат с ботом
+      description: Только житель дома, чужой дом - 404. Житель, которому бот не может написать, - 409. Бот присылает PDF A4 с адресом и QR-кодом ссылки в дом; на демо-УК - с пометкой «ДЕМО»
+      operationId: send_neighbour_leaflet
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/houses/{house_id}/flats:
     get:
       tags:
@@ -12093,6 +12239,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/analytics/arrivals:
+    get:
+      tags:
+      - 'Админка: аналитика'
+      summary: Откуда пришли жители
+      description: 'Привязки к домам за период по домам, которые сейчас у УК: ушедшие из дома и пришедшие до подключения УК тоже считаются'
+      operationId: get_arrivals
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: date_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date From
+      - name: date_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+          title: Date To
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArrivalsResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/admin/analytics/benchmark:
     get:
       tags:
@@ -13671,6 +13910,53 @@ components:
       - cancelled
       - done
       title: AppointmentStatus
+    ArrivalItem:
+      properties:
+        source:
+          $ref: '#/components/schemas/ArrivalSource'
+          description: self - нашли дом сами (бот или мини-апп), qr - QR в подъезде, chat - чат дома, invite - позвали соседи, other - прочие ссылки, только если не 0
+        count:
+          type: integer
+          title: Count
+        share:
+          type: integer
+          title: Share
+          description: Доля в сотых долях процента, 50% это 5000
+      type: object
+      required:
+      - source
+      - count
+      - share
+      title: ArrivalItem
+    ArrivalSource:
+      type: string
+      enum:
+      - self
+      - qr
+      - chat
+      - invite
+      - other
+      title: ArrivalSource
+    ArrivalsResponse:
+      properties:
+        total:
+          type: integer
+          title: Total
+        items:
+          items:
+            $ref: '#/components/schemas/ArrivalItem'
+          type: array
+          title: Items
+        is_empty:
+          type: boolean
+          title: Is Empty
+          description: 'Данных нет: фронт показывает пустое состояние, а не пустоту'
+      type: object
+      required:
+      - total
+      - items
+      - is_empty
+      title: ArrivalsResponse
     AssignExecutorRequest:
       properties:
         user_id:
@@ -14815,6 +15101,7 @@ components:
       - chat
       - deeplink
       - miniapp
+      - invite
       title: EventSource
     ExecutorItem:
       properties:
@@ -15848,6 +16135,29 @@ components:
       - has_chairman
       - items
       title: MyProposalsResponse
+    NeighbourInviteResponse:
+      properties:
+        address:
+          type: string
+          title: Address
+        is_connected:
+          type: boolean
+          title: Is Connected
+        text:
+          type: string
+          title: Text
+          description: Текст для нативного шеринга MAX, ссылка идет отдельно
+        link:
+          type: string
+          title: Link
+          description: Постоянная ссылка бота nb_<дом>, квартиру сосед укажет сам
+      type: object
+      required:
+      - address
+      - is_connected
+      - text
+      - link
+      title: NeighbourInviteResponse
     NoticeRecipient:
       properties:
         role:

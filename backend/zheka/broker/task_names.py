@@ -34,4 +34,5 @@ class TaskName(StrEnum):
     SEND_VISIT_CARD = "send_visit_card"
     SEND_GJI_PDF = "send_gji_pdf"
     SEND_REGISTER_PDF = "send_register_pdf"
+    SEND_NEIGHBOUR_LEAFLET = "send_neighbour_leaflet"
     ASK_CHAT_RIGHTS = "ask_chat_rights"

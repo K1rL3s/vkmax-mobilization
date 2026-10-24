@@ -20,11 +20,16 @@ from zheka.api.schemas.houses import (
     HouseCard,
     HouseListItem,
     LinkHouseRequest,
+    NeighbourInviteResponse,
     OrgInviteResponse,
     ResidencySummary,
 )
 from zheka.config import DeeplinksConfig
-from zheka.core.deeplinks import chairman_payload, org_register_payload
+from zheka.core.deeplinks import (
+    chairman_payload,
+    neighbour_invite_payload,
+    org_register_payload,
+)
 from zheka.core.ids import HouseId, ResidentId
 from zheka.core.register_codes import org_register_code
 from zheka.core.services.chairman import ChairmanService
@@ -32,6 +37,7 @@ from zheka.core.services.chats import ChatsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.house_point import HousePointService
 from zheka.core.services.houses import HousesService
+from zheka.core.services.neighbour_invite import NeighbourInviteService
 from zheka.core.texts import org_invite_text
 
 router = APIRouter(tags=["Дома"], route_class=DishkaRoute)
@@ -207,6 +213,48 @@ async def get_org_invite(
         text=org_invite_text(invite.house.address, invite.waiting),
         link=create_start_link(bot, org_register_payload(code)),
     )
+
+
+@router.get(
+    "/houses/{house_id}/neighbour-invite",
+    summary="Позвать соседей: ссылка в дом",
+    description=(
+        "Только житель дома, в том числе с неподтвержденной квартирой; чужой "
+        "дом - 404. Ссылка постоянная, без пригласившего: сосед попадает в бота "
+        "с выбранным домом, вход считается с источником invite"
+    ),
+)
+async def get_neighbour_invite(
+    house_id: HouseId,
+    residency: ResidencyForHouseDep,  # noqa: ARG001
+    neighbour_invite_service: FromDishka[NeighbourInviteService],
+    bot: FromDishka[Bot],
+) -> NeighbourInviteResponse:
+    invite = await neighbour_invite_service.invite(house_id)
+    return NeighbourInviteResponse(
+        address=invite.house.address,
+        is_connected=invite.is_connected,
+        text=invite.text,
+        link=create_start_link(bot, neighbour_invite_payload(house_id)),
+    )
+
+
+@router.post(
+    "/houses/{house_id}/neighbour-invite/leaflet",
+    summary="Листовка дома в чат с ботом",
+    description=(
+        "Только житель дома, чужой дом - 404. Житель, которому бот не может "
+        "написать, - 409. Бот присылает PDF A4 с адресом и QR-кодом ссылки в "
+        "дом; на демо-УК - с пометкой «ДЕМО»"
+    ),
+)
+async def send_neighbour_leaflet(
+    house_id: HouseId,
+    residency: ResidencyForHouseDep,
+    neighbour_invite_service: FromDishka[NeighbourInviteService],
+) -> OkResponse:
+    await neighbour_invite_service.send_leaflet(residency.user_id, house_id)
+    return OkResponse()
 
 
 @router.get("/houses/{house_id}/flats", summary="Квартиры дома")

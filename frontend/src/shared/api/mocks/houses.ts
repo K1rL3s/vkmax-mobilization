@@ -143,4 +143,29 @@ export const housesConfigs = [
 
     return ok({ ok: true });
   }),
+  endpoint("get", "/houses/:house_id/neighbour-invite", (request) => {
+    const house = findHouse(Number(request.params.house_id));
+
+    if (!house || !residencyForHouse(house.id)) {
+      return notFound("Дом не найден");
+    }
+
+    const { address } = houseCard(house);
+
+    return ok({
+      address,
+      is_connected: house.is_connected,
+      text: house.is_connected
+        ? `Наш дом ${address} в Жэке: заявки в УК, объявления и показания в MAX. Дом уже выбран, укажите квартиру:`
+        : `Зовем нашу УК в Жэку. Присоединяйтесь, дом ${address} уже выбран:`,
+      link: `https://max.ru/t260_hakaton_max_bot?start=nb_${house.id}`,
+    });
+  }),
+  endpoint("post", "/houses/:house_id/neighbour-invite/leaflet", (request) => {
+    const house = findHouse(Number(request.params.house_id));
+
+    return house && residencyForHouse(house.id)
+      ? ok({ ok: true })
+      : notFound("Дом не найден");
+  }),
 ];

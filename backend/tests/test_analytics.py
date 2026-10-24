@@ -14,6 +14,7 @@ from tests.conftest import (
 )
 
 from zheka.api.schemas.analytics import (
+    ArrivalsResponse,
     BenchmarkResponse,
     ChannelsSplitResponse,
     DashboardResponse,
@@ -25,6 +26,8 @@ from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
     CATEGORY_RULES,
     AnalyticsMetric,
+    ArrivalSource,
+    EventSource,
     EventType,
     MeterType,
     MetricUnit,
@@ -930,3 +933,70 @@ async def test_a_canceled_request_is_no_closed_work(session: AsyncSession) -> No
 
     assert _metric(benchmark, AnalyticsMetric.AUTO_CLOSED_SHARE).value == 5000
     assert row.closed == 2
+
+
+async def _arrival(
+    session: AsyncSession,
+    house_id: HouseId,
+    source: EventSource,
+    created_at: datetime = NOW - timedelta(days=1),
+) -> None:
+    session.add(
+        Event(
+            user_id=await add_user(session),
+            type=EventType.HOUSE_LINKED.value,
+            payload={"house_id": house_id, "source": source.value},
+            created_at=created_at,
+        ),
+    )
+    await session.flush()
+
+
+async def test_arrivals_group_the_sources_of_the_orgs_houses_in_the_period(
+    session: AsyncSession,
+) -> None:
+    org_id, house_id = await _org(session)
+    _other_org, other_house = await _org(session)
+    for source in (
+        EventSource.DIRECT,
+        EventSource.MINIAPP,
+        EventSource.QR,
+        EventSource.CHAT,
+        EventSource.INVITE,
+        EventSource.INVITE,
+    ):
+        await _arrival(session, house_id, source)
+    await _arrival(session, other_house, EventSource.INVITE)
+    await _arrival(session, house_id, EventSource.QR, NOW - timedelta(days=40))
+
+    arrivals = await _service(session).arrivals(org_id, None, None, NOW)
+
+    assert (arrivals.total, arrivals.is_empty) == (6, False)
+    assert [(item.source, item.count, item.share) for item in arrivals.items] == [
+        (ArrivalSource.SELF, 2, 3333),
+        (ArrivalSource.QR, 1, 1667),
+        (ArrivalSource.CHAT, 1, 1667),
+        (ArrivalSource.INVITE, 2, 3333),
+    ]
+
+
+async def test_arrivals_show_other_links_only_when_there_are_some(
+    session: AsyncSession,
+) -> None:
+    org_id, house_id = await _org(session)
+    service = _service(session)
+
+    empty = await service.arrivals(org_id, None, None, NOW)
+    await _arrival(session, house_id, EventSource.DEEPLINK)
+    other = await service.arrivals(org_id, None, None, NOW)
+
+    assert (empty.total, empty.is_empty) == (0, True)
+    assert [item.source for item in empty.items] == [
+        ArrivalSource.SELF,
+        ArrivalSource.QR,
+        ArrivalSource.CHAT,
+        ArrivalSource.INVITE,
+    ]
+    assert ArrivalsResponse.model_validate(empty).is_empty
+    assert other.items[-1].source is ArrivalSource.OTHER
+    assert (other.items[-1].count, other.items[-1].share) == (1, 10000)

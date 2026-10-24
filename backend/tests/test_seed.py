@@ -36,6 +36,7 @@ from zheka.core.charges import parse_lines
 from zheka.core.danger import detect_danger
 from zheka.core.enums import (
     CATEGORY_PLACES,
+    ArrivalSource,
     DangerKind,
     NoticeStatus,
     OrgRole,
@@ -198,6 +199,21 @@ async def test_the_dashboard_and_the_benchmark_are_not_empty(db: AsyncSession) -
     assert benchmark.metrics
     assert any(row.city is not None for row in benchmark.regions)
     assert benchmark.unconnected_houses
+
+
+async def test_every_enterable_demo_org_shows_where_its_residents_came_from(
+    db: AsyncSession,
+) -> None:
+    service = analytics_service(db)
+    for profile in PROFILES:
+        org = await OrgsRepo(db).get_by_inn(profile.inn)
+        assert org is not None
+
+        arrivals = await service.arrivals(org.id, None, None, NOW)
+
+        assert not arrivals.is_empty, profile.inn
+        assert all(item.count > 0 for item in arrivals.items), profile.inn
+        assert arrivals.items[-1].source is ArrivalSource.INVITE
 
 
 async def test_the_five_organizations_rank_without_a_tie(db: AsyncSession) -> None:

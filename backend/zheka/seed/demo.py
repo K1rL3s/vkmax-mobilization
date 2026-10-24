@@ -18,6 +18,7 @@ from zheka.core.enums import (
     CATEGORY_RULES,
     AnnouncementChannel,
     AppointmentStatus,
+    EventSource,
     EventType,
     NoticeStatus,
     OrgRole,
@@ -1397,6 +1398,8 @@ class Seeder:
                 pinned=pinned,
             )
             await self._activity(house, org, staff, owners, pinned)
+            if is_enterable:
+                self._arrivals(house, owners)
             if index == 0:
                 await self._planned_works(house, org, staff, owners)
             booked.append((house, owners))
@@ -1410,6 +1413,38 @@ class Seeder:
         if is_enterable:
             await self._reception(org, booked)
         return voters
+
+    def _arrivals(
+        self,
+        house: House,
+        owners: Sequence[tuple[User, Resident]],
+    ) -> None:
+        rng = Random(f"arrivals:{house.city}:{house.street}:{house.building}")
+        self._session.add_all(
+            Event(
+                user_id=user.id,
+                type=EventType.HOUSE_LINKED.value,
+                payload={
+                    "house_id": house.id,
+                    "flat_id": resident.flat_id,
+                    "flat_number": None,
+                    "source": rng.choices(
+                        (
+                            EventSource.DIRECT,
+                            EventSource.MINIAPP,
+                            EventSource.QR,
+                            EventSource.INVITE,
+                            EventSource.CHAT,
+                        ),
+                        (25, 15, 30, 20, 10),
+                    )[0].value,
+                    "entrance": None,
+                },
+                created_at=self._now
+                - timedelta(seconds=rng.randrange(1, int(HISTORY.total_seconds()))),
+            )
+            for user, resident in owners
+        )
 
     async def _users(self, count: int) -> list[User]:
         names = self._names

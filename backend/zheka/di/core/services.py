@@ -24,6 +24,7 @@ from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.meter_photo import MeterPhotoService
 from zheka.core.services.meters import MetersService
 from zheka.core.services.moderation import ModerationService
+from zheka.core.services.neighbour_invite import NeighbourInviteService
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.orgs import OrgsService
 from zheka.core.services.polls import PollsService
@@ -82,6 +83,7 @@ class ServicesProvider(Provider):
         MapService,
         HousePointService,
         AdminMapService,
+        NeighbourInviteService,
     )
     upload_quota = provide(UploadQuota, scope=Scope.APP)
     house_add_quota = provide(HouseAddQuota, scope=Scope.APP)

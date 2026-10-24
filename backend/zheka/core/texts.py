@@ -424,6 +424,22 @@ def org_invite_text(address: str, waiting: int) -> str:
     )
 
 
+def neighbour_invite_text(address: str, *, connected: bool) -> str:
+    if connected:
+        return (
+            f"Наш дом {address} в Жэке: заявки в УК, объявления и показания в MAX. "
+            "Дом уже выбран, укажите квартиру:"
+        )
+    return f"Зовем нашу УК в Жэку. Присоединяйтесь, дом {address} уже выбран:"
+
+
+def neighbour_leaflet_sent(address: str) -> str:
+    return (
+        f"📄 Листовка для подъезда: {escape(address)}\n"
+        "🖨 Распечатайте на A4 и повесьте у входа или у лифта"
+    )
+
+
 def request_share_text(request: Request, house: House, *, joinable: bool) -> str:
     text = (
         f"{CATEGORY_RULES[request.category].emoji} Заявка №{request.id} · "

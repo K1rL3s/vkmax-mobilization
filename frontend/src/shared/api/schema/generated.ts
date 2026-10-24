@@ -323,6 +323,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/houses/{house_id}/neighbour-invite": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Позвать соседей: ссылка в дом
+     * @description Только житель дома, в том числе с неподтвержденной квартирой; чужой дом - 404. Ссылка постоянная, без пригласившего: сосед попадает в бота с выбранным домом, вход считается с источником invite
+     */
+    get: operations["get_neighbour_invite"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/houses/{house_id}/neighbour-invite/leaflet": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Листовка дома в чат с ботом
+     * @description Только житель дома, чужой дом - 404. Житель, которому бот не может написать, - 409. Бот присылает PDF A4 с адресом и QR-кодом ссылки в дом; на демо-УК - с пометкой «ДЕМО»
+     */
+    post: operations["send_neighbour_leaflet"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/houses/{house_id}/flats": {
     parameters: {
       query?: never;
@@ -2263,6 +2303,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/admin/analytics/arrivals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Откуда пришли жители
+     * @description Привязки к домам за период по домам, которые сейчас у УК: ушедшие из дома и пришедшие до подключения УК тоже считаются
+     */
+    get: operations["get_arrivals"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/admin/analytics/benchmark": {
     parameters: {
       query?: never;
@@ -3117,6 +3177,35 @@ export interface components {
      * @enum {string}
      */
     AppointmentStatus: "booked" | "cancelled" | "done";
+    /** ArrivalItem */
+    ArrivalItem: {
+      /** @description self - нашли дом сами (бот или мини-апп), qr - QR в подъезде, chat - чат дома, invite - позвали соседи, other - прочие ссылки, только если не 0 */
+      source: components["schemas"]["ArrivalSource"];
+      /** Count */
+      count: number;
+      /**
+       * Share
+       * @description Доля в сотых долях процента, 50% это 5000
+       */
+      share: number;
+    };
+    /**
+     * ArrivalSource
+     * @enum {string}
+     */
+    ArrivalSource: "self" | "qr" | "chat" | "invite" | "other";
+    /** ArrivalsResponse */
+    ArrivalsResponse: {
+      /** Total */
+      total: number;
+      /** Items */
+      items: components["schemas"]["ArrivalItem"][];
+      /**
+       * Is Empty
+       * @description Данных нет: фронт показывает пустое состояние, а не пустоту
+       */
+      is_empty: boolean;
+    };
     /** AssignExecutorRequest */
     AssignExecutorRequest: {
       /** User Id */
@@ -3811,7 +3900,7 @@ export interface components {
      * EventSource
      * @enum {string}
      */
-    EventSource: "direct" | "qr" | "chat" | "deeplink" | "miniapp";
+    EventSource: "direct" | "qr" | "chat" | "deeplink" | "miniapp" | "invite";
     /** ExecutorItem */
     ExecutorItem: {
       /** User Id */
@@ -4398,6 +4487,23 @@ export interface components {
       has_chairman: boolean;
       /** Items */
       items: components["schemas"]["ProposalItem"][];
+    };
+    /** NeighbourInviteResponse */
+    NeighbourInviteResponse: {
+      /** Address */
+      address: string;
+      /** Is Connected */
+      is_connected: boolean;
+      /**
+       * Text
+       * @description Текст для нативного шеринга MAX, ссылка идет отдельно
+       */
+      text: string;
+      /**
+       * Link
+       * @description Постоянная ссылка бота nb_<дом>, квартиру сосед укажет сам
+       */
+      link: string;
     };
     /** NoticeRecipient */
     NoticeRecipient: {
@@ -8032,6 +8138,180 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OrgInviteResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  get_neighbour_invite: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NeighbourInviteResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  send_neighbour_leaflet: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        house_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OkResponse"];
         };
       };
       /** @description Некорректный запрос */
@@ -19198,6 +19478,95 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ChannelsSplitResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  get_arrivals: {
+    parameters: {
+      query?: {
+        date_from?: string | null;
+        date_to?: string | null;
+      };
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ArrivalsResponse"];
         };
       };
       /** @description Некорректный запрос */

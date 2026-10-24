@@ -52,6 +52,23 @@ const qrStartParamSchema = startParam(qrStartParamPattern).transform(
   },
 );
 
+const neighbourStartParamPattern = /^nb_([1-9]\d*)$/;
+
+const neighbourStartParamSchema = startParam(
+  neighbourStartParamPattern,
+).transform((raw, context) => {
+  const houseId = positiveInteger(
+    neighbourStartParamPattern.exec(raw)?.[1] ?? "",
+  );
+
+  if (houseId === null) {
+    context.addIssue({ code: "custom", message: "Некорректная ссылка соседа" });
+    return z.NEVER;
+  }
+
+  return { kind: "neighbour", houseId } as const;
+});
+
 const objStartParamPattern = /^obj_([1-9]\d*)_([1-9]\d*)_([a-z_]+)$/;
 
 const objStartParamSchema = startParam(objStartParamPattern).transform(
@@ -141,6 +158,7 @@ const pathStartParamSchema = startParam(/^[A-Za-z0-9_-]+$/).transform(
 const startParamSchema = z.union([
   houseStartParamSchema,
   qrStartParamSchema,
+  neighbourStartParamSchema,
   objStartParamSchema,
   codeStartParamSchema("flat", "flat"),
   codeStartParamSchema("inv", "invite"),

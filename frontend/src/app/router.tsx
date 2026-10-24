@@ -170,6 +170,11 @@ const router = createBrowserRouter([
                 lazy: () => import("@/features/house-card/house-card.page"),
               },
               {
+                path: Routes.HOUSE_INVITE,
+                lazy: () =>
+                  import("@/features/invite-neighbours/invite-neighbours.page"),
+              },
+              {
                 path: Routes.NOTIFICATIONS,
                 lazy: () => import("@/features/profile/notifications.page"),
               },

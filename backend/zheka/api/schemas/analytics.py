@@ -3,7 +3,7 @@ from datetime import date
 from pydantic import Field
 
 from zheka.api.schemas.base import BaseSchema
-from zheka.core.enums import MetricUnit, RequestChannel
+from zheka.core.enums import ArrivalSource, MetricUnit, RequestChannel
 from zheka.core.ids import HouseId, UserId
 
 _PERCENT = "Доля в сотых долях процента, 50% это 5000"
@@ -103,6 +103,24 @@ class ChannelSplitItem(BaseSchema):
 class ChannelsSplitResponse(BaseSchema):
     total: int
     items: list[ChannelSplitItem]
+    is_empty: bool = Field(description=_EMPTY)
+
+
+class ArrivalItem(BaseSchema):
+    source: ArrivalSource = Field(
+        description=(
+            "self - нашли дом сами (бот или мини-апп), qr - QR в подъезде, chat - "
+            "чат дома, invite - позвали соседи, other - прочие ссылки, только "
+            "если не 0"
+        ),
+    )
+    count: int
+    share: int = Field(description=_PERCENT)
+
+
+class ArrivalsResponse(BaseSchema):
+    total: int
+    items: list[ArrivalItem]
     is_empty: bool = Field(description=_EMPTY)
 
 

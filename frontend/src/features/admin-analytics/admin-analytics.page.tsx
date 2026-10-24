@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { PERIODS } from "./domain/period";
 import { useDashboard } from "./model/use-dashboard";
+import { ArrivalsSection } from "./ui/arrivals-section";
 import { BenchmarkLink } from "./ui/benchmark-link";
 import { ChannelsSection } from "./ui/channels-section";
 import { ChartsSection } from "./ui/charts-section";
@@ -83,6 +84,8 @@ const AdminAnalyticsPage = () => {
       <MetersSection />
 
       <ChannelsSection period={period} />
+
+      <ArrivalsSection period={period} />
 
       <ExecutorsSection period={period} />
 

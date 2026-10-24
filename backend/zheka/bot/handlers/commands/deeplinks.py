@@ -62,7 +62,11 @@ _DEMO_STAFF = {
     DeeplinkKind.DEMO_ADMIN: (OrgRole.ADMIN, DEMO_ADMIN_NOTICE),
     DeeplinkKind.DEMO_STAFF: (OrgRole.EMPLOYEE, DEMO_STAFF_NOTICE),
 }
-_HOUSE_KINDS = (DeeplinkKind.HOUSE, DeeplinkKind.ENTRANCE_QR)
+_HOUSE_KINDS = (
+    DeeplinkKind.HOUSE,
+    DeeplinkKind.ENTRANCE_QR,
+    DeeplinkKind.NEIGHBOUR_INVITE,
+)
 
 
 @router.bot_started()

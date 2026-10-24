@@ -89,6 +89,7 @@ async def get_flat(
         "address": escape(card.house.address),
         "flats": flats,
         "has_houses": bool(data.houses),
+        "invited": data.source is EventSource.INVITE,
     }
 
 

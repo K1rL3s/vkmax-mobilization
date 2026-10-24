@@ -3,7 +3,13 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 
 from zheka.base import ZhekaType
-from zheka.core.enums import CATEGORY_RULES, AnalyticsMetric, MetricUnit, RequestChannel
+from zheka.core.enums import (
+    CATEGORY_RULES,
+    AnalyticsMetric,
+    ArrivalSource,
+    MetricUnit,
+    RequestChannel,
+)
 from zheka.core.errors import (
     HOUSE_NOT_FOUND,
     EntityNotFound,
@@ -16,6 +22,7 @@ from zheka.core.services.readings import window_accepts, window_period
 from zheka.core.services.reminders import RemindersService
 from zheka.infra.database.repos.analytics import (
     AnalyticsRepo,
+    ArrivalRow,
     ChannelRow,
     ExecutorRow,
     SeasonCount,
@@ -132,6 +139,12 @@ class Season(ZhekaType):
 class Channels(ZhekaType):
     total: int
     items: list[ChannelRow]
+    is_empty: bool
+
+
+class Arrivals(ZhekaType):
+    total: int
+    items: list[ArrivalRow]
     is_empty: bool
 
 
@@ -394,6 +407,31 @@ class AnalyticsService:
         ]
         total = sum(item.count for item in items)
         return Channels(total=total, items=items, is_empty=total == 0)
+
+    async def arrivals(
+        self,
+        org_id: OrgId,
+        date_from: date | None,
+        date_to: date | None,
+        now: datetime,
+    ) -> Arrivals:
+        org = await self._orgs.get_existing(org_id)
+        period_from, period_to = _range(date_from, date_to, org.local(now))
+        rows = {
+            row.source: row
+            for row in await self._analytics.by_arrival(
+                org_id,
+                org.day_start(period_from),
+                org.day_start(period_to + timedelta(days=1)),
+            )
+        }
+        items = [
+            rows.get(source, ArrivalRow(source=source, count=0, share=0))
+            for source in ArrivalSource
+            if source is not ArrivalSource.OTHER or source in rows
+        ]
+        total = sum(item.count for item in items)
+        return Arrivals(total=total, items=items, is_empty=total == 0)
 
     async def benchmark(self, org_id: OrgId, now: datetime) -> Benchmark:
         org = await self._orgs.get_existing(org_id)

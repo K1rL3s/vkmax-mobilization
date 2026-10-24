@@ -21,6 +21,8 @@ from sqlalchemy.sql.elements import ColumnElement
 from zheka.base import ZhekaType
 from zheka.core.enums import (
     AnalyticsMetric,
+    ArrivalSource,
+    EventSource,
     EventType,
     OrgRole,
     RequestCategory,
@@ -162,6 +164,12 @@ class ExecutorRow(ZhekaType):
 
 class ChannelRow(ZhekaType):
     channel: RequestChannel
+    count: int
+    share: int
+
+
+class ArrivalRow(ZhekaType):
+    source: ArrivalSource
     count: int
     share: int
 
@@ -421,6 +429,42 @@ class AnalyticsRepo(BaseAlchemyRepo):
         return [
             ChannelRow(channel=channel, count=total, share=channel_share)
             for channel, total, channel_share in result.tuples().all()
+        ]
+
+    async def by_arrival(
+        self,
+        org_id: OrgId,
+        since: datetime,
+        until: datetime,
+    ) -> list[ArrivalRow]:
+        e = events_table.c
+        source = e.payload["source"].astext
+        arrival = case(
+            (
+                source.in_([EventSource.DIRECT.value, EventSource.MINIAPP.value]),
+                ArrivalSource.SELF.value,
+            ),
+            (source == EventSource.QR.value, ArrivalSource.QR.value),
+            (source == EventSource.CHAT.value, ArrivalSource.CHAT.value),
+            (source == EventSource.INVITE.value, ArrivalSource.INVITE.value),
+            else_=ArrivalSource.OTHER.value,
+        )
+        count = func.count()
+        stmt = scoped_to_org(
+            select(arrival, count, share(count, func.sum(count).over()))
+            .where(
+                e.type == EventType.HOUSE_LINKED.value,
+                e.created_at >= since,
+                e.created_at < until,
+            )
+            .group_by(arrival),
+            e.payload["house_id"].as_integer(),
+            org_id,
+        )
+        result = await self._session.execute(stmt)
+        return [
+            ArrivalRow(source=ArrivalSource(value), count=total, share=arrival_share)
+            for value, total, arrival_share in result.tuples().all()
         ]
 
     async def org_rank(

@@ -154,6 +154,7 @@ from zheka.bot.handlers.onboarding.windows import (
     FLAT_LIST_TEXT,
     FLAT_NUMBER_TEXT,
     HOUSE_TEXT as SEARCH_HOUSE_TEXT,
+    INVITED_TEXT,
     METHOD_TEXT,
     MISSED_TEXT,
     NEARBY_TEXT,
@@ -226,6 +227,7 @@ from zheka.broker.tasks.meters import recognize_meter_photo
 from zheka.broker.tasks.notifications import (
     broadcast_to_chats,
     broadcast_to_users,
+    send_neighbour_leaflet,
     send_register_pdf,
     send_to_user,
 )
@@ -246,6 +248,7 @@ from zheka.core.deeplinks import (
     chairman_payload,
     entrance_qr_payload,
     house_payload,
+    neighbour_invite_payload,
     org_invite_payload,
 )
 from zheka.core.enums import (
@@ -2905,6 +2908,7 @@ async def test_the_policy_button_opens_the_privacy_page_of_the_mini_app(
         (None, EventSource.DIRECT),
         (DeeplinkKind.HOUSE, EventSource.CHAT),
         (DeeplinkKind.ENTRANCE_QR, EventSource.QR),
+        (DeeplinkKind.NEIGHBOUR_INVITE, EventSource.INVITE),
         (DeeplinkKind.DEMO_STAFF, EventSource.DEEPLINK),
     ],
 )
@@ -2921,6 +2925,7 @@ async def test_a_consent_in_the_bot_records_where_the_resident_came_from(
         None: Omitted(),
         DeeplinkKind.HOUSE: house_payload(house_id),
         DeeplinkKind.ENTRANCE_QR: entrance_qr_payload(house_id, 1),
+        DeeplinkKind.NEIGHBOUR_INVITE: neighbour_invite_payload(house_id),
         DeeplinkKind.DEMO_STAFF: "demo_staff_1",
     }
     await _bot_started(client, payloads[link])
@@ -3207,7 +3212,7 @@ async def test_a_flat_picked_from_the_list_is_linked(
     await client.send(f"Улица{tag}")
     await client.send("1")
 
-    assert _text(message_manager) == FLAT_LIST_TEXT.format(address=address)
+    assert _text(message_manager) == f"🏢 {address}\n\n{FLAT_LIST_TEXT}"
     assert _button_texts(message_manager.last_message()) == [
         "1",
         "2",
@@ -3380,7 +3385,7 @@ async def test_a_deeplinked_flat_step_goes_back_to_the_method_and_forgets_the_li
     await _bot_started(client, entrance_qr_payload(deeplinked, 3))
     assert CONSENT_TEXT in _text(message_manager)
     await client.click(message_manager.last_message(), ACCEPT)
-    assert _text(message_manager) == FLAT_NUMBER_TEXT.format(address=address)
+    assert _text(message_manager) == f"🏢 {address}\n\n{FLAT_NUMBER_TEXT}"
     await client.click(message_manager.last_message(), BACK_BUTTON)
     assert METHOD_TEXT in _text(message_manager)
     await client.click(message_manager.last_message(), BY_ADDRESS)
@@ -3401,6 +3406,59 @@ async def test_a_deeplinked_flat_step_goes_back_to_the_method_and_forgets_the_li
     assert payload["house_id"] == picked
     assert payload["source"] == EventSource.DIRECT.value
     assert payload["entrance"] is None
+
+
+async def test_a_neighbour_invite_says_who_called_and_links_the_house_by_invite(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, address = await _bot_house(bot_session)
+
+    await _bot_started(client, neighbour_invite_payload(house_id))
+    await client.click(message_manager.last_message(), ACCEPT)
+
+    assert _text(message_manager) == (
+        f"{INVITED_TEXT.format(address=address)}\n\n{FLAT_NUMBER_TEXT}"
+    )
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator("⏩ Пропустить"),
+    )
+    user = await _user(bot_session, client)
+    stmt = select(events_table.c.payload).where(
+        events_table.c.type == EventType.HOUSE_LINKED,
+        events_table.c.user_id == user.id,
+    )
+    [payload] = (await bot_session.execute(stmt)).scalars().all()
+    assert payload["house_id"] == house_id
+    assert payload["source"] == EventSource.INVITE.value
+
+
+async def test_the_leaflet_task_sends_the_house_leaflet_file(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    house_id, address = await _bot_house(bot_session)
+    await _consented(client, message_manager)
+    user_id = (await _user(bot_session, client)).id
+    send_file = AsyncMock()
+    monkeypatch.setattr(MaxSender, "send_file", send_file)
+
+    await _run(task_broker, send_neighbour_leaflet, user_id=user_id, house_id=house_id)
+
+    send_file.assert_awaited_once()
+    user, file, text = send_file.call_args.args
+    assert user.id == user_id
+    assert file.file_name == f"listovka-{house_id}.pdf"
+    assert (await file.read()).startswith(b"%PDF")
+    assert text == (
+        f"📄 Листовка для подъезда: {escape(address)}\n"
+        "🖨 Распечатайте на A4 и повесьте у входа или у лифта"
+    )
 
 
 CANCEL = InlineButtonTextLocator("❌ Отмена")
