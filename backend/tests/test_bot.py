@@ -324,6 +324,7 @@ from zheka.core.services.visits import (
     REQUEST_CLOSED,
     VISIT_CANCELED,
     VISIT_REPLACED,
+    VISIT_UNDER_WAY,
 )
 from zheka.core.texts import (
     CABINET_BUTTON,
@@ -371,6 +372,7 @@ from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
 from zheka.infra.database.tables.access import (
     access_requests_table,
+    access_slots_table,
     access_targets_table,
 )
 from zheka.infra.database.tables.announcements import (
@@ -1940,6 +1942,7 @@ async def test_a_demo_resident_link_gives_only_a_flat_in_its_organization(
 
 
 FIRST_WINDOW = InlineButtonTextLocator("🕐 10:00–12:00")
+SECOND_WINDOW = InlineButtonTextLocator("🕐 12:00–14:00")
 NONE_FITS_BUTTON = InlineButtonTextLocator(NONE_FITS)
 
 
@@ -2006,7 +2009,7 @@ async def test_the_visit_window_offers_each_window(
     assert f"по заявке №{request_id}: Протечка" in (text or "")
     window = message_manager.last_message()
     assert FIRST_WINDOW.find_button(window) is not None
-    assert InlineButtonTextLocator("🕐 12:00–14:00").find_button(window) is not None
+    assert SECOND_WINDOW.find_button(window) is not None
     assert NONE_FITS_BUTTON.find_button(window) is not None
 
 
@@ -2025,6 +2028,38 @@ async def test_a_tap_picks_the_visit_window(
     bot_session.expire_all()
     target = await AccessRepo(bot_session).visit_target(visit_id)
     assert target.slot_id == slot_id
+    visit = await AccessRepo(bot_session).get(visit_id)
+    assert visit.request_id is not None
+    messages = await RequestsRepo(bot_session).list_messages(visit.request_id)
+    day = texts.short_day(visit.date)
+    assert [message.text for message in messages] == [
+        texts.visit_chosen(f"{day}, 10:00–12:00", None),
+    ]
+
+
+async def test_a_started_visit_window_keeps_its_time(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    _, _, slot_id = await _visit_window(bot_session, client, task_broker)
+    await client.click(message_manager.last_message(), FIRST_WINDOW)
+    window = message_manager.last_message()
+    stmt = (
+        update(access_slots_table)
+        .where(access_slots_table.c.id == slot_id)
+        .values(starts_at=datetime.now(UTC) - timedelta(minutes=5))
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+
+    await client.click(window, SECOND_WINDOW)
+
+    shown = message_manager.last_message()
+    assert VISIT_UNDER_WAY in _text(message_manager)
+    assert SECOND_WINDOW.find_button(shown) is None
+    assert NONE_FITS_BUTTON.find_button(shown) is None
 
 
 async def test_none_fits_in_the_bot_reaches_the_conversation(

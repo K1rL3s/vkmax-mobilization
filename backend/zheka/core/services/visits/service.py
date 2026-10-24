@@ -3,8 +3,6 @@ from datetime import UTC, datetime
 from zheka.core import texts
 from zheka.core.enums import (
     EventType,
-    NotificationCategory,
-    OrgRole,
     RequestActorRole,
     RequestChannel,
     RequestStatus,
@@ -35,6 +33,7 @@ from zheka.core.services.visits.rules import (
     VISIT_CANCELED,
     VISIT_NOT_FOUND,
     VISIT_REPLACED,
+    VISIT_UNDER_WAY,
     WINDOWS_COUNT,
     WINDOW_NOT_FOUND,
     WINDOW_OFF_DATE,
@@ -43,7 +42,6 @@ from zheka.core.services.visits.rules import (
 )
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.houses import HousesRepo
-from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import OPEN_STATUSES, RequestsRepo
 
 
@@ -53,7 +51,6 @@ class VisitService:
         "_events",
         "_houses",
         "_notifications",
-        "_orgs",
         "_requests",
         "_requests_service",
     )
@@ -63,7 +60,6 @@ class VisitService:
         access_repo: AccessRepo,
         requests_repo: RequestsRepo,
         houses_repo: HousesRepo,
-        orgs_repo: OrgsRepo,
         events_service: EventsService,
         notifications_service: NotificationsService,
         requests_service: RequestsService,
@@ -71,7 +67,6 @@ class VisitService:
         self._access = access_repo
         self._requests = requests_repo
         self._houses = houses_repo
-        self._orgs = orgs_repo
         self._events = events_service
         self._notifications = notifications_service
         self._requests_service = requests_service
@@ -177,8 +172,10 @@ class VisitService:
         user_id: UserId,
         request_id: RequestId,
         slot_id: AccessSlotId,
+        channel: RequestChannel,
     ) -> VisitData:
         request = await self._own_request(user_id, request_id)
+        await self._requests.lock(request)
         slot = await self._access.lock_visit_slot(slot_id)
         if slot is None:
             raise EntityNotFound(WINDOW_NOT_FOUND)
@@ -187,21 +184,40 @@ class VisitService:
             raise EntityNotFound(WINDOW_NOT_FOUND)
         await self._check_live(request, visit)
 
+        current = await visit_data(self._access, visit)
+        if current.slot_id == slot_id:
+            return current
+        now = datetime.now(UTC)
+        if current.under_way(now):
+            raise InvalidState(VISIT_UNDER_WAY)
+        if slot.starts_at <= now:
+            raise InvalidState(PAST_WINDOW)
+        house = await self._houses.get(request.house_id)
+        if house is None:
+            raise EntityNotFound(HOUSE_NOT_FOUND)
+
         target = await self._access.visit_target(visit.id)
-        if target.slot_id != slot_id:
-            await self._access.pick(target, slot_id, datetime.now(UTC))
-            await self._events.record(
-                EventType.VISIT_SLOT_PICKED,
-                user_id=user_id,
-                request_id=request.id,
-                access_request_id=visit.id,
-                slot_id=slot_id,
+        await self._access.pick(target, slot_id, now)
+        await self._events.record(
+            EventType.VISIT_SLOT_PICKED,
+            user_id=user_id,
+            request_id=request.id,
+            access_request_id=visit.id,
+            slot_id=slot_id,
+        )
+        picked = await visit_data(self._access, visit)
+        if picked.picked is not None:
+            was = current.picked
+            await self._requests_service.write(
+                user_id,
+                request.id,
+                texts.visit_chosen(
+                    _local_span(house, picked.picked),
+                    None if was is None else _span(house, was),
+                ),
+                channel,
             )
-            data = await visit_data(self._access, visit)
-            if data.picked is not None:
-                await self._tell_executor(request, data.picked)
-            return data
-        return await visit_data(self._access, visit)
+        return picked
 
     async def decline(
         self,
@@ -219,7 +235,10 @@ class VisitService:
         target = await self._access.visit_target(visit.id)
         if target.slot_id is None and target.responded_at is not None:
             return
-        await self._access.decline(target, datetime.now(UTC))
+        now = datetime.now(UTC)
+        if (await visit_data(self._access, visit)).under_way(now):
+            raise InvalidState(VISIT_UNDER_WAY)
+        await self._access.decline(target, now)
         await self._events.record(
             EventType.VISIT_DECLINED,
             user_id=user_id,
@@ -246,34 +265,11 @@ class VisitService:
             current = await self._access.current_visit(request.id)
             raise InvalidState(VISIT_CANCELED if current is None else VISIT_REPLACED)
 
-    async def _tell_executor(self, request: Request, window: VisitWindow) -> None:
-        executor_id = request.executor_user_id
-        house = await self._houses.get(request.house_id)
-        if executor_id is None or house is None or house.org_id is None:
-            return
-        member = await self._orgs.get_member(house.org_id, executor_id)
-        if member is None or member.role is not OrgRole.EXECUTOR:
-            return
-        flat = (
-            None
-            if request.flat_id is None
-            else await self._houses.get_flat(request.flat_id)
-        )
-        self._notifications.notify_user(
-            executor_id,
-            texts.visit_picked(
-                request.id,
-                _local_span(house, window),
-                None if flat is None else flat.number,
-            ),
-            category=NotificationCategory.REQUESTS,
-            mandatory=False,
-        )
+
+def _span(house: House, window: VisitWindow) -> str:
+    return texts.visit_span(house.local(window.starts_at), window.minutes)
 
 
 def _local_span(house: House, window: VisitWindow) -> str:
-    starts_at = house.local(window.starts_at)
-    return (
-        f"{texts.short_day(starts_at.date())}, "
-        f"{texts.visit_span(starts_at, window.minutes)}"
-    )
+    day = texts.short_day(house.local(window.starts_at).date())
+    return f"{day}, {_span(house, window)}"

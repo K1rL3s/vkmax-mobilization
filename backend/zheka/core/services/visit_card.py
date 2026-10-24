@@ -30,6 +30,10 @@ class VisitData(ZhekaType):
             None,
         )
 
+    def under_way(self, now: datetime) -> bool:
+        picked = self.picked
+        return picked is not None and picked.starts_at <= now
+
 
 async def visit_of(access_repo: AccessRepo, request: Request) -> VisitData | None:
     if request.status is RequestStatus.DONE:

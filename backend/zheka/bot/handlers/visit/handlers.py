@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from html import escape
 from typing import Any
 
@@ -51,6 +52,7 @@ async def get_windows(
         "notice": None if notice is None else escape(notice),
         "bot_username": web_app_name(bot),
         "request_payload": app_payload(request_app_path(request_id)),
+        "under_way": False,
     }
     try:
         card = await requests_service.get_card(
@@ -65,9 +67,12 @@ async def get_windows(
     if visit is None or gone is not None:
         return {**common, "offer": f"🤷 {gone}", "windows": [], "open": False}
     house = card.house
+    now = datetime.now(UTC)
+    under_way = visit.under_way(now)
     return {
         **common,
         "offer": texts.visit_offer(card.request, visit.visit.date),
+        "under_way": under_way,
         "windows": [
             WindowItem(
                 id=window.id,
@@ -79,8 +84,9 @@ async def get_windows(
                 ),
             )
             for window in visit.windows
+            if window.id == visit.slot_id or (window.starts_at > now and not under_way)
         ],
-        "open": True,
+        "open": not under_way,
     }
 
 
@@ -99,6 +105,7 @@ async def on_window(
             dialog_user_id(dialog_manager),
             request_id,
             AccessSlotId(slot_id),
+            RequestChannel.BOT,
         )
     except ZhekaError as error:
         notice = str(error)

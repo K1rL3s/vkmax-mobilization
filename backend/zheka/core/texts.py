@@ -753,9 +753,10 @@ def visit_offer(request: Request, day: date) -> str:
     )
 
 
-def visit_picked(request_id: RequestId, when: str, flat_number: str | None) -> str:
-    flat = "" if flat_number is None else f", кв. {escape(flat_number)}"
-    return f"🔧 Житель выбрал время визита по заявке №{request_id}: {when}{flat}"
+def visit_chosen(when: str, was: str | None) -> str:
+    if was is None:
+        return f"Удобное время визита: {when}"
+    return f"Удобнее другое время визита: {when} вместо {was}"
 
 
 def visit_canceled(request: Request) -> str:

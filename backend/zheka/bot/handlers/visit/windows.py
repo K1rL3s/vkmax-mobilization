@@ -10,6 +10,7 @@ from zheka.bot.handlers.visit.handlers import (
     on_window,
 )
 from zheka.bot.states import VisitWindows
+from zheka.core.services.visits import VISIT_UNDER_WAY
 from zheka.core.texts import OPEN_REQUEST
 
 NONE_FITS = "🙅 Ни одно время не подходит"
@@ -18,7 +19,8 @@ visit_dialog = Dialog(
     Window(
         Multi(
             Format("{offer}"),
-            Const("🕐 Выберите, когда вы будете дома", when=F["open"]),
+            Const("🕐 Выберите, когда вы будете дома", when=F["open"] & F["windows"]),
+            Const(f"⏳ {VISIT_UNDER_WAY}", when=F["under_way"]),
             Format("{notice}", when=F["notice"]),
             sep="\n\n",
         ),

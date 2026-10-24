@@ -15,7 +15,11 @@ export const useAdminRequest = () => {
     {
       params: { ...orgParams(), path: { request_id: params?.requestId ?? 0 } },
     },
-    { enabled: params !== null, retry: retryUnlessForbidden },
+    {
+      enabled: params !== null,
+      refetchInterval: 10_000,
+      retry: retryUnlessForbidden,
+    },
   );
 
   return { valid: params !== null, query };

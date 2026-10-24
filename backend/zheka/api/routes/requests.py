@@ -176,7 +176,11 @@ async def get_request(
 @router.post(
     "/requests/{request_id}/visit/{slot_id}",
     summary="Выбрать окно визита",
-    description="Выбор можно сменить, пока заявка не сдана на приемку",
+    description=(
+        "Выбор пишется сообщением жителя в переписку по заявке. Сменить его "
+        "можно, пока заявка не сдана на приемку и выбранное окно не началось; "
+        "начавшееся окно не выбрать"
+    ),
 )
 async def pick_visit_window(
     request_id: RequestId,
@@ -186,7 +190,12 @@ async def pick_visit_window(
     requests_service: FromDishka[RequestsService],
     files_service: FromDishka[FilesService],
 ) -> RequestCard:
-    await visit_service.pick(current_account.user_id, request_id, slot_id)
+    await visit_service.pick(
+        current_account.user_id,
+        request_id,
+        slot_id,
+        RequestChannel.MINIAPP,
+    )
     card = await requests_service.get_card(current_account.user_id, request_id)
     return _card(card, files_service)
 

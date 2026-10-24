@@ -26,6 +26,7 @@ VISIT_NOT_FOUND = "Визит не найден"
 REQUEST_CLOSED = "Заявка уже не ждет визита"
 VISIT_CANCELED = "УК отменила этот визит"
 VISIT_REPLACED = "УК предложила другое время: выберите его в новом сообщении"
+VISIT_UNDER_WAY = "Визит уже начался: поменять время нельзя"
 
 
 class VisitDraft(ZhekaType):

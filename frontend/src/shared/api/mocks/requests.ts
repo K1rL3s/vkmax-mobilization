@@ -62,6 +62,19 @@ const checkAttachments = (names: string[]): string | null => {
   return null;
 };
 
+const writeResident = (
+  item: NonNullable<ReturnType<typeof findRequest>>,
+  text: string,
+) => {
+  item.messages.push({
+    after_minutes: (Date.now() - Date.parse(item.created_at)) / 60_000,
+    author_role: "resident",
+    author_name: user.name,
+    text,
+  });
+  item.resident_answered_at = new Date().toISOString();
+};
+
 export const requestsConfigs = [
   endpoint("post", "/requests/classify", (request) => {
     const text = String(request.body.text ?? "");
@@ -136,9 +149,13 @@ export const requestsConfigs = [
       return conflict("Заявка уже не ждет визита");
     }
 
-    const error = pickVisitWindow(item.id, Number(request.params.slot_id));
+    const outcome = pickVisitWindow(item.id, Number(request.params.slot_id));
 
-    return error ? notFound(error) : ok(requestCard(item));
+    if (outcome.kind === "missing") return notFound(outcome.message);
+    if (outcome.kind === "refused") return conflict(outcome.message);
+    if (outcome.kind === "picked") writeResident(item, outcome.note);
+
+    return ok(requestCard(item));
   }),
   endpoint(
     "post",
@@ -154,19 +171,12 @@ export const requestsConfigs = [
         return conflict("Заявка уже не ждет визита");
       }
 
-      const error = declineVisit(item.id, Number(request.params.visit_id));
+      const refusal = declineVisit(item.id, Number(request.params.visit_id));
 
-      if (error) {
-        return notFound(error);
-      }
+      if (refusal?.kind === "missing") return notFound(refusal.message);
+      if (refusal?.kind === "refused") return conflict(refusal.message);
 
-      item.messages.push({
-        after_minutes: (Date.now() - Date.parse(item.created_at)) / 60_000,
-        author_role: "resident",
-        author_name: user.name,
-        text: "Ни одно предложенное время визита не подходит",
-      });
-      item.resident_answered_at = new Date().toISOString();
+      writeResident(item, "Ни одно предложенное время визита не подходит");
 
       return ok(requestCard(item));
     },

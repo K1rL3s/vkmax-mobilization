@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -55,6 +55,7 @@ from zheka.core.services.visits import (
     VISIT_CANCELED,
     VISIT_NOT_FOUND,
     VISIT_REPLACED,
+    VISIT_UNDER_WAY,
     WINDOWS_COUNT,
     WINDOW_NOT_FOUND,
     WINDOW_OFF_DATE,
@@ -65,8 +66,8 @@ from zheka.infra.database.models import OrgMember
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
-from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestsRepo
+from zheka.infra.database.tables.access import access_slots_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import residents_table
 
@@ -81,7 +82,6 @@ def _service(
         AccessRepo(session),
         RequestsRepo(session),
         HousesRepo(session),
-        OrgsRepo(session),
         EventsService(EventsRepo(session)),
         make_notifications_service(session, publisher),
         requests_service(session, publisher),
@@ -270,7 +270,12 @@ async def test_a_new_proposal_replaces_the_current_one(
     request = await _complain(session, own)
     service = _service(session, publisher)
     old = await service.propose(own.org_id, request.id, own.user_id, _draft())
-    await service.pick(own.user_id, request.id, old.windows[0].id)
+    await service.pick(
+        own.user_id,
+        request.id,
+        old.windows[0].id,
+        RequestChannel.MINIAPP,
+    )
 
     new = await service.propose(own.org_id, request.id, own.user_id, _draft(15))
     await publisher.flush()
@@ -285,7 +290,12 @@ async def test_a_new_proposal_replaces_the_current_one(
         new.id,
     ]
     with pytest.raises(InvalidState, match=VISIT_REPLACED):
-        await service.pick(own.user_id, request.id, old.windows[1].id)
+        await service.pick(
+            own.user_id,
+            request.id,
+            old.windows[1].id,
+            RequestChannel.MINIAPP,
+        )
 
 
 async def test_a_refused_proposal_keeps_the_current_visit(
@@ -324,7 +334,7 @@ async def test_staff_cancel_tells_the_author_and_closes_the_visit(
     assert sent["text"].startswith(f"❌ УК отменила визит по заявке №{request_id}")
     assert len(await events_of(session, EventType.VISIT_CANCELED)) == 1
     with pytest.raises(InvalidState, match=VISIT_CANCELED):
-        await service.pick(own.user_id, request_id, first)
+        await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
 
 
 async def test_cancel_without_a_visit_is_not_found(
@@ -435,15 +445,76 @@ async def test_the_author_picks_and_changes_a_window(
     first, second = await _windows(session, own, request_id)
     service = _service(session)
 
-    picked = await service.pick(own.user_id, request_id, first)
+    picked = await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
     assert picked.slot_id == first
-    changed = await service.pick(own.user_id, request_id, second)
+    changed = await service.pick(
+        own.user_id,
+        request_id,
+        second,
+        RequestChannel.MINIAPP,
+    )
+    await service.pick(own.user_id, request_id, second, RequestChannel.MINIAPP)
     assert changed.picked is not None
     assert changed.picked.id == second
     staff = await admin_requests_service(session).card(own.org_id, request_id)
     assert staff.card.visit is not None
     assert staff.card.visit.slot_id == second
     assert len(await events_of(session, EventType.VISIT_SLOT_PICKED)) == 2
+    day = texts.short_day(_tomorrow())
+    assert [
+        view.message.text
+        for view in staff.card.messages
+        if view.message.author_role == RequestActorRole.RESIDENT.value
+    ] == [
+        texts.visit_chosen(f"{day}, 10:00–12:00", None),
+        texts.visit_chosen(f"{day}, 12:00–14:00", "10:00–12:00"),
+    ]
+    assert staff.card.request.resident_answered_at is not None
+
+
+async def _start(session: AsyncSession, slot_id: AccessSlotId) -> None:
+    stmt = (
+        update(access_slots_table)
+        .where(access_slots_table.c.id == slot_id)
+        .values(starts_at=datetime.now(UTC) - timedelta(minutes=5))
+    )
+    await session.execute(stmt)
+    session.expire_all()
+
+
+async def test_a_started_window_is_not_picked(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request_id = await _proposed(session, own)
+    first, second = await _windows(session, own, request_id)
+    await _start(session, first)
+    service = _service(session)
+
+    with pytest.raises(InvalidState, match=PAST_WINDOW):
+        await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
+    picked = await service.pick(own.user_id, request_id, second, RequestChannel.BOT)
+
+    assert picked.slot_id == second
+
+
+async def test_a_started_visit_is_neither_moved_nor_declined(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    request_id = await _proposed(session, own)
+    first, second = await _windows(session, own, request_id)
+    service = _service(session)
+    picked = await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
+    await _start(session, first)
+
+    with pytest.raises(InvalidState, match=VISIT_UNDER_WAY):
+        await service.pick(own.user_id, request_id, second, RequestChannel.MINIAPP)
+    with pytest.raises(InvalidState, match=VISIT_UNDER_WAY):
+        await service.decline(own.user_id, request_id, picked.id, RequestChannel.BOT)
+    again = await service.pick(own.user_id, request_id, first, RequestChannel.BOT)
+
+    assert again.slot_id == first
 
 
 async def test_only_the_author_picks(
@@ -455,7 +526,12 @@ async def test_only_the_author_picks(
     stranger = await add_user(session)
 
     with pytest.raises(EntityNotFound):
-        await _service(session).pick(stranger, request_id, first)
+        await _service(session).pick(
+            stranger,
+            request_id,
+            first,
+            RequestChannel.MINIAPP,
+        )
 
 
 async def test_a_window_of_another_request_is_not_found(
@@ -467,7 +543,12 @@ async def test_a_window_of_another_request_is_not_found(
     [foreign, _] = await _windows(session, own, other_id)
 
     with pytest.raises(EntityNotFound, match=WINDOW_NOT_FOUND):
-        await _service(session).pick(own.user_id, request_id, foreign)
+        await _service(session).pick(
+            own.user_id,
+            request_id,
+            foreign,
+            RequestChannel.MINIAPP,
+        )
 
 
 async def test_a_closed_request_has_no_visit(
@@ -486,7 +567,12 @@ async def test_a_closed_request_has_no_visit(
     card = await requests_service(session).get_card(own.user_id, request_id)
     assert card.visit is None
     with pytest.raises(InvalidState, match=REQUEST_CLOSED):
-        await _service(session).pick(own.user_id, request_id, first)
+        await _service(session).pick(
+            own.user_id,
+            request_id,
+            first,
+            RequestChannel.MINIAPP,
+        )
 
 
 async def test_staff_card_offers_a_visit_only_when_one_can_be_proposed(
@@ -546,7 +632,7 @@ async def test_staff_proposes_and_the_author_picks_through_the_api(
     assert proposed.status_code == 200, proposed.text
     staff_card = proposed.json()
     assert staff_card["can_propose_visit"] is True
-    [first, _] = staff_card["visit"]["windows"]
+    [first, second] = staff_card["visit"]["windows"]
     assert first["minutes"] == 120
 
     picked = await cabinet.client.post(
@@ -555,7 +641,22 @@ async def test_staff_proposes_and_the_author_picks_through_the_api(
     )
     assert picked.status_code == 200, picked.text
     assert picked.json()["visit"]["slot_id"] == first["id"]
-    visit_id = picked.json()["visit"]["id"]
+    moved = await cabinet.client.post(
+        f"/api/requests/{request_id}/visit/{second['id']}",
+        headers=cabinet.headers,
+    )
+    assert moved.status_code == 200, moved.text
+    staff_view = await cabinet.client.get(
+        f"/api/admin/requests/{request_id}",
+        headers=cabinet.headers,
+    )
+    assert staff_view.json()["visit"]["slot_id"] == second["id"]
+    short_day = texts.short_day(day)
+    assert staff_view.json()["messages"][-1]["text"] == texts.visit_chosen(
+        f"{short_day}, 12:00–14:00",
+        "10:00–12:00",
+    )
+    visit_id = moved.json()["visit"]["id"]
     declined = await cabinet.client.post(
         f"/api/requests/{request_id}/visit/{visit_id}/decline",
         headers=cabinet.headers,
@@ -626,8 +727,8 @@ async def test_the_executor_hears_the_picked_window(
     [first, _] = await _windows(session, own, request_id)
     service = _service(session, publisher)
 
-    await service.pick(own.user_id, request_id, first)
-    await service.pick(own.user_id, request_id, first)
+    await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
+    await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
     await publisher.flush()
 
     [sent] = [
@@ -635,10 +736,12 @@ async def test_the_executor_hears_the_picked_window(
         for message in broker.enqueued(TaskName.SEND_TO_USER)
         if message["user_id"] == executor
     ]
+    request = await RequestsRepo(session).get(request_id)
+    assert request is not None
     day = texts.short_day(_tomorrow())
-    assert sent["text"] == (
-        f"🔧 Житель выбрал время визита по заявке №{request_id}: "
-        f"{day}, 10:00–12:00, кв. 1"
+    assert sent["text"] == texts.resident_answered(
+        request,
+        texts.visit_chosen(f"{day}, 10:00–12:00", None),
     )
 
 
@@ -651,7 +754,12 @@ async def test_nobody_hears_a_pick_without_an_executor(
     request_id = await _proposed(session, own)
     [first, _] = await _windows(session, own, request_id)
 
-    await _service(session, publisher).pick(own.user_id, request_id, first)
+    await _service(session, publisher).pick(
+        own.user_id,
+        request_id,
+        first,
+        RequestChannel.MINIAPP,
+    )
     await publisher.flush()
 
     assert broker.enqueued(TaskName.SEND_TO_USER) == []
@@ -667,7 +775,12 @@ async def test_a_removed_executor_hears_nothing(
     await _with_executor(session, own, request_id, OrgRole.EMPLOYEE)
     [first, _] = await _windows(session, own, request_id)
 
-    await _service(session, publisher).pick(own.user_id, request_id, first)
+    await _service(session, publisher).pick(
+        own.user_id,
+        request_id,
+        first,
+        RequestChannel.MINIAPP,
+    )
     await publisher.flush()
 
     assert broker.enqueued(TaskName.SEND_TO_USER) == []
@@ -680,7 +793,7 @@ async def test_none_fits_clears_the_pick_and_writes_to_the_conversation(
     request_id = await _proposed(session, own)
     [first, _] = await _windows(session, own, request_id)
     service = _service(session)
-    picked = await service.pick(own.user_id, request_id, first)
+    picked = await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
 
     await service.decline(own.user_id, request_id, picked.id, RequestChannel.BOT)
     await service.decline(own.user_id, request_id, picked.id, RequestChannel.BOT)
@@ -693,7 +806,11 @@ async def test_none_fits_clears_the_pick_and_writes_to_the_conversation(
         for view in card.messages
         if view.message.author_role == RequestActorRole.RESIDENT.value
     ]
-    assert resident == [texts.VISIT_NONE_FITS]
+    day = texts.short_day(_tomorrow())
+    assert resident == [
+        texts.visit_chosen(f"{day}, 10:00–12:00", None),
+        texts.VISIT_NONE_FITS,
+    ]
     assert card.request.resident_answered_at is not None
     assert len(await events_of(session, EventType.VISIT_DECLINED)) == 1
 
@@ -705,10 +822,10 @@ async def test_none_fits_after_a_new_pick_is_written_again(
     request_id = await _proposed(session, own)
     [first, _] = await _windows(session, own, request_id)
     service = _service(session)
-    picked = await service.pick(own.user_id, request_id, first)
+    picked = await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
     await service.decline(own.user_id, request_id, picked.id, RequestChannel.BOT)
 
-    await service.pick(own.user_id, request_id, first)
+    await service.pick(own.user_id, request_id, first, RequestChannel.MINIAPP)
     await service.decline(own.user_id, request_id, picked.id, RequestChannel.BOT)
 
     assert len(await events_of(session, EventType.VISIT_DECLINED)) == 2
