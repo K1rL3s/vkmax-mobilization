@@ -2,8 +2,10 @@ import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { useIsOrgAdmin } from "@/features/admin-reception";
+import { isArchived } from "@/features/announcements";
 import { Routes } from "@/shared/model/routes";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { Disclosure } from "@/shared/ui/disclosure";
 import { FilterChip } from "@/shared/ui/filter-chip";
 import { Icon, megaphoneIcon, plusIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
@@ -62,21 +64,33 @@ const AdminAnnouncementsPage = () => {
       );
     }
 
+    const recent = list.items.filter((item) => !isArchived(item));
+    const archived = list.items.filter((item) => isArchived(item));
+    const row = (announcement: (typeof list.items)[number]) => (
+      <AnnouncementRow
+        key={announcement.id}
+        announcement={announcement}
+        houses={list.houses}
+        withRegister={isAdmin}
+        onFinish={() => finish.ask(announcement)}
+      />
+    );
+
     return (
       <>
         <NewAnnouncementButton />
 
         <Flex align="stretch" direction="column" gap={8}>
-          {list.items.map((announcement) => (
-            <AnnouncementRow
-              key={announcement.id}
-              announcement={announcement}
-              houses={list.houses}
-              withRegister={isAdmin}
-              onFinish={() => finish.ask(announcement)}
-            />
-          ))}
+          {recent.map(row)}
         </Flex>
+
+        {archived.length > 0 && (
+          <Disclosure title={`Архив (${archived.length})`}>
+            <Flex align="stretch" direction="column" gap={8}>
+              {archived.map(row)}
+            </Flex>
+          </Disclosure>
+        )}
 
         {list.hasMore && (
           <Button

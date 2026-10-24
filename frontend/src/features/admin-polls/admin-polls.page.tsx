@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { rqClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
 import { orgParams } from "@/shared/model/session";
+import { Disclosure } from "@/shared/ui/disclosure";
 import { pollIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
@@ -18,16 +19,8 @@ const AdminPollsPage = () => {
 
   const items = polls.data?.items ?? [];
   const total = polls.data?.total ?? 0;
-  const sections = [
-    {
-      title: "Идут",
-      items: items.filter((poll) => poll.status === "active"),
-    },
-    {
-      title: "Завершены",
-      items: items.filter((poll) => poll.status === "closed"),
-    },
-  ].filter((section) => section.items.length > 0);
+  const active = items.filter((poll) => poll.status === "active");
+  const closed = items.filter((poll) => poll.status === "closed");
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -65,25 +58,29 @@ const AdminPollsPage = () => {
         </Button>
       )}
 
-      {sections.map((section) => (
-        <Flex
-          key={section.title}
-          asChild
-          align="stretch"
-          direction="column"
-          gap={8}
-        >
+      {active.length > 0 && (
+        <Flex asChild align="stretch" direction="column" gap={8}>
           <section>
             <Typography.Text asChild variant="title" color="primary">
-              <h2>{section.title}</h2>
+              <h2>Идут</h2>
             </Typography.Text>
 
-            {section.items.map((poll) => (
+            {active.map((poll) => (
               <AdminPollRow key={poll.id} poll={poll} />
             ))}
           </section>
         </Flex>
-      ))}
+      )}
+
+      {closed.length > 0 && (
+        <Disclosure title={`Завершённые (${closed.length})`}>
+          <Flex align="stretch" direction="column" gap={8}>
+            {closed.map((poll) => (
+              <AdminPollRow key={poll.id} poll={poll} />
+            ))}
+          </Flex>
+        </Disclosure>
+      )}
 
       {total > items.length && (
         <Typography.Text variant="description" color="secondary">

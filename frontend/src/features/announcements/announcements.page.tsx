@@ -1,16 +1,67 @@
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 
 import { Card } from "@/shared/ui/card";
+import { Disclosure } from "@/shared/ui/disclosure";
 import { alertIcon, megaphoneIcon, wrenchIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { entrancesLabel } from "./scope";
 import { useAnnouncements } from "./use-announcements";
-import { announcementWhen } from "./when";
+import { announcementWhen, isArchived } from "./when";
 import { WorksDetails } from "./works";
 
 import styles from "./announcements.module.css";
+
+import type { components } from "@/shared/api/schema/generated";
+
+type Announcement = components["schemas"]["AnnouncementItem"];
+
+const AnnouncementCard = ({ item }: { item: Announcement }) => (
+  <Card>
+    <Flex align="center" gap={12}>
+      <IconTile
+        icon={item.urgent ? alertIcon : item.works ? wrenchIcon : megaphoneIcon}
+        tone={item.urgent ? "negative" : "themed"}
+      />
+
+      <Flex className={styles.Grow} align="stretch" direction="column" gapY={2}>
+        <Typography.Text variant="body-strong" color="primary">
+          {item.urgent
+            ? "Срочное объявление"
+            : item.works
+              ? "Плановые работы"
+              : "Объявление"}
+        </Typography.Text>
+
+        <Typography.Text variant="description" color="tertiary">
+          {[
+            item.org_name,
+            item.entrances && entrancesLabel(item.entrances),
+            item.flats_count && "Для вашей квартиры",
+            announcementWhen(item.created_at),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </Typography.Text>
+      </Flex>
+    </Flex>
+
+    <Typography.Text className={styles.Text} variant="body" color="primary">
+      {item.text.split(/(https?:\/\/[^\s]*[^\s.,;:!?)»])/).map((part, index) =>
+        index % 2 === 1 ? (
+          <a key={index} href={part} target="_blank" rel="noreferrer">
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </Typography.Text>
+
+    <WorksDetails announcement={item} />
+  </Card>
+);
 
 const AnnouncementsPage = () => {
   const {
@@ -44,70 +95,24 @@ const AnnouncementsPage = () => {
       );
     }
 
+    const recent = items.filter((item) => !isArchived(item));
+    const archived = items.filter((item) => isArchived(item));
+
     return (
       <>
-        {items.map((item) => (
-          <Card key={item.id}>
-            <Flex align="center" gap={12}>
-              <IconTile
-                icon={
-                  item.urgent
-                    ? alertIcon
-                    : item.works
-                      ? wrenchIcon
-                      : megaphoneIcon
-                }
-                tone={item.urgent ? "negative" : "themed"}
-              />
-
-              <Flex
-                className={styles.Grow}
-                align="stretch"
-                direction="column"
-                gapY={2}
-              >
-                <Typography.Text variant="body-strong" color="primary">
-                  {item.urgent
-                    ? "Срочное объявление"
-                    : item.works
-                      ? "Плановые работы"
-                      : "Объявление"}
-                </Typography.Text>
-
-                <Typography.Text variant="description" color="tertiary">
-                  {[
-                    item.org_name,
-                    item.entrances && entrancesLabel(item.entrances),
-                    item.flats_count && "Для вашей квартиры",
-                    announcementWhen(item.created_at),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </Typography.Text>
-              </Flex>
-            </Flex>
-
-            <Typography.Text
-              className={styles.Text}
-              variant="body"
-              color="primary"
-            >
-              {item.text
-                .split(/(https?:\/\/[^\s]*[^\s.,;:!?)»])/)
-                .map((part, index) =>
-                  index % 2 === 1 ? (
-                    <a key={index} href={part} target="_blank" rel="noreferrer">
-                      {part}
-                    </a>
-                  ) : (
-                    part
-                  ),
-                )}
-            </Typography.Text>
-
-            <WorksDetails announcement={item} />
-          </Card>
+        {recent.map((item) => (
+          <AnnouncementCard key={item.id} item={item} />
         ))}
+
+        {archived.length > 0 && (
+          <Disclosure title={`Архив (${archived.length})`}>
+            <Flex align="stretch" direction="column" gap={8}>
+              {archived.map((item) => (
+                <AnnouncementCard key={item.id} item={item} />
+              ))}
+            </Flex>
+          </Disclosure>
+        )}
 
         {hasMore && (
           <Button

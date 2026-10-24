@@ -5,7 +5,7 @@ import { useHouseCard } from "@/features/house";
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { formatShortDay, formatTime, telHref } from "@/shared/lib/format";
-import { Chevron } from "@/shared/ui/chevron";
+import { Disclosure } from "@/shared/ui/disclosure";
 import { FieldError } from "@/shared/ui/field-error";
 
 import { gisAppealFormConstraints } from "../domain/gis-appeal-form-constraints";
@@ -204,19 +204,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
         </>
       )}
 
-      <details className={styles.More}>
-        <summary className={styles.MoreTitle}>
-          <Typography.Text
-            className={styles.Grow}
-            variant="body-strong"
-            color="primary"
-          >
-            3. Куда ещё
-          </Typography.Text>
-          <span className={styles.Chevron}>
-            <Chevron />
-          </span>
-        </summary>
+      <Disclosure title="3. Куда ещё">
         <ul className={styles.Recipients}>
           {complaintRecipients(request.category).map((recipient) => (
             <li key={`${recipient.who} ${recipient.when}`}>
@@ -244,7 +232,7 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
         >
           Темы по справочнику НСИ 220 ГИС ЖКХ, сверено 29.09.2026
         </Typography.Text>
-      </details>
+      </Disclosure>
     </div>
   );
 };

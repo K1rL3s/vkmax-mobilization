@@ -39,10 +39,12 @@ export const usePollList = () => {
     sections: [
       {
         title: "Идут",
+        collapsed: false,
         items: items.filter((poll) => poll.status === "active"),
       },
       {
         title: "Завершённые",
+        collapsed: true,
         items: items.filter((poll) => poll.status === "closed"),
       },
     ].filter((section) => section.items.length > 0),

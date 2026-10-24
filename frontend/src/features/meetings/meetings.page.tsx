@@ -2,6 +2,7 @@ import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { Routes } from "@/shared/model/routes";
+import { Disclosure } from "@/shared/ui/disclosure";
 import { pollIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
@@ -64,25 +65,38 @@ const MeetingsPage = () => {
         />
       )}
 
-      {list.sections.map((section) => (
-        <Flex
-          key={section.title}
-          asChild
-          align="stretch"
-          direction="column"
-          gap={8}
-        >
-          <section>
-            <Typography.Text asChild variant="title" color="primary">
-              <h2>{section.title}</h2>
-            </Typography.Text>
+      {list.sections.map((section) =>
+        section.collapsed ? (
+          <Disclosure
+            key={section.title}
+            title={`${section.title} (${section.items.length})`}
+          >
+            <Flex align="stretch" direction="column" gap={8}>
+              {section.items.map((poll) => (
+                <PollRow key={poll.id} poll={poll} />
+              ))}
+            </Flex>
+          </Disclosure>
+        ) : (
+          <Flex
+            key={section.title}
+            asChild
+            align="stretch"
+            direction="column"
+            gap={8}
+          >
+            <section>
+              <Typography.Text asChild variant="title" color="primary">
+                <h2>{section.title}</h2>
+              </Typography.Text>
 
-            {section.items.map((poll) => (
-              <PollRow key={poll.id} poll={poll} />
-            ))}
-          </section>
-        </Flex>
-      ))}
+              {section.items.map((poll) => (
+                <PollRow key={poll.id} poll={poll} />
+              ))}
+            </section>
+          </Flex>
+        ),
+      )}
 
       <ProposalsSection />
     </Panel>

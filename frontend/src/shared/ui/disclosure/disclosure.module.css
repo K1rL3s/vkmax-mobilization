@@ -1,0 +1,32 @@
+.Disclosure > :not(summary) {
+  margin-top: 8px;
+}
+
+.Title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  list-style: none;
+  cursor: pointer;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+}
+
+.Grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.Chevron {
+  display: flex;
+  flex-shrink: 0;
+  transform: rotate(90deg);
+  transition: transform 0.2s;
+}
+
+.Disclosure[open] .Chevron {
+  transform: rotate(-90deg);
+}
