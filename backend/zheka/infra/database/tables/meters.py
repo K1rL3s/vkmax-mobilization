@@ -44,6 +44,12 @@ readings_table = Table(
     Column("ocr_accepted", Boolean, nullable=False),
     Column("is_below_previous", Boolean, nullable=False),
     Column("submitted_at", DateTime(timezone=True), nullable=False),
-    Column("submitted_by", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column(
+        "submitted_by",
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    ),
     Index(None, "meter_id", "period", desc("submitted_at")),
 )

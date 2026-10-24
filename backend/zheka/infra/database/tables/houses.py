@@ -23,7 +23,13 @@ houses_table = Table(
     metadata,
     id_column(),
     created_at_column(),
-    Column("org_id", BigInteger, ForeignKey("organizations.id"), nullable=True),
+    Column(
+        "org_id",
+        BigInteger,
+        ForeignKey("organizations.id"),
+        nullable=True,
+        index=True,
+    ),
     Column("region", String, nullable=False),
     Column("city", String, nullable=False),
     Column("street", String, nullable=False),
@@ -55,6 +61,7 @@ houses_table = Table(
         nullable=False,
     ),
     Index(None, "city", "street"),
+    Index(None, "lat", "lon"),
 )
 
 flats_table = Table(

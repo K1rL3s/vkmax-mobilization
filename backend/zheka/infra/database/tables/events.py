@@ -9,7 +9,7 @@ events_table = Table(
     metadata,
     id_column(),
     created_at_column(),
-    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=True),
+    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=True, index=True),
     Column("type", String(48), nullable=False),
     Column("payload", JSONB, nullable=False),
     Index(None, "type", "created_at"),

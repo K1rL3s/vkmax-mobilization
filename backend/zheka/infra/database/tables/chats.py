@@ -20,9 +20,9 @@ chats_table = Table(
     metadata,
     Column("chat_id", BigInteger, primary_key=True),
     created_at_column(),
-    Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=True),
+    Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=True, index=True),
     Column("title", String, nullable=True),
-    Column("bound_by", BigInteger, ForeignKey("users.id"), nullable=True),
+    Column("bound_by", BigInteger, ForeignKey("users.id"), nullable=True, index=True),
     Column(
         "bot_is_admin",
         Boolean,
@@ -59,7 +59,7 @@ chat_members_table = Table(
         ForeignKey("chats.chat_id"),
         primary_key=True,
     ),
-    Column("user_id", BigInteger, ForeignKey("users.id"), primary_key=True),
+    Column("user_id", BigInteger, ForeignKey("users.id"), primary_key=True, index=True),
     created_at_column(),
 )
 
@@ -72,7 +72,7 @@ chat_pins_table = Table(
     Column("mid", String, nullable=False),
     Column("seq", BigInteger, nullable=False),
     Column("text", String, nullable=True),
-    Column("pinned_by", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column("pinned_by", BigInteger, ForeignKey("users.id"), nullable=False, index=True),
     Column("unpinned_at", DateTime(timezone=True), nullable=True),
     Index(
         None,

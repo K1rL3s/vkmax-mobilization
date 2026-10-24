@@ -81,7 +81,7 @@ org_members_table = Table(
     id_column(),
     created_at_column(),
     Column("org_id", BigInteger, ForeignKey("organizations.id"), nullable=False),
-    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False, index=True),
     Column("role", pg_enum(OrgRole, "org_role"), nullable=False),
     UniqueConstraint("org_id", "user_id"),
 )
@@ -95,5 +95,11 @@ org_category_executors_table = Table(
         pg_enum(RequestCategory, "request_category"),
         primary_key=True,
     ),
-    Column("executor_user_id", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column(
+        "executor_user_id",
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    ),
 )

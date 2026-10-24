@@ -16,7 +16,7 @@ council_proposals_table = Table(
     Column("status", pg_enum(ProposalStatus, "proposal_status"), nullable=False),
     Column("answer", Text, nullable=True),
     Column("answered_at", DateTime(timezone=True), nullable=True),
-    Column("poll_id", BigInteger, ForeignKey("polls.id"), nullable=True),
+    Column("poll_id", BigInteger, ForeignKey("polls.id"), nullable=True, index=True),
     Index(None, "house_id", "created_at"),
     Index(None, "author_user_id", "created_at"),
 )

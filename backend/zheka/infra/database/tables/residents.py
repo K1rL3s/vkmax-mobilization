@@ -25,7 +25,7 @@ residents_table = Table(
     created_at_column(),
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
-    Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True),
+    Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True, index=True),
     Column("flat_number", String(16), nullable=True),
     Column("role", pg_enum(ResidentRole, "resident_role"), nullable=False),
     Column(
@@ -37,7 +37,13 @@ residents_table = Table(
     ),
     Column("can_vote", Boolean, default=True, server_default=true(), nullable=False),
     Column("verified_at", DateTime(timezone=True), nullable=True),
-    Column("verified_by", BigInteger, ForeignKey("users.id"), nullable=True),
+    Column(
+        "verified_by",
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    ),
     Column(
         "status",
         pg_enum(ResidentStatus, "resident_status"),
@@ -67,7 +73,7 @@ flat_verification_requests_table = Table(
     metadata,
     id_column(),
     created_at_column(),
-    Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=False),
+    Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=False, index=True),
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
     Column("account_no", String, nullable=False),
     Column("comment", String, nullable=True),
@@ -76,7 +82,7 @@ flat_verification_requests_table = Table(
         pg_enum(VerificationStatus, "verification_status"),
         nullable=False,
     ),
-    Column("decided_by", BigInteger, ForeignKey("users.id"), nullable=True),
+    Column("decided_by", BigInteger, ForeignKey("users.id"), nullable=True, index=True),
     Column("decided_at", DateTime(timezone=True), nullable=True),
     Column("reason", String, nullable=True),
     Index(
@@ -94,7 +100,7 @@ demand_signals_table = Table(
     id_column(),
     created_at_column(),
     Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
-    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False, index=True),
     UniqueConstraint("house_id", "user_id"),
 )
 
@@ -102,7 +108,7 @@ verification_revocations_table = Table(
     "verification_revocations",
     metadata,
     Column("user_id", BigInteger, ForeignKey("users.id"), primary_key=True),
-    Column("flat_id", BigInteger, ForeignKey("flats.id"), primary_key=True),
+    Column("flat_id", BigInteger, ForeignKey("flats.id"), primary_key=True, index=True),
     created_at_column(),
 )
 
@@ -113,9 +119,21 @@ chairman_handovers_table = Table(
     Column("code", String(16), primary_key=True),
     created_at_column(),
     Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
-    Column("created_by", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column(
+        "created_by",
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    ),
     Column("expires_at", DateTime(timezone=True), nullable=False),
-    Column("accepted_by", BigInteger, ForeignKey("users.id"), nullable=True),
+    Column(
+        "accepted_by",
+        BigInteger,
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    ),
     Column("decided_at", DateTime(timezone=True), nullable=True),
     Column("revoked_at", DateTime(timezone=True), nullable=True),
     Index(
@@ -131,8 +149,8 @@ tenancies_table = Table(
     metadata,
     id_column(),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=False, index=True),
-    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
+    Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False, index=True),
     Column("started_at", DateTime(timezone=True), nullable=False),
     Column("ended_at", DateTime(timezone=True), nullable=True),
-    Column("ended_by", BigInteger, ForeignKey("users.id"), nullable=True),
+    Column("ended_by", BigInteger, ForeignKey("users.id"), nullable=True, index=True),
 )
