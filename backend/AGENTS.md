@@ -22,7 +22,7 @@ Keep `just check` and `just test` green (tests need Docker: testcontainers). For
 - Domain error = axis off `ZhekaError` (`core/errors.py`), text in the `message` ClassVar; a new axis joins the `exception_handlers` tuple in `api/errors.py` (class name -> `title`). `InvalidRequest` must not inherit `ValueError` (-> 409)
 - Events (`EventType`/`EventSource`) are recorded in `core/services/`; handlers and routes pass `source`/`method`/`entrance` (recording twice doubles counts). Exceptions: bot records `BOT_START` (`commands/start.py`, `deeplinks.py`; never the fallback router or a getter), `BOT_STOPPED`, `BOT_MUTED`, `BOT_UNMUTED` (`lifecycle.py`); the client posts `MINIAPP_OPEN`, `ANNOUNCEMENT_CLICK` to `/api/events` (`TrackEventRequest`)
 - Repos: every statement is a named `stmt`, executed on the next line; no `session.get(Model, id)`
-- Every foreign key column leads an index, PK or unique constraint (`tests/test_schema.py`): `index=True` on the column
+- Every foreign key column leads a non-partial index, PK or unique constraint (`tests/test_schema.py`): `index=True` on the column, an explicit name when a partial index already took the conventional one
 - Alembic: English messages and names, a new revision per schema change. A Postgres enum value is `ALTER TYPE ... ADD VALUE` (allowed in the migration transaction on PG 16, unusable until commit); its downgrade recreates the type without it
 - Fractions are scaled ints with one explicit rounding, never `Decimal`/`float`: kopecks; tariff 1/10000 rouble per unit (both `BigInteger`); area 1/100 m2; volume, readings 1/1000 m3 or kWh; percent 1/100 (50% = `5000`). Only coordinates are `Numeric(9, 6)`. The unit goes in the Russian `Field(description=...)`, not the name
 

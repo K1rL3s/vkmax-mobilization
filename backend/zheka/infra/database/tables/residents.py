@@ -24,7 +24,7 @@ residents_table = Table(
     id_column(),
     created_at_column(),
     Column("user_id", BigInteger, ForeignKey("users.id"), nullable=False),
-    Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
+    Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False, index=True),
     Column("flat_id", BigInteger, ForeignKey("flats.id"), nullable=True, index=True),
     Column("flat_number", String(16), nullable=True),
     Column("role", pg_enum(ResidentRole, "resident_role"), nullable=False),
@@ -92,6 +92,7 @@ flat_verification_requests_table = Table(
         unique=True,
         postgresql_where=text("status = 'pending'"),
     ),
+    Index("ix_flat_verification_requests_by_user", "user_id"),
 )
 
 demand_signals_table = Table(
@@ -118,7 +119,7 @@ chairman_handovers_table = Table(
     metadata,
     Column("code", String(16), primary_key=True),
     created_at_column(),
-    Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False),
+    Column("house_id", BigInteger, ForeignKey("houses.id"), nullable=False, index=True),
     Column(
         "created_by",
         BigInteger,

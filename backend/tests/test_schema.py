@@ -9,9 +9,14 @@ def _leading_columns(table: Table) -> set[str]:
         for constraint in table.constraints
         if isinstance(constraint, PrimaryKeyConstraint | UniqueConstraint)
     ]
+    full_indexes = [
+        index
+        for index in table.indexes
+        if index.dialect_options["postgresql"]["where"] is None
+    ]
     return {
         next(iter(each.columns)).name
-        for each in [*table.indexes, *keys]
+        for each in [*full_indexes, *keys]
         if len(each.columns)
     }
 
