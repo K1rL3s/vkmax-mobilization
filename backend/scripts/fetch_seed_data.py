@@ -13,7 +13,7 @@ import zipfile
 from collections import defaultdict
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from math import ceil
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -827,6 +827,9 @@ def _pick(street: Street) -> list[dict[str, str]]:
         and int(row["living_rooms_amount"]) > 0
         and row["number_floors_max"]
         and row["owners_payment"]
+        and _is_number(row["total_sq"])
+        and _is_number(row["living_rooms_sq"])
+        and _is_number(row["owners_payment"])
     ]
     picked.sort(key=lambda row: _building_key(row["address"][len(street.prefix) :]))
     return picked[:HOUSES_PER_STREET]
@@ -1202,6 +1205,14 @@ def on_street(street: Street, address: dict[str, str]) -> bool:
     return address.get("ISO3166-2-lvl4") == ISO_REGIONS[street.export_id] and (
         road.lower().replace("ё", "е") == street.street.lower().replace("ё", "е")
     )
+
+
+def _is_number(value: str) -> bool:
+    try:
+        Decimal(value.replace(",", "."))
+    except InvalidOperation:
+        return False
+    return True
 
 
 if __name__ == "__main__":
