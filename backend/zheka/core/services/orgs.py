@@ -19,7 +19,7 @@ from zheka.core.models import OrgInvite, OrgMember, OrgSettings, Organization, U
 from zheka.core.register_codes import is_shared_register_code, signed_register_org
 from zheka.core.services.demo import DEMO_LOCKED
 from zheka.core.services.events import EventsService
-from zheka.core.services.houses import HouseFound, is_connected
+from zheka.core.services.houses import HouseFound, is_connected, stated
 from zheka.core.services.invites import issue_invite
 from zheka.core.services.profile import OrgMembershipView
 from zheka.infra.database.repos.houses import HousesRepo
@@ -200,6 +200,8 @@ class OrgsService:
         group_threshold: int,
         group_window_hours: int,
         phone: str,
+        address: str,
+        work_hours: str | None,
         reception_note: str | None,
         emergency_phone: str | None,
         email: str | None,
@@ -220,6 +222,9 @@ class OrgsService:
                 f"Окно склейки заявок - от {MIN_GROUP_WINDOW_HOURS} "
                 f"до {MAX_GROUP_WINDOW_HOURS} часов",
             )
+        address = address.strip()
+        if not address:
+            raise InvalidRequest("Укажите адрес офиса")
 
         org = await self._orgs.get_existing(org_id)
         settings = await self._orgs.get_settings(org_id)
@@ -232,6 +237,8 @@ class OrgsService:
         settings.group_threshold = group_threshold
         settings.group_window_hours = group_window_hours
         org.phone = phone
+        org.address = address
+        org.work_hours = stated(work_hours)
         org.reception_note = reception_note
         org.emergency_phone = (emergency_phone or "").strip() or None
         org.email = checked_email(email)

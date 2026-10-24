@@ -9,6 +9,8 @@ export const orgFormConstraints = {
   email: 120,
   site: 200,
   receptionNote: 300,
+  workHours: 300,
+  address: 300,
 };
 
 export const isSiteAddress = (value: string) =>

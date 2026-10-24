@@ -16722,11 +16722,18 @@ components:
           - type: string
           - type: 'null'
           title: License No
-        reception_note:
+        work_hours:
           anyOf:
           - type: string
           - type: 'null'
-          title: Reception Note
+          title: Work Hours
+          description: Часы работы офиса УК
+        reception_hours:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reception Hours
+          description: 'Часы приема: собраны из расписания записи, без него - текст УК'
         emergency_phone:
           anyOf:
           - type: string
@@ -16986,11 +16993,22 @@ components:
         phone:
           type: string
           title: Phone
+        address:
+          type: string
+          title: Address
+          description: Адрес офиса УК
+        work_hours:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Work Hours
+          description: Часы работы офиса УК, текстом
         reception_note:
           anyOf:
           - type: string
           - type: 'null'
           title: Reception Note
+          description: Часы приема текстом, жителю - пока нет расписания записи
         emergency_phone:
           anyOf:
           - type: string
@@ -17014,6 +17032,8 @@ components:
       - group_threshold
       - group_window_hours
       - phone
+      - address
+      - work_hours
       - reception_note
       - emergency_phone
       - email
@@ -19042,6 +19062,17 @@ components:
           type: string
           maxLength: 32
           title: Phone
+        address:
+          type: string
+          maxLength: 300
+          title: Address
+          description: Адрес офиса УК
+        work_hours:
+          anyOf:
+          - type: string
+            maxLength: 300
+          - type: 'null'
+          title: Work Hours
         reception_note:
           anyOf:
           - type: string
@@ -19074,6 +19105,7 @@ components:
       - group_threshold
       - group_window_hours
       - phone
+      - address
       title: UpdateOrgSettingsRequest
     VerificationRequestItem:
       properties:

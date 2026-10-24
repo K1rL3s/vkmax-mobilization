@@ -186,7 +186,7 @@ export const SettingsForm = ({ settings, lock }: SettingsFormProps) => {
 
         <Section
           title="Контакты для жителей"
-          note="Жители видят эти контакты в карточке дома. Аварийный номер ещё и на экране «Авария» в приложении и в боте"
+          note="Жители видят эти контакты в карточке дома. Аварийный номер ещё и на экране «Авария» в приложении и в боте. Если задано расписание приёма, часы приёма в карточке собираются из него"
         >
           <Field label="Телефон">
             <Input
@@ -232,6 +232,26 @@ export const SettingsForm = ({ settings, lock }: SettingsFormProps) => {
               hint={errors.site?.message}
               innerClassNames={{ hint: styles.Error }}
               {...register("site")}
+            />
+          </Field>
+
+          <Field label="Адрес офиса">
+            <Input
+              placeholder="Город, улица, дом, офис"
+              maxLength={limits.address}
+              hint={errors.address?.message}
+              innerClassNames={{ hint: styles.Error }}
+              {...register("address")}
+            />
+          </Field>
+
+          <Field label="Часы работы">
+            <Input
+              placeholder="Например: пн-пт 9:00-18:00, обед 13-14"
+              maxLength={limits.workHours}
+              hint={errors.work_hours?.message}
+              innerClassNames={{ hint: styles.Error }}
+              {...register("work_hours")}
             />
           </Field>
 

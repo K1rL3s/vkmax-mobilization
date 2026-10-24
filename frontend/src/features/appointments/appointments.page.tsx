@@ -112,7 +112,7 @@ const AppointmentsPage = () => {
                 {org.name}
               </Typography.Text>
               <Typography.Text variant="description" color="secondary">
-                {[org.address, org.reception_note].filter(Boolean).join(" · ")}
+                {[org.address, org.reception_hours].filter(Boolean).join(" · ")}
               </Typography.Text>
             </Flex>
           </Flex>

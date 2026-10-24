@@ -31,6 +31,7 @@ organizations_table = Table(
     Column("phone", String, nullable=False),
     Column("address", String, nullable=False),
     Column("reception_note", String, nullable=True),
+    Column("work_hours", String, nullable=True),
     Column("registered_at", DateTime(timezone=True), nullable=True),
     Column("is_demo", Boolean, default=False, server_default=false(), nullable=False),
     Column("timezone", String, nullable=False),

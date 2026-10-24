@@ -63,6 +63,8 @@ const state = {
     group_threshold: 3,
     group_window_hours: 24,
     phone: ZHILSERVIS.phone,
+    address: ZHILSERVIS.address,
+    work_hours: ZHILSERVIS.work_hours ?? null,
     reception_note: "Пн-чт 9:00-18:00, пт до 17:00",
     emergency_phone: ZHILSERVIS.emergency_phone,
     email: ZHILSERVIS.email,
@@ -157,6 +159,8 @@ const settingsError = (body: Record<string, unknown>): string | null => {
     !numbers.every(isInteger) ||
     typeof body.meter_window_always_open !== "boolean" ||
     typeof body.phone !== "string" ||
+    typeof body.address !== "string" ||
+    !(body.work_hours == null || typeof body.work_hours === "string") ||
     !(body.reception_note == null || typeof body.reception_note === "string") ||
     !(
       body.emergency_phone == null || typeof body.emergency_phone === "string"
@@ -165,6 +169,10 @@ const settingsError = (body: Record<string, unknown>): string | null => {
     !(body.site == null || typeof body.site === "string")
   ) {
     return "Некорректные поля настроек";
+  }
+
+  if (!(body.address as string).trim()) {
+    return "Укажите адрес офиса";
   }
 
   const email = (body.email as string | null)?.trim();
@@ -207,7 +215,7 @@ export const adminOrgConfigs = [
       inn: "9900000020",
       license_no: null,
       phone: state.settings.phone,
-      address: ZHILSERVIS.address,
+      address: state.settings.address,
       reception_note: state.settings.reception_note,
       registered_at: "2026-06-01T09:00:00Z",
       is_demo: ZHILSERVIS.is_demo,
@@ -229,6 +237,9 @@ export const adminOrgConfigs = [
 
     state.settings = {
       ...(request.body as Schemas["UpdateOrgSettingsRequest"]),
+      address: (request.body.address as string).trim(),
+      work_hours:
+        (request.body.work_hours as string | undefined)?.trim() || null,
       reception_note:
         (request.body.reception_note as string | undefined) ?? null,
       emergency_phone:

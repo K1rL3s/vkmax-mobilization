@@ -29,10 +29,12 @@ from zheka.core.services.house_health import (
     SystemHealth,
     house_health,
 )
+from zheka.core.services.reception import reception_hours
 from zheka.infra.database.repos.analytics import AnalyticsRepo, PublicStats
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.reception import ReceptionRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -90,6 +92,7 @@ class HouseCardData(ZhekaType):
     is_chat_bound: bool
     org_stats: PublicStats | None
     health: Sequence[SystemHealth] | None = None
+    reception_hours: str | None = None
     outages: Sequence[OutageView] = ()
     services: Sequence[CityService] = ()
 
@@ -128,6 +131,7 @@ class HousesService:
         "_flats",
         "_houses",
         "_orgs",
+        "_reception",
         "_requests",
         "_residents",
         "_users",
@@ -143,7 +147,9 @@ class HousesService:
         events_service: EventsService,
         analytics_repo: AnalyticsRepo,
         requests_repo: RequestsRepo,
+        reception_repo: ReceptionRepo,
     ) -> None:
+        self._reception = reception_repo
         self._analytics = analytics_repo
         self._requests = requests_repo
         self._houses = houses_repo
@@ -269,6 +275,12 @@ class HousesService:
             is_chat_bound=await self._houses.is_chat_bound(house_id),
             org_stats=org_stats,
             health=health,
+            reception_hours=(
+                None
+                if org is None
+                else reception_hours(await self._reception.list_windows(org.id))
+                or org.reception_note
+            ),
             outages=demo_outages(house, now),
             services=city_services(house.region, house.city),
         )

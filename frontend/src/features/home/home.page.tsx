@@ -300,7 +300,7 @@ const HomePage = () => {
                   {house.org.name}
                 </Typography.Text>
                 <Typography.Text variant="description" color="secondary">
-                  {house.org.reception_note ?? "Управляющая компания дома"}
+                  {house.org.reception_hours ?? "Управляющая компания дома"}
                 </Typography.Text>
               </Flex>
               <Chevron />

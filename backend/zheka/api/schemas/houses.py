@@ -49,7 +49,11 @@ class OrgContacts(BaseSchema):
         description="Сайт УК со схемой, у реестровой - по данным Реформы ЖКХ",
     )
     license_no: str | None = None
-    reception_note: str | None = None
+    work_hours: str | None = Field(default=None, description="Часы работы офиса УК")
+    reception_hours: str | None = Field(
+        default=None,
+        description="Часы приема: собраны из расписания записи, без него - текст УК",
+    )
     emergency_phone: str | None = Field(
         default=None,
         description="Аварийно-диспетчерская служба дома, если УК ее указала",
@@ -309,7 +313,13 @@ class HouseCard(BaseSchema):
             area=house.area,
             lat=None if house.lat is None else float(house.lat),
             lon=None if house.lon is None else float(house.lon),
-            org=None if card.org is None else OrgContacts.model_validate(card.org),
+            org=(
+                None
+                if card.org is None
+                else OrgContacts.model_validate(card.org).model_copy(
+                    update={"reception_hours": card.reception_hours},
+                )
+            ),
             my_residency=(
                 None if residency is None else ResidencySummary.of(residency)
             ),

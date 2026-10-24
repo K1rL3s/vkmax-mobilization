@@ -14,6 +14,7 @@ class Organization(ZhekaMutableType, Zoned):
     phone: str
     address: str
     reception_note: str | None = None
+    work_hours: str | None = None
     registered_at: datetime | None = None
     is_demo: bool = False
     timezone: str

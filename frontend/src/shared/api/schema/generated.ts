@@ -4821,8 +4821,16 @@ export interface components {
       site?: string | null;
       /** License No */
       license_no?: string | null;
-      /** Reception Note */
-      reception_note?: string | null;
+      /**
+       * Work Hours
+       * @description Часы работы офиса УК
+       */
+      work_hours?: string | null;
+      /**
+       * Reception Hours
+       * @description Часы приема: собраны из расписания записи, без него - текст УК
+       */
+      reception_hours?: string | null;
       /**
        * Emergency Phone
        * @description Аварийно-диспетчерская служба дома, если УК ее указала
@@ -4989,7 +4997,20 @@ export interface components {
       group_window_hours: number;
       /** Phone */
       phone: string;
-      /** Reception Note */
+      /**
+       * Address
+       * @description Адрес офиса УК
+       */
+      address: string;
+      /**
+       * Work Hours
+       * @description Часы работы офиса УК, текстом
+       */
+      work_hours: string | null;
+      /**
+       * Reception Note
+       * @description Часы приема текстом, жителю - пока нет расписания записи
+       */
       reception_note: string | null;
       /** Emergency Phone */
       emergency_phone: string | null;
@@ -6275,6 +6296,13 @@ export interface components {
       group_window_hours: number;
       /** Phone */
       phone: string;
+      /**
+       * Address
+       * @description Адрес офиса УК
+       */
+      address: string;
+      /** Work Hours */
+      work_hours?: string | null;
       /** Reception Note */
       reception_note?: string | null;
       /** Emergency Phone */

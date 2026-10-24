@@ -1,6 +1,6 @@
 import secrets
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any, cast
@@ -20,6 +20,7 @@ from zheka.api.schemas.houses import (
     AdminHouseListItem,
     EntranceQr,
     HouseCard,
+    OrgContacts,
     ResidencySummary,
 )
 from zheka.config import DeeplinksConfig
@@ -51,14 +52,22 @@ from zheka.core.ids import FlatId, HouseId, MaxChatId, OrgId
 from zheka.core.register_codes import org_register_code
 from zheka.core.services.chats import ChatJoinOffer
 from zheka.core.services.events import EventsService
-from zheka.core.services.houses import HousesService, ResidencyView
+from zheka.core.services.houses import HouseCardData, HousesService, ResidencyView
 from zheka.core.texts import org_invite_text
-from zheka.infra.database.models import Chat, Flat, House, Request, Resident
+from zheka.infra.database.models import (
+    Chat,
+    Flat,
+    House,
+    ReceptionWindow,
+    Request,
+    Resident,
+)
 from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.reception import ReceptionRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
@@ -76,6 +85,7 @@ def _make_service(session: AsyncSession) -> HousesService:
         EventsService(EventsRepo(session)),
         AnalyticsRepo(session),
         RequestsRepo(session),
+        ReceptionRepo(session),
     )
 
 
@@ -937,3 +947,42 @@ async def test_cities_with_more_houses_come_first(
         (region, "Яр"),
         (region, "Аул"),
     ]
+
+
+async def test_the_card_reads_reception_hours_from_the_schedule_before_the_note(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    org = await OrgsRepo(session).get_existing(fixture.org_id)
+    org.reception_note = "по записи по телефону"
+    await session.flush()
+    service = _make_service(session)
+    now = datetime.now(UTC)
+
+    def contacts(card: HouseCardData) -> OrgContacts:
+        assert card.org is not None
+        org_card = HouseCard.of(card, []).org
+        assert org_card is not None
+        return org_card
+
+    noted = contacts(await service.house_card(fixture.house_id, fixture.user_id, now))
+    await ReceptionRepo(session).replace_windows(
+        fixture.org_id,
+        [
+            ReceptionWindow(
+                org_id=fixture.org_id,
+                weekday=weekday,
+                time_from=time(9),
+                time_to=time(13),
+                slot_minutes=30,
+            )
+            for weekday in range(5)
+        ],
+    )
+    scheduled = contacts(
+        await service.house_card(fixture.house_id, fixture.user_id, now),
+    )
+
+    assert noted.reception_hours == "по записи по телефону"
+    assert scheduled.reception_hours == "пн-пт 9:00-13:00"

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Button, CellSimple, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link, Navigate } from "react-router-dom";
 
@@ -12,6 +12,7 @@ import {
 import { HouseMapPreview } from "@/features/house-map";
 import { cn } from "@/shared/lib/css";
 import { maskedFromIso } from "@/shared/lib/date-mask";
+import { getWebApp } from "@/shared/lib/max";
 import {
   duration,
   formatArea,
@@ -235,12 +236,29 @@ const Org = ({ house }: { house: HouseCard }) => {
           before={<Icon src={geoPinIcon} className={styles.CellIcon} />}
           overline="Адрес офиса"
           title={org.address}
-        />
+          showChevron
+          asChild
+        >
+          <a
+            href={`https://yandex.ru/maps/?text=${encodeURIComponent(org.address)}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={openInMax}
+          />
+        </CellSimple>
+        {org.work_hours && (
+          <CellSimple
+            separator
+            before={<Icon src={clockIcon} className={styles.CellIcon} />}
+            overline="Часы работы"
+            title={org.work_hours}
+          />
+        )}
         <CellSimple
           separator
           before={<Icon src={clockIcon} className={styles.CellIcon} />}
-          overline="Режим приёма"
-          title={org.reception_note ?? "УК не указала часы приёма"}
+          overline="Часы приёма"
+          title={org.reception_hours ?? "УК не указала часы приёма"}
         />
       </div>
 
@@ -262,6 +280,15 @@ const Org = ({ house }: { house: HouseCard }) => {
       )}
     </>
   );
+};
+
+const openInMax = (event: MouseEvent<HTMLAnchorElement>) => {
+  const webApp = getWebApp();
+
+  if (webApp?.openLink) {
+    event.preventDefault();
+    webApp.openLink(event.currentTarget.href);
+  }
 };
 
 const Works = ({

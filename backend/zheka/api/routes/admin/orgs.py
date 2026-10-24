@@ -59,6 +59,8 @@ async def update_org_settings(
         body.group_threshold,
         body.group_window_hours,
         body.phone,
+        body.address,
+        body.work_hours,
         body.reception_note,
         body.emergency_phone,
         body.email,

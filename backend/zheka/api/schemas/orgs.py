@@ -118,7 +118,11 @@ class OrgSettingsResponse(BaseSchema):
     group_threshold: int
     group_window_hours: int
     phone: str
-    reception_note: str | None
+    address: str = Field(description="Адрес офиса УК")
+    work_hours: str | None = Field(description="Часы работы офиса УК, текстом")
+    reception_note: str | None = Field(
+        description="Часы приема текстом, жителю - пока нет расписания записи",
+    )
     emergency_phone: str | None
     email: str | None
     site: str | None
@@ -133,6 +137,8 @@ class OrgSettingsResponse(BaseSchema):
             group_threshold=settings.group_threshold,
             group_window_hours=settings.group_window_hours,
             phone=view.org.phone,
+            address=view.org.address,
+            work_hours=view.org.work_hours,
             reception_note=view.org.reception_note,
             emergency_phone=view.org.emergency_phone,
             email=view.org.email,
@@ -147,6 +153,8 @@ class UpdateOrgSettingsRequest(BaseSchema):
     group_threshold: int
     group_window_hours: int
     phone: Phone
+    address: Annotated[str, Field(max_length=300, description="Адрес офиса УК")]
+    work_hours: Annotated[str, Field(max_length=300)] | None = None
     reception_note: FreeText | None = None
     emergency_phone: Phone | None = None
     email: Annotated[str, Field(max_length=120)] | None = None

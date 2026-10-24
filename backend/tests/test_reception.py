@@ -24,6 +24,7 @@ from zheka.core.services.events import EventsService
 from zheka.core.services.reception import (
     ReceptionService,
     ReceptionWindowDraft,
+    reception_hours,
 )
 from zheka.infra.database.models import Request
 from zheka.infra.database.repos.events import EventsRepo
@@ -96,6 +97,40 @@ async def _add_request(
     session.add(request)
     await session.flush()
     return request.id
+
+
+def _window(weekday: int, start: time, end: time) -> ReceptionWindow:
+    return ReceptionWindow(
+        org_id=OrgId(1),
+        weekday=weekday,
+        time_from=start,
+        time_to=end,
+        slot_minutes=30,
+    )
+
+
+def test_reception_hours_glue_days_with_the_same_windows() -> None:
+    weekdays = [
+        _window(weekday, start, end)
+        for weekday in range(5)
+        for start, end in ((time(14), time(18)), (time(9), time(13)))
+    ]
+
+    assert reception_hours(weekdays) == "пн-пт 9:00-13:00, 14:00-18:00"
+    assert (
+        reception_hours(
+            [
+                _window(0, time(9), time(12)),
+                _window(1, time(9), time(12)),
+                _window(2, time(15), time(19, 30)),
+                _window(3, time(15), time(19, 30)),
+                _window(4, time(9), time(12)),
+                _window(5, time(10), time(12)),
+            ],
+        )
+        == "пн, вт, пт 9:00-12:00; ср, чт 15:00-19:30; сб 10:00-12:00"
+    )
+    assert reception_hours([]) is None
 
 
 def test_a_window_expands_into_whole_slots_in_utc() -> None:

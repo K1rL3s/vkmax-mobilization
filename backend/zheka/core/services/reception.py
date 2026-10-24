@@ -25,6 +25,8 @@ RECEPTION_HORIZON_DAYS = 14
 LAST_WEEKDAY = 6
 MIN_SLOT_MINUTES = 5
 MAX_SLOT_MINUTES = 240
+WEEKDAY_NAMES = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
+MIN_DAY_RANGE = 3
 
 APPOINTMENT_NOT_FOUND = "Запись на прием не найдена"
 SLOT_TAKEN = "Слот уже занят"
@@ -75,6 +77,43 @@ def slot_capacities(
                 capacities[moment] = max(capacities.get(moment, 0), window.capacity)
         day += timedelta(days=1)
     return capacities
+
+
+def clock(moment: time) -> str:
+    return f"{moment.hour}:{moment.minute:02d}"
+
+
+def day_runs(weekdays: Sequence[int]) -> str:
+    runs: list[list[int]] = []
+    for weekday in weekdays:
+        if runs and runs[-1][-1] == weekday - 1:
+            runs[-1].append(weekday)
+        else:
+            runs.append([weekday])
+    parts = []
+    for run in runs:
+        if len(run) >= MIN_DAY_RANGE:
+            parts.append(f"{WEEKDAY_NAMES[run[0]]}-{WEEKDAY_NAMES[run[-1]]}")
+        else:
+            parts.extend(WEEKDAY_NAMES[weekday] for weekday in run)
+    return ", ".join(parts)
+
+
+def reception_hours(windows: Sequence[ReceptionWindow]) -> str | None:
+    by_day: dict[int, list[tuple[time, time]]] = {}
+    for window in sorted(windows, key=lambda item: (item.weekday, item.time_from)):
+        by_day.setdefault(window.weekday, []).append((window.time_from, window.time_to))
+    days_by_hours: dict[tuple[tuple[time, time], ...], list[int]] = {}
+    for weekday, hours in by_day.items():
+        days_by_hours.setdefault(tuple(hours), []).append(weekday)
+    return (
+        "; ".join(
+            f"{day_runs(weekdays)} "
+            + ", ".join(f"{clock(start)}-{clock(end)}" for start, end in hours)
+            for hours, weekdays in days_by_hours.items()
+        )
+        or None
+    )
 
 
 class ReceptionService:

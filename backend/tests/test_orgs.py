@@ -158,6 +158,8 @@ async def test_org_surface(
         group_threshold=2,
         group_window_hours=24,
         phone="+79990000000",
+        address=" Москва, Тестовая, 2, офис 5 ",
+        work_hours=" пн-пт 9:00-18:00 ",
         reception_note="по записи",
         emergency_phone=" +79990000112 ",
         email=None,
@@ -165,6 +167,8 @@ async def test_org_surface(
     )
     assert updated.settings.meter_window_day_to == 20
     assert updated.org.reception_note == "по записи"
+    assert updated.org.address == "Москва, Тестовая, 2, офис 5"
+    assert updated.org.work_hours == "пн-пт 9:00-18:00"
     assert OrgContacts.model_validate(updated.org).emergency_phone == "+79990000112"
 
     members = await orgs_service.members(own.org_id)
@@ -203,6 +207,8 @@ async def test_org_mail_and_site_reach_house_contacts(
             group_threshold=3,
             group_window_hours=24,
             phone="+79990000000",
+            address="Москва",
+            work_hours=None,
             reception_note=None,
             emergency_phone=None,
             email=email,
@@ -453,6 +459,30 @@ async def test_foreign_invite_is_not_revoked_from_another_org(
     assert alive.revoked_at is None
 
 
+async def test_update_settings_refuses_an_empty_office_address(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    own = await make_org_house_flat_user(org_role=OrgRole.CREATOR)
+
+    with pytest.raises(InvalidRequest):
+        await make_orgs_service(session).update_settings(
+            own.org_id,
+            15,
+            25,
+            meter_window_always_open=False,
+            group_threshold=3,
+            group_window_hours=24,
+            phone="+79990000000",
+            address="   ",
+            work_hours=None,
+            reception_note=None,
+            emergency_phone=None,
+            email=None,
+            site=None,
+        )
+
+
 @pytest.mark.parametrize(
     ("day_from", "day_to", "group_threshold", "group_window_hours"),
     [
@@ -482,6 +512,8 @@ async def test_update_settings_rejects_values_outside_the_limits(
             group_threshold=group_threshold,
             group_window_hours=group_window_hours,
             phone="+79990000000",
+            address="Москва",
+            work_hours=None,
             reception_note=None,
             emergency_phone=None,
             email=None,
@@ -592,6 +624,8 @@ async def test_a_blank_emergency_phone_is_cleared(
         group_threshold=3,
         group_window_hours=24,
         phone="+79990000000",
+        address="Москва",
+        work_hours=None,
         reception_note=None,
         emergency_phone="   ",
         email=None,
@@ -609,6 +643,7 @@ def _settings(phone: str, emergency_phone: str) -> UpdateOrgSettingsRequest:
         group_threshold=3,
         group_window_hours=24,
         phone=phone,
+        address="Москва",
         emergency_phone=emergency_phone,
     )
 

@@ -609,17 +609,18 @@ class Seeder:
         self,
         profile: OrgProfile,
         number: int,
-        timezone: str,
+        office: House,
     ) -> Organization:
         org = Organization(
             name=profile.name,
             inn=profile.inn,
             phone=f"+7 (000) 000-00-{number:02d}",
-            address="Адрес вымышлен, организация создана для демо",
+            address=f"{office.address}, офис 1",
+            work_hours="пн-пт 9:00-19:00, обед 13:00-14:00",
             reception_note="Прием по будням, запись в приложении",
             registered_at=self._now - HISTORY - timedelta(days=30),
             is_demo=True,
-            timezone=timezone,
+            timezone=office.timezone,
             emergency_phone=f"+7 (000) 000-01-{number:02d}",
             email=f"priem-{number}@demo-uk.example.com",
             site=f"https://demo-uk-{number}.example.com",
@@ -1660,7 +1661,7 @@ class Seeder:
                 len(neighbours),
                 profile.houses,
             )
-            org = await self._org(profile, number, items[0].house.timezone)
+            org = await self._org(profile, number, items[0].house)
             staff = await self._staff(org, profile)
             for item in items:
                 item.house.org_id = org.id

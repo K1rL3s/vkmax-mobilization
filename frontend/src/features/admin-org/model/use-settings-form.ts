@@ -67,6 +67,15 @@ const settingsSchema = z.object({
       (value) => value === "" || isSiteAddress(value),
       "Нужен адрес вида uk-primer.ru",
     ),
+  address: z
+    .string()
+    .trim()
+    .min(1, "Укажите адрес офиса")
+    .max(limits.address, `Адрес длиннее ${limits.address} символов`),
+  work_hours: z
+    .string()
+    .trim()
+    .max(limits.workHours, `Текст длиннее ${limits.workHours} символов`),
   reception_note: z
     .string()
     .trim()
@@ -80,6 +89,7 @@ type SettingsDraft = z.infer<typeof settingsSchema>;
 
 const draftOf = (settings: OrgSettings): SettingsDraft => ({
   ...settings,
+  work_hours: settings.work_hours ?? "",
   reception_note: settings.reception_note ?? "",
   emergency_phone: settings.emergency_phone ?? "",
   email: settings.email ?? "",
@@ -115,6 +125,7 @@ export const useSettingsForm = (settings: OrgSettings, lock: SettingsLock) => {
         params: orgParams(),
         body: {
           ...draft,
+          work_hours: draft.work_hours || null,
           reception_note: draft.reception_note || null,
           emergency_phone: draft.emergency_phone || null,
           email: draft.email || null,
