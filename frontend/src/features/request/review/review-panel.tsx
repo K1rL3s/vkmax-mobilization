@@ -1,12 +1,12 @@
-import { Button, Flex, Textarea, Typography } from "@maxhub/max-ui";
+import { Button, Flex, Typography } from "@maxhub/max-ui";
 
 import { duration, formatDayTime } from "@/shared/lib/format";
-import { AttachmentPicker } from "@/shared/ui/attachment-picker";
 import { autoClose } from "../domain/timeline";
 import type { RequestCard } from "../domain/types";
 
 import { AttachmentPair } from "./attachment-pair";
-import { COMMENT_LIMIT, useReview } from "./use-review";
+import { RejectionFields } from "./rejection-fields";
+import { useReview } from "./use-review";
 
 import styles from "./review-panel.module.css";
 
@@ -48,43 +48,7 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
 
       <AttachmentPair request={request} doneAt={closing?.sentAt ?? null} />
 
-      <Flex align="stretch" direction="column" gapY={4}>
-        <Textarea
-          className={styles.Comment}
-          mode="secondary"
-          rows={2}
-          placeholder="Что не так с работой"
-          value={form.comment}
-          onChange={(event) => form.setComment(event.target.value)}
-        />
-        <Typography.Text
-          className={styles.Counter}
-          variant="detail"
-          color="secondary"
-        >
-          {form.comment.length} / {COMMENT_LIMIT}
-        </Typography.Text>
-      </Flex>
-
-      <Flex align="stretch" direction="column" gapY={8}>
-        <AttachmentPicker
-          attachments={form.attachments.attachments}
-          isFull={form.attachments.isFull}
-          isUploading={form.attachments.isUploading}
-          onAdd={form.attachments.add}
-          onRemove={form.attachments.remove}
-        />
-        <Typography.Text
-          variant="description"
-          color="secondary"
-          className={form.attachments.error ? styles.Failed : undefined}
-        >
-          {form.attachments.error ??
-            (request.rejection_needs_photo
-              ? "Приложите фото того, что не так"
-              : "Приложите фото, если есть")}
-        </Typography.Text>
-      </Flex>
+      <RejectionFields rejection={form.rejection} />
 
       {form.error && (
         <Typography.Text variant="description" className={styles.Failed}>
@@ -106,18 +70,36 @@ export const ReviewPanel = ({ request }: { request: RequestCard }) => {
           className={styles.Action}
           size="medium"
           variant="secondary"
-          loading={form.isRejecting}
+          loading={form.rejection.isSending}
           disabled={!form.canReject}
-          onClick={form.reject}
+          onClick={form.rejection.send}
         >
           Сделано плохо
         </Button>
       </Flex>
 
       <Typography.Text variant="detail" color="secondary">
-        {form.rejectMissing ??
+        {form.rejection.missing ??
           "«Сделано плохо» создаст повторную заявку со ссылкой на эту"}
       </Typography.Text>
+
+      {form.canDemoAutoClose && (
+        <Flex align="flex-start" direction="column" gapY={4}>
+          <Button
+            size="small"
+            variant="secondary"
+            loading={form.isAutoClosing}
+            onClick={form.demoAutoClose}
+          >
+            Демо: закрыть без проверки
+          </Button>
+          {form.autoCloseError && (
+            <Typography.Text variant="description" className={styles.Failed}>
+              {form.autoCloseError}
+            </Typography.Text>
+          )}
+        </Flex>
+      )}
     </div>
   );
 };

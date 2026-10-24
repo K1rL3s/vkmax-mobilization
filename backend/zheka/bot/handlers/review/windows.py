@@ -10,10 +10,12 @@ from maxo.enums import AttachmentType
 
 from zheka.bot.cards import BACK, CANCEL
 from zheka.bot.handlers.review.handlers import (
+    get_auto_closed,
     get_ratings,
     get_rejection,
     get_review,
     on_accept,
+    on_problem_remains,
     on_rating,
     on_reject,
     on_rejection,
@@ -31,6 +33,11 @@ ASK_TEXT = (
     "🔍 Исполнитель закончил работу. Проверьте и примите ее\n"
     "⏳ Без ответа заявка закроется сама через "
     f"{AUTO_CLOSE_AFTER // timedelta(hours=1)} ч"
+)
+AUTO_CLOSED_TEXT = (
+    "🔒 Заявка №{request_id} закрыта: работу не проверили за "
+    f"{AUTO_CLOSE_AFTER // timedelta(hours=1)} часов. Если проблема осталась, "
+    "нажмите кнопку до {until} - создадим повторную заявку со ссылкой на эту"
 )
 REJECTED_TEXT = "↩️ Повторная заявка ушла в УК"
 RATED_TEXT = "⭐ Ваша оценка: {rating}"
@@ -124,6 +131,22 @@ review_dialog = Dialog(
         Row(SwitchTo(BACK, id="to_rejection", state=Review.rejection), CANCEL),
         state=Review.rejection_photo,
         getter=get_rejection,
+    ),
+    Window(
+        Format(AUTO_CLOSED_TEXT),
+        Button(
+            Const("👎 Проблема осталась"),
+            id="problem_remains",
+            on_click=on_problem_remains,
+        ),
+        WebApp(
+            Const(OPEN_REQUEST),
+            Format("{bot_username}"),
+            payload=Format("{request_payload}"),
+            when=F["bot_username"],
+        ),
+        state=Review.auto_closed,
+        getter=get_auto_closed,
     ),
     on_start=on_start,
 )

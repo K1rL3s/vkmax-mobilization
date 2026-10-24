@@ -40,6 +40,7 @@ type MockRequest = {
   }[];
   place?: Schemas["RequestPlace"];
   gis_appeal_number?: string | null;
+  auto_closed_at?: string;
 };
 
 const request = (
@@ -484,7 +485,9 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     flat_id: residencyForHouse(item.house_id)?.flat_id ?? null,
     auto_close_at:
       item.status === "on_review" ? shift(timeline[3].at, 48 * 60) : null,
+    return_until: returnUntil(item),
     can_demo_expire: canDemoExpire(item),
+    can_demo_auto_close: canDemoAutoClose(item),
     rejection_needs_photo: !["meter_error", "charge_dispute"].includes(
       item.category,
     ),
@@ -624,6 +627,23 @@ export const canDemoExpire = (item: MockRequest) =>
   ["new", "accepted", "in_progress"].includes(item.status) &&
   item.deadline_at !== null &&
   new Date(item.deadline_at).getTime() > Date.now();
+
+export const canDemoAutoClose = (item: MockRequest) =>
+  Boolean(findHouse(item.house_id)?.org?.is_demo) &&
+  item.status === "on_review";
+
+export const returnUntil = (item: MockRequest) => {
+  if (
+    !item.auto_closed_at ||
+    requests.some((other) => other.parent_request_id === item.id)
+  ) {
+    return null;
+  }
+
+  const until = shift(item.auto_closed_at, 7 * 24 * 60);
+
+  return new Date(until).getTime() > Date.now() ? until : null;
+};
 
 export const canDemoNeighbours = (item: MockRequest) =>
   Boolean(findHouse(item.house_id)?.org?.is_demo) &&

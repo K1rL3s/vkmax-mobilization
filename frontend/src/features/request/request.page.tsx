@@ -21,7 +21,7 @@ import {
 } from "./domain/status";
 import { buildTimeline } from "./domain/timeline";
 import { useRequest } from "./model/use-request";
-import { ReviewPanel } from "./review";
+import { AutoClosedPanel, ReviewPanel } from "./review";
 import { CancelPanel } from "./ui/cancel-panel";
 import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
@@ -130,6 +130,10 @@ const RequestPage = () => {
       {isRunning && <DeadlinePanel request={request} />}
 
       {request.can_review && <ReviewPanel request={request} />}
+
+      {request.return_until && (
+        <AutoClosedPanel request={request} returnUntil={request.return_until} />
+      )}
 
       {(request.can_rate || request.rating !== null) && (
         <RatePanel request={request} />

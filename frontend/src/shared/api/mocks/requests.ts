@@ -12,6 +12,7 @@ import {
   page,
 } from "./reply";
 import {
+  canDemoAutoClose,
   canDemoExpire,
   canDemoNeighbours,
   createRequest,
@@ -26,6 +27,7 @@ import {
   requestCard,
   requestCategories,
   requestListItem,
+  returnUntil,
   similarRequests,
   uploads,
   user,
@@ -235,7 +237,15 @@ export const requestsConfigs = [
     const mediaError = checkAttachments(body.photos ?? []);
     if (mediaError) return badRequest(mediaError);
 
-    if (item.status === "on_review") {
+    const returned = item.completion_reason === "auto_closed";
+
+    if (returned && !returnUntil(item)) {
+      return conflict(
+        `Вернуть заявку №${item.id} уже нельзя. Если проблема осталась, подайте новую заявку`,
+      );
+    }
+
+    if (item.status === "on_review" || returned) {
       if (!description) {
         return badRequest("Опишите, что не так с работой");
       }
@@ -246,7 +256,9 @@ export const requestsConfigs = [
       ) {
         return badRequest("Приложите фото: так УК увидит, что не так");
       }
+    }
 
+    if (item.status === "on_review") {
       item.status = "done";
       item.completion_reason = "resident_rejected";
     }
@@ -261,6 +273,19 @@ export const requestsConfigs = [
     }
 
     item.deadline_at = minutes(-1);
+
+    return ok(requestCard(item));
+  }),
+  endpoint("post", "/requests/:request_id/demo/auto-close", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item || !canDemoAutoClose(item)) {
+      return notFound("Заявка не найдена");
+    }
+
+    item.status = "done";
+    item.completion_reason = "auto_closed";
+    item.auto_closed_at = minutes(0);
 
     return ok(requestCard(item));
   }),

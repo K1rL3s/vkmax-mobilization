@@ -116,10 +116,10 @@ def blocked_detail(reason: str | None) -> str:
     return BLOCKED if reason is None else f"{BLOCKED}: {reason}"
 
 
-def request_auto_closed(request_id: RequestId) -> str:
+def return_expired(request_id: RequestId, until: datetime) -> str:
     return (
-        f"🔒 Заявка №{request_id} закрыта: работу не проверили за 48 часов. "
-        "Если проблема осталась, подайте повторную заявку"
+        f"Вернуть заявку №{request_id} можно было до {until:%d.%m}. "
+        "Если проблема осталась, подайте новую заявку"
     )
 
 

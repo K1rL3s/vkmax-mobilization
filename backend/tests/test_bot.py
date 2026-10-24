@@ -186,6 +186,7 @@ from zheka.bot.handlers.requests.windows import (
 from zheka.bot.handlers.review.handlers import REJECTION_TAKEN, repeat_sent
 from zheka.bot.handlers.review.windows import (
     ASK_TEXT,
+    AUTO_CLOSED_TEXT,
     OPTIONAL_PHOTO_TEXT,
     PHOTOS_TEXT,
     RATED_TEXT,
@@ -234,6 +235,7 @@ from zheka.broker.tasks.notifications import (
 from zheka.broker.tasks.reminders import broadcast_access_request
 from zheka.broker.tasks.requests import (
     attach_result_photo,
+    auto_close_reviewed_requests,
     send_executor_card,
     send_gji_pdf,
     send_question_card,
@@ -317,10 +319,12 @@ from zheka.core.services.polls import ALREADY_VOTED
 from zheka.core.services.profile import ProfileService
 from zheka.core.services.reminders import DEMO_ADDRESS, DEMO_SERIAL
 from zheka.core.services.requests import (
+    AUTO_CLOSE_AFTER,
     CANCEL_TOO_LATE,
     MAX_RATING,
     MIN_RATING,
     REJECT_NOT_ON_REVIEW,
+    RETURN_WINDOW,
     RequestsService,
 )
 from zheka.core.services.visits import (
@@ -1045,6 +1049,83 @@ async def _reviewing(
 async def _repeats_of(session: AsyncSession, request_id: RequestId) -> list[Request]:
     stmt = select(Request).where(requests_table.c.parent_request_id == request_id)
     return list((await session.execute(stmt)).scalars().all())
+
+
+PROBLEM_REMAINS = InlineButtonTextLocator("👎 Проблема осталась")
+
+
+async def _auto_closed(
+    session: AsyncSession,
+    client: BotClient,
+    broker: InMemoryBroker,
+    age: timedelta,
+) -> RequestId:
+    request_id = await _reviewing(session, client, broker)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(
+            reviewed_at=datetime.now(UTC) - AUTO_CLOSE_AFTER - age,
+        )
+    )
+    await session.execute(stmt)
+    await session.commit()
+    await _run(broker, auto_close_reviewed_requests)
+    stmt = (
+        update(requests_table)
+        .where(requests_table.c.id == request_id)
+        .values(done_at=datetime.now(UTC) - age)
+    )
+    await session.execute(stmt)
+    await session.commit()
+    await _run(broker, send_review_card, request_id=request_id)
+    return request_id
+
+
+async def test_problem_remains_after_an_auto_close_files_a_repeat_from_the_bot(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = await _auto_closed(bot_session, client, task_broker, timedelta())
+    [enqueued] = bot_broker.enqueued(TaskName.SEND_REVIEW_CARD)[-1:]
+    assert enqueued == {"request_id": request_id}
+    request = await _status(bot_session, request_id)
+    assert request.done_at is not None
+    house = await HousesRepo(bot_session).get(request.house_id)
+    assert house is not None
+    until = house.local(request.done_at + RETURN_WINDOW)
+    assert _text(message_manager) == AUTO_CLOSED_TEXT.format(
+        request_id=request_id,
+        until=f"{until:%d.%m}",
+    )
+
+    await client.click(message_manager.last_message(), PROBLEM_REMAINS)
+    await _rendered(message_manager, REJECTION_TEXT)
+    await client.send("Кран все еще течет")
+    await _send_photo(client, None)
+    await client.click(message_manager.last_message(), SEND)
+    download = AsyncMock(
+        side_effect=lambda _url, out, **_: out.write(b"\xff\xd8\xff\xe0"),
+    )
+    monkeypatch.setattr(fake_bot, "download", download)
+    await _run(
+        task_broker,
+        reject_bot_request,
+        **bot_broker.enqueued(TaskName.REJECT_BOT_REQUEST)[-1],
+    )
+
+    parent = await _status(bot_session, request_id)
+    assert parent.completion_reason is RequestCompletionReason.AUTO_CLOSED
+    [repeat] = await _repeats_of(bot_session, request_id)
+    assert repeat.description == "Кран все еще течет"
+    assert len(await RequestsRepo(bot_session).list_attachments(repeat.id)) == 1
+    sent = bot_broker.enqueued(TaskName.SEND_TO_USER)[-1]
+    assert sent["text"] == repeat_sent(repeat.id)
 
 
 async def test_a_stale_rejection_prompt_files_no_repeat(
@@ -7111,3 +7192,31 @@ async def test_a_forwarded_pin_command_does_nothing(
 
     assert await _pin_mids(bot_session, chat_id) == ["m-1"]
     assert len(bot_broker.enqueued(TaskName.SYNC_CHAT_PINS)) == synced
+
+
+async def test_problem_remains_a_week_after_the_auto_close_files_nothing(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    answers: _CallbackAnswers,
+) -> None:
+    request_id = await _auto_closed(
+        bot_session,
+        client,
+        task_broker,
+        RETURN_WINDOW + timedelta(minutes=1),
+    )
+    request = await _status(bot_session, request_id)
+    assert request.done_at is not None
+    house = await HousesRepo(bot_session).get(request.house_id)
+    assert house is not None
+    until = house.local(request.done_at + RETURN_WINDOW)
+
+    await client.click(message_manager.last_message(), PROBLEM_REMAINS)
+
+    assert answers.notifications == [
+        f"⌛ {texts.return_expired(request_id, until)}",
+    ]
+    assert REJECTION_TEXT not in _text(message_manager)
+    assert await _repeats_of(bot_session, request_id) == []

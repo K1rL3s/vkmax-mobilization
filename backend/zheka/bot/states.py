@@ -47,6 +47,7 @@ class Review(StatesGroup):
     rating = State()
     rejection = State()
     rejection_photo = State()
+    auto_closed = State()
 
 
 class ChatBinding(StatesGroup):

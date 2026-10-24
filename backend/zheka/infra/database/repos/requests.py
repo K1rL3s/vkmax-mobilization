@@ -547,6 +547,14 @@ class RequestsRepo(BaseAlchemyRepo):
         )
         await self._session.execute(stmt)
 
+    async def has_repeat(self, request_id: RequestId) -> bool:
+        stmt = select(
+            select(requests_table.c.id)
+            .where(requests_table.c.parent_request_id == request_id)
+            .exists(),
+        )
+        return bool(await self._session.scalar(stmt))
+
     async def last_for_flat(
         self,
         flat_id: FlatId,

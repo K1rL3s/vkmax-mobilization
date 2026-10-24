@@ -725,7 +725,10 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Повторная заявка */
+    /**
+     * Повторная заявка
+     * @description Только автор, с приемки или по закрытой заявке. С приемки и по закрытой без проверки нужны объяснение и фото по правилам категории; закрытую без проверки возвращают до `return_until` карточки и один раз, иначе 409
+     */
     post: operations["create_repeat_request"];
     delete?: never;
     options?: never;
@@ -818,6 +821,26 @@ export interface paths {
      * @description Только автор заявки в демо-УК, пока заявка открыта и не просрочена, иначе 404. Срок, и срок реакции, если он позже, становится минутой раньше текущего момента, уведомления о просрочке уходят сразу
      */
     post: operations["expire_request_deadline"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/requests/{request_id}/demo/auto-close": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Демо: закрыть без проверки
+     * @description Только автор заявки на приемке в демо-УК, иначе 404. Заявка закрывается так же, как через 48 часов без ответа, и бот присылает сообщение об автозакрытии
+     */
+    post: operations["demo_auto_close_request"];
     delete?: never;
     options?: never;
     head?: never;
@@ -2926,10 +2949,20 @@ export interface components {
        */
       auto_close_at?: string | null;
       /**
+       * Return Until
+       * @description До этого момента автор заявки, закрытой без проверки, может сообщить, что проблема осталась, и подать повторную; пусто - нельзя
+       */
+      return_until?: string | null;
+      /**
        * Can Demo Expire
        * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
        */
       can_demo_expire: boolean;
+      /**
+       * Can Demo Auto Close
+       * @description Автор заявки на приемке в демо-УК может закрыть ее без проверки
+       */
+      can_demo_auto_close: boolean;
       /**
        * Rejection Needs Photo
        * @description Вернуть работу с приемки можно только с фото или видео
@@ -5661,10 +5694,20 @@ export interface components {
        */
       auto_close_at?: string | null;
       /**
+       * Return Until
+       * @description До этого момента автор заявки, закрытой без проверки, может сообщить, что проблема осталась, и подать повторную; пусто - нельзя
+       */
+      return_until?: string | null;
+      /**
        * Can Demo Expire
        * @description Автор заявки в демо-УК может перенести ее срок на текущий момент
        */
       can_demo_expire: boolean;
+      /**
+       * Can Demo Auto Close
+       * @description Автор заявки на приемке в демо-УК может закрыть ее без проверки
+       */
+      can_demo_auto_close: boolean;
       /**
        * Rejection Needs Photo
        * @description Вернуть работу с приемки можно только с фото или видео
@@ -11022,6 +11065,93 @@ export interface operations {
     };
   };
   expire_request_deadline: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  demo_auto_close_request: {
     parameters: {
       query?: never;
       header?: {

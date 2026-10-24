@@ -135,6 +135,7 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     parent_request_id: null,
     auto_close_at: null,
     can_demo_expire: false,
+    can_demo_auto_close: false,
     rejection_needs_photo: true,
     can_demo_neighbours: false,
     can_propose_visit: false,

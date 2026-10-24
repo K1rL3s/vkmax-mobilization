@@ -243,7 +243,16 @@ async def rate_request(
     return _card(card, files_service)
 
 
-@router.post("/requests/{request_id}/repeat", summary="Повторная заявка")
+@router.post(
+    "/requests/{request_id}/repeat",
+    summary="Повторная заявка",
+    description=(
+        "Только автор, с приемки или по закрытой заявке. С приемки и по "
+        "закрытой без проверки нужны объяснение и фото по правилам категории; "
+        "закрытую без проверки возвращают до `return_until` карточки и один "
+        "раз, иначе 409"
+    ),
+)
 async def create_repeat_request(
     request_id: RequestId,
     current_account: RequireConsentDep,
@@ -351,6 +360,29 @@ async def expire_request_deadline(
     files_service: FromDishka[FilesService],
 ) -> RequestCard:
     card = await requests_service.demo_expire(
+        current_account.user_id,
+        request_id,
+        datetime.now(UTC),
+    )
+    return _card(card, files_service)
+
+
+@router.post(
+    "/requests/{request_id}/demo/auto-close",
+    summary="Демо: закрыть без проверки",
+    description=(
+        "Только автор заявки на приемке в демо-УК, иначе 404. Заявка "
+        "закрывается так же, как через 48 часов без ответа, и бот присылает "
+        "сообщение об автозакрытии"
+    ),
+)
+async def demo_auto_close_request(
+    request_id: RequestId,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+) -> RequestCard:
+    card = await requests_service.demo_auto_close(
         current_account.user_id,
         request_id,
         datetime.now(UTC),

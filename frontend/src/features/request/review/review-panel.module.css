@@ -29,14 +29,6 @@
   background-color: var(--icon-positive);
 }
 
-.Comment {
-  width: 100%;
-}
-
-.Counter {
-  align-self: flex-end;
-}
-
 .Failed {
   color: var(--text-negative);
 }

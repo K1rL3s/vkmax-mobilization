@@ -19,7 +19,11 @@ from zheka.bot.states import ExecutorCard, Question, Review, VisitWindows
 from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.bot_requests import save_photos
 from zheka.core import texts
-from zheka.core.enums import NotificationCategory, RequestStatus
+from zheka.core.enums import (
+    NotificationCategory,
+    RequestCompletionReason,
+    RequestStatus,
+)
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import AccessRequestId, RequestId, UserId
 from zheka.core.services.admin_requests import AdminRequestsService
@@ -105,7 +109,11 @@ async def send_review_card(
         notifications_service,
         sender,
         request.author_user_id,
-        Review.card,
+        (
+            Review.auto_closed
+            if request.completion_reason is RequestCompletionReason.AUTO_CLOSED
+            else Review.card
+        ),
         f"review-{request_id}",
         ReviewData(request_id=request_id).to_data(),
         ShowMode.SEND,

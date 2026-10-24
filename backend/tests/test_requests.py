@@ -583,10 +583,7 @@ async def test_auto_close_ends_an_expired_review_once_and_tells_the_author(
     assert changed.user_id is None
     assert changed.payload["by_role"] == RequestActorRole.SYSTEM.value
     await publisher.flush()
-    [sent] = broker.enqueued(TaskName.SEND_TO_USER)
-    assert sent["user_id"] == own.user_id
-    assert sent["mandatory"] is True
-    assert f"№{stale}" in sent["text"]
+    assert broker.enqueued(TaskName.SEND_REVIEW_CARD) == [{"request_id": stale}]
 
 
 async def test_rate_puts_the_one_score_and_closes_the_rating(

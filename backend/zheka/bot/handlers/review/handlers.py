@@ -32,6 +32,7 @@ from zheka.core.services.requests import (
     MAX_RATING,
     MIN_RATING,
     RequestsService,
+    return_deadline,
 )
 from zheka.core.texts import REQUEST_STATUS_LABELS
 
@@ -73,6 +74,44 @@ async def get_review(
             ],
         ),
     }
+
+
+@inject
+async def get_auto_closed(
+    bot: Bot,
+    dialog_manager: DialogManager,
+    requests_service: FromDishka[RequestsService],
+    **_: Any,
+) -> dict[str, Any]:
+    request_id = _request_id(dialog_manager)
+    card = await requests_service.get_card(dialog_user_id(dialog_manager), request_id)
+    deadline = return_deadline(card.request)
+    return {
+        "request_id": request_id,
+        "bot_username": web_app_name(bot),
+        "request_payload": app_payload(request_app_path(request_id)),
+        "until": "" if deadline is None else f"{card.house.local(deadline):%d.%m}",
+    }
+
+
+@inject
+async def on_problem_remains(
+    callback: MessageCallback,
+    _button: Button,
+    dialog_manager: DialogManager,
+    requests_service: FromDishka[RequestsService],
+) -> None:
+    request_id = _request_id(dialog_manager)
+    try:
+        await requests_service.check_return(dialog_user_id(dialog_manager), request_id)
+    except ZhekaError as error:
+        await callback.callback_answer(notification=f"⌛ {error}")
+        return
+    await ask_in_default_stack(
+        dialog_manager,
+        Review.rejection,
+        ReviewData(request_id=request_id).to_data(),
+    )
 
 
 async def get_ratings(**_: Any) -> dict[str, Any]:

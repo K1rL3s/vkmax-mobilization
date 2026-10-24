@@ -3793,6 +3793,7 @@ paths:
       tags:
       - Заявки
       summary: Повторная заявка
+      description: Только автор, с приемки или по закрытой заявке. С приемки и по закрытой без проверки нужны объяснение и фото по правилам категории; закрытую без проверки возвращают до `return_until` карточки и один раз, иначе 409
       operationId: create_repeat_request
       security:
       - ApiTestToken: []
@@ -4171,6 +4172,79 @@ paths:
       summary: 'Демо: срок заявки истек'
       description: Только автор заявки в демо-УК, пока заявка открыта и не просрочена, иначе 404. Срок, и срок реакции, если он позже, становится минутой раньше текущего момента, уведомления о просрочке уходят сразу
       operationId: expire_request_deadline
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/demo/auto-close:
+    post:
+      tags:
+      - Заявки
+      summary: 'Демо: закрыть без проверки'
+      description: Только автор заявки на приемке в демо-УК, иначе 404. Заявка закрывается так же, как через 48 часов без ответа, и бот присылает сообщение об автозакрытии
+      operationId: demo_auto_close_request
       security:
       - ApiTestToken: []
       parameters:
@@ -13530,10 +13604,21 @@ components:
           - type: 'null'
           title: Auto Close At
           description: Автозакрытие заявки, оставленной на приемке
+        return_until:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Return Until
+          description: До этого момента автор заявки, закрытой без проверки, может сообщить, что проблема осталась, и подать повторную; пусто - нельзя
         can_demo_expire:
           type: boolean
           title: Can Demo Expire
           description: Автор заявки в демо-УК может перенести ее срок на текущий момент
+        can_demo_auto_close:
+          type: boolean
+          title: Can Demo Auto Close
+          description: Автор заявки на приемке в демо-УК может закрыть ее без проверки
         rejection_needs_photo:
           type: boolean
           title: Rejection Needs Photo
@@ -13603,6 +13688,7 @@ components:
       - can_review
       - can_rate
       - can_demo_expire
+      - can_demo_auto_close
       - rejection_needs_photo
       - can_demo_neighbours
       - is_staff_author
@@ -18034,10 +18120,21 @@ components:
           - type: 'null'
           title: Auto Close At
           description: Автозакрытие заявки, оставленной на приемке
+        return_until:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Return Until
+          description: До этого момента автор заявки, закрытой без проверки, может сообщить, что проблема осталась, и подать повторную; пусто - нельзя
         can_demo_expire:
           type: boolean
           title: Can Demo Expire
           description: Автор заявки в демо-УК может перенести ее срок на текущий момент
+        can_demo_auto_close:
+          type: boolean
+          title: Can Demo Auto Close
+          description: Автор заявки на приемке в демо-УК может закрыть ее без проверки
         rejection_needs_photo:
           type: boolean
           title: Rejection Needs Photo
@@ -18074,6 +18171,7 @@ components:
       - can_review
       - can_rate
       - can_demo_expire
+      - can_demo_auto_close
       - rejection_needs_photo
       - can_demo_neighbours
       title: RequestCard

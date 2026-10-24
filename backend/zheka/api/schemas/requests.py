@@ -237,8 +237,18 @@ class RequestCard(RequestListItem):
         default=None,
         description="Автозакрытие заявки, оставленной на приемке",
     )
+    return_until: datetime | None = Field(
+        default=None,
+        description=(
+            "До этого момента автор заявки, закрытой без проверки, может "
+            "сообщить, что проблема осталась, и подать повторную; пусто - нельзя"
+        ),
+    )
     can_demo_expire: bool = Field(
         description="Автор заявки в демо-УК может перенести ее срок на текущий момент",
+    )
+    can_demo_auto_close: bool = Field(
+        description="Автор заявки на приемке в демо-УК может закрыть ее без проверки",
     )
     rejection_needs_photo: bool = Field(
         description="Вернуть работу с приемки можно только с фото или видео",
@@ -293,7 +303,9 @@ class RequestCard(RequestListItem):
             parent_request_id=request.parent_request_id,
             flat_id=request.flat_id,
             auto_close_at=card.auto_close_at,
+            return_until=card.return_until,
             can_demo_expire=card.can_demo_expire,
+            can_demo_auto_close=card.can_demo_auto_close,
             rejection_needs_photo=rule.rejection_needs_photo,
             can_demo_neighbours=card.can_demo_neighbours,
             visit=None if card.visit is None else VisitItem.of(card.visit),

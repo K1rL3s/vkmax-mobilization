@@ -79,6 +79,7 @@ MAX_ATTACHMENTS = 12
 MAX_VIDEOS = 2
 TOO_MANY_VIDEOS = "Можно приложить не больше 2 видео"
 AUTO_CLOSE_AFTER = timedelta(hours=48)
+RETURN_WINDOW = timedelta(days=7)
 MIN_RATING = 1
 MAX_RATING = 5
 DEMO_NEIGHBOURS = 4
@@ -96,6 +97,7 @@ REPEAT_NOT_DONE = "Повторную заявку подают после пр�
 REJECTION_COMMENT_REQUIRED = "Расскажите, что сделано плохо"
 ACCEPT_NOT_ON_REVIEW = "Работу принимают на приемке"
 REJECT_NOT_ON_REVIEW = "Работу возвращают только с приемки"
+RETURNED_ALREADY = "Повторная заявка по этой заявке уже подана"
 SHARE_FINISHED = "Заявку на приемке или закрытую соседям уже не показать"
 RATING_OUT_OF_RANGE = f"Оценка - от {MIN_RATING} до {MAX_RATING}"
 ESCALATED_ALREADY = "Руководство УК уже уведомлено"
@@ -148,7 +150,9 @@ class RequestCardData(ZhekaType):
     can_review: bool
     can_rate: bool
     auto_close_at: datetime | None
+    return_until: datetime | None
     can_demo_expire: bool
+    can_demo_auto_close: bool
     can_demo_neighbours: bool
     visit: VisitData | None = None
 
@@ -301,7 +305,11 @@ class RequestsService:
         house_id = parent.house_id
         await self._active_resident(user_id, house_id)
         house = await self._get_house(house_id)
-        if rejected_on_review:
+        deadline = return_deadline(parent)
+        if deadline is not None:
+            await self._check_return(parent, deadline, house, datetime.now(UTC))
+        complained = rejected_on_review or deadline is not None
+        if complained:
             text = stated(description or "", REJECTION_COMMENT_REQUIRED)
         else:
             text = stated(
@@ -310,7 +318,7 @@ class RequestsService:
             )
         checked = self._checked_attachments(attachments)
         if (
-            rejected_on_review
+            complained
             and not checked
             and CATEGORY_RULES[parent.category].rejection_needs_photo
         ):
@@ -397,17 +405,52 @@ class RequestsService:
     async def auto_close(self, now: datetime) -> int:
         requests = await self._requests.list_reviewed_before(now - AUTO_CLOSE_AFTER)
         for request in requests:
-            await self._complete_review(
-                request,
-                None,
-                RequestCompletionReason.AUTO_CLOSED,
-                now,
-            )
-            self._notifications.notify_author(
-                request,
-                texts.request_auto_closed(request.id),
-            )
+            await self._close_unreviewed(request, now)
         return len(requests)
+
+    async def demo_auto_close(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        now: datetime,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._requests.lock(request)
+        house = await self._get_house(request.house_id)
+        org = None if house.org_id is None else await self._orgs.get(house.org_id)
+        if not demo_auto_closable(request, org):
+            raise EntityNotFound(REQUEST_NOT_FOUND)
+        await self._close_unreviewed(request, now)
+        return await self._built_card(request, house)
+
+    async def _close_unreviewed(self, request: Request, now: datetime) -> None:
+        await self._complete_review(
+            request,
+            None,
+            RequestCompletionReason.AUTO_CLOSED,
+            now,
+        )
+        self._notifications.open_review_card(request.id)
+
+    async def check_return(self, user_id: UserId, request_id: RequestId) -> None:
+        request = await self._own_request(user_id, request_id)
+        deadline = return_deadline(request)
+        if deadline is None:
+            raise InvalidState(REJECT_NOT_ON_REVIEW)
+        house = await self._get_house(request.house_id)
+        await self._check_return(request, deadline, house, datetime.now(UTC))
+
+    async def _check_return(
+        self,
+        request: Request,
+        deadline: datetime,
+        house: House,
+        now: datetime,
+    ) -> None:
+        if deadline <= now:
+            raise InvalidState(texts.return_expired(request.id, house.local(deadline)))
+        if await self._requests.has_repeat(request.id):
+            raise InvalidState(RETURNED_ALREADY)
 
     async def _complete_review(
         self,
@@ -612,7 +655,10 @@ class RequestsService:
         channel: RequestChannel,
     ) -> RequestCardData:
         parent = await self._own_request(user_id, request_id)
-        if parent.status is not RequestStatus.ON_REVIEW:
+        if (
+            parent.status is not RequestStatus.ON_REVIEW
+            and return_deadline(parent) is None
+        ):
             raise InvalidState(REJECT_NOT_ON_REVIEW)
         return await self.repeat(user_id, request_id, comment, photos, channel)
 
@@ -1088,6 +1134,8 @@ async def build_card(
         else await users_repo.get_by_id(request.executor_user_id)
     )
     org = None if house.org_id is None else await orgs_repo.get(house.org_id)
+    now = datetime.now(UTC)
+    deadline = return_deadline(request)
     return RequestCardData(
         request=request,
         house=house,
@@ -1128,7 +1176,16 @@ async def build_card(
             and request.reviewed_at is not None
             else None
         ),
-        can_demo_expire=authored and demo_expirable(request, org, datetime.now(UTC)),
+        return_until=(
+            deadline
+            if authored
+            and deadline is not None
+            and deadline > now
+            and not await requests_repo.has_repeat(request.id)
+            else None
+        ),
+        can_demo_expire=authored and demo_expirable(request, org, now),
+        can_demo_auto_close=authored and demo_auto_closable(request, org),
         can_demo_neighbours=authored
         and bool(
             await available_neighbours(
@@ -1136,7 +1193,7 @@ async def build_card(
                 orgs_repo,
                 request,
                 org,
-                datetime.now(UTC),
+                now,
             ),
         ),
         visit=await visit_of(access_repo, request),
@@ -1161,6 +1218,19 @@ def demo_expirable(
         and request.status in OPEN_STATUSES
         and request.deadline_at > now
     )
+
+
+def demo_auto_closable(request: Request, org: Organization | None) -> bool:
+    return org is not None and org.is_demo and request.status is RequestStatus.ON_REVIEW
+
+
+def return_deadline(request: Request) -> datetime | None:
+    if (
+        request.completion_reason is not RequestCompletionReason.AUTO_CLOSED
+        or request.done_at is None
+    ):
+        return None
+    return request.done_at + RETURN_WINDOW
 
 
 async def available_neighbours(
