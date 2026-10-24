@@ -294,6 +294,9 @@ export const adminRequestsConfigs = [
           (!request.query.place || item.place === request.query.place) &&
           (!request.query.executor_user_id ||
             item.executor_user_id === number(request.query.executor_user_id)) &&
+          (request.query.danger !== "true" ||
+            (!!item.danger &&
+              ["new", "accepted", "in_progress"].includes(item.status))) &&
           (request.query.overdue !== "true" ||
             (item.status !== "done" &&
               item.status !== "on_review" &&

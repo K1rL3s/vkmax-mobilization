@@ -166,6 +166,50 @@ async def test_overdue_requests_come_first_and_can_be_filtered(
     assert [row.request.id for row in only_overdue] == [late.id]
 
 
+async def test_danger_filter_isolates_open_dangerous_requests(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    calm = await _complain(session, own.user_id, own.house_id)
+    danger_card = await requests_service(session).create(
+        own.user_id,
+        own.house_id,
+        RequestDraft(
+            category=RequestCategory.ELECTRICITY,
+            description="Пахнет газом в подъезде",
+            place=RequestPlace.HOUSE,
+        ),
+    )
+    closed = await requests_service(session).create(
+        own.user_id,
+        own.house_id,
+        RequestDraft(
+            category=RequestCategory.ELECTRICITY,
+            description="Искрит щиток на площадке",
+            place=RequestPlace.HOUSE,
+        ),
+    )
+    closed.request.status = RequestStatus.DONE
+    await session.flush()
+    service = admin_requests_service(session)
+
+    rows, _ = await service.inbox(own.org_id, NO_FILTERS, 20, 0)
+    only_danger, total = await service.inbox(
+        own.org_id,
+        RequestFilters(danger=True),
+        20,
+        0,
+    )
+
+    assert {row.request.id for row in rows} == {
+        calm.id,
+        danger_card.request.id,
+        closed.request.id,
+    }
+    assert total == 1
+    assert [row.request.id for row in only_danger] == [danger_card.request.id]
+
+
 async def test_grouped_collapses_a_group_into_one_row(
     session: AsyncSession,
     own: OrgHouseFlatUser,

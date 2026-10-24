@@ -1,10 +1,12 @@
 import { Typography } from "@maxhub/max-ui";
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import { cn } from "@/shared/lib/css";
+import { rqClient } from "@/shared/api/instance";
 import { Routes } from "@/shared/model/routes";
-import { useSession } from "@/shared/model/session";
+import { orgParams, useSession } from "@/shared/model/session";
 import {
+  alertIcon,
   buildingIcon,
   chartIcon,
   homeIcon,
@@ -21,6 +23,13 @@ import styles from "./admin-tab-bar.module.css";
 export const AdminTabBar = () => {
   const navigate = useNavigate();
   const { currentResidency, selectCabinet } = useSession();
+  const danger = rqClient.useQuery("get", "/api/admin/requests", {
+    params: {
+      ...orgParams(),
+      query: { danger: true, grouped: true, limit: 1 },
+    },
+  });
+  const dangerCount = danger.data?.total ?? 0;
 
   const exit = currentResidency
     ? { label: "Кабинет жителя", to: Routes.HOME }
@@ -33,6 +42,18 @@ export const AdminTabBar = () => {
 
   return (
     <nav className={styles.AdminTabBar}>
+      {dangerCount > 0 && (
+        <Link
+          to={`${Routes.ADMIN_REQUESTS}?filter=danger`}
+          className={styles.DangerBanner}
+        >
+          <Icon src={alertIcon} size={20} />
+          <Typography.Text variant="body-strong" color="inherit">
+            Аварии: {dangerCount} - нужно немедленное вмешательство
+          </Typography.Text>
+        </Link>
+      )}
+
       <StripButton icon={homeIcon} label={exit.label} onClick={leave} />
 
       <div className={styles.Tabs}>

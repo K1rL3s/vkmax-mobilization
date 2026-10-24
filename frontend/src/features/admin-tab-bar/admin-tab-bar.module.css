@@ -37,3 +37,13 @@
   line-height: 12px;
   white-space: nowrap;
 }
+
+.DangerBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: var(--button-negative);
+  color: var(--button-primary-contrast);
+  text-decoration: none;
+}

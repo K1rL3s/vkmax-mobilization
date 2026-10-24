@@ -10,6 +10,7 @@ import type { AdminRequestItem } from "./request-workflow";
 
 export const FILTERS = [
   { id: "all", label: "Все" },
+  { id: "danger", label: "Аварии" },
   { id: "overdue", label: "Просроченные" },
   { id: "question", label: "Ждут ответа жителя" },
   { id: "answered", label: "Есть ответ жителя" },
@@ -22,7 +23,7 @@ export const FILTERS = [
 export type FilterId = (typeof FILTERS)[number]["id"];
 
 const STATUSES: Record<
-  Exclude<FilterId, "all" | "overdue" | "question" | "answered">,
+  Exclude<FilterId, "all" | "danger" | "overdue" | "question" | "answered">,
   RequestStatus[]
 > = {
   new: ["new", "accepted"],
@@ -42,6 +43,12 @@ export const matchesFilter = (
   filter: FilterId,
 ): boolean => {
   if (filter === "all") return true;
+  if (filter === "danger")
+    return (
+      !!request.danger &&
+      !isFinished(request.status) &&
+      !isOnReview(request.status)
+    );
   if (filter === "overdue") return overdueNote(request) !== null;
   if (filter === "question") return !!request.question_asked_at;
   if (filter === "answered") return !!request.resident_answered_at;

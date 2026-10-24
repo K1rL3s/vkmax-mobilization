@@ -16411,6 +16411,7 @@ export interface operations {
         house_id?: number | null;
         executor_user_id?: number | null;
         overdue?: boolean;
+        danger?: boolean;
         grouped?: boolean;
         question_asked?: boolean;
         resident_answered?: boolean;

@@ -66,6 +66,7 @@ class RequestFilters(ZhekaType):
     channel: RequestChannel | None = None
     executor_user_id: UserId | None = None
     overdue: bool = False
+    danger: bool = False
     grouped: bool = False
     question_asked: bool = False
     resident_answered: bool = False
@@ -355,6 +356,9 @@ class RequestsRepo(BaseAlchemyRepo):
                     requests_table.c.id.in_(leaders),
                 ),
             )
+
+        if filters.danger:
+            stmt = stmt.where(dangerous)
 
         stmt = stmt.order_by(
             escalated.desc(),

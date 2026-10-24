@@ -9301,6 +9301,13 @@ paths:
           type: boolean
           default: false
           title: Overdue
+      - name: danger
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Danger
       - name: grouped
         in: query
         required: false
