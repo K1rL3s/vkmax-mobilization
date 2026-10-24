@@ -20,6 +20,15 @@ import { isCategory } from "../domain/request-workflow";
 
 const PAGE_SIZE = 100;
 
+export const SORTS = [
+  { id: "important", label: "Сначала важные" },
+  { id: "deadline", label: "По сроку" },
+  { id: "massive", label: "Массовые" },
+  { id: "fresh", label: "Свежие" },
+] as const;
+
+type SortId = (typeof SORTS)[number]["id"];
+
 const filterSchema = z.object({
   filter: z
     .custom<FilterId>((value) => FILTERS.some(({ id }) => id === value))
@@ -30,6 +39,9 @@ const filterSchema = z.object({
     .enum(["flat", "house"] satisfies RequestPlace[])
     .optional()
     .catch(undefined),
+  sort: z
+    .custom<SortId>((value) => SORTS.some(({ id }) => id === value))
+    .catch("important"),
 });
 
 export const useAdminRequestList = () => {
@@ -47,6 +59,7 @@ export const useAdminRequestList = () => {
           grouped: true,
           house_id: filters.house,
           place: filters.place,
+          sort: filters.sort,
         },
       },
     },
@@ -54,13 +67,14 @@ export const useAdminRequestList = () => {
   );
 
   const updateFilter = (
-    name: "filter" | "category" | "house" | "place",
+    name: "filter" | "category" | "house" | "place" | "sort",
     value: string,
   ) => {
+    const isDefault = name === "sort" ? value === "important" : value === "all";
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous);
-        if (value !== "all") next.set(name, value);
+        if (!isDefault) next.set(name, value);
         else next.delete(name);
         return next;
       },

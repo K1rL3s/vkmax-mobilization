@@ -7,7 +7,7 @@ import { geoPinIcon, Icon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { FILTERS } from "./domain/request-filters";
-import { useAdminRequestList } from "./model/use-admin-request-list";
+import { SORTS, useAdminRequestList } from "./model/use-admin-request-list";
 import { FilterBar } from "./ui/filter-bar";
 import { NoOrgAccess } from "./ui/no-org-access";
 import { RequestRow } from "./ui/request-row";
@@ -45,6 +45,13 @@ const AdminRequestsPage = () => {
         )}
         <FilterBar
           groups={[
+            {
+              name: "sort",
+              label: "Порядок",
+              options: SORTS,
+              value: list.filters.sort,
+              defaultValue: "important",
+            },
             {
               name: "filter",
               label: "Статус",

@@ -5699,6 +5699,11 @@ export interface components {
      */
     RequestPlace: "flat" | "house";
     /**
+     * RequestSort
+     * @enum {string}
+     */
+    RequestSort: "important" | "deadline" | "massive" | "fresh";
+    /**
      * RequestStatus
      * @enum {string}
      */
@@ -16563,6 +16568,7 @@ export interface operations {
         /** @description Сдвиг от начала списка */
         offset?: number;
         place?: components["schemas"]["RequestPlace"] | null;
+        sort?: components["schemas"]["RequestSort"];
       };
       header?: {
         "X-Org-Id"?: number | null;

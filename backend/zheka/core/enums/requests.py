@@ -281,3 +281,10 @@ CATEGORY_PLACES: Mapping[RequestCategory, RequestPlace] = {
     RequestCategory.METER_ERROR: RequestPlace.FLAT,
     RequestCategory.CHARGE_DISPUTE: RequestPlace.FLAT,
 }
+
+
+class RequestSort(StrEnum):
+    IMPORTANT = "important"
+    DEADLINE = "deadline"
+    MASSIVE = "massive"
+    FRESH = "fresh"

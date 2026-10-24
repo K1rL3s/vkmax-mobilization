@@ -1,7 +1,7 @@
 from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.expression import FromClause
 
@@ -16,6 +16,7 @@ from zheka.core.enums import (
     RequestCompletionReason,
     RequestGroupStatus,
     RequestPlace,
+    RequestSort,
     RequestStatus,
     ResidentStatus,
 )
@@ -71,6 +72,7 @@ class RequestFilters(ZhekaType):
     question_asked: bool = False
     resident_answered: bool = False
     place: RequestPlace | None = None
+    sort: RequestSort = RequestSort.IMPORTANT
 
 
 def overdue_at(
@@ -360,12 +362,36 @@ class RequestsRepo(BaseAlchemyRepo):
         if filters.danger:
             stmt = stmt.where(dangerous)
 
-        stmt = stmt.order_by(
-            escalated.desc(),
-            dangerous.desc(),
-            overdue.desc(),
-            requests_table.c.created_at.desc(),
-        )
+        if filters.sort is not RequestSort.IMPORTANT:
+            finished = requests_table.c.status == RequestStatus.DONE
+            stmt = stmt.order_by(finished.asc())
+        if filters.sort is RequestSort.DEADLINE:
+            stmt = stmt.order_by(requests_table.c.deadline_at.asc())
+        elif filters.sort is RequestSort.MASSIVE:
+            group_members = requests_table.alias()
+            group_size = (
+                select(func.count())
+                .where(group_members.c.group_id == requests_table.c.group_id)
+                .correlate(requests_table)
+                .scalar_subquery()
+            )
+            massive = case(
+                (requests_table.c.group_id.is_(None), 1),
+                else_=group_size,
+            )
+            stmt = stmt.order_by(
+                massive.desc(),
+                requests_table.c.created_at.desc(),
+            )
+        elif filters.sort is RequestSort.FRESH:
+            stmt = stmt.order_by(requests_table.c.created_at.desc())
+        else:
+            stmt = stmt.order_by(
+                escalated.desc(),
+                dangerous.desc(),
+                overdue.desc(),
+                requests_table.c.created_at.desc(),
+            )
         return await self._page(stmt, limit, offset)
 
     async def set_status(

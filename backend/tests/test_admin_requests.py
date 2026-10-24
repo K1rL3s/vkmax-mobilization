@@ -48,6 +48,7 @@ from zheka.core.enums import (
     RequestCompletionReason,
     RequestGroupStatus,
     RequestPlace,
+    RequestSort,
     RequestStatus,
     ResidentRole,
     ResidentStatus,
@@ -208,6 +209,67 @@ async def test_danger_filter_isolates_open_dangerous_requests(
     }
     assert total == 1
     assert [row.request.id for row in only_danger] == [danger_card.request.id]
+
+
+async def test_sort_by_deadline_puts_the_soonest_first(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    soon = await _complain(session, own.user_id, own.house_id)
+    later = await _complain(session, own.user_id, own.house_id)
+    await _age(session, soon.id, 5)
+    service = admin_requests_service(session)
+
+    rows, _ = await service.inbox(
+        own.org_id,
+        RequestFilters(sort=RequestSort.DEADLINE),
+        20,
+        0,
+    )
+
+    assert [row.request.id for row in rows] == [soon.id, later.id]
+
+
+async def test_sort_fresh_puts_the_newest_first(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    old = await _complain(session, own.user_id, own.house_id)
+    new = await _complain(session, own.user_id, own.house_id)
+    await _age(session, old.id, 5)
+    service = admin_requests_service(session)
+
+    rows, _ = await service.inbox(
+        own.org_id,
+        RequestFilters(sort=RequestSort.FRESH),
+        20,
+        0,
+    )
+
+    assert [row.request.id for row in rows] == [new.id, old.id]
+
+
+async def test_sort_massive_puts_the_biggest_group_first(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    lone = await _complain(
+        session,
+        own.user_id,
+        own.house_id,
+        category=RequestCategory.ELECTRICITY,
+    )
+    members, _ = await _group_of_three(session, own)
+    service = admin_requests_service(session)
+
+    rows, _ = await service.inbox(
+        own.org_id,
+        RequestFilters(grouped=True, sort=RequestSort.MASSIVE),
+        20,
+        0,
+    )
+
+    assert [row.request.id for row in rows] == [members[0].id, lone.id]
 
 
 async def test_grouped_collapses_a_group_into_one_row(
@@ -1414,3 +1476,25 @@ async def test_the_inbox_filters_open_questions_and_fresh_answers(
 
     assert [row.request.id for row in waiting] == [asked.id]
     assert [row.request.id for row in replied] == [answered.id]
+
+
+@pytest.mark.parametrize(
+    "sort",
+    [RequestSort.DEADLINE, RequestSort.MASSIVE, RequestSort.FRESH],
+)
+async def test_chosen_sort_puts_finished_requests_after_open_ones(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    sort: RequestSort,
+) -> None:
+    open_request = await _complain(session, own.user_id, own.house_id)
+    await _age(session, open_request.id, 5)
+    done = await _complain(session, own.user_id, own.house_id)
+    done.status = RequestStatus.DONE
+    done.deadline_at -= timedelta(days=30)
+    await session.flush()
+    service = admin_requests_service(session)
+
+    rows, _ = await service.inbox(own.org_id, RequestFilters(sort=sort), 20, 0)
+
+    assert [row.request.id for row in rows] == [open_request.id, done.id]

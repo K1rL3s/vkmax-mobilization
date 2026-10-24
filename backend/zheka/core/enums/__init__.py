@@ -32,6 +32,7 @@ from zheka.core.enums.requests import (
     RequestCompletionReason,
     RequestGroupStatus,
     RequestPlace,
+    RequestSort,
     RequestStatus,
     ResponsibilityZone,
 )
@@ -74,6 +75,7 @@ __all__ = (
     "RequestCompletionReason",
     "RequestGroupStatus",
     "RequestPlace",
+    "RequestSort",
     "RequestStatus",
     "ResidentRole",
     "ResidentStatus",

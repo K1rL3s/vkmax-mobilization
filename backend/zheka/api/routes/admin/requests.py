@@ -26,6 +26,7 @@ from zheka.core.enums import (
     RequestCategory,
     RequestChannel,
     RequestPlace,
+    RequestSort,
     RequestStatus,
 )
 from zheka.core.errors import NotEnoughRights
@@ -78,6 +79,7 @@ async def list_org_requests(
     limit: Limit = 20,
     offset: Offset = 0,
     place: RequestPlace | None = None,
+    sort: RequestSort = RequestSort.IMPORTANT,
 ) -> Page[AdminRequestListItem]:
     rows, total = await admin_requests_service.inbox(
         current_org.org_id,
@@ -93,6 +95,7 @@ async def list_org_requests(
             question_asked=question_asked,
             resident_answered=resident_answered,
             place=place,
+            sort=sort,
         ),
         limit,
         offset,

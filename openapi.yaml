@@ -9437,6 +9437,12 @@ paths:
           - $ref: '#/components/schemas/RequestPlace'
           - type: 'null'
           title: Place
+      - name: sort
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/RequestSort'
+          default: important
       - name: X-Org-Id
         in: header
         required: false
@@ -17914,6 +17920,14 @@ components:
       - flat
       - house
       title: RequestPlace
+    RequestSort:
+      type: string
+      enum:
+      - important
+      - deadline
+      - massive
+      - fresh
+      title: RequestSort
     RequestStatus:
       type: string
       enum:
