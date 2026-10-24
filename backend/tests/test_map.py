@@ -275,3 +275,18 @@ async def test_an_unregistered_org_gets_no_public_stats(session: AsyncSession) -
 
     assert [row.stats for row in data.items] == [None]
     assert data.orgs == []
+
+
+async def test_over_the_limit_connected_houses_stay_and_the_rest_spread_evenly(
+    session: AsyncSession,
+) -> None:
+    lat, lon = _spot()
+    connected = await _house(session, await _org(session), lat, lon)
+    idle = [
+        await _house(session, None, lat + step * 0.001, lon) for step in range(1, 7)
+    ]
+
+    data = await _service(session).houses(_box(lat, lon), MapFilters(limit=4), NOW)
+
+    assert [row.house.id for row in data.items] == [connected, *idle[::2]]
+    assert data.total == 7

@@ -127,7 +127,7 @@ class MapService:
                 org_counts[row.org.id] = org_counts.get(row.org.id, 0) + 1
         matched = [row for row in rows if row.matches(filters)]
         return MapData(
-            items=matched[: filters.limit],
+            items=spread(matched, filters.limit),
             total=len(matched),
             orgs=sorted(
                 (
@@ -145,3 +145,12 @@ def _kind(house: House, org: Organization | None) -> MapHouseKind:
     if house.added_by_resident:
         return MapHouseKind.ADDED
     return MapHouseKind.UNCONNECTED
+
+
+def spread(rows: list[MapHouseRow], limit: int) -> list[MapHouseRow]:
+    if len(rows) <= limit:
+        return rows
+    connected = [row for row in rows if row.kind is MapHouseKind.CONNECTED][:limit]
+    rest = [row for row in rows if row.kind is not MapHouseKind.CONNECTED]
+    room = limit - len(connected)
+    return connected + [rest[index * len(rest) // room] for index in range(room)]
