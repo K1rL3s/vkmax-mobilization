@@ -919,3 +919,19 @@ async def test_the_admin_card_tells_whether_the_bot_runs_the_chat(
     card = await _make_service(session).admin_card(data.org_id, data.house_id)
 
     assert AdminHouseCard.of(card, []).chat_bot_is_admin is shown
+
+
+async def test_cities_with_more_houses_come_first(
+    session: AsyncSession,
+    make_org_house_flat_user: Callable[..., Awaitable[OrgHouseFlatUser]],
+) -> None:
+    fixture = await make_org_house_flat_user()
+    region = f"Область {secrets.token_hex(4)}"
+    for city, count in (("Аул", 1), ("Яр", 2)):
+        for _ in range(count):
+            await _add_house(session, fixture.org_id, region=region, city=city)
+
+    assert await HousesRepo(session).list_cities(region, None) == [
+        (region, "Яр"),
+        (region, "Аул"),
+    ]

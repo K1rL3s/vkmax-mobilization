@@ -103,14 +103,17 @@ class HousesRepo(BaseAlchemyRepo):
         region: str | None,
         query: str | None,
     ) -> Sequence[tuple[str, str]]:
-        stmt = select(houses_table.c.region, houses_table.c.city).distinct()
+        stmt = select(houses_table.c.region, houses_table.c.city).group_by(
+            houses_table.c.region,
+            houses_table.c.city,
+        )
         if region is not None:
             stmt = stmt.where(houses_table.c.region == region)
         if query is not None:
             stmt = stmt.where(houses_table.c.city.istartswith(query, autoescape=True))
-        stmt = stmt.order_by(houses_table.c.region, houses_table.c.city)
+        stmt = stmt.order_by(func.count().desc(), houses_table.c.city)
         result = await self._session.execute(stmt)
-        return result.tuples().all()
+        return [(row_region, city) for row_region, city in result.tuples().all()]
 
     async def list_streets(
         self,
