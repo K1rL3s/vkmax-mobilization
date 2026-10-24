@@ -58,6 +58,7 @@ class Request(ZhekaMutableType):
     resident_answered_at: datetime | None = None
     danger: DangerKind | None = None
     place: RequestPlace = RequestPlace.FLAT
+    gis_appeal_number: str | None = None
 
     @property
     def warn_at(self) -> datetime:

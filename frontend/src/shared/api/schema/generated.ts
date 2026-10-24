@@ -884,6 +884,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/gis-appeal": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Номер обращения в ГИС ЖКХ по жалобе в ГЖИ
+     * @description Только автор просроченной открытой заявки, чужая - 404, непросроченная или закрытая - 409. Номер виден на карточке заявки и записывается в переписку
+     */
+    post: operations["set_gis_appeal_number"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/requests/{request_id}/demo/neighbours": {
     parameters: {
       query?: never;
@@ -2764,6 +2784,11 @@ export interface components {
       danger_phrase?: string | null;
       /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
       place: components["schemas"]["RequestPlace"];
+      /**
+       * Gis Appeal Number
+       * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+       */
+      gis_appeal_number?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -2918,6 +2943,11 @@ export interface components {
       danger_phrase?: string | null;
       /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
       place: components["schemas"]["RequestPlace"];
+      /**
+       * Gis Appeal Number
+       * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+       */
+      gis_appeal_number?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -5398,6 +5428,11 @@ export interface components {
       danger_phrase?: string | null;
       /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
       place: components["schemas"]["RequestPlace"];
+      /**
+       * Gis Appeal Number
+       * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+       */
+      gis_appeal_number?: string | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -5632,6 +5667,11 @@ export interface components {
       danger_phrase?: string | null;
       /** @description Где проблема: flat - в квартире (личная), house - в доме (общая) */
       place: components["schemas"]["RequestPlace"];
+      /**
+       * Gis Appeal Number
+       * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+       */
+      gis_appeal_number?: string | null;
     };
     /** RequestMessageItem */
     RequestMessageItem: {
@@ -5782,6 +5822,14 @@ export interface components {
     SetChairmanRequest: {
       /** Is Chairman */
       is_chairman: boolean;
+    };
+    /** SetGisAppealNumberRequest */
+    SetGisAppealNumberRequest: {
+      /**
+       * Number
+       * @description Номер обращения в ГИС ЖКХ после подачи жалобы
+       */
+      number: string;
     };
     /** SetReceptionWindowsRequest */
     SetReceptionWindowsRequest: {
@@ -11085,6 +11133,97 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["OkResponse"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  set_gis_appeal_number: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetGisAppealNumberRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RequestCard"];
         };
       };
       /** @description Некорректный запрос */

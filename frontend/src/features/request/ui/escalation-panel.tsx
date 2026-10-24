@@ -1,4 +1,4 @@
-import { Button, Flex, Typography } from "@maxhub/max-ui";
+import { Button, Flex, Input, Typography } from "@maxhub/max-ui";
 import { useCopy } from "@siberiacancode/reactuse";
 
 import { useHouseCard } from "@/features/house";
@@ -6,17 +6,28 @@ import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
 import { formatShortDay, formatTime, telHref } from "@/shared/lib/format";
 import { Chevron } from "@/shared/ui/chevron";
+import { FieldError } from "@/shared/ui/field-error";
 
+import { gisAppealFormConstraints } from "../domain/gis-appeal-form-constraints";
 import { gjiAppeal } from "../domain/gji";
 import { complaintRecipients } from "../domain/recipients";
 import type { RequestCard } from "../domain/types";
+import { useGisAppeal } from "../model/use-gis-appeal";
 import { refetchRequests } from "../model/use-repeat-request";
 
 import styles from "./escalation-panel.module.css";
 
+const HOW_TO_FILE = [
+  "ГИС ЖКХ - dom.gosuslugi.ru, раздел «Обращения», приложите PDF",
+  "«Госуслуги Дом» - мобильное приложение, раздел обращений, приложите PDF",
+  "Лично - в приемной жилищной инспекции региона: две подписанные распечатки, на второй попросите отметку о приеме",
+  "Заказным письмом с уведомлением - на адрес жилищной инспекции региона, подписанная распечатка",
+];
+
 export const EscalationPanel = ({ request }: { request: RequestCard }) => {
   const house = useHouseCard(request.house_id);
   const copy = useCopy(2000);
+  const gisAppeal = useGisAppeal(request.id);
   const escalate = rqClient.useMutation(
     "post",
     "/api/requests/{request_id}/escalate",
@@ -100,6 +111,55 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
           )}
         </Typography.Text>
       )}
+
+      <Flex align="stretch" direction="column" gapY={4}>
+        <Typography.Text variant="description" color="secondary">
+          Как подать
+        </Typography.Text>
+        <ul className={styles.HowTo}>
+          {HOW_TO_FILE.map((line) => (
+            <li key={line}>
+              <Typography.Text variant="description" color="secondary">
+                {line}
+              </Typography.Text>
+            </li>
+          ))}
+        </ul>
+      </Flex>
+
+      <Flex align="stretch" direction="column" gapY={8}>
+        <Typography.Text variant="description" color="secondary">
+          Номер обращения в ГИС ЖКХ (необязательно)
+        </Typography.Text>
+
+        {request.gis_appeal_number ? (
+          <Typography.Text variant="body-strong" color="primary">
+            № {request.gis_appeal_number}
+          </Typography.Text>
+        ) : (
+          <form
+            className={styles.GisAppeal}
+            noValidate
+            onSubmit={gisAppeal.submit}
+          >
+            <Input
+              className={styles.Grow}
+              placeholder="Например, 123456"
+              aria-label="Номер обращения в ГИС ЖКХ"
+              maxLength={gisAppealFormConstraints.number}
+              {...gisAppeal.form.register("number")}
+            />
+            <Button type="submit" size="medium" loading={gisAppeal.isPending}>
+              Сохранить
+            </Button>
+          </form>
+        )}
+        <FieldError
+          message={
+            gisAppeal.form.formState.errors.number?.message ?? gisAppeal.error
+          }
+        />
+      </Flex>
 
       {text && (
         <>

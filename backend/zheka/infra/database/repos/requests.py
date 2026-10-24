@@ -709,6 +709,10 @@ class RequestsRepo(BaseAlchemyRepo):
         result = await self._session.execute(stmt)
         return result.scalars().all()
 
+    async def set_gis_appeal_number(self, request: Request, number: str) -> None:
+        request.gis_appeal_number = number
+        await self._session.flush()
+
 
 def escalation_active(now: datetime, table: FromClause) -> ColumnElement[bool]:
     return and_(table.c.escalated_at.is_not(None), overdue_at(now, table))

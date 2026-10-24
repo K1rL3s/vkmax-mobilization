@@ -107,6 +107,7 @@ EMPTY_MESSAGE = "Напишите сообщение для УК"
 WRITE_CLOSED = "Заявка закрыта, подайте новую"
 GJI_NOT_OVERDUE = "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек"
 NEIGHBOUR_DESCRIPTION = "Та же проблема: {}"
+EMPTY_GIS_NUMBER = "Впишите номер обращения"
 
 
 class RequestDraft(ZhekaType):
@@ -988,6 +989,28 @@ class RequestsService:
             user_id,
             None if resident.verified_at is None else resident.flat_id,
         )
+
+    async def set_gis_appeal_number(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        number: str,
+        now: datetime,
+    ) -> RequestCardData:
+        request = await self._own_request(user_id, request_id)
+        await self._requests.lock(request)
+        if request.status not in OPEN_STATUSES or request.deadline_at > now:
+            raise InvalidState(GJI_NOT_OVERDUE)
+        appeal = stated(number, EMPTY_GIS_NUMBER)
+        await self._requests.set_gis_appeal_number(request, appeal)
+        await self._requests.add_message(
+            request.id,
+            user_id,
+            RequestActorRole.RESIDENT.value,
+            f"Жалоба подана в ГИС ЖКХ, номер обращения: {appeal}",
+        )
+        house = await self._get_house(request.house_id)
+        return await self._built_card(request, house)
 
 
 async def build_rows(

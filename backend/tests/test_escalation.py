@@ -27,7 +27,12 @@ from zheka.core.enums import (
     RequestPlace,
     RequestStatus,
 )
-from zheka.core.errors import EntityNotFound, InvalidState, NotEnoughRights
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
 from zheka.core.ids import MaxChatId, UserId
 from zheka.core.services.requests import RequestDraft
 from zheka.core.texts import REQUEST_PLACE_LINES
@@ -430,6 +435,70 @@ async def test_a_gji_pdf_of_an_overdue_request_goes_to_its_author(
     assert event.payload == {"request_id": request.id, "format": "gji_pdf"}
 
 
+async def test_set_gis_appeal_number_of_someone_elses_request_is_not_found(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+) -> None:
+    neighbour = await add_user(session)
+    await add_resident(session, neighbour, own.house_id, None)
+    request = await _complain(session, own.user_id, own.house_id)
+
+    with pytest.raises(EntityNotFound):
+        await requests_service(session, publisher).set_gis_appeal_number(
+            neighbour,
+            request.id,
+            "123456",
+            request.deadline_at + timedelta(hours=1),
+        )
+
+
+@pytest.mark.parametrize(
+    ("status", "late"),
+    [
+        (RequestStatus.IN_PROGRESS, timedelta(minutes=-1)),
+        (RequestStatus.ON_REVIEW, timedelta(hours=1)),
+        (RequestStatus.DONE, timedelta(hours=1)),
+    ],
+)
+async def test_set_gis_appeal_number_is_refused_before_the_deadline_or_after_the_work(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+    status: RequestStatus,
+    late: timedelta,
+) -> None:
+    request = await _complain(session, own.user_id, own.house_id)
+    request.status = status
+    await session.flush()
+
+    with pytest.raises(InvalidState):
+        await requests_service(session, publisher).set_gis_appeal_number(
+            own.user_id,
+            request.id,
+            "123456",
+            request.deadline_at + late,
+        )
+
+
+async def test_set_gis_appeal_number_is_stored_and_logged_in_the_conversation(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+) -> None:
+    request = await _complain(session, own.user_id, own.house_id)
+
+    card = await requests_service(session, publisher).set_gis_appeal_number(
+        own.user_id,
+        request.id,
+        "123456",
+        request.deadline_at + timedelta(minutes=1),
+    )
+
+    assert card.request.gis_appeal_number == "123456"
+    assert "123456" in card.messages[-1].message.text
+
+
 @pytest.mark.parametrize("stopped", [False, True])
 async def test_a_gji_pdf_is_refused_when_the_bot_cannot_write_to_the_author(
     session: AsyncSession,
@@ -493,3 +562,21 @@ async def test_a_gji_pdf_says_demo_on_every_page_only_for_a_demo_org(
     assert complaint.pages_count > 1
     pages = range(1, complaint.pages_count + 1)
     assert drawn == ({(page, "ДЕМО") for page in pages} if is_demo else set())
+
+
+async def test_a_blank_gis_appeal_number_is_refused(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+) -> None:
+    request = await _complain(session, own.user_id, own.house_id)
+
+    with pytest.raises(InvalidRequest):
+        await requests_service(session, publisher).set_gis_appeal_number(
+            own.user_id,
+            request.id,
+            "   ",
+            request.deadline_at + timedelta(minutes=1),
+        )
+
+    assert request.gis_appeal_number is None

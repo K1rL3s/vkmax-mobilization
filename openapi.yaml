@@ -4471,6 +4471,85 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/gis-appeal:
+    post:
+      tags:
+      - Заявки
+      summary: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ
+      description: Только автор просроченной открытой заявки, чужая - 404, непросроченная или закрытая - 409. Номер виден на карточке заявки и записывается в переписку
+      operationId: set_gis_appeal_number
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetGisAppealNumberRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestCard'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/requests/{request_id}/demo/neighbours:
     post:
       tags:
@@ -13034,6 +13113,12 @@ components:
         place:
           $ref: '#/components/schemas/RequestPlace'
           description: 'Где проблема: flat - в квартире (личная), house - в доме (общая)'
+        gis_appeal_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gis Appeal Number
+          description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
         house_id:
           type: integer
           title: House Id
@@ -13290,6 +13375,12 @@ components:
         place:
           $ref: '#/components/schemas/RequestPlace'
           description: 'Где проблема: flat - в квартире (личная), house - в доме (общая)'
+        gis_appeal_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gis Appeal Number
+          description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
         house_id:
           type: integer
           title: House Id
@@ -17402,6 +17493,12 @@ components:
         place:
           $ref: '#/components/schemas/RequestPlace'
           description: 'Где проблема: flat - в квартире (личная), house - в доме (общая)'
+        gis_appeal_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gis Appeal Number
+          description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
         house_id:
           type: integer
           title: House Id
@@ -17765,6 +17862,12 @@ components:
         place:
           $ref: '#/components/schemas/RequestPlace'
           description: 'Где проблема: flat - в квартире (личная), house - в доме (общая)'
+        gis_appeal_number:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gis Appeal Number
+          description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
       type: object
       required:
       - id
@@ -18020,6 +18123,18 @@ components:
       required:
       - is_chairman
       title: SetChairmanRequest
+    SetGisAppealNumberRequest:
+      properties:
+        number:
+          type: string
+          maxLength: 50
+          minLength: 1
+          title: Number
+          description: Номер обращения в ГИС ЖКХ после подачи жалобы
+      type: object
+      required:
+      - number
+      title: SetGisAppealNumberRequest
     SetReceptionWindowsRequest:
       properties:
         windows:

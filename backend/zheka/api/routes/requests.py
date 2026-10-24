@@ -30,6 +30,7 @@ from zheka.api.schemas.requests import (
     RequestCategoryItem,
     RequestExport,
     RequestListItem,
+    SetGisAppealNumberRequest,
     SharedRequestResponse,
     SimilarRequestsResponse,
     WriteToRequestRequest,
@@ -478,6 +479,31 @@ async def send_gji_pdf(
         datetime.now(UTC),
     )
     return OkResponse()
+
+
+@router.post(
+    "/requests/{request_id}/gis-appeal",
+    summary="Номер обращения в ГИС ЖКХ по жалобе в ГЖИ",
+    description=(
+        "Только автор просроченной открытой заявки, чужая - 404, "
+        "непросроченная или закрытая - 409. Номер виден на карточке заявки "
+        "и записывается в переписку"
+    ),
+)
+async def set_gis_appeal_number(
+    request_id: RequestId,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+    files_service: FromDishka[FilesService],
+    body: SetGisAppealNumberRequest,
+) -> RequestCard:
+    card = await requests_service.set_gis_appeal_number(
+        current_account.user_id,
+        request_id,
+        body.number,
+        datetime.now(UTC),
+    )
+    return _card(card, files_service)
 
 
 @router.post(

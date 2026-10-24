@@ -447,4 +447,37 @@ export const requestsConfigs = [
 
     return ok(requestCard(item));
   }),
+  endpoint("post", "/requests/:request_id/gis-appeal", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
+
+    if (
+      !["new", "accepted", "in_progress"].includes(item.status) ||
+      item.deadline_at === null ||
+      new Date(item.deadline_at).getTime() > Date.now()
+    ) {
+      return conflict(
+        "Жалобу в ГЖИ готовим, только когда срок открытой заявки истек",
+      );
+    }
+
+    const body = request.body as Schemas["SetGisAppealNumberRequest"];
+    const number = body.number.trim();
+    if (!number) {
+      return badRequest("Впишите номер обращения");
+    }
+
+    item.gis_appeal_number = number;
+    item.messages.push({
+      after_minutes: (Date.now() - Date.parse(item.created_at)) / 60_000,
+      author_role: "resident",
+      author_name: user.name,
+      text: `Жалоба подана в ГИС ЖКХ, номер обращения: ${number}`,
+    });
+
+    return ok(requestCard(item));
+  }),
 ];

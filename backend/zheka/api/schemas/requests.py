@@ -147,6 +147,10 @@ class RequestListItem(BaseSchema):
     place: RequestPlace = Field(
         description="Где проблема: flat - в квартире (личная), house - в доме (общая)",
     )
+    gis_appeal_number: str | None = Field(
+        default=None,
+        description="Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан",
+    )
 
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
@@ -175,6 +179,7 @@ class RequestListItem(BaseSchema):
             danger=request.danger,
             danger_phrase=None if found is None else found.phrase,
             place=request.place,
+            gis_appeal_number=request.gis_appeal_number,
         )
 
 
@@ -543,6 +548,14 @@ class CancelRequestRequest(BaseSchema):
 
 class WriteToRequestRequest(BaseSchema):
     text: FreeText
+
+
+class SetGisAppealNumberRequest(BaseSchema):
+    number: str = Field(
+        min_length=1,
+        max_length=50,
+        description="Номер обращения в ГИС ЖКХ после подачи жалобы",
+    )
 
 
 class Pp290Item(BaseSchema):

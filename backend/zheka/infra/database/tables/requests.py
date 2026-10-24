@@ -91,6 +91,7 @@ requests_table = Table(
         nullable=True,
     ),
     Column("place", pg_enum(RequestPlace, "request_place"), nullable=False),
+    Column("gis_appeal_number", String, nullable=True),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),

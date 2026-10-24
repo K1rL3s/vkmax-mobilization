@@ -39,6 +39,7 @@ type MockRequest = {
     is_internal?: boolean;
   }[];
   place?: Schemas["RequestPlace"];
+  gis_appeal_number?: string | null;
 };
 
 const request = (
@@ -388,6 +389,7 @@ export const requestListItem = (
   question_asked_at: item.question_asked_at,
   resident_answered_at: item.resident_answered_at,
   place: FIXED_PLACES[item.category] ?? item.place ?? "flat",
+  gis_appeal_number: item.gis_appeal_number ?? null,
 });
 
 const STEP: {
