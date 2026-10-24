@@ -59,6 +59,19 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
         : null,
     overhaul: null,
     documents: [],
+    health: house.is_connected
+      ? (
+          [
+            { system: "elevator", reported: 2, resolved: 1, open: 1 },
+            { system: "water", reported: 1, resolved: 1, open: 0 },
+            { system: "heating", reported: 0, resolved: 0, open: 0 },
+            { system: "electricity", reported: 0, resolved: 0, open: 0 },
+            { system: "garbage", reported: 3, resolved: 3, open: 0 },
+            { system: "entrance", reported: 0, resolved: 0, open: 0 },
+            { system: "yard", reported: 1, resolved: 0, open: 1 },
+          ] satisfies Schemas["HouseSystemHealth"][]
+        ).filter((row) => row.system !== "elevator" || house.floors >= 6)
+      : null,
     outages: [
       {
         resource: "hot_water",

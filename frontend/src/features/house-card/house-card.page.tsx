@@ -43,6 +43,7 @@ import {
 } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
+import { HouseHealthSection } from "./house-health-section";
 import { Pp290Section } from "./pp290-section";
 import { TariffsSection } from "./tariffs-section";
 
@@ -444,6 +445,13 @@ const HouseCardPage = () => {
       )}
 
       <Facts house={house} />
+
+      {house.health && (
+        <HouseHealthSection
+          health={house.health}
+          withNeighbours={house.my_residency != null}
+        />
+      )}
 
       <Section title="Управляющая компания">
         <Org house={house} />

@@ -60,6 +60,10 @@
     color: var(--icon-primary);
   }
 
+  .CellIcon.attention {
+    color: var(--promo-text-step-1);
+  }
+
   .Note {
     padding: 12px;
     border-radius: 16px;

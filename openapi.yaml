@@ -15718,6 +15718,14 @@ components:
           - $ref: '#/components/schemas/OrgPublicStats'
           - type: 'null'
           description: Показатели УК за 90 дней, нет при малом числе заявок
+        health:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/HouseSystemHealth'
+            type: array
+          - type: 'null'
+          title: Health
+          description: Состояние дома за 14 дней по общим заявкам, только у подключенного дома. Лифт - при 6 этажах и выше или если по лифту были заявки
         outages:
           items:
             $ref: '#/components/schemas/OutageItem'
@@ -15975,6 +15983,40 @@ components:
       - open
       - calm
       title: HouseState
+    HouseSystem:
+      type: string
+      enum:
+      - elevator
+      - water
+      - heating
+      - electricity
+      - garbage
+      - entrance
+      - yard
+      title: HouseSystem
+    HouseSystemHealth:
+      properties:
+        system:
+          $ref: '#/components/schemas/HouseSystem'
+        reported:
+          type: integer
+          title: Reported
+          description: 'Общих проблем за 14 дней и открытых сейчас: коллективная заявка и ее повторы - одна проблема, отмененные не считаются'
+        resolved:
+          type: integer
+          title: Resolved
+          description: 'Из них закрыто: принято жителем или закрыто автоматически'
+        open:
+          type: integer
+          title: Open
+          description: Из них открыто сейчас
+      type: object
+      required:
+      - system
+      - reported
+      - resolved
+      - open
+      title: HouseSystemHealth
     LinkHouseRequest:
       properties:
         flat_id:

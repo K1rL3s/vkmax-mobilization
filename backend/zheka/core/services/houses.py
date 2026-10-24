@@ -9,6 +9,7 @@ from zheka.core.city_services import CityService, city_services
 from zheka.core.enums import (
     EventSource,
     EventType,
+    RequestCategory,
     ResidentRole,
     ResidentStatus,
     VerificationStatus,
@@ -23,10 +24,16 @@ from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
 from zheka.core.models import Flat, House, Organization, Resident, User
 from zheka.core.outages import OutageView, demo_outages
 from zheka.core.services.events import EventsService
+from zheka.core.services.house_health import (
+    ELEVATOR_FROM_FLOORS,
+    SystemHealth,
+    house_health,
+)
 from zheka.infra.database.repos.analytics import AnalyticsRepo, PublicStats
 from zheka.infra.database.repos.flats import FlatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
@@ -82,6 +89,7 @@ class HouseCardData(ZhekaType):
     demand_sent: bool
     is_chat_bound: bool
     org_stats: PublicStats | None
+    health: Sequence[SystemHealth] | None = None
     outages: Sequence[OutageView] = ()
     services: Sequence[CityService] = ()
 
@@ -120,6 +128,7 @@ class HousesService:
         "_flats",
         "_houses",
         "_orgs",
+        "_requests",
         "_residents",
         "_users",
     )
@@ -133,8 +142,10 @@ class HousesService:
         flats_repo: FlatsRepo,
         events_service: EventsService,
         analytics_repo: AnalyticsRepo,
+        requests_repo: RequestsRepo,
     ) -> None:
         self._analytics = analytics_repo
+        self._requests = requests_repo
         self._houses = houses_repo
         self._residents = residents_repo
         self._orgs = orgs_repo
@@ -221,6 +232,7 @@ class HousesService:
         connected = is_connected(house, org)
         resident = await self._residents.get_for_house(user_id, house_id)
         org_stats = None
+        health = None
         if org is not None and connected:
             stats = await self._analytics.public_stats(
                 org.id,
@@ -229,6 +241,19 @@ class HousesService:
             )
             if stats.closed >= PUBLIC_STATS_MIN_CLOSED:
                 org_stats = stats
+            health = house_health(
+                await self._requests.list_shared_for_house(
+                    house_id,
+                    now - timedelta(days=14),
+                ),
+                with_elevator=(
+                    (house.floors or 0) >= ELEVATOR_FROM_FLOORS
+                    or await self._requests.has_category(
+                        house_id,
+                        RequestCategory.ELEVATOR,
+                    )
+                ),
+            )
         return HouseCardData(
             house=house,
             org=org,
@@ -243,6 +268,7 @@ class HousesService:
             ),
             is_chat_bound=await self._houses.is_chat_bound(house_id),
             org_stats=org_stats,
+            health=health,
             outages=demo_outages(house, now),
             services=city_services(house.region, house.city),
         )

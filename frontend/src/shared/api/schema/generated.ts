@@ -4222,6 +4222,11 @@ export interface components {
       /** @description Показатели УК за 90 дней, нет при малом числе заявок */
       org_stats?: components["schemas"]["OrgPublicStats"] | null;
       /**
+       * Health
+       * @description Состояние дома за 14 дней по общим заявкам, только у подключенного дома. Лифт - при 6 этажах и выше или если по лифту были заявки
+       */
+      health?: components["schemas"]["HouseSystemHealth"][] | null;
+      /**
        * Outages
        * @description Текущие и плановые отключения по дому, сейчас демо-данные
        */
@@ -4372,6 +4377,37 @@ export interface components {
      * @enum {string}
      */
     HouseState: "emergency" | "escalated" | "overdue" | "open" | "calm";
+    /**
+     * HouseSystem
+     * @enum {string}
+     */
+    HouseSystem:
+      | "elevator"
+      | "water"
+      | "heating"
+      | "electricity"
+      | "garbage"
+      | "entrance"
+      | "yard";
+    /** HouseSystemHealth */
+    HouseSystemHealth: {
+      system: components["schemas"]["HouseSystem"];
+      /**
+       * Reported
+       * @description Общих проблем за 14 дней и открытых сейчас: коллективная заявка и ее повторы - одна проблема, отмененные не считаются
+       */
+      reported: number;
+      /**
+       * Resolved
+       * @description Из них закрыто: принято жителем или закрыто автоматически
+       */
+      resolved: number;
+      /**
+       * Open
+       * @description Из них открыто сейчас
+       */
+      open: number;
+    };
     /** LinkHouseRequest */
     LinkHouseRequest: {
       /** Flat Id */

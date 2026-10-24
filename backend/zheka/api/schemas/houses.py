@@ -9,6 +9,7 @@ from zheka.api.schemas.files import FileRef
 from zheka.core.enums import (
     CityServiceKind,
     EventSource,
+    HouseSystem,
     RequestCategory,
     ResidentRole,
     ResidentStatus,
@@ -181,6 +182,20 @@ class OrgPublicStats(BaseSchema):
     ratings_count: int
 
 
+class HouseSystemHealth(BaseSchema):
+    system: HouseSystem
+    reported: int = Field(
+        description=(
+            "Общих проблем за 14 дней и открытых сейчас: коллективная заявка и ее "
+            "повторы - одна проблема, отмененные не считаются"
+        ),
+    )
+    resolved: int = Field(
+        description="Из них закрыто: принято жителем или закрыто автоматически",
+    )
+    open: int = Field(description="Из них открыто сейчас")
+
+
 class OutageItem(BaseSchema):
     resource: ServiceType
     reason: str
@@ -249,6 +264,13 @@ class HouseCard(BaseSchema):
         default=None,
         description="Показатели УК за 90 дней, нет при малом числе заявок",
     )
+    health: list[HouseSystemHealth] | None = Field(
+        default=None,
+        description=(
+            "Состояние дома за 14 дней по общим заявкам, только у подключенного "
+            "дома. Лифт - при 6 этажах и выше или если по лифту были заявки"
+        ),
+    )
     outages: list[OutageItem] = Field(
         description="Текущие и плановые отключения по дому, сейчас демо-данные",
     )
@@ -310,6 +332,11 @@ class HouseCard(BaseSchema):
                 None
                 if card.org_stats is None
                 else OrgPublicStats.model_validate(card.org_stats)
+            ),
+            health=(
+                None
+                if card.health is None
+                else [HouseSystemHealth.model_validate(item) for item in card.health]
             ),
             outages=[OutageItem.model_validate(item) for item in card.outages],
             services=[CityServiceItem.model_validate(item) for item in card.services],

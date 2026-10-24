@@ -1,7 +1,7 @@
 from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.expression import FromClause
 
@@ -720,6 +720,39 @@ class RequestsRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return result.scalars().all()
+
+    async def list_shared_for_house(
+        self,
+        house_id: HouseId,
+        since: datetime,
+    ) -> Sequence[Request]:
+        stmt = (
+            select(Request)
+            .where(
+                requests_table.c.house_id == house_id,
+                requests_table.c.place == RequestPlace.HOUSE,
+                requests_table.c.completion_reason.is_distinct_from(
+                    RequestCompletionReason.RESIDENT_CANCELED,
+                ),
+                or_(
+                    requests_table.c.created_at >= since,
+                    requests_table.c.status != RequestStatus.DONE,
+                ),
+            )
+            .order_by(requests_table.c.id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def has_category(self, house_id: HouseId, category: RequestCategory) -> bool:
+        stmt = select(
+            exists().where(
+                requests_table.c.house_id == house_id,
+                requests_table.c.category == category,
+            ),
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
 
     async def list_done_for_house(
         self,

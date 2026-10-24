@@ -273,6 +273,16 @@ class RequestPlace(StrEnum):
     HOUSE = "house"
 
 
+class HouseSystem(StrEnum):
+    ELEVATOR = "elevator"
+    WATER = "water"
+    HEATING = "heating"
+    ELECTRICITY = "electricity"
+    GARBAGE = "garbage"
+    ENTRANCE = "entrance"
+    YARD = "yard"
+
+
 CATEGORY_PLACES: Mapping[RequestCategory, RequestPlace] = {
     RequestCategory.ELEVATOR: RequestPlace.HOUSE,
     RequestCategory.GARBAGE: RequestPlace.HOUSE,
