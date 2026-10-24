@@ -2061,6 +2061,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/admin/announcements/preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Предпросмотр объявления
+     * @description Тело и проверки те же, что у создания, ничего не сохраняется и не отправляется: текст сообщения от бота и сколько адресатов его получат, сколько из них заранее не получат и почему
+     */
+    post: operations["preview_announcement"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/admin/announcements/{announcement_id}/register": {
     parameters: {
       query?: never;
@@ -3098,6 +3118,51 @@ export interface components {
        * @description Документы PDF к объявлению: приказ, график
        */
       documents?: components["schemas"]["AnnouncementDocument"][];
+    };
+    /** AnnouncementPreviewResponse */
+    AnnouncementPreviewResponse: {
+      /**
+       * Message
+       * @description Текст личного сообщения от бота, как его увидит житель, без HTML-экранирования
+       */
+      message: string;
+      /**
+       * Chat Hashtag
+       * @description Строка, которой сообщение закончится в чате дома; null - в чаты не уйдет
+       */
+      chat_hashtag: string | null;
+      /**
+       * Chats Count
+       * @description Привязанных чатов домов, куда уйдет сообщение
+       */
+      chats_count: number;
+      /**
+       * Residents Count
+       * @description Жителей, которым уйдет личное сообщение; в демо-УК - только автору
+       */
+      residents_count: number;
+      /**
+       * Recipients Count
+       * @description Адресатов всего: жители и чаты, то же число, что recipients_count после отправки
+       */
+      recipients_count: number;
+      /**
+       * Bot Stopped Count
+       * @description Жителей из residents_count, у которых бот остановлен
+       */
+      bot_stopped_count: number;
+      /**
+       * Muted Count
+       * @description Жителей из residents_count, которые выключили объявления
+       */
+      muted_count: number;
+      /**
+       * Houses Without Chat
+       * @description Выбранные дома без привязанного чата при канале chat
+       */
+      houses_without_chat: number[];
+      /** Is Demo */
+      is_demo: boolean;
     };
     /** AnnouncementWorks */
     AnnouncementWorks: {
@@ -18048,6 +18113,96 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AnnouncementItem"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  preview_announcement: {
+    parameters: {
+      query?: never;
+      header?: {
+        "X-Org-Id"?: number | null;
+        WebAppData?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateAnnouncementRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AnnouncementPreviewResponse"];
         };
       };
       /** @description Некорректный запрос */

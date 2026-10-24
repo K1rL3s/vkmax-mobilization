@@ -1,5 +1,6 @@
 from collections.abc import Mapping, Sequence
 
+from zheka.base import ZhekaType
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core import texts
@@ -23,6 +24,11 @@ from zheka.core.models import Request
 from zheka.core.notifications import default_level
 from zheka.core.services.events import EventsService
 from zheka.infra.database.repos.notifications import NotificationsRepo
+
+
+class Unreachable(ZhekaType):
+    bot_stopped: int
+    muted: int
 
 
 class NotificationsService:
@@ -62,6 +68,26 @@ class NotificationsService:
                     level=level.value,
                 )
         return await self.levels(user_id)
+
+    async def unreachable(
+        self,
+        user_ids: Sequence[UserId],
+        category: NotificationCategory,
+        *,
+        mandatory: bool,
+    ) -> Unreachable:
+        reached = {
+            recipient.user_id: recipient
+            for recipient in await self._notifications.recipients(user_ids, category)
+        }
+        return Unreachable(
+            bot_stopped=sum(user_id not in reached for user_id in user_ids),
+            muted=sum(
+                user_id in reached
+                and reached[user_id].level.resolve_notify(mandatory=mandatory) is None
+                for user_id in user_ids
+            ),
+        )
 
     def notify_user(
         self,

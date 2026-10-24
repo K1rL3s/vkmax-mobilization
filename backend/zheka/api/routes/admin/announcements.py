@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep, IdempotencyDep
 from zheka.api.schemas.announcements import (
     AnnouncementItem,
+    AnnouncementPreviewResponse,
     CreateAnnouncementRequest,
     NoticeRegister,
 )
@@ -65,6 +66,35 @@ async def create_announcement(
     response = AnnouncementItem.of(data, files_service)
     await idempotency.save(response)
     return response
+
+
+@router.post(
+    "/admin/announcements/preview",
+    summary="Предпросмотр объявления",
+    description=(
+        "Тело и проверки те же, что у создания, ничего не сохраняется и не "
+        "отправляется: текст сообщения от бота и сколько адресатов его получат, "
+        "сколько из них заранее не получат и почему"
+    ),
+)
+async def preview_announcement(
+    current_org: CurrentOrgDep,
+    body: CreateAnnouncementRequest,
+    announcements_service: FromDishka[AnnouncementsService],
+) -> AnnouncementPreviewResponse:
+    preview = await announcements_service.preview(
+        current_org.org_id,
+        current_org.user_id,
+        body.house_ids,
+        body.text,
+        body.channels,
+        urgent=body.urgent,
+        entrances=body.entrances,
+        flat_ids=body.flat_ids,
+        works=None if body.works is None else body.works.draft(),
+        documents=[document.model_dump() for document in body.documents],
+    )
+    return AnnouncementPreviewResponse.of(preview)
 
 
 @router.get(

@@ -17,6 +17,7 @@ import { useConfirm } from "@/shared/ui/confirm-dialog";
 import { announcementFormConstraints } from "../domain/announcement-form-constraints";
 import type { Channel } from "../domain/labels";
 
+import { announcementBody } from "./announcement-body";
 import type { OrgHouse, SentOutcome } from "./use-announcements";
 
 const { textMax, documentsMax, documentTitleMax } = announcementFormConstraints;
@@ -315,27 +316,7 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
             "Idempotency-Key": idempotency.key,
           },
         },
-        body: {
-          text: draft.text,
-          house_ids: draft.houseIds,
-          channels: draft.channels,
-          urgent: draft.urgent,
-          entrances: draft.scope === "entrances" ? draft.entrances : undefined,
-          flat_ids:
-            draft.scope === "flats"
-              ? draft.flats.map((flat) => flat.flat_id)
-              : undefined,
-          works: draft.works
-            ? {
-                category: draft.worksCategory,
-                starts_at: `${draft.worksFromDay}T${draft.worksFromTime}`,
-                ends_at: `${draft.worksToDay}T${draft.worksToTime}`,
-              }
-            : undefined,
-          documents: draft.works
-            ? draft.documents.map(({ name, title }) => ({ name, title }))
-            : [],
-        },
+        body: announcementBody(draft),
       });
     },
     dismiss: () => {

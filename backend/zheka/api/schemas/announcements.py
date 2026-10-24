@@ -17,6 +17,7 @@ from zheka.core.services.announcements import (
     ANNOUNCEMENT_TEXT_LIMIT,
     ActiveWorks,
     AnnouncementData,
+    AnnouncementPreview,
     NoticeRegisterData,
     WorksDraft,
 )
@@ -296,4 +297,56 @@ class PlannedWorks(BaseSchema):
             announcement_id=works.announcement.id,
             title=works.announcement.text.split("\n", 1)[0],
             ends_at=works.ends_at,
+        )
+
+
+class AnnouncementPreviewResponse(BaseSchema):
+    message: str = Field(
+        description=(
+            "Текст личного сообщения от бота, как его увидит житель, "
+            "без HTML-экранирования"
+        ),
+    )
+    chat_hashtag: str | None = Field(
+        description=(
+            "Строка, которой сообщение закончится в чате дома; null - в чаты не уйдет"
+        ),
+    )
+    chats_count: int = Field(
+        description="Привязанных чатов домов, куда уйдет сообщение",
+    )
+    residents_count: int = Field(
+        description=(
+            "Жителей, которым уйдет личное сообщение; в демо-УК - только автору"
+        ),
+    )
+    recipients_count: int = Field(
+        description=(
+            "Адресатов всего: жители и чаты, то же число, что recipients_count "
+            "после отправки"
+        ),
+    )
+    bot_stopped_count: int = Field(
+        description="Жителей из residents_count, у которых бот остановлен",
+    )
+    muted_count: int = Field(
+        description="Жителей из residents_count, которые выключили объявления",
+    )
+    houses_without_chat: list[HouseId] = Field(
+        description="Выбранные дома без привязанного чата при канале chat",
+    )
+    is_demo: bool
+
+    @classmethod
+    def of(cls, preview: AnnouncementPreview) -> Self:
+        return cls(
+            message=preview.message,
+            chat_hashtag=preview.chat_hashtag,
+            chats_count=preview.chats_count,
+            residents_count=preview.residents_count,
+            recipients_count=preview.chats_count + preview.residents_count,
+            bot_stopped_count=preview.bot_stopped_count,
+            muted_count=preview.muted_count,
+            houses_without_chat=list(preview.houses_without_chat),
+            is_demo=preview.is_demo,
         )

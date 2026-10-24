@@ -1,0 +1,17 @@
+.Title {
+  margin: 0;
+}
+
+.Bubble {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 16px 16px 16px 4px;
+  background-color: var(--background-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.Error {
+  color: var(--text-negative);
+}

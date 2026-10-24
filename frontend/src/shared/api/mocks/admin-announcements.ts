@@ -148,6 +148,38 @@ const announcements: Item[] = [
   ),
 ];
 
+const draftOf = (body: Partial<Schemas["CreateAnnouncementRequest"]>) => ({
+  text: typeof body.text === "string" ? body.text.trim() : "",
+  houseIds: [...new Set(body.house_ids ?? [])],
+  channels: [...new Set(body.channels ?? ["chat" as const])],
+});
+
+const refusal = (body: Partial<Schemas["CreateAnnouncementRequest"]>) => {
+  const { text, houseIds, channels } = draftOf(body);
+
+  if (!text) {
+    return badRequest("Напишите текст объявления");
+  }
+
+  if (text.length > 2000) {
+    return badRequest("Сократите объявление до 2000 символов");
+  }
+
+  if (houseIds.length === 0) {
+    return badRequest("Выберите хотя бы один дом");
+  }
+
+  if (channels.length === 0) {
+    return badRequest("Выберите хотя бы один канал");
+  }
+
+  if (houseIds.some((id) => !(id in ORG_HOUSES))) {
+    return notFound("Дом не найден");
+  }
+
+  return undefined;
+};
+
 export const adminAnnouncementsConfigs = [
   endpoint("get", "/admin/announcements", (request) => {
     const houseId = number(request.query.house_id);
@@ -165,28 +197,11 @@ export const adminAnnouncementsConfigs = [
   }),
   endpoint("post", "/admin/announcements", (request) => {
     const body = request.body as Partial<Schemas["CreateAnnouncementRequest"]>;
-    const text = typeof body.text === "string" ? body.text.trim() : "";
-    const houseIds = [...new Set(body.house_ids ?? [])];
-    const channels = [...new Set(body.channels ?? ["chat" as const])];
+    const { text, houseIds, channels } = draftOf(body);
+    const refused = refusal(body);
 
-    if (!text) {
-      return badRequest("Напишите текст объявления");
-    }
-
-    if (text.length > 2000) {
-      return badRequest("Сократите объявление до 2000 символов");
-    }
-
-    if (houseIds.length === 0) {
-      return badRequest("Выберите хотя бы один дом");
-    }
-
-    if (channels.length === 0) {
-      return badRequest("Выберите хотя бы один канал");
-    }
-
-    if (houseIds.some((id) => !(id in ORG_HOUSES))) {
-      return notFound("Дом не найден");
+    if (refused) {
+      return refused;
     }
 
     const created = {
@@ -218,6 +233,36 @@ export const adminAnnouncementsConfigs = [
       ...created,
       houses_without_chat: deliver(houseIds, channels).withoutChat,
     } satisfies Item);
+  }),
+  endpoint("post", "/admin/announcements/preview", (request) => {
+    const body = request.body as Partial<Schemas["CreateAnnouncementRequest"]>;
+    const { text, houseIds, channels } = draftOf(body);
+    const refused = refusal(body);
+
+    if (refused) {
+      return refused;
+    }
+
+    const { recipients, withoutChat } = deliver(houseIds, channels);
+    const chats = channels.includes("chat")
+      ? houseIds.length - withoutChat.length
+      : 0;
+    const heading = body.urgent ? "🚨 Срочное объявление" : "📢 Объявление";
+    const entrances = body.entrances?.length
+      ? `\n📍 Подъезд ${body.entrances.join(", ")}`
+      : "";
+
+    return ok({
+      message: `${heading} от ${ZHILSERVIS.name}${entrances}\n\n${text}`,
+      chat_hashtag: chats > 0 ? "#объявление" : null,
+      chats_count: chats,
+      residents_count: recipients - chats,
+      recipients_count: recipients,
+      bot_stopped_count: channels.includes("direct") ? 4 : 0,
+      muted_count: channels.includes("direct") ? 7 : 0,
+      houses_without_chat: withoutChat,
+      is_demo: false,
+    } satisfies Schemas["AnnouncementPreviewResponse"]);
   }),
   endpoint(
     "get",

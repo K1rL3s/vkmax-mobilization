@@ -1,6 +1,7 @@
 from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from datetime import UTC, datetime
+from html import unescape
 
 from zheka.base import ZhekaType
 from zheka.core import texts
@@ -72,6 +73,34 @@ class AnnouncementData(ZhekaType):
     announcement: Announcement
     org_name: str | None
     houses_without_chat: Sequence[HouseId] = ()
+
+
+class AnnouncementPlan(ZhekaType):
+    org_name: str
+    is_demo: bool
+    house_ids: Sequence[HouseId]
+    text: str
+    channels: Sequence[AnnouncementChannel]
+    entrances: Sequence[int] | None
+    flat_ids: Sequence[FlatId] | None
+    works_from: datetime | None
+    works_until: datetime | None
+    message: str
+    residents: Sequence[Resident]
+    user_ids: Sequence[UserId]
+    chat_ids: Sequence[MaxChatId]
+    houses_without_chat: Sequence[HouseId]
+
+
+class AnnouncementPreview(ZhekaType):
+    message: str
+    chat_hashtag: str | None
+    chats_count: int
+    residents_count: int
+    bot_stopped_count: int
+    muted_count: int
+    houses_without_chat: Sequence[HouseId]
+    is_demo: bool
 
 
 class WorksDraft(ZhekaType):
@@ -158,6 +187,144 @@ class AnnouncementsService:
         works: WorksDraft | None = None,
         documents: Sequence[Mapping[str, str]] = (),
     ) -> AnnouncementData:
+        plan = await self._plan(
+            org_id,
+            user_id,
+            house_ids,
+            text,
+            channels,
+            urgent=urgent,
+            entrances=entrances,
+            flat_ids=flat_ids,
+            works=works,
+            documents=documents,
+        )
+        announcement = await self._announcements.create(
+            org_id,
+            user_id,
+            plan.house_ids,
+            plan.text,
+            plan.channels,
+            len(plan.user_ids) + len(plan.chat_ids),
+            urgent=urgent,
+            delivered_direct=None if plan.user_ids else 0,
+            delivered_chat=None if plan.chat_ids else 0,
+            entrances=plan.entrances,
+            flat_ids=plan.flat_ids,
+            poll_id=poll_id,
+            works_category=None if works is None else works.category,
+            works_from=plan.works_from,
+            works_until=plan.works_until,
+            documents=documents,
+        )
+        await self._announcements.add_deliveries(
+            [
+                NoticeDelivery.of(announcement.id, resident)
+                for resident in plan.residents
+            ]
+            or [
+                NoticeDelivery(
+                    announcement_id=announcement.id,
+                    user_id=recipient,
+                    house_id=plan.house_ids[0],
+                )
+                for recipient in plan.user_ids
+            ],
+        )
+
+        for channel in plan.channels:
+            await self._events.record(
+                EventType.ANNOUNCEMENT_SENT,
+                user_id=user_id,
+                announcement_id=announcement.id,
+                channel=channel.value,
+                houses_count=len(plan.house_ids),
+            )
+
+        app_button = app_path = None
+        if poll_id is not None:
+            app_button, app_path = texts.VOTE, poll_app_path(poll_id)
+        elif documents:
+            app_button, app_path = texts.OPEN_DOCUMENTS, ANNOUNCEMENTS_APP_PATH
+        self._notifications.notify_users(
+            plan.user_ids,
+            plan.message,
+            category=NotificationCategory.ANNOUNCEMENTS,
+            mandatory=False,
+            app_button=app_button,
+            app_path=app_path,
+            announcement_id=announcement.id,
+        )
+        self._notifications.notify_chats(
+            plan.chat_ids,
+            f"{plan.message}\n\n{texts.ANNOUNCEMENT_HASHTAG}",
+            app_button=app_button,
+            app_path=app_path,
+            announcement_id=announcement.id,
+        )
+
+        return AnnouncementData(
+            announcement=announcement,
+            org_name=plan.org_name,
+            houses_without_chat=plan.houses_without_chat,
+        )
+
+    async def preview(
+        self,
+        org_id: OrgId,
+        user_id: UserId,
+        house_ids: Sequence[HouseId],
+        text: str,
+        channels: Sequence[AnnouncementChannel],
+        *,
+        urgent: bool = False,
+        entrances: Sequence[int] | None = None,
+        flat_ids: Sequence[FlatId] | None = None,
+        works: WorksDraft | None = None,
+        documents: Sequence[Mapping[str, str]] = (),
+    ) -> AnnouncementPreview:
+        plan = await self._plan(
+            org_id,
+            user_id,
+            house_ids,
+            text,
+            channels,
+            urgent=urgent,
+            entrances=entrances,
+            flat_ids=flat_ids,
+            works=works,
+            documents=documents,
+        )
+        unreachable = await self._notifications.unreachable(
+            plan.user_ids,
+            NotificationCategory.ANNOUNCEMENTS,
+            mandatory=False,
+        )
+        return AnnouncementPreview(
+            message=unescape(plan.message),
+            chat_hashtag=texts.ANNOUNCEMENT_HASHTAG if plan.chat_ids else None,
+            chats_count=len(plan.chat_ids),
+            residents_count=len(plan.user_ids),
+            bot_stopped_count=unreachable.bot_stopped,
+            muted_count=unreachable.muted,
+            houses_without_chat=plan.houses_without_chat,
+            is_demo=plan.is_demo,
+        )
+
+    async def _plan(
+        self,
+        org_id: OrgId,
+        user_id: UserId,
+        house_ids: Sequence[HouseId],
+        text: str,
+        channels: Sequence[AnnouncementChannel],
+        *,
+        urgent: bool,
+        entrances: Sequence[int] | None,
+        flat_ids: Sequence[FlatId] | None,
+        works: WorksDraft | None,
+        documents: Sequence[Mapping[str, str]],
+    ) -> AnnouncementPlan:
         stated = text.strip()
         if not stated:
             raise InvalidRequest(EMPTY_TEXT)
@@ -227,85 +394,35 @@ class AnnouncementsService:
 
         org = await self._orgs.get(org_id)
         org_name = UNKNOWN_ORG if org is None else org.name
+        is_demo = org is not None and org.is_demo
         user_ids = [resident.user_id for resident in residents]
-        if org is not None and org.is_demo and user_ids:
+        if is_demo and user_ids:
             residents = [
                 resident for resident in residents if resident.user_id == user_id
             ]
             user_ids = [user_id]
-        announcement = await self._announcements.create(
-            org_id,
-            user_id,
-            targets,
-            stated,
-            picked,
-            len(user_ids) + len(chat_ids),
-            urgent=urgent,
-            delivered_direct=None if user_ids else 0,
-            delivered_chat=None if chat_ids else 0,
+        return AnnouncementPlan(
+            org_name=org_name,
+            is_demo=is_demo,
+            house_ids=targets,
+            text=stated,
+            channels=picked,
             entrances=entrances,
             flat_ids=flat_ids,
-            poll_id=poll_id,
-            works_category=None if works is None else works.category,
             works_from=starts_at,
             works_until=ends_at,
-            documents=documents,
-        )
-        await self._announcements.add_deliveries(
-            [NoticeDelivery.of(announcement.id, resident) for resident in residents]
-            or [
-                NoticeDelivery(
-                    announcement_id=announcement.id,
-                    user_id=recipient,
-                    house_id=targets[0],
-                )
-                for recipient in user_ids
-            ],
-        )
-
-        for channel in picked:
-            await self._events.record(
-                EventType.ANNOUNCEMENT_SENT,
-                user_id=user_id,
-                announcement_id=announcement.id,
-                channel=channel.value,
-                houses_count=len(targets),
-            )
-
-        message = texts.announcement(
-            org_name,
-            stated,
-            urgent=urgent,
-            entrances=entrances,
-            for_flats=flat_ids is not None,
-            works=works_line,
-            documents=bool(documents),
-        )
-        app_button = app_path = None
-        if poll_id is not None:
-            app_button, app_path = texts.VOTE, poll_app_path(poll_id)
-        elif documents:
-            app_button, app_path = texts.OPEN_DOCUMENTS, ANNOUNCEMENTS_APP_PATH
-        self._notifications.notify_users(
-            user_ids,
-            message,
-            category=NotificationCategory.ANNOUNCEMENTS,
-            mandatory=False,
-            app_button=app_button,
-            app_path=app_path,
-            announcement_id=announcement.id,
-        )
-        self._notifications.notify_chats(
-            chat_ids,
-            f"{message}\n\n{texts.ANNOUNCEMENT_HASHTAG}",
-            app_button=app_button,
-            app_path=app_path,
-            announcement_id=announcement.id,
-        )
-
-        return AnnouncementData(
-            announcement=announcement,
-            org_name=org_name,
+            message=texts.announcement(
+                org_name,
+                stated,
+                urgent=urgent,
+                entrances=entrances,
+                for_flats=flat_ids is not None,
+                works=works_line,
+                documents=bool(documents),
+            ),
+            residents=residents,
+            user_ids=user_ids,
+            chat_ids=chat_ids,
             houses_without_chat=houses_without_chat,
         )
 

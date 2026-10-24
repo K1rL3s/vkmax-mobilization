@@ -10824,6 +10824,87 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/announcements/preview:
+    post:
+      tags:
+      - 'Админка: объявления'
+      summary: Предпросмотр объявления
+      description: 'Тело и проверки те же, что у создания, ничего не сохраняется и не отправляется: текст сообщения от бота и сколько адресатов его получат, сколько из них заранее не получат и почему'
+      operationId: preview_announcement
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnnouncementRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementPreviewResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/admin/announcements/{announcement_id}/register:
     get:
       tags:
@@ -13783,6 +13864,59 @@ components:
       - channels
       - delivered_count
       title: AnnouncementItem
+    AnnouncementPreviewResponse:
+      properties:
+        message:
+          type: string
+          title: Message
+          description: Текст личного сообщения от бота, как его увидит житель, без HTML-экранирования
+        chat_hashtag:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chat Hashtag
+          description: Строка, которой сообщение закончится в чате дома; null - в чаты не уйдет
+        chats_count:
+          type: integer
+          title: Chats Count
+          description: Привязанных чатов домов, куда уйдет сообщение
+        residents_count:
+          type: integer
+          title: Residents Count
+          description: Жителей, которым уйдет личное сообщение; в демо-УК - только автору
+        recipients_count:
+          type: integer
+          title: Recipients Count
+          description: 'Адресатов всего: жители и чаты, то же число, что recipients_count после отправки'
+        bot_stopped_count:
+          type: integer
+          title: Bot Stopped Count
+          description: Жителей из residents_count, у которых бот остановлен
+        muted_count:
+          type: integer
+          title: Muted Count
+          description: Жителей из residents_count, которые выключили объявления
+        houses_without_chat:
+          items:
+            type: integer
+          type: array
+          title: Houses Without Chat
+          description: Выбранные дома без привязанного чата при канале chat
+        is_demo:
+          type: boolean
+          title: Is Demo
+      type: object
+      required:
+      - message
+      - chat_hashtag
+      - chats_count
+      - residents_count
+      - recipients_count
+      - bot_stopped_count
+      - muted_count
+      - houses_without_chat
+      - is_demo
+      title: AnnouncementPreviewResponse
     AnnouncementWorks:
       properties:
         category:

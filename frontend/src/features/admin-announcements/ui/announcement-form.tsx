@@ -4,22 +4,17 @@ import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
 import { FlatPicker, useIsOrgAdmin } from "@/features/admin-reception";
 import { Card } from "@/shared/ui/card";
 import { Checkbox } from "@/shared/ui/checkbox";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { FieldError } from "@/shared/ui/field-error";
 import { alertIcon } from "@/shared/ui/icon";
 import { IconTile } from "@/shared/ui/icon-tile";
 
 import { announcementFormConstraints } from "../domain/announcement-form-constraints";
-import {
-  addressees,
-  channelsLabel,
-  housesCount,
-  scopeLabel,
-} from "../domain/labels";
+import { housesCount } from "../domain/labels";
 import { groupHousesByStreet } from "../domain/streets";
 import { useAnnouncementForm } from "../model/use-announcement-form";
 import type { OrgHouse } from "../model/use-announcements";
 
+import { AnnouncementReview } from "./announcement-review";
 import { WorksFields } from "./works-fields";
 
 import styles from "./announcement-form.module.css";
@@ -336,46 +331,7 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
         </div>
       </form>
 
-      <ConfirmDialog
-        isOpen={form.draft !== undefined}
-        title={
-          form.draft?.urgent
-            ? "Отправить срочное объявление?"
-            : "Отправить объявление?"
-        }
-        description={
-          form.draft && (
-            <>
-              {[
-                addressees(form.draft.houseIds, houses),
-                scopeLabel({
-                  entrances:
-                    form.draft.scope === "entrances"
-                      ? form.draft.entrances
-                      : null,
-                  flats_count:
-                    form.draft.scope === "flats"
-                      ? form.draft.flats.length
-                      : null,
-                }),
-              ]
-                .filter(Boolean)
-                .join(", ")}
-              . {channelsLabel(form.draft.channels)}.
-              {form.withoutChat.length > 0 &&
-                (form.withoutChat.length === form.draft.houseIds.length
-                  ? " Ни у одного из этих домов нет привязанного чата, объявление никто не получит."
-                  : ` Не получат дома без чата: ${form.withoutChat.map((house) => house.address).join("; ")}.`)}{" "}
-              Отозвать отправленное объявление нельзя
-            </>
-          )
-        }
-        confirmLabel="Отправить"
-        error={form.sendError}
-        isPending={form.isSending}
-        onConfirm={form.send}
-        onClose={form.dismiss}
-      />
+      <AnnouncementReview form={form} houses={houses} />
     </Panel>
   );
 };
