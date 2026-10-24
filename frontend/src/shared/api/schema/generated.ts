@@ -2500,6 +2500,10 @@ export interface components {
       open_requests: number;
       /** Chat Bound */
       chat_bound: boolean;
+      /** City */
+      city: string;
+      /** Street */
+      street: string;
     };
     /** AdminMapHouse */
     AdminMapHouse: {

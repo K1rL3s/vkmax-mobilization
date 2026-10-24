@@ -231,6 +231,8 @@ export const adminHousesConfigs = [
           ...item,
           address: addressOf(item.id),
           entrances: findHouse(item.id)!.entrances,
+          city: findHouse(item.id)!.city,
+          street: findHouse(item.id)!.street,
         })).filter((item) => item.address.toLowerCase().includes(query)),
         request.query,
         50,

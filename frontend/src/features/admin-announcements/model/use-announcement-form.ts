@@ -222,6 +222,12 @@ export const useAnnouncementForm = (houses: OrgHouse[]) => {
       setHouseIds(checked ? houses.map((house) => house.id) : []),
     toggleHouse: (id: number, checked: boolean) =>
       setHouseIds(toggled(houseIds, id, checked)),
+    toggleStreet: (ids: number[], checked: boolean) =>
+      setHouseIds(
+        checked
+          ? [...new Set([...houseIds, ...ids])]
+          : houseIds.filter((id) => !ids.includes(id)),
+      ),
     setScope: (next: Scope) => {
       form.setValue("scope", next, validate);
 

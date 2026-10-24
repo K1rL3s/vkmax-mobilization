@@ -12624,6 +12624,12 @@ components:
         chat_bound:
           type: boolean
           title: Chat Bound
+        city:
+          type: string
+          title: City
+        street:
+          type: string
+          title: Street
       type: object
       required:
       - id
@@ -12633,6 +12639,8 @@ components:
       - residents_count
       - open_requests
       - chat_bound
+      - city
+      - street
       title: AdminHouseListItem
     AdminMapHouse:
       properties:

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Button, Flex, Panel, Textarea, Typography } from "@maxhub/max-ui";
 
 import { FlatPicker, useIsOrgAdmin } from "@/features/admin-reception";
@@ -16,6 +16,7 @@ import {
   housesCount,
   scopeLabel,
 } from "../domain/labels";
+import { groupHousesByStreet } from "../domain/streets";
 import { useAnnouncementForm } from "../model/use-announcement-form";
 import type { OrgHouse } from "../model/use-announcements";
 
@@ -140,15 +141,39 @@ export const AnnouncementForm = ({ houses }: { houses: OrgHouse[] }) => {
                   />
                 )}
 
-                {houses.map((house) => (
-                  <Option
-                    key={house.id}
-                    checked={form.houseIds.includes(house.id)}
-                    onChange={(checked) => form.toggleHouse(house.id, checked)}
-                    label={house.address}
-                    caption={house.chat_bound ? undefined : "Чат не привязан"}
-                    isWarning
-                  />
+                {groupHousesByStreet(houses).map((group) => (
+                  <Fragment key={group.street}>
+                    {group.houses.length > 1 && (
+                      <Option
+                        checked={group.houses.every((house) =>
+                          form.houseIds.includes(house.id),
+                        )}
+                        onChange={(checked) =>
+                          form.toggleStreet(
+                            group.houses.map((house) => house.id),
+                            checked,
+                          )
+                        }
+                        label={`Вся улица: ${group.street}`}
+                        caption={housesCount(group.houses.length)}
+                      />
+                    )}
+
+                    {group.houses.map((house) => (
+                      <Option
+                        key={house.id}
+                        checked={form.houseIds.includes(house.id)}
+                        onChange={(checked) =>
+                          form.toggleHouse(house.id, checked)
+                        }
+                        label={house.address}
+                        caption={
+                          house.chat_bound ? undefined : "Чат не привязан"
+                        }
+                        isWarning
+                      />
+                    ))}
+                  </Fragment>
                 ))}
               </Card>
 

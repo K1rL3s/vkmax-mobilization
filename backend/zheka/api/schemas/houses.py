@@ -370,6 +370,8 @@ class AdminHouseListItem(BaseSchema):
     residents_count: int | None = Field(description="Только для администратора")
     open_requests: int
     chat_bound: bool
+    city: str
+    street: str
 
     @classmethod
     def of(cls, row: AdminHouseRow, can_manage: bool) -> Self:
@@ -381,6 +383,8 @@ class AdminHouseListItem(BaseSchema):
             residents_count=row.residents_count if can_manage else None,
             open_requests=row.open_requests,
             chat_bound=row.chat_bound,
+            city=row.house.city,
+            street=row.house.street,
         )
 
 
