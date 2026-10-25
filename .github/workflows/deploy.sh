@@ -20,6 +20,7 @@ roll() {
         [ -z "$new" ] || docker rm -f $new
         return 1
     fi
+    sleep 2
     if [ -n "$old" ]; then
         docker stop $old
         docker rm $old
