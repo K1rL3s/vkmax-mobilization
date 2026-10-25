@@ -17,6 +17,7 @@ from zheka.bot.middlewares.user import USER_KEY
 from zheka.bot.states import Menu, NewRequest, entry_state
 from zheka.bot.voice import VOICE_PENDING, publish_transcription
 from zheka.broker.publisher import TaskPublisher
+from zheka.core.charges import is_bill_question
 from zheka.core.danger import detect_danger
 from zheka.core.models import User
 from zheka.core.services.meter_photo import MeterPhotoService
@@ -35,9 +36,13 @@ async def no_state_handler(
 ) -> None:
     body = update.message.body
     draft = NewRequestData.from_free_text(body)
-    danger = detect_danger(body.text or transcript(body))
+    text = body.text or transcript(body)
+    danger = detect_danger(text)
     if user.consent_at is None and danger is not None:
         await update.answer_text(danger_warning(danger.kind, None), notify=False)
+    if user.consent_at is not None and is_bill_question(text):
+        await dialog_manager.start(Menu.bill, mode=StartMode.RESET_STACK)
+        return
     if user.consent_at is not None and draft is None and danger is not None:
         await dialog_manager.start(Menu.emergency, mode=StartMode.RESET_STACK)
         return
@@ -70,11 +75,14 @@ async def on_free_text(
     user: User = dialog_manager.middleware_data[USER_KEY]
     body = update.message.body
     draft = NewRequestData.from_free_text(body)
-    danger = detect_danger(body.text or transcript(body))
+    text = body.text or transcript(body)
+    danger = detect_danger(text)
     if user.consent_at is None:
         if danger is not None:
             await update.answer_text(danger_warning(danger.kind, None), notify=False)
         await dialog_manager.start(entry_state(user), mode=StartMode.RESET_STACK)
+    elif is_bill_question(text):
+        await dialog_manager.start(Menu.bill, mode=StartMode.RESET_STACK)
     elif draft is None and danger is not None:
         await dialog_manager.start(Menu.emergency, mode=StartMode.RESET_STACK)
     elif draft is None and has_voice(update.message.body):

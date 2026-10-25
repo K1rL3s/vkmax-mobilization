@@ -15,6 +15,7 @@ class Menu(StatesGroup):
     who_spot = State()
     who_subject = State()
     who_verdict = State()
+    bill = State()
 
 
 def entry_state(user: User) -> State:

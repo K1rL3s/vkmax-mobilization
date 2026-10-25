@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from zheka.base import ZhekaType
 from zheka.core.enums import EventSource, RequestCategory
-from zheka.core.ids import HouseId, PollId, RequestId
+from zheka.core.ids import ChargeId, HouseId, PollId, RequestId, ResidentId
 from zheka.core.services.demo import DEMO_INNS
 
 
@@ -127,3 +127,12 @@ def poll_app_path(poll_id: PollId) -> str:
 
 
 ANNOUNCEMENTS_APP_PATH = "/announcements"
+CHARGES_APP_PATH = "/charges"
+
+
+def charge_app_path(charge_id: ChargeId) -> str:
+    return f"{CHARGES_APP_PATH}/{charge_id}"
+
+
+def flat_confirmation_app_path(resident_id: ResidentId) -> str:
+    return f"/residencies/{resident_id}/confirm"

@@ -29,6 +29,12 @@ class Resident(ZhekaMutableType):
     block_reason: str | None = None
     is_chairman: bool = False
 
+    @property
+    def verified_flat_id(self) -> FlatId | None:
+        if self.verified_at is None or self.status is not ResidentStatus.ACTIVE:
+            return None
+        return self.flat_id
+
 
 class VerificationRequest(ZhekaMutableType):
     id: VerificationRequestId = UNSET

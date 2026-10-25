@@ -1,8 +1,10 @@
+import re
 from collections.abc import Mapping, Sequence
 from datetime import date
 from typing import Any, Literal
 
 from zheka.base import ZhekaType
+from zheka.core.danger import detect_danger
 from zheka.core.enums import ServiceType
 from zheka.core.errors import InvalidValue
 
@@ -116,3 +118,36 @@ def breakdown(
 
     lines.sort(key=lambda line: abs(line.delta), reverse=True)
     return ChargeBreakdown(delta=sum(line.delta for line in lines), lines=lines)
+
+
+_BILL_NOUN = re.compile(
+    r"\bсч[её]т(?:а|у|е|ом|ы|ов)?\b|квитанц|начисл|коммуналк|\bжк[ху]\b|тариф"
+    r"|\bплат[аеуы]\b|\bсумм[аеуы]\b",
+)
+_BILL_RISE = re.compile(
+    r"вырос|подорожа|\bдорого\b|дороже|\bмного(?:вато)?\b|больш|увелич"
+    r"|почему так(?:ой|ая|ое|ие)\b",
+)
+_SHORT_BILL_RISE = re.compile(r"так много|\bдорого\b|дороже|подорожа")
+_PROBLEM = re.compile(
+    r"\bнет\b|\bбез\b|\bне\s+(?!понима|понятн|ясн)|слома|неисправ|теч[её]т|протек"
+    r"|засор|холодн|грязн|неправильн|ошиб|перерасч|пересчит|завыш|сч[её]тчик"
+    r"|,\s*(?:а|но)\b",
+)
+SHORT_BILL_WORDS = 3
+BILL_QUESTION_WORDS = 15
+
+
+def is_bill_question(text: str) -> bool:
+    lowered = text.lower()
+    words = len(lowered.split())
+    if (
+        words > BILL_QUESTION_WORDS
+        or _BILL_RISE.search(lowered) is None
+        or _PROBLEM.search(lowered) is not None
+        or detect_danger(text) is not None
+    ):
+        return False
+    if _BILL_NOUN.search(lowered) is not None:
+        return True
+    return words <= SHORT_BILL_WORDS and _SHORT_BILL_RISE.search(lowered) is not None

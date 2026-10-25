@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 
 from zheka.base import ZhekaType
 from zheka.core.charges import (
+    ChargeBreakdown,
     ChargeLine,
     LineDelta,
     breakdown as compute_breakdown,
@@ -79,6 +80,12 @@ class BreakdownData(ZhekaType):
 class PaymentResult(ZhekaType):
     charge_id: ChargeId
     paid_at: datetime
+
+
+class BillChange(ZhekaType):
+    charge: Charge
+    previous_charge: Charge | None
+    breakdown: ChargeBreakdown
 
 
 def _rubles(kopecks: int) -> str:
@@ -316,6 +323,24 @@ class ChargesService:
                 ),
             )
         return result
+
+    async def latest_change(
+        self,
+        flat_id: FlatId,
+        user_id: UserId,
+    ) -> BillChange | None:
+        charges, _ = await self._charges.list_for_flat(flat_id, 1, 0)
+        if not charges:
+            return None
+        charge = await self._verified_charge(ChargeId(charges[0].id), user_id)
+        current_lines, previous_lines, previous_charge = await self._diffed_lines(
+            charge,
+        )
+        return BillChange(
+            charge=charge,
+            previous_charge=previous_charge,
+            breakdown=compute_breakdown(current_lines, previous_lines),
+        )
 
 
 def _money(kopecks: int) -> str:

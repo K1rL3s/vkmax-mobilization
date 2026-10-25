@@ -130,12 +130,15 @@ from zheka.bot.handlers.executor.windows import (
 from zheka.bot.handlers.fallback import NOT_UNDERSTOOD
 from zheka.bot.handlers.forget.handlers import FORGOTTEN_TEXT
 from zheka.bot.handlers.menu.handlers import (
+    BILL_NOT_VERIFIED,
+    BILL_TENANT,
     OWNER_HINT,
     SPOTS_TEXT,
     UTILITY_NO_PHONE,
     VERDICT_TITLES,
 )
 from zheka.bot.handlers.menu.windows import (
+    BILL_BUTTON,
     CALL_NOTE_TEXT,
     CONTACTS_BUTTON,
     CONTACTS_TEXT,
@@ -145,9 +148,12 @@ from zheka.bot.handlers.menu.windows import (
     EMERGENCY_TEXT,
     GREETING,
     HOUSE_MENU_TEXT,
+    LINE_QUESTION_BUTTON,
     MENU_TEXT,
+    OPEN_CHARGES_BUTTON,
     STAFF_TEXT,
     SUBJECT_TEXT,
+    VERIFY_FLAT_BUTTON,
     WHO_BUTTON,
 )
 from zheka.bot.handlers.meter_photo.handlers import ANOMALY_TEXT
@@ -380,6 +386,7 @@ from zheka.infra.database.models import (
 )
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chairman import ChairmanRepo
+from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
@@ -7606,3 +7613,178 @@ async def test_another_problem_described_by_voice_is_not_a_join(
     await client.click(message_manager.last_message(), SEND)
 
     assert _text(message_manager) == SENT_TEXT
+
+
+BILL = InlineButtonTextLocator(BILL_BUTTON)
+
+
+async def test_a_bill_question_without_a_verified_flat_offers_the_verification(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    user_id = (await _user(bot_session, client)).id
+    resident = await ResidentsRepo(bot_session).get_for_house(user_id, house_id)
+    assert resident is not None
+    await client.send("/start")
+    assert BILL.find_button(message_manager.last_message()) is None
+
+    await client.send("Почему такой большой счёт за свет?")
+
+    assert _text(message_manager) == BILL_NOT_VERIFIED
+    assert _opened(_buttons(message_manager.last_message())) == [
+        (VERIFY_FLAT_BUTTON, f"/residencies/{resident.id}/confirm"),
+    ]
+
+
+async def test_a_verified_owner_gets_the_bill_change_from_the_menu_and_free_text(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    user_id = (await _user(bot_session, client)).id
+    _, house_id = await _org_house(bot_session)
+    flat = Flat(house_id=house_id, number="12")
+    bot_session.add(flat)
+    await bot_session.flush()
+    bot_session.add(
+        Resident(
+            user_id=user_id,
+            house_id=house_id,
+            flat_id=flat.id,
+            role=ResidentRole.OWNER,
+            verified_at=datetime.now(UTC),
+        ),
+    )
+    maintenance = {"service": "maintenance", "amount": 150_000}
+    charges = ChargesRepo(bot_session)
+    await charges.add(
+        flat.id,
+        date(2026, 8, 1),
+        [
+            {
+                "service": "hot_water",
+                "amount": 30_000,
+                "volume": 3_000,
+                "tariff": 1_000_000,
+            },
+            maintenance,
+        ],
+        180_000,
+        datetime.now(UTC),
+        None,
+    )
+    charge = await charges.add(
+        flat.id,
+        date(2026, 9, 1),
+        [
+            {
+                "service": "hot_water",
+                "amount": 42_000,
+                "volume": 3_500,
+                "tariff": 1_200_000,
+            },
+            maintenance,
+            {"service": "penalty", "amount": 1_234},
+        ],
+        193_234,
+        datetime.now(UTC),
+        None,
+    )
+    charge_id = charge.id
+    await bot_session.commit()
+    expected = (
+        "💸 <b>Сентябрь 2026: 1 932,34 ₽</b>\n\n"
+        "📈 +132,34 ₽ к прошлому месяцу\n\n"
+        "🔸 Горячая вода +120 ₽: тариф +70 ₽, расход +50 ₽\n"
+        "🔸 Пени +12,34 ₽: новая строка"
+    )
+    buttons = [
+        (LINE_QUESTION_BUTTON, f"/charges/{charge_id}"),
+        (OPEN_CHARGES_BUTTON, "/charges"),
+    ]
+
+    await client.send("/start")
+    await client.click(message_manager.last_message(), BILL)
+
+    assert _text(message_manager) == expected
+    assert _opened(_buttons(message_manager.last_message())) == buttons
+    await client.send("/start")
+    await client.send("почему так много")
+    assert _text(message_manager) == expected
+
+
+async def test_a_bill_question_with_no_window_open_answers_instead_of_a_request(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    users = UsersRepo(bot_session)
+    user = await users.upsert_by_max_id(MaxUserId(client.user.id), "Житель", None)
+    await users.set_consent(user.id, CONSENT_VERSION)
+    await bot_session.commit()
+    house_id, _ = await _bot_house(bot_session, org_id=await _org(bot_session))
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    await client.send("Почему в этом месяце такой большой счёт?")
+
+    assert _text(message_manager) == BILL_NOT_VERIFIED
+
+
+async def test_a_recognized_bill_question_opens_the_bill_instead_of_a_request(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+) -> None:
+    await _resident_of_a_connected_house(bot_session, client, message_manager)
+    _speechkit(fake_bot, monkeypatch, text="Почему такой большой счёт за свет")
+
+    await _run(
+        task_broker,
+        transcribe_voice,
+        user_id=(await _user(bot_session, client)).id,
+        url=VOICE_URL,
+        draft=NewRequestData().to_data(),
+        in_draft=False,
+    )
+
+    assert _text(message_manager) == BILL_NOT_VERIFIED
+
+
+async def test_a_verified_tenant_has_no_bill_button_and_is_sent_to_the_owner(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    user_id = (await _user(bot_session, client)).id
+    _, house_id = await _org_house(bot_session)
+    flat = Flat(house_id=house_id, number="14")
+    bot_session.add(flat)
+    await bot_session.flush()
+    bot_session.add(
+        Resident(
+            user_id=user_id,
+            house_id=house_id,
+            flat_id=flat.id,
+            role=ResidentRole.TENANT,
+            can_see_charges=False,
+            verified_at=datetime.now(UTC),
+        ),
+    )
+    await bot_session.commit()
+
+    await client.send("/start")
+    assert BILL.find_button(message_manager.last_message()) is None
+    await client.send("почему так много")
+
+    assert _text(message_manager) == BILL_TENANT

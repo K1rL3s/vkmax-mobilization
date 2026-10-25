@@ -18,9 +18,10 @@ from zheka.bot.handlers.requests.handlers import (
     NOT_CREATED_UNEXPECTED,
 )
 from zheka.bot.handlers.review.handlers import repeat_sent
-from zheka.bot.states import NewRequest
+from zheka.bot.states import Menu, NewRequest
 from zheka.bot.voice import VOICE_FAILED
 from zheka.broker.task_names import TaskName
+from zheka.core.charges import is_bill_question
 from zheka.core.deeplinks import request_app_path
 from zheka.core.enums import (
     NotificationCategory,
@@ -65,6 +66,14 @@ async def transcribe_voice(
     text = await _recognize_voice(bot, speech, quota, user_id, url)
     data = NewRequestData.retort.load(draft, NewRequestData)
     data.voice_pending = False
+    if not in_draft and is_bill_question(text):
+        await sender.start_dialog(
+            Menu.bill,
+            user,
+            notify=False,
+            show_mode=ShowMode.SEND,
+        )
+        return True
     if text:
         data.description = text
         state = NewRequest.attachments if in_draft else NewRequest.category

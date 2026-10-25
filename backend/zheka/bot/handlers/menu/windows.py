@@ -20,6 +20,7 @@ from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.handlers.menu.handlers import (
     SPOTS_TEXT,
     SPOT_ITEMS,
+    get_bill,
     get_contacts,
     get_digest,
     get_emergency,
@@ -79,6 +80,10 @@ CONTACTS_BUTTON = "📞 Куда звонить"
 CONTACTS_TEXT = "📞 <b>Куда звонить</b>\n\n🏢 {address}\n\n{contacts}"
 WHO_BUTTON = "🔎 Кто отвечает?"
 SUBJECT_TEXT = "{spot}\n\n🔎 Что сломалось?"
+BILL_BUTTON = "💸 Почему такой счёт"
+LINE_QUESTION_BUTTON = "❓ Вопрос по строке"
+OPEN_CHARGES_BUTTON = "📱 Открыть начисления"
+VERIFY_FLAT_BUTTON = "🔑 Подтвердить квартиру"
 
 menu_dialog = Dialog(
     Window(
@@ -104,6 +109,12 @@ menu_dialog = Dialog(
             id="contacts",
             state=Menu.contacts,
             when=F["address"],
+        ),
+        SwitchTo(
+            Const(BILL_BUTTON),
+            id="bill",
+            state=Menu.bill,
+            when=F["sees_bill"],
         ),
         Button(
             Const("💬 Чат дома"),
@@ -246,5 +257,36 @@ menu_dialog = Dialog(
         Row(SwitchTo(BACK, id="who_verdict_back", state=Menu.who_subject), TO_MENU),
         state=Menu.who_verdict,
         getter=get_verdict,
+    ),
+    Window(
+        Format("{bill}"),
+        MessageInput(on_free_text),
+        WebApp(
+            Const(LINE_QUESTION_BUTTON),
+            Format("{bot_username}"),
+            payload=Format("{charge_payload}"),
+            when=F["charge_payload"] & F["bot_username"],
+        ),
+        WebApp(
+            Const(OPEN_CHARGES_BUTTON),
+            Format("{bot_username}"),
+            payload=Format("{charges_payload}"),
+            when=F["charges_payload"] & F["bot_username"],
+        ),
+        WebApp(
+            Const(VERIFY_FLAT_BUTTON),
+            Format("{bot_username}"),
+            payload=Format("{verify_payload}"),
+            when=F["verify_payload"] & F["bot_username"],
+        ),
+        Start(
+            Const("🔎 Найти дом"),
+            id="bill_find_house",
+            state=Onboarding.method,
+            when=F["find_house"],
+        ),
+        TO_MENU,
+        state=Menu.bill,
+        getter=get_bill,
     ),
 )

@@ -10,19 +10,28 @@ from maxo.dialogs.integrations.dishka import inject
 from maxo.dialogs.widgets.kbd import Button, Select
 from maxo.types import MessageCallback
 
-from zheka.bot.cards import back_to_menu, refused, web_app_name
+from zheka.bot.cards import app_payload, back_to_menu, refused, web_app_name
 from zheka.bot.dialog_data import NewRequestData, ResponsibilityData
+from zheka.bot.handlers.meter_photo.handlers import MONTHS
 from zheka.bot.middlewares.user import dialog_user_id
 from zheka.bot.states import Menu, NewRequest
+from zheka.core.charges import LineDelta
 from zheka.core.city_services import CityService, city_services
+from zheka.core.deeplinks import (
+    CHARGES_APP_PATH,
+    charge_app_path,
+    flat_confirmation_app_path,
+)
 from zheka.core.enums import (
     CATEGORY_RULES,
+    SERVICE_LABELS,
     CityServiceKind,
     NotificationCategory,
     NotificationLevel,
 )
 from zheka.core.errors import ZhekaError
 from zheka.core.responsibility import LEAVES, SPOTS, Leaf, Spot, Verdict
+from zheka.core.services.charges import BillChange, ChargesService
 from zheka.core.services.chats import NO_CHAT_TO_JOIN, ChatsService
 from zheka.core.services.digest import DigestService
 from zheka.core.services.notifications import NotificationsService
@@ -78,6 +87,9 @@ async def get_menu(
         "staff": me.is_staff,
         "can_join_chat": offer is not None and not offer.joined,
         "chat_link": offer.link if offer is not None and offer.joined else None,
+        "sees_bill": residency is not None
+        and residency.resident.verified_flat_id is not None
+        and residency.resident.can_see_charges,
     }
 
 
@@ -330,3 +342,91 @@ async def on_responsibility_request(
         place=leaf.place,
     )
     await dialog_manager.start(NewRequest.description, data=draft.to_data())
+
+
+BILL_NOT_VERIFIED = "🔐 Начисления видны после подтверждения квартиры"
+BILL_TENANT = "🔐 Начисления видит собственник квартиры"
+BILL_EMPTY = "📄 Начислений пока нет"
+BILL_FIRST = "📄 Первый месяц в истории квартиры - сравнить пока не с чем"
+BILL_SAME = "🟰 Сумма не изменилась"
+BILL_LINES = 4
+
+
+@inject
+async def get_bill(
+    bot: Bot,
+    dialog_manager: DialogManager,
+    profile_service: FromDishka[ProfileService],
+    charges_service: FromDishka[ChargesService],
+    **_: Any,
+) -> dict[str, Any]:
+    user_id = dialog_user_id(dialog_manager)
+    residency = (await profile_service.me(user_id)).latest_residency
+    resident = None if residency is None else residency.resident
+    flat_id = None if resident is None else resident.verified_flat_id
+    data: dict[str, Any] = {
+        "bot_username": web_app_name(bot),
+        "find_house": resident is None,
+        "verify_payload": None,
+        "charge_payload": None,
+        "charges_payload": None,
+    }
+    if resident is None or flat_id is None:
+        verify = None if resident is None else flat_confirmation_app_path(resident.id)
+        return data | {
+            "bill": BILL_NOT_VERIFIED,
+            "verify_payload": verify and app_payload(verify),
+        }
+    if not resident.can_see_charges:
+        return data | {"bill": BILL_TENANT}
+    change = await charges_service.latest_change(flat_id, user_id)
+    data["charges_payload"] = app_payload(CHARGES_APP_PATH)
+    if change is None:
+        return data | {"bill": BILL_EMPTY}
+    return data | {
+        "bill": _bill_text(change),
+        "charge_payload": app_payload(charge_app_path(change.charge.id)),
+    }
+
+
+def _bill_text(change: BillChange) -> str:
+    charge = change.charge
+    period = f"{MONTHS[charge.period.month - 1].capitalize()} {charge.period.year}"
+    head = f"💸 <b>{period}: {_rubles(charge.total)}</b>"
+    if change.previous_charge is None:
+        return f"{head}\n\n{BILL_FIRST}"
+    delta = change.breakdown.delta
+    total = (
+        f"{'📈' if delta > 0 else '📉'} {_rubles(delta, signed=True)} к прошлому месяцу"
+        if delta
+        else BILL_SAME
+    )
+    lines = [line for line in change.breakdown.lines if line.delta][:BILL_LINES]
+    return "\n\n".join(
+        filter(None, [head, total, "\n".join(map(_bill_line, lines))]),
+    )
+
+
+def _bill_line(line: LineDelta) -> str:
+    if line.kind == "appeared":
+        detail = "новая строка"
+    elif line.kind == "disappeared":
+        detail = "строки больше нет"
+    else:
+        detail = ", ".join(
+            f"{name} {_rubles(effect, signed=True)}"
+            for name, effect in (
+                ("тариф", line.tariff_effect),
+                ("расход", line.volume_effect),
+            )
+            if effect
+        )
+    label = SERVICE_LABELS[line.service]
+    return f"🔸 {label} {_rubles(line.delta, signed=True)}: {detail}"
+
+
+def _rubles(kopecks: int, *, signed: bool = False) -> str:
+    whole, cents = divmod(abs(kopecks), 100)
+    sign = "-" if kopecks < 0 else "+" if signed and kopecks else ""
+    amount = f"{whole:,}".replace(",", " ")
+    return f"{sign}{amount},{cents:02d} ₽" if cents else f"{sign}{amount} ₽"
