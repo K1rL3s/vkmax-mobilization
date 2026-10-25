@@ -39,7 +39,7 @@ export const RequestRow = ({
     ? (request.author_name ?? request.caller_name ?? "Звонок в УК")
     : request.category_label;
   const memberSubtitle = flat ? `Квартира ${flat}` : "Квартира не указана";
-  const address = `№${request.id} · ${request.address}${!grouped && flat ? ` · кв. ${flat}` : ""}`;
+  const address = `№${request.id} · ${request.address}${!grouped && flat ? ` · кв. ${flat}` : ""}${request.entrance ? ` · подъезд ${request.entrance}` : ""}`;
   const meta = [
     grouped &&
       `Коллективная · ${request.group_size} ${plural(request.group_size, [

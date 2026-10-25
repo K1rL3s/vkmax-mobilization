@@ -19,7 +19,7 @@ import { StatusPill } from "@/shared/ui/status-pill";
 
 import { CategoryChips } from "./category-chips";
 import { CategoryInfo } from "./category-info";
-import { PlaceChoice } from "./place-choice";
+import { EntranceChoice, PlaceChoice } from "./place-choice";
 import { SimilarPanel } from "./similar-panel";
 import { DESCRIPTION_LIMIT, useNewRequest } from "./use-new-request";
 
@@ -139,6 +139,22 @@ const NewRequestPage = () => {
               </Typography.Text>
 
               <PlaceChoice value={form.place} onChange={form.setPlace} />
+            </section>
+          </Flex>
+        )}
+
+        {form.asksEntrance && (
+          <Flex asChild align="stretch" direction="column" gap={8}>
+            <section>
+              <Typography.Text asChild variant="title" color="primary">
+                <h2>Подъезд</h2>
+              </Typography.Text>
+
+              <EntranceChoice
+                count={form.entrances}
+                value={form.entrance}
+                onChange={form.setEntrance}
+              />
             </section>
           </Flex>
         )}

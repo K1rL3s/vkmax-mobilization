@@ -135,9 +135,14 @@ def _draft(
     )
 
 
-async def _neighbour(session: AsyncSession, house_id: HouseId, number: str) -> UserId:
+async def _neighbour(
+    session: AsyncSession,
+    house_id: HouseId,
+    number: str,
+    entrance: int | None = None,
+) -> UserId:
     user_id = await add_user(session, f"Сосед {number}")
-    flat = Flat(house_id=house_id, number=number)
+    flat = Flat(house_id=house_id, number=number, entrance=entrance)
     session.add(flat)
     await session.flush()
     session.add(

@@ -55,6 +55,8 @@ from zheka.core.services.requests import (
     RequestRow,
     build_card,
     build_rows,
+    entranced,
+    flat_entrance,
     placed,
     stated,
 )
@@ -118,6 +120,7 @@ class PhoneRequestDraft(ZhekaType):
     caller_phone: str | None = None
     resident_id: ResidentId | None = None
     place: RequestPlace | None = None
+    entrance: int | None = None
 
 
 class AdminRequestsService:
@@ -340,6 +343,12 @@ class AdminRequestsService:
             caller_name=caller_name,
             caller_phone=caller_phone,
             place=place,
+            entrance=entranced(
+                house,
+                place,
+                draft.entrance
+                or await flat_entrance(self._houses, house, draft.category, flat_id),
+            ),
         )
         await self._requests.add_log(
             request.id,

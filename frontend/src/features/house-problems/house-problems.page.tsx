@@ -37,7 +37,12 @@ const HouseProblemsPage = () => {
     );
   }
 
-  const { open, resolved, resolved_total: resolvedTotal } = problems.data;
+  const {
+    open,
+    resolved,
+    resolved_total: resolvedTotal,
+    own_entrance: ownEntrance,
+  } = problems.data;
 
   return (
     <Panel className={styles.Page} mode="secondary">
@@ -113,6 +118,14 @@ const HouseProblemsPage = () => {
                     <StatusPill tone="neutral">
                       {PLACE_LABEL[problem.place]}
                     </StatusPill>
+                    {problem.entrance != null &&
+                      (problem.entrance === ownEntrance ? (
+                        <StatusPill tone="themed">ваш подъезд</StatusPill>
+                      ) : (
+                        <StatusPill tone="neutral">
+                          подъезд {problem.entrance}
+                        </StatusPill>
+                      ))}
                     {problem.mine && (
                       <Typography.Text
                         variant="description"
@@ -128,7 +141,12 @@ const HouseProblemsPage = () => {
               {!problem.mine && (
                 <Button asChild size="medium" variant="secondary" stretched>
                   <Link
-                    to={`${Routes.REQUEST_NEW}?category=${problem.category}`}
+                    to={`${Routes.REQUEST_NEW}?${new URLSearchParams({
+                      category: problem.category,
+                      ...(problem.entrance == null
+                        ? {}
+                        : { entrance: String(problem.entrance) }),
+                    }).toString()}`}
                   >
                     У меня тоже
                   </Link>

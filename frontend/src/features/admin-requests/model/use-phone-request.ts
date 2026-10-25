@@ -44,6 +44,7 @@ const phoneSchema = z
       .trim()
       .max(requestFormConstraints.callerPhone, "Сократите телефон"),
     place: z.enum(["flat", "house"] satisfies RequestPlace[]).nullable(),
+    entrance: z.number().int().nonnegative(),
   })
   .superRefine((draft, context) => {
     if (draft.residentId || draft.flatId) return;
@@ -76,17 +77,19 @@ export const usePhoneRequest = () => {
       callerName: "",
       callerPhone: "",
       place: null,
+      entrance: 0,
     },
   });
   useClosingConfirmation(form.formState.isDirty);
-  const [houseId, flatId, category, place] = useWatch({
+  const [houseId, flatId, category, place, entrance] = useWatch({
     control: form.control,
-    name: ["houseId", "flatId", "category", "place"],
+    name: ["houseId", "flatId", "category", "place", "entrance"],
   });
-  const asksPlace =
-    categories.data?.some(
-      (item) => item.category === category && !item.place,
-    ) ?? false;
+  const rule = categories.data?.find((item) => item.category === category);
+  const asksPlace = rule !== undefined && !rule.place;
+  const entrances = houses.selected?.entrances ?? 1;
+  const asksEntrance =
+    houseId > 0 && (rule?.place ?? place) === "house" && entrances > 1;
   const flats = useRequestFlats(houseId);
   const residents = useRequestResidents(houseId, flatId);
   const idempotency = useIdempotencyKey();
@@ -107,6 +110,7 @@ export const usePhoneRequest = () => {
     form.setValue("houseId", 0);
     form.setValue("flatId", 0);
     form.setValue("residentId", 0);
+    form.setValue("entrance", 0);
   };
   const selectHouse = (id: number | string) => {
     const house = houses.select(id);
@@ -164,6 +168,7 @@ export const usePhoneRequest = () => {
         caller_name: draft.callerName || null,
         caller_phone: draft.callerPhone || null,
         place: asksPlace ? draft.place : null,
+        entrance: asksEntrance && draft.entrance ? draft.entrance : null,
       },
     });
   }, isPlaceMissing);
@@ -198,5 +203,9 @@ export const usePhoneRequest = () => {
     place,
     selectPlace: (value: RequestPlace) =>
       form.setValue("place", value, { shouldValidate: true }),
+    asksEntrance,
+    entrances,
+    entrance,
+    selectEntrance: (value: number) => form.setValue("entrance", value),
   };
 };

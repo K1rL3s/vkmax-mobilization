@@ -59,6 +59,7 @@ class Request(ZhekaMutableType):
     danger: DangerKind | None = None
     place: RequestPlace = RequestPlace.FLAT
     gis_appeal_number: str | None = None
+    entrance: int | None = None
 
     @property
     def warn_at(self) -> datetime:
@@ -76,6 +77,7 @@ class RequestGroup(ZhekaMutableType):
     category: RequestCategory
     window_started_at: datetime
     status: RequestGroupStatus
+    entrance: int | None = None
 
 
 class RequestAttachment(ZhekaMutableType):

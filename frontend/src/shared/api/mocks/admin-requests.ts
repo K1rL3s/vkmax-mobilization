@@ -480,6 +480,7 @@ export const adminRequestsConfigs = [
       caller_name: body.caller_name?.trim() || null,
       caller_phone: body.caller_phone?.trim() || null,
       place: body.place ?? undefined,
+      entrance: body.entrance ?? null,
     });
     requests.push(item);
     return ok(item);

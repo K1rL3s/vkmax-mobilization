@@ -39,6 +39,7 @@ type MockRequest = {
     is_internal?: boolean;
   }[];
   place?: Schemas["RequestPlace"];
+  entrance?: number | null;
   gis_appeal_number?: string | null;
   auto_closed_at?: string;
 };
@@ -391,6 +392,7 @@ export const requestListItem = (
   resident_answered_at: item.resident_answered_at,
   place: FIXED_PLACES[item.category] ?? item.place ?? "flat",
   gis_appeal_number: item.gis_appeal_number ?? null,
+  entrance: item.entrance ?? null,
 });
 
 const STEP: {
@@ -567,6 +569,7 @@ export const createRequest = (
       )?.place ??
       body.place ??
       undefined,
+    entrance: body.entrance ?? null,
   });
   requests.push(created);
 
@@ -602,6 +605,7 @@ export const repeatRequest = (
     has_attachments: attachments.length > 0,
     attachment_names: attachments,
     place: item.place,
+    entrance: item.entrance,
   });
   requests.push(created);
 
@@ -679,6 +683,17 @@ export const houseProblems = (
         since: days(-1),
         mine: false,
         place: "house",
+        entrance: 1,
+      },
+      {
+        category: "elevator",
+        category_label: CATEGORY_RULES.elevator.label,
+        flats_count: 2,
+        status: "new",
+        since: days(-1),
+        mine: false,
+        place: "house",
+        entrance: 2,
       },
       ...shown
         .filter((item) => item.status !== "done")
@@ -690,10 +705,12 @@ export const houseProblems = (
           since: item.created_at,
           mine: true,
           place: requestListItem(item).place,
+          entrance: item.entrance ?? null,
         })),
     ],
     resolved,
     resolved_total: resolved.length,
+    own_entrance: 1,
   };
 };
 

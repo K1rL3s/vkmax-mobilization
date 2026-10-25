@@ -133,7 +133,7 @@ class ChatCardsService:
             )
         return ChatCardView(
             house_id=group.house_id,
-            text=texts.group_card(group.category, flats, status),
+            text=texts.group_card(group.category, flats, status, group.entrance),
             me_too=group.category,
             join=True,
         )

@@ -3341,6 +3341,14 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/RequestCategory'
+      - name: entrance
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entrance
       - name: X-House-Id
         in: header
         required: false
@@ -13952,6 +13960,12 @@ components:
           - type: 'null'
           title: Gis Appeal Number
           description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+        entrance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entrance
+          description: Подъезд общей заявки; пусто - не указан
         house_id:
           type: integer
           title: House Id
@@ -14236,6 +14250,12 @@ components:
           - type: 'null'
           title: Gis Appeal Number
           description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+        entrance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entrance
+          description: Подъезд общей заявки; пусто - не указан
         house_id:
           type: integer
           title: House Id
@@ -15520,6 +15540,13 @@ components:
           - $ref: '#/components/schemas/RequestPlace'
           - type: 'null'
           description: Где проблема, если категория допускает и квартиру, и дом; у остальных категорий место задано ими
+        entrance:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Entrance
+          description: Подъезд проблемы в доме; у лифта и подъезда заявки разных подъездов собираются в разные коллективные. Пусто - у лифта и подъезда подъезд квартиры, если он известен, иначе не указан
       type: object
       required:
       - house_id
@@ -15606,6 +15633,13 @@ components:
           - $ref: '#/components/schemas/RequestPlace'
           - type: 'null'
           description: Где проблема, если категория допускает и квартиру, и дом; у остальных категорий место задано ими
+        entrance:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Entrance
+          description: Подъезд проблемы в доме; у лифта и подъезда заявки разных подъездов собираются в разные коллективные. Пусто - у лифта и подъезда подъезд квартиры, если он известен, иначе не указан
       type: object
       required:
       - category
@@ -16394,6 +16428,12 @@ components:
           type: integer
           title: Resolved Total
           description: Сколько решено за 30 дней всего
+        own_entrance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Own Entrance
+          description: 'Подъезд квартиры жителя: его строки идут в open первыми; пусто - подъезд не известен'
       type: object
       required:
       - open
@@ -17107,6 +17147,12 @@ components:
         place:
           $ref: '#/components/schemas/RequestPlace'
           description: 'Где проблема у первой заявки: flat - в квартире, house - в доме'
+        entrance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entrance
+          description: Подъезд, общий для всех заявок строки; пусто - не указан или разные
       type: object
       required:
       - category
@@ -18579,6 +18625,12 @@ components:
           - type: 'null'
           title: Gis Appeal Number
           description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+        entrance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entrance
+          description: Подъезд общей заявки; пусто - не указан
         house_id:
           type: integer
           title: House Id
@@ -18970,6 +19022,12 @@ components:
           - type: 'null'
           title: Gis Appeal Number
           description: Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
+        entrance:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Entrance
+          description: Подъезд общей заявки; пусто - не указан
       type: object
       required:
       - id

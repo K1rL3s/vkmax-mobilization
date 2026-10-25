@@ -92,6 +92,7 @@ requests_table = Table(
     ),
     Column("place", pg_enum(RequestPlace, "request_place"), nullable=False),
     Column("gis_appeal_number", String, nullable=True),
+    Column("entrance", Integer, nullable=True),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),
@@ -110,6 +111,7 @@ request_groups_table = Table(
         pg_enum(RequestGroupStatus, "request_group_status"),
         nullable=False,
     ),
+    Column("entrance", Integer, nullable=True),
 )
 
 request_attachments_table = Table(

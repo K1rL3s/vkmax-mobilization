@@ -105,6 +105,9 @@ const AdminRequestPage = () => {
           <StatusPill tone={tone}>{statusLabel(request, "staff")}</StatusPill>
           <StatusPill tone="neutral">{request.category_label}</StatusPill>
           <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
+          {request.entrance != null && (
+            <StatusPill tone="neutral">Подъезд {request.entrance}</StatusPill>
+          )}
           {escalation && <StatusPill tone="negative">{escalation}</StatusPill>}
           {danger && <StatusPill tone="negative">{danger}</StatusPill>}
           {thread && <StatusPill tone={thread.tone}>{thread.text}</StatusPill>}

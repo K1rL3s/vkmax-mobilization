@@ -370,11 +370,17 @@ def flats_count(count: int) -> str:
     return f"{count} {_plural(count, 'квартира', 'квартиры', 'квартир')}"
 
 
-def group_card(category: RequestCategory, flats: int, status: RequestStatus) -> str:
+def group_card(
+    category: RequestCategory,
+    flats: int,
+    status: RequestStatus,
+    entrance: int | None = None,
+) -> str:
     rule = CATEGORY_RULES[category]
     told = _plural(flats, "сообщила", "сообщили", "сообщили")
+    where = "" if entrance is None else f", подъезд {entrance}"
     return (
-        f"{rule.caption}: о проблеме {told} {flats_count(flats)}\n"
+        f"{rule.caption}{where}: о проблеме {told} {flats_count(flats)}\n"
         "УК получила заявки. Статус: "
         f"{REQUEST_STATUS_LABELS[status].lower()}\n"
         f"Если у вас то же самое, нажмите «{ME_TOO[2:]}»\n"

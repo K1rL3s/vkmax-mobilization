@@ -48,3 +48,7 @@
   outline: 2px solid var(--icon-themed);
   outline-offset: 2px;
 }
+
+.SheetTitle {
+  margin: 0;
+}

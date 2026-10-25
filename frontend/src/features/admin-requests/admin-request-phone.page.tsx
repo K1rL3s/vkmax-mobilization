@@ -107,6 +107,31 @@ const AdminRequestPhonePage = () => {
                 </>
               )}
 
+              {model.asksEntrance && (
+                <>
+                  <Typography.Text variant="description" color="secondary">
+                    Подъезд
+                  </Typography.Text>
+                  <ChipRow
+                    wrap
+                    label="Подъезд"
+                    options={[
+                      { id: "0", label: "Не указан" },
+                      ...Array.from(
+                        { length: model.entrances },
+                        (_, index) => ({
+                          id: String(index + 1),
+                          label: String(index + 1),
+                        }),
+                      ),
+                    ]}
+                    value={String(model.entrance)}
+                    disabled={model.isSubmitting}
+                    onChange={(value) => model.selectEntrance(Number(value))}
+                  />
+                </>
+              )}
+
               <Flex asChild align="stretch" direction="column" gap={4}>
                 <label>
                   <Typography.Text variant="description" color="secondary">

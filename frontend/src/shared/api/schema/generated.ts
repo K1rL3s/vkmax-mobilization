@@ -2973,6 +2973,11 @@ export interface components {
        * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
        */
       gis_appeal_number?: string | null;
+      /**
+       * Entrance
+       * @description Подъезд общей заявки; пусто - не указан
+       */
+      entrance?: number | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -3149,6 +3154,11 @@ export interface components {
        * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
        */
       gis_appeal_number?: string | null;
+      /**
+       * Entrance
+       * @description Подъезд общей заявки; пусто - не указан
+       */
+      entrance?: number | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -3939,6 +3949,11 @@ export interface components {
       resident_id?: number | null;
       /** @description Где проблема, если категория допускает и квартиру, и дом; у остальных категорий место задано ими */
       place?: components["schemas"]["RequestPlace"] | null;
+      /**
+       * Entrance
+       * @description Подъезд проблемы в доме; у лифта и подъезда заявки разных подъездов собираются в разные коллективные. Пусто - у лифта и подъезда подъезд квартиры, если он известен, иначе не указан
+       */
+      entrance?: number | null;
     };
     /** CreatePollRequest */
     CreatePollRequest: {
@@ -3990,6 +4005,11 @@ export interface components {
       llm_accepted: boolean;
       /** @description Где проблема, если категория допускает и квартиру, и дом; у остальных категорий место задано ими */
       place?: components["schemas"]["RequestPlace"] | null;
+      /**
+       * Entrance
+       * @description Подъезд проблемы в доме; у лифта и подъезда заявки разных подъездов собираются в разные коллективные. Пусто - у лифта и подъезда подъезд квартиры, если он известен, иначе не указан
+       */
+      entrance?: number | null;
     };
     /**
      * DangerKind
@@ -4455,6 +4475,11 @@ export interface components {
        * @description Сколько решено за 30 дней всего
        */
       resolved_total: number;
+      /**
+       * Own Entrance
+       * @description Подъезд квартиры жителя: его строки идут в open первыми; пусто - подъезд не известен
+       */
+      own_entrance?: number | null;
     };
     /** HouseResidentItem */
     HouseResidentItem: {
@@ -4885,6 +4910,11 @@ export interface components {
       mine: boolean;
       /** @description Где проблема у первой заявки: flat - в квартире, house - в доме */
       place: components["schemas"]["RequestPlace"];
+      /**
+       * Entrance
+       * @description Подъезд, общий для всех заявок строки; пусто - не указан или разные
+       */
+      entrance?: number | null;
     };
     /** OrgCard */
     OrgCard: {
@@ -5812,6 +5842,11 @@ export interface components {
        * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
        */
       gis_appeal_number?: string | null;
+      /**
+       * Entrance
+       * @description Подъезд общей заявки; пусто - не указан
+       */
+      entrance?: number | null;
       /** House Id */
       house_id: number;
       /** Address */
@@ -6068,6 +6103,11 @@ export interface components {
        * @description Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан
        */
       gis_appeal_number?: string | null;
+      /**
+       * Entrance
+       * @description Подъезд общей заявки; пусто - не указан
+       */
+      entrance?: number | null;
     };
     /** RequestMessageItem */
     RequestMessageItem: {
@@ -10287,6 +10327,7 @@ export interface operations {
     parameters: {
       query: {
         category: components["schemas"]["RequestCategory"];
+        entrance?: number | null;
       };
       header?: {
         "X-House-Id"?: number | null;

@@ -68,6 +68,11 @@ PLACE_CHOICE = (
     "у остальных категорий место задано ими"
 )
 PROBLEM_PLACE = "Где проблема у первой заявки: flat - в квартире, house - в доме"
+ENTRANCE_CHOICE = (
+    "Подъезд проблемы в доме; у лифта и подъезда заявки разных подъездов "
+    "собираются в разные коллективные. Пусто - у лифта и подъезда подъезд "
+    "квартиры, если он известен, иначе не указан"
+)
 
 
 class RequestCategoryItem(BaseSchema):
@@ -151,6 +156,10 @@ class RequestListItem(BaseSchema):
         default=None,
         description="Номер обращения в ГИС ЖКХ по жалобе в ГЖИ; пусто - не вписан",
     )
+    entrance: int | None = Field(
+        default=None,
+        description="Подъезд общей заявки; пусто - не указан",
+    )
 
     @classmethod
     def of_row(cls, row: RequestRow) -> Self:
@@ -180,6 +189,7 @@ class RequestListItem(BaseSchema):
             danger_phrase=None if found is None else found.phrase,
             place=request.place,
             gis_appeal_number=request.gis_appeal_number,
+            entrance=request.entrance,
         )
 
 
@@ -352,6 +362,7 @@ class CreateRequestRequest(BaseSchema):
     llm_suggested: bool = False
     llm_accepted: bool = False
     place: RequestPlace | None = Field(default=None, description=PLACE_CHOICE)
+    entrance: int | None = Field(default=None, ge=1, description=ENTRANCE_CHOICE)
 
 
 class SimilarRequestsResponse(BaseSchema):
@@ -508,6 +519,7 @@ class CreatePhoneRequestRequest(BaseSchema):
         ),
     )
     place: RequestPlace | None = Field(default=None, description=PLACE_CHOICE)
+    entrance: int | None = Field(default=None, ge=1, description=ENTRANCE_CHOICE)
 
 
 class RequestGroupCard(BaseSchema):
@@ -629,6 +641,12 @@ class OpenProblemItem(BaseSchema):
         description="Среди заявок есть ваша или вашей подтвержденной квартиры",
     )
     place: RequestPlace = Field(description=PROBLEM_PLACE)
+    entrance: int | None = Field(
+        default=None,
+        description=(
+            "Подъезд, общий для всех заявок строки; пусто - не указан или разные"
+        ),
+    )
 
     @classmethod
     def of(cls, problem: OpenProblem) -> Self:
@@ -640,6 +658,7 @@ class OpenProblemItem(BaseSchema):
             since=problem.since,
             mine=problem.mine,
             place=problem.place,
+            entrance=problem.entrance,
         )
 
 
@@ -671,6 +690,13 @@ class HouseProblemsResponse(BaseSchema):
         description="Решенные за 30 дней, последние 20",
     )
     resolved_total: int = Field(description="Сколько решено за 30 дней всего")
+    own_entrance: int | None = Field(
+        default=None,
+        description=(
+            "Подъезд квартиры жителя: его строки идут в open первыми; "
+            "пусто - подъезд не известен"
+        ),
+    )
 
     @classmethod
     def of(cls, problems: HouseProblems) -> Self:
@@ -678,4 +704,5 @@ class HouseProblemsResponse(BaseSchema):
             open=[OpenProblemItem.of(problem) for problem in problems.open],
             resolved=[ResolvedProblemItem.of(problem) for problem in problems.resolved],
             resolved_total=problems.resolved_total,
+            own_entrance=problems.own_entrance,
         )

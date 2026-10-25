@@ -25,6 +25,7 @@ PRIVATE_CATEGORIES = frozenset(
     for category, place in CATEGORY_PLACES.items()
     if place is RequestPlace.FLAT
 )
+ENTRANCE_CATEGORIES = frozenset({RequestCategory.ELEVATOR, RequestCategory.ENTRANCE})
 RESOLVED_PERIOD = timedelta(days=30)
 RESOLVED_SHOWN = 20
 
@@ -63,6 +64,10 @@ def complaint_sources(requests: Sequence[Request]) -> set[tuple[str, int]]:
     return sources
 
 
+def grouped_entrance(category: RequestCategory, entrance: int | None) -> int | None:
+    return entrance if category in ENTRANCE_CATEGORIES else None
+
+
 class GroupingService:
     __slots__ = ("_events", "_notifications", "_requests")
 
@@ -86,22 +91,34 @@ class GroupingService:
             return
         since = now - timedelta(hours=rules.window_hours)
         house_id = request.house_id
-        group = await self._requests.find_open_group(house_id, request.category, since)
+        entrance = grouped_entrance(request.category, request.entrance)
+        group = await self._requests.find_open_group(
+            house_id,
+            request.category,
+            since,
+            entrance,
+        )
         if group is not None:
             await self._requests.attach_to_group([request], group.id)
             await self.joined(request, group.id)
             return
 
-        open_requests = await self._requests.list_open_in_window(
+        open_requests = await self._open_in_window(
             house_id,
             request.category,
             since,
+            entrance,
         )
         if len(complaint_sources(open_requests)) < rules.threshold:
             return
 
         oldest = min(item.created_at for item in open_requests)
-        group = await self._requests.create_group(house_id, request.category, oldest)
+        group = await self._requests.create_group(
+            house_id,
+            request.category,
+            oldest,
+            entrance,
+        )
         await self._requests.attach_to_group(open_requests, group.id)
         for member in open_requests:
             self._notifications.sync_chat_card(
@@ -126,6 +143,7 @@ class GroupingService:
         now: datetime,
         exclude_flat_id: FlatId | None,
         exclude_user_id: UserId,
+        entrance: int | None,
     ) -> SimilarRequests:
         if category in PRIVATE_CATEGORIES:
             return SimilarRequests(
@@ -135,12 +153,14 @@ class GroupingService:
                 window_started_at=None,
             )
         since = now - timedelta(hours=rules.window_hours)
-        group = await self._requests.find_open_group(house_id, category, since)
-        open_requests = await self._requests.list_open_in_window(
+        entrance = grouped_entrance(category, entrance)
+        group = await self._requests.find_open_group(
             house_id,
             category,
             since,
+            entrance,
         )
+        open_requests = await self._open_in_window(house_id, category, since, entrance)
         sources = complaint_sources(open_requests) - {
             ("flat", exclude_flat_id),
             ("user", exclude_user_id),
@@ -175,18 +195,26 @@ class GroupingService:
         now: datetime,
         exclude_flat_id: FlatId | None,
         exclude_user_id: UserId,
+        entrance: int | None,
     ) -> "NeighboursOffer | None":
         if category in PRIVATE_CATEGORIES:
             return None
         since = now - timedelta(hours=rules.window_hours)
-        group = await self._requests.find_open_group(house_id, category, since)
+        entrance = grouped_entrance(category, entrance)
+        group = await self._requests.find_open_group(
+            house_id,
+            category,
+            since,
+            entrance,
+        )
         group_id = None if group is None else group.id
         shared = [
             request
-            for request in await self._requests.list_open_in_window(
+            for request in await self._open_in_window(
                 house_id,
                 category,
                 since,
+                entrance,
             )
             if request.place is RequestPlace.HOUSE
             or (group_id is not None and request.group_id == group_id)
@@ -207,6 +235,23 @@ class GroupingService:
             group_id=group_id,
         )
 
+    async def _open_in_window(
+        self,
+        house_id: HouseId,
+        category: RequestCategory,
+        since: datetime,
+        entrance: int | None,
+    ) -> list[Request]:
+        return [
+            request
+            for request in await self._requests.list_open_in_window(
+                house_id,
+                category,
+                since,
+            )
+            if grouped_entrance(category, request.entrance) == entrance
+        ]
+
 
 class OpenProblem(ZhekaType):
     category: RequestCategory
@@ -215,6 +260,7 @@ class OpenProblem(ZhekaType):
     since: datetime
     mine: bool
     place: RequestPlace
+    entrance: int | None
 
 
 class ResolvedProblem(ZhekaType):
@@ -228,6 +274,7 @@ class HouseProblems(ZhekaType):
     open: Sequence[OpenProblem]
     resolved: Sequence[ResolvedProblem]
     resolved_total: int
+    own_entrance: int | None
 
 
 def problems_of(
@@ -235,17 +282,20 @@ def problems_of(
     done_requests: Sequence[Request],
     user_id: UserId,
     flat_id: FlatId | None,
+    own_entrance: int | None,
 ) -> HouseProblems:
     shown = [
         request
         for request in open_requests
         if request.category not in PRIVATE_CATEGORIES
     ]
-    problems: dict[tuple[RequestCategory, RequestGroupId | None], list[Request]] = (
-        defaultdict(list)
-    )
+    problems: dict[
+        tuple[RequestCategory, RequestGroupId | None, int | None],
+        list[Request],
+    ] = defaultdict(list)
     for request in shown:
-        problems[request.category, request.group_id].append(request)
+        entrance = grouped_entrance(request.category, request.entrance)
+        problems[request.category, request.group_id, entrance].append(request)
     open_groups = {request.group_id for request in shown} - {None}
     finished: dict[tuple[str, int], list[Request]] = defaultdict(list)
     for request in done_requests:
@@ -267,27 +317,35 @@ def problems_of(
         )
         for members in finished.values()
     ]
+    open_problems = [
+        OpenProblem(
+            category=category,
+            flats_count=max(len(complaint_sources(members)), 1),
+            status=min(
+                (member.status for member in members),
+                key=list(RequestStatus).index,
+            ),
+            since=min(member.created_at for member in members),
+            mine=any(
+                member.author_user_id == user_id
+                or (flat_id is not None and member.flat_id == flat_id)
+                for member in members
+            ),
+            place=min(members, key=lambda member: member.id).place,
+            entrance=common_entrance(members),
+        )
+        for (category, _, _), members in problems.items()
+    ]
     return HouseProblems(
-        open=[
-            OpenProblem(
-                category=category,
-                flats_count=max(len(complaint_sources(members)), 1),
-                status=min(
-                    (member.status for member in members),
-                    key=list(RequestStatus).index,
-                ),
-                since=min(member.created_at for member in members),
-                mine=any(
-                    member.author_user_id == user_id
-                    or (flat_id is not None and member.flat_id == flat_id)
-                    for member in members
-                ),
-                place=min(members, key=lambda member: member.id).place,
-            )
-            for (category, _), members in problems.items()
-        ],
+        open=sorted(
+            open_problems,
+            key=lambda problem: (
+                own_entrance is None or problem.entrance != own_entrance
+            ),
+        ),
         resolved=resolved[:RESOLVED_SHOWN],
         resolved_total=len(resolved),
+        own_entrance=own_entrance,
     )
 
 
@@ -296,3 +354,8 @@ class NeighboursOffer(ZhekaType):
     flats_count: int
     status: RequestStatus
     group_id: RequestGroupId | None
+
+
+def common_entrance(requests: Sequence[Request]) -> int | None:
+    entrances = {request.entrance for request in requests}
+    return entrances.pop() if len(entrances) == 1 else None

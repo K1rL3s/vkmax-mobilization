@@ -65,6 +65,7 @@ from zheka.core.services.files import FilesService
 from zheka.core.services.houses import NOT_CONNECTED, is_connected
 from zheka.core.services.notifications import NotificationsService
 from zheka.core.services.request_groups import (
+    ENTRANCE_CATEGORIES,
     PRIVATE_CATEGORIES,
     RESOLVED_PERIOD,
     GroupingRules,
@@ -132,6 +133,7 @@ class RequestDraft(ZhekaType):
     llm_suggested: bool = False
     llm_accepted: bool = False
     place: RequestPlace | None = None
+    entrance: int | None = None
 
 
 class RequestMessageView(ZhekaType):
@@ -262,9 +264,18 @@ class RequestsService:
         attachments = self._checked_attachments(draft.attachments)
         group_id = await self._checked_group(draft.group_id, house_id, draft.category)
         chosen = draft.place
+        entrance = draft.entrance
         if group_id is not None:
-            members = await self._requests.list_for_group(group_id)
-            chosen = next((member.place for member in members), chosen)
+            first = next(iter(await self._requests.list_for_group(group_id)), None)
+            if first is not None:
+                chosen, entrance = first.place, first.entrance
+        elif entrance is None:
+            entrance = await flat_entrance(
+                self._houses,
+                house,
+                draft.category,
+                resident.flat_id,
+            )
         place = placed(draft.category, chosen)
 
         request = await self._requests.create(
@@ -278,6 +289,7 @@ class RequestsService:
             None,
             is_staff_author=await self._is_staff(house, user_id),
             place=place,
+            entrance=entranced(house, place, entrance),
         )
         await self._add_attachments(request, attachments, user_id)
         await self._open(request, user_id)
@@ -358,6 +370,7 @@ class RequestsService:
             parent.id,
             is_staff_author=await self._is_staff(house, user_id),
             place=parent.place,
+            entrance=parent.entrance,
         )
         await self._add_attachments(request, checked, user_id)
         await self._open(request, user_id)
@@ -540,15 +553,25 @@ class RequestsService:
         user_id: UserId,
         house_id: HouseId,
         category: RequestCategory,
+        entrance: int | None = None,
     ) -> SimilarRequests:
         resident = await self._active_resident(user_id, house_id)
+        house = await self._get_house(house_id)
+        if entrance is None:
+            entrance = await flat_entrance(
+                self._houses,
+                house,
+                category,
+                resident.flat_id,
+            )
         return await self._grouping.similar(
             house_id,
             category,
-            await self._rules(await self._get_house(house_id)),
+            await self._rules(house),
             datetime.now(UTC),
             resident.flat_id,
             user_id,
+            entranced(house, RequestPlace.HOUSE, entrance),
         )
 
     async def _group(
@@ -1022,6 +1045,7 @@ class RequestsService:
                 None,
                 is_staff_author=False,
                 place=request.place,
+                entrance=request.entrance,
             )
             await self._open(neighbour, resident.user_id)
             await self._requests.mark_deadline(neighbour, now, overdue=True)
@@ -1046,11 +1070,17 @@ class RequestsService:
         now: datetime,
     ) -> HouseProblems:
         resident = await self._active_resident(user_id, house_id)
+        flat = (
+            None
+            if resident.flat_id is None
+            else await self._houses.get_flat(resident.flat_id)
+        )
         return problems_of(
             await self._requests.list_open_for_house(house_id),
             await self._requests.list_done_for_house(house_id, now - RESOLVED_PERIOD),
             user_id,
             None if resident.verified_at is None else resident.flat_id,
+            None if flat is None else flat.entrance,
         )
 
     async def set_gis_appeal_number(
@@ -1122,13 +1152,15 @@ class RequestsService:
         category: RequestCategory,
     ) -> NeighboursOffer | None:
         resident = await self._active_resident(user_id, house_id)
+        house = await self._get_house(house_id)
         return await self._grouping.offer(
             house_id,
             category,
-            await self._rules(await self._get_house(house_id)),
+            await self._rules(house),
             datetime.now(UTC),
             None if resident.verified_at is None else resident.flat_id,
             user_id,
+            await flat_entrance(self._houses, house, category, resident.flat_id),
         )
 
     async def send_neighbour_act_pdf(
@@ -1411,3 +1443,31 @@ async def neighbour_act_due(
     if request.completion_reason is RequestCompletionReason.AUTO_CLOSED:
         return await requests_repo.has_repeat(request.id)
     return request.completion_reason is RequestCompletionReason.RESIDENT_REJECTED
+
+
+ENTRANCE_IN_FLAT = "Подъезд указывают только у проблемы в доме"
+ENTRANCE_OUT_OF_RANGE = "В доме нет подъезда с таким номером"
+
+
+def entranced(house: House, place: RequestPlace, entrance: int | None) -> int | None:
+    if entrance is None:
+        return None
+    if place is not RequestPlace.HOUSE:
+        raise InvalidRequest(ENTRANCE_IN_FLAT)
+    if not 1 <= entrance <= house.entrances:
+        raise InvalidRequest(ENTRANCE_OUT_OF_RANGE)
+    return entrance if house.entrances > 1 else None
+
+
+async def flat_entrance(
+    houses_repo: HousesRepo,
+    house: House,
+    category: RequestCategory,
+    flat_id: FlatId | None,
+) -> int | None:
+    if category not in ENTRANCE_CATEGORIES or flat_id is None or house.entrances <= 1:
+        return None
+    flat = await houses_repo.get_flat(flat_id)
+    if flat is None or flat.entrance is None or flat.entrance > house.entrances:
+        return None
+    return flat.entrance

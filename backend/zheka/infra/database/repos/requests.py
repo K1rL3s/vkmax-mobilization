@@ -101,6 +101,7 @@ class RequestsRepo(BaseAlchemyRepo):
         caller_name: str | None = None,
         caller_phone: str | None = None,
         place: RequestPlace,
+        entrance: int | None = None,
     ) -> Request:
         now = datetime.now(UTC)
         react_deadline_at, deadline_at = CATEGORY_RULES[category].deadlines(
@@ -126,6 +127,7 @@ class RequestsRepo(BaseAlchemyRepo):
             react_deadline_at=react_deadline_at,
             danger=None if danger is None else danger.kind,
             place=place,
+            entrance=entrance,
         )
         self._session.add(request)
         await self._session.flush()
@@ -449,6 +451,7 @@ class RequestsRepo(BaseAlchemyRepo):
         house_id: HouseId,
         category: RequestCategory,
         since: datetime,
+        entrance: int | None,
     ) -> RequestGroup | None:
         stmt = (
             select(RequestGroup)
@@ -457,6 +460,7 @@ class RequestsRepo(BaseAlchemyRepo):
                 request_groups_table.c.category == category,
                 request_groups_table.c.status == RequestGroupStatus.OPEN,
                 request_groups_table.c.window_started_at >= since,
+                request_groups_table.c.entrance.is_not_distinct_from(entrance),
             )
             .order_by(request_groups_table.c.id.desc())
             .limit(1)
@@ -482,12 +486,14 @@ class RequestsRepo(BaseAlchemyRepo):
         house_id: HouseId,
         category: RequestCategory,
         window_started_at: datetime,
+        entrance: int | None = None,
     ) -> RequestGroup:
         group = RequestGroup(
             house_id=house_id,
             category=category,
             window_started_at=window_started_at,
             status=RequestGroupStatus.OPEN,
+            entrance=entrance,
         )
         self._session.add(group)
         await self._session.flush()

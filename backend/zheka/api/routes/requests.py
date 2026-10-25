@@ -110,11 +110,13 @@ async def find_similar_requests(
     requests_service: FromDishka[RequestsService],
     announcements_service: FromDishka[AnnouncementsService],
     category: RequestCategory,
+    entrance: int | None = None,
 ) -> SimilarRequestsResponse:
     similar = await requests_service.similar(
         residency.user_id,
         residency.house_id,
         category,
+        entrance,
     )
     works = await announcements_service.active_works(
         residency.user_id,

@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { z } from "zod";
 
+import { useHouseCard } from "@/features/house";
 import {
   requestCategorySchema,
   useRequestCategories,
@@ -53,23 +54,25 @@ export const useNewRequest = () => {
   const [searchParams] = useSearchParams();
   const preset =
     requestCategorySchema.safeParse(searchParams.get("category")).data ?? null;
-  const entrance = z.coerce
-    .number()
-    .int()
-    .positive()
-    .safeParse(searchParams.get("entrance") ?? undefined).data;
   const { currentResidency: residency } = useSession();
-  const prefill = entrance === undefined ? "" : `Подъезд ${entrance}: `;
-  const [description, setDescription] = useState(prefill);
+  const house = useHouseCard(residency?.house_id);
+  const [description, setDescription] = useState("");
   const [picked, setPicked] = useState<RequestCategory | null>(
     dispute?.category ?? preset,
   );
   const [place, setPlace] = useState<RequestPlace | null>(null);
+  const [entrance, setEntrance] = useState(
+    z.coerce
+      .number()
+      .int()
+      .positive()
+      .safeParse(searchParams.get("entrance") ?? undefined).data ?? null,
+  );
   const attachments = useAttachments();
   const idempotency = useIdempotencyKey();
 
   useClosingConfirmation(
-    description.trim() !== prefill.trim() || attachments.names.length > 0,
+    description.trim() !== "" || attachments.names.length > 0,
   );
 
   const categories = useRequestCategories();
@@ -98,6 +101,10 @@ export const useNewRequest = () => {
   const category = picked ?? suggested;
   const rule = categories.data?.find((item) => item.category === category);
   const asksPlace = !dispute && rule !== undefined && !rule.place;
+  const entrances = Math.max(house.data?.entrances ?? 1, entrance ?? 0);
+  const isHousePlace = !dispute && (rule?.place ?? place) === "house";
+  const asksEntrance = isHousePlace && entrances > 1;
+  const chosenEntrance = isHousePlace ? entrance : null;
 
   const debouncedCategory = useDebounceValue(category, 400);
 
@@ -107,7 +114,10 @@ export const useNewRequest = () => {
     {
       params: {
         ...houseParams(),
-        query: { category: debouncedCategory ?? "other" },
+        query: {
+          category: debouncedCategory ?? "other",
+          entrance: chosenEntrance ?? undefined,
+        },
       },
     },
     { enabled: debouncedCategory !== null && !dispute },
@@ -180,6 +190,7 @@ export const useNewRequest = () => {
         llm_suggested: suggested !== null,
         llm_accepted: suggested !== null && category === suggested,
         place: asksPlace ? place : null,
+        entrance: chosenEntrance,
       },
     });
   };
@@ -226,6 +237,10 @@ export const useNewRequest = () => {
     asksPlace,
     place,
     setPlace,
+    asksEntrance,
+    entrances,
+    entrance,
+    setEntrance,
     submit,
   };
 };

@@ -108,6 +108,9 @@ const RequestPage = () => {
         <Flex align="center" wrap="wrap" gap={8}>
           <StatusPill tone={tone}>{statusLabel(request)}</StatusPill>
           <StatusPill tone="neutral">{PLACE_LABEL[request.place]}</StatusPill>
+          {request.entrance != null && (
+            <StatusPill tone="neutral">Подъезд {request.entrance}</StatusPill>
+          )}
           {request.group_size > 1 && (
             <StatusPill tone="neutral">
               {request.group_size}{" "}
