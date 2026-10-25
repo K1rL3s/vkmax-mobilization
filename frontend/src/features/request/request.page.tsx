@@ -27,6 +27,7 @@ import { DeadlinePanel } from "./ui/deadline-panel";
 import { EscalationPanel } from "./ui/escalation-panel";
 import { LetterPanel } from "./ui/letter-panel";
 import { MessageThread } from "./ui/message-thread";
+import { NeighbourActPanel } from "./ui/neighbour-act-panel";
 import { QuestionPanel } from "./ui/question-panel";
 import { RatePanel } from "./ui/rate-panel";
 import { ReplyForm } from "./ui/reply-form";
@@ -201,6 +202,8 @@ const RequestPage = () => {
       {overdue && <EscalationPanel request={request} />}
 
       {isRunning && <SharePanel request={request} />}
+
+      {request.can_neighbour_act && <NeighbourActPanel request={request} />}
 
       {letter && <LetterPanel {...letter} />}
 

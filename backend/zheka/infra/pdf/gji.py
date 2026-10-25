@@ -149,14 +149,7 @@ class GjiComplaint(PdfDocument):
         self.paragraph("История заявки", bold=True)
         self.grid(
             ("Дата и время", "Статус", "Кто изменил"),
-            [
-                (
-                    self._moment(log.at),
-                    REQUEST_STATUS_LABELS[log.to_status],
-                    ACTORS.get(log.by_role, log.by_role),
-                )
-                for log in self._card.timeline
-            ],
+            history_rows(self._card),
             (40, 55, 75),
         )
 
@@ -190,3 +183,14 @@ class GjiComplaint(PdfDocument):
             (10, 90, 20, 50),
             line_height=7,
         )
+
+
+def history_rows(card: RequestCardData) -> list[tuple[str, str, str]]:
+    return [
+        (
+            f"{card.house.local(log.at):{PRINTED}}",
+            REQUEST_STATUS_LABELS[log.to_status],
+            ACTORS.get(log.by_role, log.by_role),
+        )
+        for log in card.timeline
+    ]

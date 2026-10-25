@@ -15,6 +15,7 @@ import {
   canDemoAutoClose,
   canDemoExpire,
   canDemoNeighbours,
+  canNeighbourAct,
   createRequest,
   declineVisit,
   findRequest,
@@ -514,5 +515,20 @@ export const requestsConfigs = [
     });
 
     return ok(requestCard(item));
+  }),
+  endpoint("post", "/requests/:request_id/neighbour-act-pdf", (request) => {
+    const item = findRequest(Number(request.params.request_id));
+
+    if (!item) {
+      return notFound("Заявка не найдена");
+    }
+
+    if (!canNeighbourAct(item)) {
+      return conflict(
+        "Акт с соседями готовим по заявке об отоплении, воде или свете, когда срок истек или работу не приняли",
+      );
+    }
+
+    return ok({ ok: true } satisfies Schemas["OkResponse"]);
   }),
 ];

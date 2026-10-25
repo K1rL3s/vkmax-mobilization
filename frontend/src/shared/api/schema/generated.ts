@@ -987,6 +987,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/requests/{request_id}/neighbour-act-pdf": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Акт с соседями файлом в чат с ботом
+     * @description Только автор заявки об отоплении, водоснабжении или электричестве, чужая - 404. Заявка должна быть просроченной открытой или с непринятой работой («Сделано плохо»), и бот должен мочь написать автору, иначе 409. Бот присылает PDF акта о непредоставлении (ненадлежащем качестве) коммунальной услуги по п. 110(1) ПП РФ № 354: адрес, услуга, начало нарушения со времени подачи заявки, история статусов и строки для подписей двух соседей и председателя совета дома; на демо-УК - с пометкой «ДЕМО»
+     */
+    post: operations["send_neighbour_act_pdf"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/flats/{flat_id}/meters": {
     parameters: {
       query?: never;
@@ -3038,6 +3058,11 @@ export interface components {
       visit?: components["schemas"]["VisitItem"] | null;
       /** @description Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы */
       recalculation?: components["schemas"]["RecalculationItem"] | null;
+      /**
+       * Can Neighbour Act
+       * @description Автор может получить акт с соседями: заявка об отоплении, воде или свете просрочена, работу не приняли или после автозакрытия сообщили, что проблема осталась
+       */
+      can_neighbour_act: boolean;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -5872,6 +5897,11 @@ export interface components {
       visit?: components["schemas"]["VisitItem"] | null;
       /** @description Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы */
       recalculation?: components["schemas"]["RecalculationItem"] | null;
+      /**
+       * Can Neighbour Act
+       * @description Автор может получить акт с соседями: заявка об отоплении, воде или свете просрочена, работу не приняли или после автозакрытия сообщили, что проблема осталась
+       */
+      can_neighbour_act: boolean;
     };
     /**
      * RequestCategory
@@ -11950,6 +11980,93 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RequestCard"];
+        };
+      };
+      /** @description Некорректный запрос */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Требуется авторизация */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Недостаточно прав */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Сущность не найдена */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Конфликт состояния */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Внутренняя ошибка сервера */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+      /** @description Любая другая ошибка, конверт тот же */
+      default: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiError_BaseError_"];
+        };
+      };
+    };
+  };
+  send_neighbour_act_pdf: {
+    parameters: {
+      query?: never;
+      header?: {
+        WebAppData?: string | null;
+      };
+      path: {
+        request_id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OkResponse"];
         };
       };
       /** @description Некорректный запрос */

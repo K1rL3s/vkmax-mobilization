@@ -777,3 +777,11 @@ def visit_chosen(when: str, was: str | None) -> str:
 
 def visit_canceled(request: Request) -> str:
     return f"❌ УК отменила визит по заявке {_request(request.id, request.category)}"
+
+
+def neighbour_act_pdf_sent(request_id: RequestId) -> str:
+    return (
+        f"📄 Акт с соседями по заявке №{request_id}\n"
+        "📝 Впишите замеры, распечатайте и подпишите с двумя соседями и "
+        "председателем совета дома"
+    )

@@ -1,4 +1,6 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,12 +12,14 @@ from tests.conftest import (
     add_user,
     admin_requests_service,
     events_of,
+    photo_name,
     requests_service,
 )
 from tests.test_contact import _viewer
 from tests.test_requests import _age, _block, _complain, _group_of_three, _member
 
 from zheka.api.routes.admin.requests import list_org_requests
+from zheka.api.schemas.requests import RequestCard
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core.enums import (
@@ -23,7 +27,10 @@ from zheka.core.enums import (
     DangerKind,
     EventType,
     OrgRole,
+    RequestActorRole,
     RequestCategory,
+    RequestChannel,
+    RequestCompletionReason,
     RequestPlace,
     RequestStatus,
 )
@@ -34,13 +41,14 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import MaxChatId, UserId
+from zheka.core.models import Request
 from zheka.core.services.requests import RequestDraft
 from zheka.core.texts import REQUEST_PLACE_LINES
 from zheka.infra.database.models import OrgMember, User
 from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.infra.database.repos.requests import RequestFilters
+from zheka.infra.database.repos.requests import RequestFilters, RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
-from zheka.infra.pdf import GjiComplaint, PdfDocument
+from zheka.infra.pdf import GjiComplaint, NeighbourAct, PdfDocument
 
 
 async def test_escalation_reaches_everyone_on_the_request_once(
@@ -580,3 +588,352 @@ async def test_a_blank_gis_appeal_number_is_refused(
         )
 
     assert request.gis_appeal_number is None
+
+
+async def test_a_neighbour_act_of_someone_elses_request_is_not_found(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    neighbour = await add_user(session)
+    await add_resident(session, neighbour, own.house_id, None)
+    await _open_dialog(session, neighbour)
+    request = await _complain(
+        session,
+        own.user_id,
+        own.house_id,
+        RequestCategory.WATER_SUPPLY,
+    )
+
+    with pytest.raises(EntityNotFound):
+        await requests_service(session, publisher).send_neighbour_act_pdf(
+            neighbour,
+            request.id,
+            request.deadline_at + timedelta(hours=1),
+        )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_NEIGHBOUR_ACT_PDF) == []
+    assert await events_of(session, EventType.REQUEST_EXPORTED) == []
+
+
+@pytest.mark.parametrize(
+    ("category", "status", "reason", "late"),
+    [
+        (RequestCategory.LEAK, RequestStatus.IN_PROGRESS, None, timedelta(hours=1)),
+        (
+            RequestCategory.WATER_SUPPLY,
+            RequestStatus.IN_PROGRESS,
+            None,
+            timedelta(minutes=-1),
+        ),
+        (RequestCategory.HEATING, RequestStatus.ON_REVIEW, None, timedelta(hours=1)),
+        (
+            RequestCategory.ELECTRICITY,
+            RequestStatus.DONE,
+            RequestCompletionReason.RESIDENT_ACCEPTED,
+            timedelta(hours=1),
+        ),
+        (
+            RequestCategory.LEAK,
+            RequestStatus.DONE,
+            RequestCompletionReason.RESIDENT_REJECTED,
+            timedelta(hours=1),
+        ),
+    ],
+)
+async def test_a_neighbour_act_is_refused_outside_utilities_or_while_on_time(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    category: RequestCategory,
+    status: RequestStatus,
+    reason: RequestCompletionReason | None,
+    late: timedelta,
+) -> None:
+    await _open_dialog(session, own.user_id)
+    request = await _complain(session, own.user_id, own.house_id, category)
+    request.status = status
+    request.completion_reason = reason
+    await session.flush()
+
+    with pytest.raises(InvalidState):
+        await requests_service(session, publisher).send_neighbour_act_pdf(
+            own.user_id,
+            request.id,
+            request.deadline_at + late,
+        )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_NEIGHBOUR_ACT_PDF) == []
+
+
+@pytest.mark.parametrize("rejected", [False, True])
+async def test_a_neighbour_act_of_an_overdue_or_rejected_request_goes_to_its_author(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    rejected: bool,
+) -> None:
+    await _open_dialog(session, own.user_id)
+    request = await _complain(
+        session,
+        own.user_id,
+        own.house_id,
+        RequestCategory.WATER_SUPPLY,
+    )
+    late = timedelta(minutes=1)
+    if rejected:
+        request.status = RequestStatus.DONE
+        request.completion_reason = RequestCompletionReason.RESIDENT_REJECTED
+        await session.flush()
+        late = -timedelta(hours=1)
+
+    await requests_service(session, publisher).send_neighbour_act_pdf(
+        own.user_id,
+        request.id,
+        request.deadline_at + late,
+    )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_NEIGHBOUR_ACT_PDF) == [
+        {"user_id": own.user_id, "request_id": request.id},
+    ]
+    [event] = await events_of(session, EventType.REQUEST_EXPORTED)
+    assert event.payload == {"request_id": request.id, "format": "neighbour_act_pdf"}
+
+
+async def test_a_neighbour_act_is_refused_when_the_bot_cannot_write_to_the_author(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    request = await _complain(
+        session,
+        own.user_id,
+        own.house_id,
+        RequestCategory.HEATING,
+    )
+
+    with pytest.raises(InvalidState, match="Бот не может вам написать"):
+        await requests_service(session, publisher).send_neighbour_act_pdf(
+            own.user_id,
+            request.id,
+            request.deadline_at + timedelta(minutes=1),
+        )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_NEIGHBOUR_ACT_PDF) == []
+
+
+@pytest.mark.parametrize("is_demo", [False, True])
+async def test_a_neighbour_act_says_demo_on_every_page_only_for_a_demo_org(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+    monkeypatch: pytest.MonkeyPatch,
+    is_demo: bool,
+) -> None:
+    org = await OrgsRepo(session).get(own.org_id)
+    assert org is not None
+    org.is_demo = is_demo
+    await session.flush()
+    request = await _complain(
+        session,
+        own.user_id,
+        own.house_id,
+        RequestCategory.WATER_SUPPLY,
+    )
+    card = await requests_service(session, publisher).get_card(
+        own.user_id,
+        request.id,
+    )
+    drawn: set[tuple[int, str]] = set()
+    monkeypatch.setattr(
+        PdfDocument,
+        "text",
+        lambda pdf, *args: drawn.add((pdf.page, args[-1])),
+    )
+
+    act = NeighbourAct(card, request.deadline_at + timedelta(hours=1))
+    act.render()
+
+    pages = range(1, act.pages_count + 1)
+    assert drawn == ({(page, "ДЕМО") for page in pages} if is_demo else set())
+
+
+async def _auto_closed(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+    *,
+    returned: bool,
+) -> Request:
+    request = await _complain(
+        session,
+        own.user_id,
+        own.house_id,
+        RequestCategory.HEATING,
+    )
+    request.status = RequestStatus.DONE
+    request.completion_reason = RequestCompletionReason.AUTO_CLOSED
+    request.done_at = datetime.now(UTC)
+    await session.flush()
+    if returned:
+        await requests_service(session, publisher).reject(
+            own.user_id,
+            request.id,
+            "Батареи так и не греют",
+            [photo_name()],
+            RequestChannel.MINIAPP,
+        )
+    return request
+
+
+async def test_a_neighbour_act_follows_problem_remains_on_an_auto_closed_request(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    await _open_dialog(session, own.user_id)
+    request = await _auto_closed(session, own, publisher, returned=True)
+    service = requests_service(session, publisher)
+
+    await service.send_neighbour_act_pdf(own.user_id, request.id, datetime.now(UTC))
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_NEIGHBOUR_ACT_PDF) == [
+        {"user_id": own.user_id, "request_id": request.id},
+    ]
+    card = await service.get_card(own.user_id, request.id)
+    assert RequestCard.of(card, [], []).can_neighbour_act
+
+
+async def test_a_neighbour_act_waits_for_problem_remains_on_an_auto_closed_request(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    await _open_dialog(session, own.user_id)
+    request = await _auto_closed(session, own, publisher, returned=False)
+    service = requests_service(session, publisher)
+
+    with pytest.raises(InvalidState):
+        await service.send_neighbour_act_pdf(
+            own.user_id,
+            request.id,
+            datetime.now(UTC),
+        )
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SEND_NEIGHBOUR_ACT_PDF) == []
+    card = await service.get_card(own.user_id, request.id)
+    assert not RequestCard.of(card, [], []).can_neighbour_act
+
+
+@pytest.mark.parametrize(
+    ("category", "late", "due"),
+    [
+        (RequestCategory.WATER_SUPPLY, True, True),
+        (RequestCategory.WATER_SUPPLY, False, False),
+        (RequestCategory.LEAK, True, False),
+    ],
+)
+async def test_the_card_offers_a_neighbour_act_to_an_overdue_utility_request(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    category: RequestCategory,
+    late: bool,
+    due: bool,
+) -> None:
+    request = await _complain(session, own.user_id, own.house_id, category)
+    if late:
+        request.deadline_at = datetime.now(UTC) - timedelta(minutes=1)
+        await session.flush()
+
+    card = await requests_service(session).get_card(own.user_id, request.id)
+
+    assert RequestCard.of(card, [], []).can_neighbour_act is due
+
+
+async def test_a_neighbour_act_of_a_returned_auto_closed_request_says_so(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = await _auto_closed(session, own, publisher, returned=True)
+    card = await requests_service(session, publisher).get_card(
+        own.user_id,
+        request.id,
+    )
+    written: list[str] = []
+    monkeypatch.setattr(
+        PdfDocument,
+        "paragraph",
+        lambda _pdf, text, **_: written.append(text),
+    )
+
+    NeighbourAct(card, datetime.now(UTC))
+
+    assert any(
+        "потребитель сообщил, что нарушение не устранено" in text for text in written
+    )
+    assert not any(text.startswith("Срок выполнения заявки истек") for text in written)
+
+
+async def test_a_neighbour_act_keeps_its_signatures_on_one_page(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = await _auto_closed(session, own, publisher, returned=True)
+    for before, after in pairwise(
+        (
+            RequestStatus.NEW,
+            RequestStatus.ACCEPTED,
+            RequestStatus.IN_PROGRESS,
+            RequestStatus.ON_REVIEW,
+            RequestStatus.DONE,
+        ),
+    ):
+        await RequestsRepo(session).add_log(
+            request.id,
+            before,
+            after,
+            None,
+            RequestActorRole.STAFF.value,
+            request.created_at,
+        )
+    card = await requests_service(session, publisher).get_card(
+        own.user_id,
+        request.id,
+    )
+    pages: dict[str, tuple[int, int]] = {}
+    grid = PdfDocument.grid
+
+    def spy(
+        pdf: PdfDocument,
+        headings: Sequence[str],
+        rows: Sequence[Sequence[str]],
+        widths: Sequence[float],
+        *,
+        line_height: float = 4.6,
+    ) -> None:
+        first = pdf.page
+        grid(pdf, headings, rows, widths, line_height=line_height)
+        pages[headings[0]] = (first, pdf.page)
+
+    monkeypatch.setattr(PdfDocument, "grid", spy)
+
+    NeighbourAct(card, datetime.now(UTC))
+
+    first, last = pages["Кто подписывает"]
+    assert first == last

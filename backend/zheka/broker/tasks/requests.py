@@ -33,7 +33,7 @@ from zheka.core.services.requests import RequestsService
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
-from zheka.infra.pdf import GjiComplaint
+from zheka.infra.pdf import GjiComplaint, NeighbourAct
 
 logger = logging.getLogger(__name__)
 
@@ -249,4 +249,27 @@ async def send_gji_pdf(
             f"zhaloba-{request_id}.pdf",
         ),
         texts.gji_pdf_sent(request_id),
+    )
+
+
+@async_shared_broker.task(task_name=TaskName.SEND_NEIGHBOUR_ACT_PDF.value)
+@inject(patch_module=True)
+async def send_neighbour_act_pdf(
+    user_id: UserId,
+    request_id: RequestId,
+    requests_service: FromDishka[RequestsService],
+    users_repo: FromDishka[UsersRepo],
+    sender: FromDishka[MaxSender],
+) -> None:
+    user = await users_repo.get_by_id(user_id)
+    if user is None:
+        return
+    card = await requests_service.get_card(user_id, request_id)
+    await sender.send_file(
+        user,
+        BufferedInputFile.file(
+            NeighbourAct(card, datetime.now(UTC)).render(),
+            f"akt-{request_id}.pdf",
+        ),
+        texts.neighbour_act_pdf_sent(request_id),
     )

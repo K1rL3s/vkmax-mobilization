@@ -278,6 +278,13 @@ class RequestCard(RequestListItem):
             "подтверждена, нет начисления по услуге или нет превышения нормы"
         ),
     )
+    can_neighbour_act: bool = Field(
+        description=(
+            "Автор может получить акт с соседями: заявка об отоплении, воде или "
+            "свете просрочена, работу не приняли или после автозакрытия сообщили, "
+            "что проблема осталась"
+        ),
+    )
 
     @classmethod
     def of(
@@ -332,6 +339,7 @@ class RequestCard(RequestListItem):
                     amount=card.recalculation.amount,
                 )
             ),
+            can_neighbour_act=card.can_neighbour_act,
         )
 
 

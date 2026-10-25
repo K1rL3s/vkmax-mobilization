@@ -4843,6 +4843,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/requests/{request_id}/neighbour-act-pdf:
+    post:
+      tags:
+      - Заявки
+      summary: Акт с соседями файлом в чат с ботом
+      description: 'Только автор заявки об отоплении, водоснабжении или электричестве, чужая - 404. Заявка должна быть просроченной открытой или с непринятой работой («Сделано плохо»), и бот должен мочь написать автору, иначе 409. Бот присылает PDF акта о непредоставлении (ненадлежащем качестве) коммунальной услуги по п. 110(1) ПП РФ № 354: адрес, услуга, начало нарушения со времени подачи заявки, история статусов и строки для подписей двух соседей и председателя совета дома; на демо-УК - с пометкой «ДЕМО»'
+      operationId: send_neighbour_act_pdf
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Request Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/flats/{flat_id}/meters:
     get:
       tags:
@@ -13997,6 +14070,10 @@ components:
           - $ref: '#/components/schemas/RecalculationItem'
           - type: 'null'
           description: 'Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы'
+        can_neighbour_act:
+          type: boolean
+          title: Can Neighbour Act
+          description: 'Автор может получить акт с соседями: заявка об отоплении, воде или свете просрочена, работу не приняли или после автозакрытия сообщили, что проблема осталась'
         is_staff_author:
           type: boolean
           title: Is Staff Author
@@ -14056,6 +14133,7 @@ components:
       - can_demo_auto_close
       - rejection_needs_photo
       - can_demo_neighbours
+      - can_neighbour_act
       - is_staff_author
       title: AdminRequestCard
     AdminRequestListItem:
@@ -18619,6 +18697,10 @@ components:
           - $ref: '#/components/schemas/RecalculationItem'
           - type: 'null'
           description: 'Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы'
+        can_neighbour_act:
+          type: boolean
+          title: Can Neighbour Act
+          description: 'Автор может получить акт с соседями: заявка об отоплении, воде или свете просрочена, работу не приняли или после автозакрытия сообщили, что проблема осталась'
       type: object
       required:
       - id
@@ -18645,6 +18727,7 @@ components:
       - can_demo_auto_close
       - rejection_needs_photo
       - can_demo_neighbours
+      - can_neighbour_act
       title: RequestCard
     RequestCategory:
       type: string

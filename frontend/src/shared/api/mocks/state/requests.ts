@@ -494,6 +494,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     can_demo_neighbours: canDemoNeighbours(item),
     visit: item.status === "done" ? null : visitOf(item.id),
     recalculation: item.id === 145 ? { hours_over: 40, amount: 13_740 } : null,
+    can_neighbour_act: canNeighbourAct(item),
   };
 };
 
@@ -705,4 +706,23 @@ const FIXED_PLACES: Partial<
   yard: "house",
   meter_error: "flat",
   charge_dispute: "flat",
+};
+
+export const canNeighbourAct = (item: MockRequest) => {
+  if (!["heating", "water_supply", "electricity"].includes(item.category)) {
+    return false;
+  }
+
+  if (["new", "accepted", "in_progress"].includes(item.status)) {
+    return (
+      item.deadline_at !== null &&
+      new Date(item.deadline_at).getTime() <= Date.now()
+    );
+  }
+
+  if (item.completion_reason === "auto_closed") {
+    return requests.some((other) => other.parent_request_id === item.id);
+  }
+
+  return item.completion_reason === "resident_rejected";
 };

@@ -258,6 +258,7 @@ from zheka.broker.tasks.requests import (
     auto_close_reviewed_requests,
     send_executor_card,
     send_gji_pdf,
+    send_neighbour_act_pdf,
     send_question_card,
     send_review_card,
     send_visit_card,
@@ -7870,3 +7871,43 @@ async def test_a_welcome_without_the_pin_right_carries_the_house_menu(
 def test_house_screens_never_read_as_request_categories() -> None:
     screens = {screen.value for screen in HouseScreen}
     assert screens.isdisjoint(category.value for category in RequestCategory)
+
+
+async def test_the_neighbour_act_task_sends_the_act_file_to_its_author(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    house_id = await _staff(bot_session, client)
+    author = (await _user(bot_session, client)).id
+    request_id = await _request(
+        bot_session,
+        house_id,
+        RequestStatus.ACCEPTED,
+        author=author,
+    )
+    request = await RequestsRepo(bot_session).get(request_id)
+    assert request is not None
+    request.category = RequestCategory.WATER_SUPPLY
+    await bot_session.commit()
+    send_file = AsyncMock()
+    monkeypatch.setattr(MaxSender, "send_file", send_file)
+
+    await _run(
+        task_broker,
+        send_neighbour_act_pdf,
+        user_id=author,
+        request_id=request_id,
+    )
+
+    send_file.assert_awaited_once()
+    user, file, text = send_file.call_args.args
+    assert user.id == author
+    assert file.file_name == f"akt-{request_id}.pdf"
+    assert (await file.read()).startswith(b"%PDF")
+    assert text == (
+        f"📄 Акт с соседями по заявке №{request_id}\n"
+        "📝 Впишите замеры, распечатайте и подпишите с двумя соседями и "
+        "председателем совета дома"
+    )

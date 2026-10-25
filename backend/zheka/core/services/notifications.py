@@ -285,3 +285,10 @@ class NotificationsService:
 
     def ask_chat_rights(self, chat_id: MaxChatId) -> None:
         self._publisher.publish(TaskName.ASK_CHAT_RIGHTS, chat_id=chat_id)
+
+    def send_neighbour_act_pdf(self, user_id: UserId, request_id: RequestId) -> None:
+        self._publisher.publish(
+            TaskName.SEND_NEIGHBOUR_ACT_PDF,
+            user_id=user_id,
+            request_id=request_id,
+        )

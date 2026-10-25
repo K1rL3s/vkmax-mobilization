@@ -167,6 +167,7 @@ class RequestCardData(ZhekaType):
     can_demo_neighbours: bool
     visit: VisitData | None = None
     recalculation: Recalculation | None = None
+    can_neighbour_act: bool
 
 
 class SharedRequest(ZhekaType):
@@ -1130,6 +1131,26 @@ class RequestsService:
             user_id,
         )
 
+    async def send_neighbour_act_pdf(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        now: datetime,
+    ) -> None:
+        request = await self._own_request(user_id, request_id)
+        if not await neighbour_act_due(self._requests, request, now):
+            raise InvalidState(ACT_NOT_DUE)
+        user = await self._users.get_by_id(user_id)
+        if user is None or not user.in_dialog:
+            raise InvalidState(NO_BOT_DIALOG)
+        await self._events.record(
+            EventType.REQUEST_EXPORTED,
+            user_id=user_id,
+            request_id=request_id,
+            format="neighbour_act_pdf",
+        )
+        self._notifications.send_neighbour_act_pdf(user_id, request_id)
+
 
 async def build_rows(
     requests_repo: RequestsRepo,
@@ -1269,6 +1290,8 @@ async def build_card(
             ),
         ),
         visit=await visit_of(access_repo, request),
+        can_neighbour_act=authored
+        and await neighbour_act_due(requests_repo, request, now),
     )
 
 
@@ -1361,3 +1384,30 @@ def violation_end(
         (log.at for log in timeline if log.to_status is RequestStatus.DONE),
         default=None,
     )
+
+
+UTILITY_SERVICES = {
+    RequestCategory.HEATING: "отопление",
+    RequestCategory.WATER_SUPPLY: (
+        "холодное / горячее водоснабжение (нужное подчеркнуть)"
+    ),
+    RequestCategory.ELECTRICITY: "электроснабжение",
+}
+ACT_NOT_DUE = (
+    "Акт с соседями готовим по заявке об отоплении, воде или свете, когда срок "
+    "истек или работу не приняли"
+)
+
+
+async def neighbour_act_due(
+    requests_repo: RequestsRepo,
+    request: Request,
+    now: datetime,
+) -> bool:
+    if request.category not in UTILITY_SERVICES:
+        return False
+    if request.status in OPEN_STATUSES:
+        return request.deadline_at <= now
+    if request.completion_reason is RequestCompletionReason.AUTO_CLOSED:
+        return await requests_repo.has_repeat(request.id)
+    return request.completion_reason is RequestCompletionReason.RESIDENT_REJECTED

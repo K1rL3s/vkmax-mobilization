@@ -138,6 +138,7 @@ const makeRequest = (houseId: number, fields: Partial<Request>): Request => {
     can_demo_auto_close: false,
     rejection_needs_photo: true,
     can_demo_neighbours: false,
+    can_neighbour_act: false,
     can_propose_visit: false,
     ...fields,
     place: category.place ?? fields.place ?? "house",

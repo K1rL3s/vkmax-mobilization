@@ -578,3 +578,30 @@ async def add_demo_neighbours(
         datetime.now(UTC),
     )
     return _card(card, files_service)
+
+
+@router.post(
+    "/requests/{request_id}/neighbour-act-pdf",
+    summary="Акт с соседями файлом в чат с ботом",
+    description=(
+        "Только автор заявки об отоплении, водоснабжении или электричестве, "
+        "чужая - 404. Заявка должна быть просроченной открытой или с "
+        "непринятой работой («Сделано плохо»), и бот должен мочь написать "
+        "автору, иначе 409. Бот присылает PDF акта о непредоставлении "
+        "(ненадлежащем качестве) коммунальной услуги по п. 110(1) ПП РФ № 354: "
+        "адрес, услуга, начало нарушения со времени подачи заявки, история "
+        "статусов и строки для подписей двух соседей и председателя совета "
+        "дома; на демо-УК - с пометкой «ДЕМО»"
+    ),
+)
+async def send_neighbour_act_pdf(
+    request_id: RequestId,
+    current_account: RequireConsentDep,
+    requests_service: FromDishka[RequestsService],
+) -> OkResponse:
+    await requests_service.send_neighbour_act_pdf(
+        current_account.user_id,
+        request_id,
+        datetime.now(UTC),
+    )
+    return OkResponse()
