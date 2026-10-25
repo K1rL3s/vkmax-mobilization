@@ -1,3 +1,7 @@
+import hashlib
+import hmac
+import json
+import urllib.parse
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -15,7 +19,10 @@ from tests.conftest import (
 
 from zheka.api import app as app_module
 from zheka.api.app import app_factory
-from zheka.api.dependencies.current_user import parse_init_data
+from zheka.api.dependencies.current_user import (
+    parse_init_data,
+    signature_variant,
+)
 from zheka.config import ApiConfig, DbConfig
 from zheka.core.consent import CONSENT_VERSION
 from zheka.core.services.demo import (
@@ -256,3 +263,58 @@ async def test_rejected_init_data_is_logged_by_shape_only(
         value not in message
         for value in ("Жека", "Секрет", "i.example", raw.partition("hash=")[2])
     )
+
+
+DESKTOP_FIELDS = {
+    "auth_date": "1761400000",
+    "chat": json.dumps({"id": 1, "type": "DIALOG"}),
+    "ip": "203.0.113.7",
+    "query_id": "q-1",
+    "start_param": "",
+    "user": json.dumps({"id": 42, "first_name": "Жека"}),
+}
+VARIANT_BASE = {"A": "A", "B": "B", "C": "C", "D": "A", "E": "B", "F": "C"}
+
+
+def _signed_as(variant: str) -> str:
+    raw = urllib.parse.urlencode(DESKTOP_FIELDS)
+    bases = {
+        "A": {key: value for key, value in DESKTOP_FIELDS.items() if value},
+        "B": DESKTOP_FIELDS,
+        "C": dict(part.split("=", 1) for part in raw.split("&")),
+    }
+    fields = bases[VARIANT_BASE[variant]]
+    if variant in "DEF":
+        fields = {key: value for key, value in fields.items() if key != "ip"}
+    check = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
+    secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
+    signature = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    return f"{raw}&hash={signature}"
+
+
+@pytest.mark.parametrize("variant", list(VARIANT_BASE))
+def test_init_data_signed_by_any_known_variant_passes(variant: str) -> None:
+    raw = _signed_as(variant)
+
+    init_data = parse_init_data(TOKEN, raw)
+
+    assert signature_variant(TOKEN, raw) == variant
+    assert init_data.user.id == 42
+    assert init_data.ip == (None if variant in "DEF" else "203.0.113.7")
+
+
+@pytest.mark.parametrize("variant", list(VARIANT_BASE))
+def test_a_tampered_user_fails_under_every_variant(variant: str) -> None:
+    raw = _signed_as(variant).replace("%3A+42", "%3A+43")
+
+    with pytest.raises(InvalidWebAppInitDataError):
+        parse_init_data(TOKEN, raw)
+
+
+def test_an_unsigned_ip_is_dropped() -> None:
+    raw = _signed_as("D").replace("203.0.113.7", "198.51.100.66")
+
+    init_data = parse_init_data(TOKEN, raw)
+
+    assert init_data.user.id == 42
+    assert init_data.ip is None

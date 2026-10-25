@@ -1,6 +1,8 @@
+import hashlib
 import hmac
 import logging
 import urllib.parse
+from dataclasses import replace
 from typing import Annotated
 
 from dishka import FromDishka
@@ -12,7 +14,8 @@ from maxo.utils.webapp import (
     WebAppChat,
     WebAppInitData,
     WebAppUser,
-    safe_parse_webapp_init_data,
+    check_webapp_signature,
+    parse_webapp_init_data,
 )
 
 from zheka.config import Config
@@ -20,6 +23,8 @@ from zheka.core.errors import Unauthorized
 from zheka.core.ids import API_CHECKER_MAX_USER_ID
 
 logger = logging.getLogger(__name__)
+
+WITHOUT_IP = frozenset("DEF")
 
 API_CHECKER = WebAppInitData(
     chat=WebAppChat(id=API_CHECKER_MAX_USER_ID, type="DIALOG"),
@@ -82,7 +87,14 @@ CurrentUserDep = Annotated[WebAppInitData, Depends(get_current_user)]
 def _signed_init_data(token: str, raw: str) -> WebAppInitData:
     if any("\n" in key + value for key, value in urllib.parse.parse_qsl(raw)):
         raise InvalidWebAppInitDataError("Перевод строки в initData")
-    return safe_parse_webapp_init_data(token, raw)
+    variant = signature_variant(token, raw)
+    if variant is None:
+        raise InvalidWebAppInitDataError("Invalid init data signature")
+    init_data = parse_webapp_init_data(raw)
+    if variant == "A":
+        return init_data
+    logger.info("initData подошла по варианту подписи %s", variant)
+    return replace(init_data, ip=None) if variant in WITHOUT_IP else init_data
 
 
 def init_data_shape(raw: str) -> str:
@@ -92,4 +104,48 @@ def init_data_shape(raw: str) -> str:
     return (
         f"ключи {sorted(keys)}, прочих частей {len(names) - len(keys)}, "
         f"hash {'hash' in keys}, длина {len(raw)}, есть {marks}"
+    )
+
+
+def signature_variant(token: str, raw: str) -> str | None:
+    if check_webapp_signature(token, raw):
+        return "A"
+    decoded = dict(urllib.parse.parse_qsl(raw))
+    with_blanks = dict(urllib.parse.parse_qsl(raw, keep_blank_values=True))
+    raw_pairs = {
+        key: value for key, _, value in (part.partition("=") for part in raw.split("&"))
+    }
+    candidates = [("B", with_blanks), ("C", raw_pairs)]
+    if "ip" in with_blanks:
+        candidates += [
+            ("D", _without_ip(decoded)),
+            ("E", _without_ip(with_blanks)),
+            ("F", _without_ip(raw_pairs)),
+        ]
+    secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+    return next(
+        (variant for variant, fields in candidates if _signed(secret, fields)),
+        None,
+    )
+
+
+def _without_ip(fields: dict[str, str]) -> dict[str, str]:
+    return {key: value for key, value in fields.items() if key != "ip"}
+
+
+def _signed(secret: bytes, fields: dict[str, str]) -> bool:
+    expected = fields.get("hash")
+    if expected is None:
+        return False
+    check = "\n".join(
+        f"{key}={value}" for key, value in sorted(fields.items()) if key != "hash"
+    )
+    signature = hmac.new(
+        secret,
+        check.encode(errors="surrogatepass"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(
+        signature.encode(),
+        expected.encode(errors="surrogatepass"),
     )
