@@ -70,7 +70,7 @@ HELP_TEXT = (
     "В чате дома, для председателя и сотрудников УК:\n"
     "/pin - закрепить сообщение, ответом на него\n"
     "/unpin - открепить ответом на сообщение или номером из списка\n"
-    "/repin - прислать список закрепленных заново"
+    "/repin - прислать меню дома и закрепы заново"
 )
 FAQ_TEXT = (
     "❓ Частые вопросы\n\n"
@@ -137,7 +137,7 @@ BOT_COMMANDS = [
     BotCommand(name="delete", description="Удалить мои данные"),
     BotCommand(name="pin", description="Закрепить сообщение в чате дома"),
     BotCommand(name="unpin", description="Открепить сообщение в чате дома"),
-    BotCommand(name="repin", description="Прислать список закрепленных заново"),
+    BotCommand(name="repin", description="Прислать меню дома и закрепы заново"),
 ]
 
 

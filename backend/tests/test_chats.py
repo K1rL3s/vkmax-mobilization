@@ -962,3 +962,23 @@ async def test_the_cabinet_resends_the_menu_only_where_the_bot_can_pin(
         "notify": False,
         "resend": True,
     }
+
+
+async def test_a_numbered_unpin_in_reply_to_the_list_unpins_by_number(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _pinning_chat(session, data)
+    service = _service(session)
+    await _pin_three(service, data, chat_id)
+    await ChatsRepo(session).set_pins_mid(await _chat(session, chat_id), "list-1")
+    the_list = MessageRef(mid="list-1", seq=50)
+
+    with pytest.raises(InvalidRequest, match=re.escape(UNPIN_HINT)):
+        await service.unpin(data.user_id, chat_id, the_list, 4)
+    assert await service.unpin(data.user_id, chat_id, the_list, 2)
+
+    assert [mid for mid, _ in await _listed(session, chat_id)] == ["m-1", "m-3"]
+    events = await _pin_events(session, chat_id, EventType.CHAT_UNPINNED)
+    assert [event["method"] for event in events] == ["number"]

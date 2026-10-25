@@ -82,7 +82,7 @@ UNPIN_THE_LIST = (
     "укажите его номер, например /unpin 2"
 )
 PINS_ERASED = (
-    "🗑 Сообщение со списком закрепленных удалили, и я очистил список. "
+    "🗑 Сообщение с меню дома удалили, и я очистил список закрепленных. "
     "Закрепить заново можно командой /pin в ответ на нужное сообщение, "
     "вернуть меню дома - командой /repin"
 )
@@ -438,7 +438,9 @@ class ChatsService:
         pin: ChatPin | None = None
         method = UnpinMethod.REPLY
         if target is not None and target.mid == chat.pins_mid:
-            raise InvalidRequest(UNPIN_THE_LIST)
+            if number is None:
+                raise InvalidRequest(UNPIN_THE_LIST)
+            target = None
         if target is not None:
             pin = next((listed for listed in pins if listed.mid == target.mid), None)
         elif number is not None and 1 <= number <= len(pins):
