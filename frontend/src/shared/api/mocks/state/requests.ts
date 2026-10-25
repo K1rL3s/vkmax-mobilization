@@ -493,6 +493,7 @@ export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {
     ),
     can_demo_neighbours: canDemoNeighbours(item),
     visit: item.status === "done" ? null : visitOf(item.id),
+    recalculation: item.id === 145 ? { hours_over: 40, amount: 13_740 } : null,
   };
 };
 

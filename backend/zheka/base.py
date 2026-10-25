@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, dataclass_transform
 from zoneinfo import ZoneInfo
 
@@ -68,3 +68,13 @@ class Zoned:
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=self.zone)
         return moment.astimezone(UTC)
+
+    def hours_by_month(self, start: datetime, end: datetime) -> dict[date, int]:
+        hours: dict[date, int] = {}
+        while start < end:
+            period = self.local(start).date().replace(day=1)
+            next_period = (period + timedelta(days=32)).replace(day=1)
+            stop = min(end, self.day_start(next_period))
+            hours[period] = (stop - start) // timedelta(hours=1)
+            start = stop
+        return hours

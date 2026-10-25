@@ -72,13 +72,17 @@ from zheka.core.services.demo import (
     DEMO_INN,
     DEMO_INNS,
     MONTHLY_USAGE,
+    OUTAGE_DESCRIPTION,
     SERIAL_CODES,
     DemoService,
     demo_account_no,
+    demo_flat_number,
 )
 from zheka.core.services.readings import current_period
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.tables.houses import flats_table
+from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import (
     demand_signals_table,
     residents_table,
@@ -1714,6 +1718,7 @@ async def extend(
             directory,
             missing,
         )
+    await _water_outages(session, demo, now)
     logger.info("Сид дополнен: домов в справочнике %s", len(directory))
     return True
 
@@ -1861,3 +1866,37 @@ ADDED_PROFILES = (
         requests_per_week=1,
     ),
 )
+
+
+async def _water_outages(
+    session: AsyncSession,
+    demo: DemoService,
+    now: datetime,
+) -> None:
+    stmt = (
+        select(
+            flats_table.c.house_id,
+            flats_table.c.id,
+            flats_table.c.number,
+            residents_table.c.user_id,
+        )
+        .join(residents_table, residents_table.c.flat_id == flats_table.c.id)
+        .join(users_table, users_table.c.id == residents_table.c.user_id)
+        .where(
+            users_table.c.max_user_id > 0,
+            residents_table.c.role == ResidentRole.OWNER,
+            ~select(requests_table.c.id)
+            .where(
+                requests_table.c.flat_id == flats_table.c.id,
+                requests_table.c.description == OUTAGE_DESCRIPTION,
+            )
+            .exists(),
+        )
+    )
+    houses = HousesRepo(session)
+    for house_id, flat_id, number, user_id in (await session.execute(stmt)).all():
+        if number != demo_flat_number(user_id):
+            continue
+        house = await houses.get(house_id)
+        if house is not None:
+            await demo.water_outage(house, flat_id, user_id, now)

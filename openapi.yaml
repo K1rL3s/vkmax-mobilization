@@ -13652,6 +13652,11 @@ components:
           - $ref: '#/components/schemas/VisitItem'
           - type: 'null'
           description: Время визита, предложенное УК; пусто у закрытой заявки
+        recalculation:
+          anyOf:
+          - $ref: '#/components/schemas/RecalculationItem'
+          - type: 'null'
+          description: 'Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы'
         is_staff_author:
           type: boolean
           title: Is Staff Author
@@ -17821,6 +17826,21 @@ components:
       - is_open
       - is_submitted
       title: ReadingPeriodItem
+    RecalculationItem:
+      properties:
+        hours_over:
+          type: integer
+          title: Hours Over
+          description: Часы перерыва сверх месячной нормы ПП 354, прил. 1
+        amount:
+          type: integer
+          title: Amount
+          description: Оценка снижения платы, копейки
+      type: object
+      required:
+      - hours_over
+      - amount
+      title: RecalculationItem
     ReceptionSlotItem:
       properties:
         starts_at:
@@ -18235,6 +18255,11 @@ components:
           - $ref: '#/components/schemas/VisitItem'
           - type: 'null'
           description: Время визита, предложенное УК; пусто у закрытой заявки
+        recalculation:
+          anyOf:
+          - $ref: '#/components/schemas/RecalculationItem'
+          - type: 'null'
+          description: 'Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы'
       type: object
       required:
       - id

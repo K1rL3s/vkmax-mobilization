@@ -2975,6 +2975,8 @@ export interface components {
       can_demo_neighbours: boolean;
       /** @description Время визита, предложенное УК; пусто у закрытой заявки */
       visit?: components["schemas"]["VisitItem"] | null;
+      /** @description Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы */
+      recalculation?: components["schemas"]["RecalculationItem"] | null;
       /** Is Staff Author */
       is_staff_author: boolean;
       /** Author Name */
@@ -5490,6 +5492,19 @@ export interface components {
       /** Reason */
       reason?: string | null;
     };
+    /** RecalculationItem */
+    RecalculationItem: {
+      /**
+       * Hours Over
+       * @description Часы перерыва сверх месячной нормы ПП 354, прил. 1
+       */
+      hours_over: number;
+      /**
+       * Amount
+       * @description Оценка снижения платы, копейки
+       */
+      amount: number;
+    };
     /** ReceptionSlotItem */
     ReceptionSlotItem: {
       /**
@@ -5782,6 +5797,8 @@ export interface components {
       can_demo_neighbours: boolean;
       /** @description Время визита, предложенное УК; пусто у закрытой заявки */
       visit?: components["schemas"]["VisitItem"] | null;
+      /** @description Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до сдачи на приемку; пусто - не считаем: квартира автора не подтверждена, нет начисления по услуге или нет превышения нормы */
+      recalculation?: components["schemas"]["RecalculationItem"] | null;
     };
     /**
      * RequestCategory

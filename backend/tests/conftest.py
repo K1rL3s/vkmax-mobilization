@@ -89,6 +89,7 @@ from zheka.infra.database.models import (
 )
 from zheka.infra.database.repos.access import AccessRepo
 from zheka.infra.database.repos.chairman import ChairmanRepo
+from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.events import EventsRepo
 from zheka.infra.database.repos.houses import HousesRepo
@@ -599,6 +600,7 @@ def requests_service(
         category_executors_service(session, publisher),
         ChatsRepo(session),
         AccessRepo(session),
+        ChargesRepo(session),
     )
 
 

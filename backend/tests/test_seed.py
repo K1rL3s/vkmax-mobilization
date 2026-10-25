@@ -42,9 +42,11 @@ from zheka.core.enums import (
     OrgRole,
     PollStatus,
     RequestCategory,
+    RequestCompletionReason,
     RequestPlace,
     RequestStatus,
     ResidentRole,
+    ServiceType,
 )
 from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import (
@@ -55,11 +57,13 @@ from zheka.core.ids import (
     OrgId,
     UserId,
 )
+from zheka.core.recalculation import Recalculation
 from zheka.core.services.demo import (
     API_CHECKER_DEMO_NUMBER,
     CHECKER_RESERVED,
     DEMO_INN,
     DEMO_INNS,
+    OUTAGE_DESCRIPTION,
     DemoService,
     demo_account_no,
     demo_flat_number,
@@ -95,6 +99,7 @@ from zheka.infra.database.tables.organizations import (
 from zheka.infra.database.tables.polls import polls_table
 from zheka.infra.database.tables.requests import (
     request_attachments_table,
+    request_status_log_table,
     requests_table,
 )
 from zheka.infra.database.tables.residents import (
@@ -135,6 +140,7 @@ def _demo(session: AsyncSession) -> DemoService:
         MetersRepo(session),
         ChargesRepo(session),
         UsersRepo(session),
+        RequestsRepo(session),
     )
 
 
@@ -1089,3 +1095,66 @@ async def test_extending_puts_back_a_missing_directory_house(db: AsyncSession) -
         houses_table.c.building == building,
     )
     assert (await db.execute(stmt)).scalar_one() == 1
+
+
+async def test_a_reviewer_flat_comes_with_a_two_day_water_outage_to_recalculate(
+    db: AsyncSession,
+) -> None:
+    user_id = await _positive_user(db)
+    access = await _demo(db).activate(user_id)
+    house = access.residency.house
+    flat_id = FlatId(access.residency.resident.flat_id or 0)
+
+    [request], _total = await RequestsRepo(db).list_for_user(
+        user_id,
+        house.id,
+        None,
+        10,
+        0,
+    )
+    card = await requests_service(db).get_card(user_id, request.id)
+
+    charge = await ChargesRepo(db).latest_until(
+        flat_id,
+        house.local(request.created_at).date().replace(day=1),
+    )
+    assert charge is not None
+    [cold] = [
+        line
+        for line in parse_lines(charge.lines)
+        if line.service is ServiceType.COLD_WATER
+    ]
+    assert request.description == OUTAGE_DESCRIPTION
+    assert request.status is RequestStatus.DONE
+    assert request.completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED
+    assert request.deadline_warned_at is not None
+    assert request.overdue_notified_at is not None
+    assert request.created_at < datetime.now(UTC) - PUBLIC_STATS_PERIOD
+    assert card.recalculation == Recalculation(
+        hours_over=40,
+        amount=cold.amount * 600 // 10_000,
+    )
+
+
+async def test_extending_gives_an_older_reviewer_flat_its_water_outage_once(
+    db: AsyncSession,
+) -> None:
+    user_id = await _positive_user(db)
+    access = await _demo(db).activate(user_id)
+    flat_id = FlatId(access.residency.resident.flat_id or 0)
+    outage = select(requests_table.c.id).where(requests_table.c.flat_id == flat_id)
+    await db.execute(
+        delete(request_status_log_table).where(
+            request_status_log_table.c.request_id.in_(outage),
+        ),
+    )
+    await db.execute(delete(requests_table).where(requests_table.c.flat_id == flat_id))
+    before = await _counts(db)
+
+    assert await extend(db, _demo(db), FILES, NOW)
+    added = await _counts(db)
+    assert await extend(db, _demo(db), FILES, NOW)
+
+    assert added["requests"] == before["requests"] + 1
+    assert added["request_status_log"] == before["request_status_log"] + 5
+    assert await _counts(db) == added

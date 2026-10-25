@@ -87,3 +87,16 @@ class ChargesRepo(BaseAlchemyRepo):
         self._session.add(charge)
         await self._session.flush()
         return charge
+
+    async def latest_until(self, flat_id: FlatId, period: date) -> Charge | None:
+        stmt = (
+            select(Charge)
+            .where(
+                charges_table.c.flat_id == flat_id,
+                charges_table.c.period <= period,
+            )
+            .order_by(charges_table.c.period.desc())
+            .limit(1)
+        )
+        charge: Charge | None = await self._session.scalar(stmt)
+        return charge

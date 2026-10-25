@@ -6,9 +6,16 @@ from random import Random
 from zheka.base import ZhekaType
 from zheka.core.charges import ChargeLine, previous_period, to_kopecks
 from zheka.core.enums import (
+    CATEGORY_RULES,
     SERVICE_OF_METER,
     MeterType,
     OrgRole,
+    RequestActorRole,
+    RequestCategory,
+    RequestChannel,
+    RequestCompletionReason,
+    RequestPlace,
+    RequestStatus,
     ResidentRole,
     ServiceType,
     TariffZone,
@@ -17,10 +24,11 @@ from zheka.core.errors import EntityNotFound, NotEnoughRights
 from zheka.core.ids import (
     API_CHECKER_MAX_USER_ID,
     DEMO_TENANT_MAX_ID_BASE,
+    FlatId,
     MaxUserId,
     UserId,
 )
-from zheka.core.models import Flat, Organization
+from zheka.core.models import Flat, House, Organization
 from zheka.core.services.houses import CONSENT_REQUIRED, ResidencyView
 from zheka.core.services.profile import OrgMembershipView
 from zheka.core.services.readings import current_period
@@ -28,6 +36,7 @@ from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import UsersRepo
 
@@ -61,6 +70,9 @@ SERIAL_CODES = {
 _AREA_SERVICES = (ServiceType.MAINTENANCE, ServiceType.OVERHAUL)
 SPIKE_FACTOR = 3
 BELOW_NOTE = "Показание меньше предыдущего, объем к проверке"
+OUTAGE_DESCRIPTION = "Нет холодной воды в квартире, из крана не течет"
+OUTAGE_AGO = timedelta(days=100)
+OUTAGE_LENGTH = timedelta(hours=48)
 
 
 class DemoAccess(ZhekaType):
@@ -73,7 +85,15 @@ def demo_flat_number(user_id: UserId) -> str:
 
 
 class DemoService:
-    __slots__ = ("_charges", "_houses", "_meters", "_orgs", "_residents", "_users")
+    __slots__ = (
+        "_charges",
+        "_houses",
+        "_meters",
+        "_orgs",
+        "_requests",
+        "_residents",
+        "_users",
+    )
 
     def __init__(
         self,
@@ -83,7 +103,9 @@ class DemoService:
         meters_repo: MetersRepo,
         charges_repo: ChargesRepo,
         users_repo: UsersRepo,
+        requests_repo: RequestsRepo,
     ) -> None:
+        self._requests = requests_repo
         self._orgs = orgs_repo
         self._houses = houses_repo
         self._residents = residents_repo
@@ -277,6 +299,7 @@ class DemoService:
                 house.local(now).date(),
                 verification_soon=True,
             )
+            await self.water_outage(house, flat.id, user_id, now)
         if not await self._residents.list_tenancies(flat.id):
             tenant = await self._users.upsert_by_max_id(
                 MaxUserId(DEMO_TENANT_MAX_ID_BASE - user_id),
@@ -326,6 +349,87 @@ class DemoService:
         ):
             raise NotEnoughRights(CHECKER_RESERVED)
         return org
+
+    async def water_outage(
+        self,
+        house: House,
+        flat_id: FlatId,
+        owner_id: UserId,
+        now: datetime,
+    ) -> None:
+        category = RequestCategory.WATER_SUPPLY
+        request = await self._requests.create(
+            house,
+            flat_id,
+            owner_id,
+            category,
+            OUTAGE_DESCRIPTION,
+            RequestChannel.MINIAPP,
+            None,
+            None,
+            is_staff_author=False,
+            place=RequestPlace.FLAT,
+        )
+        filed = datetime.combine(
+            house.local(now - OUTAGE_AGO).date().replace(day=10),
+            time(9),
+            house.zone,
+        )
+        accepted = filed + timedelta(minutes=12)
+        started = accepted + timedelta(hours=1)
+        reviewed = filed + OUTAGE_LENGTH
+        done = reviewed + timedelta(hours=2)
+        request.react_deadline_at, request.deadline_at = CATEGORY_RULES[
+            category
+        ].deadlines(filed, house.zone)
+        request.created_at = filed
+        request.status = RequestStatus.DONE
+        request.completion_reason = RequestCompletionReason.RESIDENT_ACCEPTED
+        request.accepted_at = accepted
+        request.reviewed_at = reviewed
+        request.done_at = done
+        request.deadline_warned_at = now
+        request.overdue_notified_at = now
+        steps = (
+            (None, RequestStatus.NEW, owner_id, RequestActorRole.RESIDENT, filed),
+            (
+                RequestStatus.NEW,
+                RequestStatus.ACCEPTED,
+                None,
+                RequestActorRole.STAFF,
+                accepted,
+            ),
+            (
+                RequestStatus.ACCEPTED,
+                RequestStatus.IN_PROGRESS,
+                None,
+                RequestActorRole.STAFF,
+                started,
+            ),
+            (
+                RequestStatus.IN_PROGRESS,
+                RequestStatus.ON_REVIEW,
+                None,
+                RequestActorRole.STAFF,
+                reviewed,
+            ),
+            (
+                RequestStatus.ON_REVIEW,
+                RequestStatus.DONE,
+                owner_id,
+                RequestActorRole.RESIDENT,
+                done,
+            ),
+        )
+        for from_status, to_status, by, role, at in steps:
+            await self._requests.add_log(
+                request.id,
+                from_status,
+                to_status,
+                by,
+                role.value,
+                at,
+            )
 
 
 def demo_account_no(flat_number: str) -> str:

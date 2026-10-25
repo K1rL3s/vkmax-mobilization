@@ -13,7 +13,9 @@ const { leakActLetter, recalcLetter, requestLetter } = (await import(
 )) as {
   leakActLetter: (...args: unknown[]) => string;
   recalcLetter: (...args: unknown[]) => string;
-  requestLetter: (...args: unknown[]) => { title: string } | null;
+  requestLetter: (
+    ...args: unknown[]
+  ) => { title: string; text: string; estimate?: string } | null;
 };
 
 const org = {
@@ -132,4 +134,27 @@ test("recalc runs to the present when the resident rejected the work", () => {
 
   assertClean(text);
   assert.match(text, /с 28\.09\.2026 14:10 \[по настоящее время\]/);
+});
+
+test("recalc estimate keeps kopecks the rounding would lose", () => {
+  const water = {
+    ...request,
+    category: "water_supply",
+    category_label: "Водоснабжение",
+    status: "in_progress",
+    recalculation: { hours_over: 1, amount: 45 },
+  };
+  const estimate = (amount: number) =>
+    requestLetter(
+      { ...water, recalculation: { hours_over: 40, amount } },
+      house,
+      "management",
+    )?.estimate;
+
+  assert.match(
+    requestLetter(water, house, "management")?.text ?? "",
+    /перерыва: 1 ч\. .* около 0,45\s₽\./,
+  );
+  assert.match(estimate(45) ?? "", /^0,45\s₽$/);
+  assert.match(estimate(6_000) ?? "", /^60\s₽$/);
 });

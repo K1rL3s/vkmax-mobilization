@@ -5,7 +5,7 @@ import type { Letter } from "../domain/letters";
 
 import styles from "./letter-panel.module.css";
 
-export const LetterPanel = ({ title, hint, text }: Letter) => {
+export const LetterPanel = ({ title, hint, text, estimate }: Letter) => {
   const [open, toggle] = useBoolean();
   const copy = useCopy(2000);
 
@@ -19,6 +19,17 @@ export const LetterPanel = ({ title, hint, text }: Letter) => {
           {hint}
         </Typography.Text>
       </Flex>
+
+      {estimate && (
+        <Flex align="stretch" direction="column" gapY={2}>
+          <Typography.Text variant="body-strong" color="primary">
+            ≈ {estimate} к перерасчёту
+          </Typography.Text>
+          <Typography.Text variant="description" color="secondary">
+            Оценка по ПП 354, прил. 1, не юридическая консультация
+          </Typography.Text>
+        </Flex>
+      )}
 
       {open && (
         <>

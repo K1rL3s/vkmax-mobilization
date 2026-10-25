@@ -2,7 +2,12 @@ import type { HouseCard } from "@/features/house";
 
 import type { RequestCard, ResponsibilityZone } from "./types";
 
-export type Letter = { title: string; hint: string; text: string };
+export type Letter = {
+  title: string;
+  hint: string;
+  text: string;
+  estimate?: string;
+};
 
 const docDate = new Intl.DateTimeFormat("ru-RU", {
   day: "2-digit",
@@ -14,6 +19,13 @@ const docTime = new Intl.DateTimeFormat("ru-RU", {
   hour: "2-digit",
   minute: "2-digit",
 });
+
+const roubles = (kopecks: number) =>
+  new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
+    minimumFractionDigits: kopecks % 100 === 0 ? 0 : 2,
+  }).format(kopecks / 100);
 
 const day = (value: string | number) => docDate.format(new Date(value));
 
@@ -84,6 +96,7 @@ export const recalcLetter = (
   zone: ResponsibilityZone | null,
 ) => {
   const end = violationEnd(request);
+  const recalc = request.recalculation;
 
   return letter(
     zone === "utility"
@@ -93,6 +106,11 @@ export const recalcLetter = (
     [
       `Сообщаю о нарушении качества коммунальной услуги по адресу: ${flatAddress(request, house)}. ${request.category_label}: «${request.description}».`,
       `Период нарушения: с ${day(request.created_at)} ${time(request.created_at)} ${end ? `по ${day(end)} ${time(end)}` : "[по настоящее время]"}.`,
+      ...(recalc
+        ? [
+            `Превышение допустимой продолжительности перерыва: ${recalc.hours_over} ч. Снижение платы по приложению 1 к ПП № 354 по моей оценке - около ${roubles(recalc.amount)}.`,
+          ]
+        : []),
       "Замеры и подтверждения: [например, температура в комнате, фото].",
       dispatchLine(request),
       "Прошу зафиксировать факт нарушения актом и выполнить перерасчет платы за период нарушения. Копию акта прошу выдать мне.",
@@ -121,6 +139,9 @@ export const requestLetter = (
       title: "Заявление на перерасчет",
       hint: "За время перебоев плату можно снизить. Мы подставили данные заявки, недостающее отмечено [в скобках]",
       text: recalcLetter(request, house, zone),
+      estimate: request.recalculation
+        ? roubles(request.recalculation.amount)
+        : undefined,
     };
   }
 

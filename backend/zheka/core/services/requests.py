@@ -1,8 +1,10 @@
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from zheka.base import ZhekaType
 from zheka.core import texts
+from zheka.core.charges import parse_lines
 from zheka.core.deeplinks import (
     admin_request_app_path,
     house_category_payload,
@@ -26,6 +28,7 @@ from zheka.core.enums import (
     RequestPlace,
     RequestStatus,
     ResidentStatus,
+    ServiceType,
 )
 from zheka.core.errors import (
     FLAT_NOT_FOUND,
@@ -50,6 +53,12 @@ from zheka.core.models import (
     Resident,
     User,
 )
+from zheka.core.recalculation import (
+    CATEGORY_SERVICE,
+    HEATING_OFF_MONTHS,
+    Recalculation,
+    recalculation,
+)
 from zheka.core.services.category_executors import CategoryExecutorsService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
@@ -67,6 +76,7 @@ from zheka.core.services.request_groups import (
 )
 from zheka.core.services.visit_card import VisitData, visit_of
 from zheka.infra.database.repos.access import AccessRepo
+from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
@@ -155,6 +165,7 @@ class RequestCardData(ZhekaType):
     can_demo_auto_close: bool
     can_demo_neighbours: bool
     visit: VisitData | None = None
+    recalculation: Recalculation | None = None
 
 
 class SharedRequest(ZhekaType):
@@ -185,6 +196,7 @@ class RequestsService:
     __slots__ = (
         "_access",
         "_category_executors",
+        "_charges",
         "_chats",
         "_classifier",
         "_events",
@@ -213,8 +225,10 @@ class RequestsService:
         category_executors_service: CategoryExecutorsService,
         chats_repo: ChatsRepo,
         access_repo: AccessRepo,
+        charges_repo: ChargesRepo,
     ) -> None:
         self._access = access_repo
+        self._charges = charges_repo
         self._chats = chats_repo
         self._requests = requests_repo
         self._houses = houses_repo
@@ -557,7 +571,7 @@ class RequestsService:
         )
 
     async def _built_card(self, request: Request, house: House) -> RequestCardData:
-        return await build_card(
+        card = await build_card(
             self._requests,
             self._houses,
             self._users,
@@ -567,6 +581,7 @@ class RequestsService:
             house,
             authored=True,
         )
+        return replace(card, recalculation=await self._recalculation(card))
 
     async def _open(self, request: Request, user_id: UserId) -> None:
         await self._requests.add_log(
@@ -1058,6 +1073,46 @@ class RequestsService:
         house = await self._get_house(request.house_id)
         return await self._built_card(request, house)
 
+    async def _recalculation(self, card: RequestCardData) -> Recalculation | None:
+        request = card.request
+        service = CATEGORY_SERVICE.get(request.category)
+        end = violation_end(request, card.timeline, datetime.now(UTC))
+        flat_id = request.flat_id
+        if service is None or end is None or flat_id is None:
+            return None
+        if not any(
+            resident.user_id == request.author_user_id
+            and resident.verified_at is not None
+            and resident.status is not ResidentStatus.BLOCKED
+            and resident.can_see_charges
+            for resident in await self._residents.list_for_flat(flat_id)
+        ):
+            return None
+        hours_over = amount = 0
+        for period, hours in card.house.hours_by_month(
+            request.created_at,
+            end,
+        ).items():
+            if service is ServiceType.HEATING and period.month in HEATING_OFF_MONTHS:
+                continue
+            charge = await self._charges.latest_until(flat_id, period)
+            line = next(
+                (
+                    line
+                    for line in ([] if charge is None else parse_lines(charge.lines))
+                    if line.service is service
+                ),
+                None,
+            )
+            if line is None:
+                return None
+            part = recalculation(service, hours, line.amount)
+            hours_over += part.hours_over
+            amount += part.amount
+        if amount == 0:
+            return None
+        return Recalculation(hours_over=hours_over, amount=amount)
+
 
 async def build_rows(
     requests_repo: RequestsRepo,
@@ -1268,3 +1323,24 @@ def placed(category: RequestCategory, chosen: RequestPlace | None) -> RequestPla
     if place is None:
         raise InvalidRequest(PLACE_REQUIRED)
     return place
+
+
+def violation_end(
+    request: Request,
+    timeline: Sequence[RequestStatusLog],
+    now: datetime,
+) -> datetime | None:
+    if request.completion_reason in {
+        RequestCompletionReason.RESIDENT_REJECTED,
+        RequestCompletionReason.RESIDENT_CANCELED,
+    }:
+        return None
+    if request.status in OPEN_STATUSES:
+        return now
+    return max(
+        (log.at for log in timeline if log.to_status is RequestStatus.ON_REVIEW),
+        default=None,
+    ) or max(
+        (log.at for log in timeline if log.to_status is RequestStatus.DONE),
+        default=None,
+    )

@@ -211,6 +211,13 @@ class RequestStatusLogItem(BaseSchema):
     from_status: RequestStatus | None = None
 
 
+class RecalculationItem(BaseSchema):
+    hours_over: int = Field(
+        description="Часы перерыва сверх месячной нормы ПП 354, прил. 1",
+    )
+    amount: int = Field(description="Оценка снижения платы, копейки")
+
+
 class RequestCard(RequestListItem):
     house_id: HouseId
     address: str
@@ -263,6 +270,14 @@ class RequestCard(RequestListItem):
         default=None,
         description="Время визита, предложенное УК; пусто у закрытой заявки",
     )
+    recalculation: RecalculationItem | None = Field(
+        default=None,
+        description=(
+            "Оценка перерасчета за перерыв по ПП 354, прил. 1, от подачи до "
+            "сдачи на приемку; пусто - не считаем: квартира автора не "
+            "подтверждена, нет начисления по услуге или нет превышения нормы"
+        ),
+    )
 
     @classmethod
     def of(
@@ -309,6 +324,14 @@ class RequestCard(RequestListItem):
             rejection_needs_photo=rule.rejection_needs_photo,
             can_demo_neighbours=card.can_demo_neighbours,
             visit=None if card.visit is None else VisitItem.of(card.visit),
+            recalculation=(
+                None
+                if card.recalculation is None
+                else RecalculationItem(
+                    hours_over=card.recalculation.hours_over,
+                    amount=card.recalculation.amount,
+                )
+            ),
         )
 
 
