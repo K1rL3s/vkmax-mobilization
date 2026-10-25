@@ -30,3 +30,9 @@ def test_every_foreign_key_leads_an_index() -> None:
     ]
 
     assert missing == []
+
+
+def test_no_two_indexes_share_a_name() -> None:
+    names = [index.name for table in metadata.sorted_tables for index in table.indexes]
+
+    assert {name for name in names if names.count(name) > 1} == set()
