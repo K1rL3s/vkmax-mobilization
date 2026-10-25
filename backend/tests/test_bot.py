@@ -3758,7 +3758,6 @@ async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
         "🚨 Авария",
         "📝 Подать заявку",
         WHO_BUTTON,
-        CONTACTS_BUTTON,
         DIGEST_BUTTON,
         "📱 Открыть приложение",
         "🔎 Другой дом",
@@ -4582,6 +4581,7 @@ async def test_the_emergency_screen_works_without_a_house(
 
 
 CONTACTS = InlineButtonTextLocator(CONTACTS_BUTTON)
+WHO = InlineButtonTextLocator(re.escape(WHO_BUTTON))
 
 
 async def test_where_to_call_lists_the_house_lines_city_services_and_112(
@@ -4604,12 +4604,13 @@ async def test_where_to_call_lists_the_house_lines_city_services_and_112(
     )
     await _linked(bot_session, client, house_id, datetime.now(UTC))
     await client.send("/start")
+    await client.click(message_manager.last_message(), WHO)
 
     await client.click(message_manager.last_message(), CONTACTS)
 
     lines = _text(message_manager).split("\n\n")
     assert lines[:4] == [
-        "📞 <b>Куда звонить</b>",
+        "📒 <b>Все телефоны</b>",
         f"🏢 {address}",
         "<b>Аварийная служба дома</b> - +7 (843) 000-11-22",
         "<b>УК Казанская</b> - +7 (843) 000-00-00",
@@ -4636,6 +4637,7 @@ async def test_where_to_call_of_a_registry_house_outside_the_directory(
     house_id, address = await _bot_house(bot_session, org_id=org_id)
     await _linked(bot_session, client, house_id, datetime.now(UTC))
     await client.send("/start")
+    await client.click(message_manager.last_message(), WHO)
 
     await client.click(message_manager.last_message(), CONTACTS)
 
@@ -4649,8 +4651,11 @@ async def test_where_to_call_of_a_registry_house_outside_the_directory(
     )
     assert _button_texts(message_manager.last_message()) == [
         "📋 Телефон УК",
+        "↩️ Назад",
         "🏠 Меню",
     ]
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert _text(message_manager) == SPOTS_TEXT
 
 
 async def test_where_to_call_waits_for_a_house(
@@ -4658,7 +4663,9 @@ async def test_where_to_call_waits_for_a_house(
     message_manager: MockMessageManager,
 ) -> None:
     await _consented(client, message_manager)
+    await client.click(message_manager.last_message(), WHO)
 
+    assert _text(message_manager) == SPOTS_TEXT
     assert CONTACTS.find_button(message_manager.last_message()) is None
 
 
@@ -7261,9 +7268,6 @@ async def test_problem_remains_a_week_after_the_auto_close_files_nothing(
     assert await _repeats_of(bot_session, request_id) == []
 
 
-WHO = InlineButtonTextLocator(re.escape(WHO_BUTTON))
-
-
 async def _verdict(
     client: BotClient,
     message_manager: MockMessageManager,
@@ -7290,11 +7294,14 @@ async def test_who_answers_files_a_request_of_the_leaf_category(
     bot_session: AsyncSession,
     bot_broker: RecordingBroker,
 ) -> None:
-    house_id, _ = await _resident_of_a_connected_house(
+    await _consented(client, message_manager)
+    org_id = await _org(
         bot_session,
-        client,
-        message_manager,
+        name="УК Стояк",
+        emergency_phone="+7 (495) 000-11-22",
     )
+    house_id, _ = await _bot_house(bot_session, org_id=org_id)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
     leaf = LEAVES["riser_leak"]
     rule = CATEGORY_RULES[RequestCategory.LEAK]
 
@@ -7307,8 +7314,14 @@ async def test_who_answers_files_a_request_of_the_leaf_category(
                 f"⏳ Локализовать аварию - {rule.react_text}\n"
                 f"⏰ Срок - {rule.deadline_text}\n📜 {rule.basis}"
             ),
+            "📞 <b>Аварийная служба дома</b> - +7 (495) 000-11-22",
+            "📞 <b>УК Стояк</b> - +7 (000) 000-00-00",
         ],
     )
+    assert _copied(message_manager.last_message()) == [
+        ("📋 Номер аварийной службы", "+7 (495) 000-11-22"),
+        ("📋 Телефон УК", "+70000000000"),
+    ]
     await client.click(message_manager.last_message(), NEW_REQUEST)
     assert _text(message_manager) == f"ℹ️ {rule.owner_zone}\n\n{DESCRIPTION_TEXT}"
     await client.send("Течет стояк в ванной")
@@ -7319,6 +7332,30 @@ async def test_who_answers_files_a_request_of_the_leaf_category(
     assert enqueued["house_id"] == int(house_id)
     assert enqueued["category"] == RequestCategory.LEAK
     assert enqueued["place"] == RequestPlace.FLAT
+
+
+async def test_who_answers_gives_the_owner_only_the_uk_phone(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    org_id = await _org(
+        bot_session,
+        name="УК Розетка",
+        emergency_phone="+7 (495) 000-11-22",
+    )
+    house_id, _ = await _bot_house(bot_session, org_id=org_id)
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    verdict = await _verdict(client, message_manager, LEAVES["socket"])
+
+    assert verdict.endswith(
+        f"{OWNER_HINT}\n\n📞 <b>УК Розетка</b> - +7 (000) 000-00-00",
+    )
+    assert _copied(message_manager.last_message()) == [
+        ("📋 Телефон УК", "+70000000000"),
+    ]
 
 
 async def test_who_answers_names_the_city_utility_by_the_house(

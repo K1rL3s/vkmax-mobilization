@@ -19,12 +19,12 @@ from zheka.bot.cards import BACK, EMERGENCY, TO_MENU, app_payload
 from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.handlers.menu.handlers import (
     SPOTS_TEXT,
-    SPOT_ITEMS,
     get_bill,
     get_contacts,
     get_digest,
     get_emergency,
     get_menu,
+    get_spots,
     get_subjects,
     get_verdict,
     on_digest_subscribe,
@@ -76,9 +76,9 @@ CALL_NOTE_TEXT = (
     "📝 <b>При обращении к диспетчеру</b>\n"
     "Сообщите адрес и опишите проблему. Запишите время звонка и номер заявки"
 )
-CONTACTS_BUTTON = "📞 Куда звонить"
-CONTACTS_TEXT = "📞 <b>Куда звонить</b>\n\n🏢 {address}\n\n{contacts}"
-WHO_BUTTON = "🔎 Кто отвечает?"
+CONTACTS_BUTTON = "📒 Все телефоны"
+CONTACTS_TEXT = "📒 <b>Все телефоны</b>\n\n🏢 {address}\n\n{contacts}"
+WHO_BUTTON = "📞 Кто отвечает и куда звонить?"
 SUBJECT_TEXT = "{spot}\n\n🔎 Что сломалось?"
 BILL_BUTTON = "💸 Почему такой счёт"
 LINE_QUESTION_BUTTON = "❓ Вопрос по строке"
@@ -104,12 +104,6 @@ menu_dialog = Dialog(
         ),
         Start(Const("📝 Подать заявку"), id="new_request", state=NewRequest.category),
         SwitchTo(Const(WHO_BUTTON), id="who", state=Menu.who_spot),
-        SwitchTo(
-            Const(CONTACTS_BUTTON),
-            id="contacts",
-            state=Menu.contacts,
-            when=F["address"],
-        ),
         SwitchTo(
             Const(BILL_BUTTON),
             id="bill",
@@ -209,7 +203,7 @@ menu_dialog = Dialog(
             Format("{org_copy}"),
             when=F["org_copy"],
         ),
-        TO_MENU,
+        Row(SwitchTo(BACK, id="contacts_back", state=Menu.who_spot), TO_MENU),
         state=Menu.contacts,
         getter=get_contacts,
     ),
@@ -225,9 +219,15 @@ menu_dialog = Dialog(
                 on_click=on_spot,
             ),
         ),
+        SwitchTo(
+            Const(CONTACTS_BUTTON),
+            id="contacts",
+            state=Menu.contacts,
+            when=F["address"],
+        ),
         TO_MENU,
         state=Menu.who_spot,
-        getter=SPOT_ITEMS,
+        getter=get_spots,
     ),
     Window(
         Format(SUBJECT_TEXT),
@@ -253,6 +253,16 @@ menu_dialog = Dialog(
             id="who_request",
             on_click=on_responsibility_request,
             when=F["category"],
+        ),
+        CopyText(
+            Const("📋 Номер аварийной службы"),
+            Format("{emergency_copy}"),
+            when=F["emergency_copy"],
+        ),
+        CopyText(
+            Const("📋 Телефон УК"),
+            Format("{org_copy}"),
+            when=F["org_copy"],
         ),
         Row(SwitchTo(BACK, id="who_verdict_back", state=Menu.who_subject), TO_MENU),
         state=Menu.who_verdict,

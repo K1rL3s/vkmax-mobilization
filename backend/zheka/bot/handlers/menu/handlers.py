@@ -49,13 +49,14 @@ VERDICT_TITLES = {
 }
 OWNER_HINT = "💡 УК может помочь платно: спросите у нее, сколько стоит вызов мастера"
 SPOTS_TEXT = (
-    "🔎 <b>Кто отвечает?</b>\n\n"
-    "Где сломалось? Подскажу, кто должен чинить и куда обращаться"
+    "📞 <b>Кто отвечает и куда звонить?</b>\n\n"
+    "Где сломалось? Подскажу, кто должен чинить и куда звонить"
 )
 SPOT_ITEMS = {
     "spots": [{"id": spot.value, "label": label} for spot, label in SPOTS.items()],
 }
 UTILITY_NO_PHONE = "📞 Телефон организации - в квитанции. При угрозе жизни звоните 112"
+ORG_VERDICTS = frozenset({Verdict.MANAGEMENT, Verdict.OWNER})
 
 
 def _pretty_phone(phone: str) -> str:
@@ -271,6 +272,13 @@ async def get_verdict(
     residency = (
         await profile_service.me(dialog_user_id(dialog_manager))
     ).latest_residency
+    org = (
+        None if residency is None or leaf.verdict not in ORG_VERDICTS else residency.org
+    )
+    emergency_phone = (
+        None if org is None or leaf.verdict is Verdict.OWNER else org.emergency_phone
+    )
+    org_phone = None if org is None else org.phone.strip() or None
     services = (
         []
         if residency is None or leaf.service is None
@@ -287,9 +295,21 @@ async def get_verdict(
                 leaf.label,
                 f"⚖️ {leaf.basis}",
                 *_verdict_lines(leaf, services),
+                *(
+                    [f"📞 {_contact('Аварийная служба дома', emergency_phone)}"]
+                    if emergency_phone
+                    else []
+                ),
+                *(
+                    [f"📞 {_contact(org.name, org_phone)}"]
+                    if org is not None and org_phone is not None
+                    else []
+                ),
             ],
         ),
         "category": leaf.category,
+        "emergency_copy": emergency_phone,
+        "org_copy": org_phone,
     }
 
 
@@ -430,3 +450,13 @@ def _rubles(kopecks: int, *, signed: bool = False) -> str:
     sign = "-" if kopecks < 0 else "+" if signed and kopecks else ""
     amount = f"{whole:,}".replace(",", " ")
     return f"{sign}{amount},{cents:02d} ₽" if cents else f"{sign}{amount} ₽"
+
+
+@inject
+async def get_spots(
+    dialog_manager: DialogManager,
+    profile_service: FromDishka[ProfileService],
+    **_: Any,
+) -> dict[str, Any]:
+    me = await profile_service.me(dialog_user_id(dialog_manager))
+    return {**SPOT_ITEMS, "address": me.latest_residency is not None}
