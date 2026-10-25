@@ -1,8 +1,10 @@
 import itertools
 import logging
+import secrets
 import shutil
 from collections.abc import Iterator, Sequence
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from math import ceil
 from pathlib import Path
 from random import Random
@@ -611,6 +613,7 @@ class Seeder:
         )
         await self._demand(directory, taken, voters)
         await self.add(directory, ADDED_PROFILES)
+        await self.expo()
 
     async def _user(self) -> User:
         return (await self._users(1))[0]
@@ -1366,7 +1369,7 @@ class Seeder:
         staff: Staff,
         ordered: Sequence[DirectoryHouse],
     ) -> list[User]:
-        is_enterable = profile in PROFILES
+        is_enterable = profile in (*PROFILES, EXPO_PROFILE)
         rng = Random(f"pending:{profile.inn}")
         pending = (
             set(rng.sample(range(1, len(ordered)), rng.randint(1, 3)))
@@ -1670,19 +1673,33 @@ class Seeder:
                 len(neighbours),
                 profile.houses,
             )
-            org = await self._org(profile, number, items[0].house)
-            staff = await self._staff(org, profile)
-            for item in items:
-                item.house.org_id = org.id
-                taken.add(item.house.id)
-            await self._session.flush()
-            by_id = {item.house.id: item for item in items}
-            ordered = [
-                by_id[house.id]
-                for house in await HousesRepo(self._session).list_for_org(org.id)
-            ]
-            voters.extend(await self._houses(profile, org, staff, ordered))
+            taken.update(item.house.id for item in items)
+            voters.extend(await self._occupy(number, profile, items))
         return voters, taken
+
+    async def _occupy(
+        self,
+        number: int,
+        profile: OrgProfile,
+        items: Sequence[DirectoryHouse],
+    ) -> list[User]:
+        org = await self._org(profile, number, items[0].house)
+        staff = await self._staff(org, profile)
+        for item in items:
+            item.house.org_id = org.id
+        await self._session.flush()
+        by_id = {item.house.id: item for item in items}
+        ordered = [
+            by_id[house.id]
+            for house in await HousesRepo(self._session).list_for_org(org.id)
+        ]
+        return await self._houses(profile, org, staff, ordered)
+
+    async def expo(self) -> None:
+        items = [_expo_house(*row) for row in EXPO_HOUSES]
+        self._session.add_all(item.house for item in items)
+        await self._session.flush()
+        await self._occupy(EXPO_NUMBER, EXPO_PROFILE, items)
 
 
 COMMON_DESCRIPTIONS = frozenset(
@@ -1714,15 +1731,15 @@ async def extend(
         for profile in ADDED_PROFILES
         if await orgs.get_by_inn(profile.inn) is None
     ]
+    stmt = select(func.min(users_table.c.max_user_id)).where(
+        users_table.c.max_user_id > DEMO_TENANT_MAX_ID_BASE,
+    )
+    lowest = (await session.execute(stmt)).scalar_one()
+    seeder = Seeder(session, demo, now, min(lowest or 0, 0) - 1)
     if missing:
-        stmt = select(func.min(users_table.c.max_user_id)).where(
-            users_table.c.max_user_id > DEMO_TENANT_MAX_ID_BASE,
-        )
-        lowest = (await session.execute(stmt)).scalar_one()
-        await Seeder(session, demo, now, min(lowest or 0, 0) - 1).add(
-            directory,
-            missing,
-        )
+        await seeder.add(directory, missing)
+    if await orgs.get_by_inn(EXPO_PROFILE.inn) is None:
+        await seeder.expo()
     await _water_outages(session, demo, now)
     await _house_documents(session)
     logger.info("Сид дополнен: домов в справочнике %s", len(directory))
@@ -2036,3 +2053,67 @@ async def _house_documents(session: AsyncSession) -> None:
             .where(organizations_table.c.is_demo, ~known),
         )
         await session.execute(stmt)
+
+
+EXPO_PROFILE = OrgProfile(
+    name="Демо-УК «Выставочный квартал»",
+    inn=DEMO_INNS[5],
+    city="Большие Кабаны",
+    houses=12,
+    accept_minutes=25,
+    phone_percent=10,
+    repeat_percent=4,
+    recent_repeats=1,
+    auto_close_percent=8,
+    ratings=(5, 5, 4, 5, 4),
+    overdue=1,
+)
+EXPO_NUMBER = 99
+EXPO_REGION = "Республика Татарстан"
+EXPO_HOUSES = (
+    ("улица Павильонная", "1", "55.620700", "49.290500", 17, 4, 240, 2019),
+    ("улица Павильонная", "3", "55.620700", "49.293000", 9, 3, 108, 2018),
+    ("улица Павильонная", "5", "55.620700", "49.295500", 9, 4, 144, 2018),
+    ("улица Павильонная", "7", "55.621900", "49.288000", 12, 2, 96, 2020),
+    ("улица Павильонная", "9", "55.621900", "49.290500", 16, 3, 189, 2020),
+    ("улица Павильонная", "11", "55.621900", "49.293000", 5, 4, 80, 2017),
+    ("улица Ярмарочная", "2", "55.621900", "49.295500", 10, 3, 120, 2021),
+    ("улица Ярмарочная", "4", "55.623100", "49.288000", 14, 2, 112, 2021),
+    ("улица Ярмарочная", "6", "55.623100", "49.290500", 9, 6, 216, 2022),
+    ("улица Ярмарочная", "8", "55.623100", "49.293000", 12, 3, 144, 2022),
+    ("улица Ярмарочная", "10", "55.623100", "49.295500", 17, 1, 68, 2023),
+    ("улица Ярмарочная", "12", "55.620700", "49.288000", 5, 6, 90, 2017),
+)
+EXPO_FLAT_AREA = 5_200
+EXPO_OVERHAUL_RATE = 101_600
+
+
+def _expo_house(
+    street: str,
+    building: str,
+    lat: str,
+    lon: str,
+    floors: int,
+    entrances: int,
+    flats: int,
+    built_year: int,
+) -> DirectoryHouse:
+    return DirectoryHouse(
+        house=House(
+            region=EXPO_REGION,
+            city=EXPO_PROFILE.city,
+            street=street,
+            building=building,
+            built_year=built_year,
+            floors=floors,
+            area=flats * EXPO_FLAT_AREA * 5 // 4,
+            entrances=entrances,
+            lat=Decimal(lat),
+            lon=Decimal(lon),
+            chat_binding_code=secrets.token_hex(4),
+            timezone="Europe/Moscow",
+        ),
+        living_flats=flats,
+        living_area=flats * EXPO_FLAT_AREA,
+        overhaul_rate=EXPO_OVERHAUL_RATE,
+    )

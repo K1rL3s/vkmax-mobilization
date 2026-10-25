@@ -15732,7 +15732,7 @@ components:
       properties:
         number:
           type: integer
-          maximum: 5.0
+          maximum: 6.0
           minimum: 1.0
           title: Number
           description: Номер демо-УК, как N в ссылке demo_..._N

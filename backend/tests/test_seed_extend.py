@@ -12,7 +12,7 @@ from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.organizations import org_members_table
 from zheka.infra.database.tables.users import users_table
 from zheka.seed import demo as demo_module
-from zheka.seed.demo import ADDED_PROFILES, extend, seed
+from zheka.seed.demo import ADDED_PROFILES, EXPO_PROFILE, Seeder, extend, seed
 
 
 async def test_extending_without_a_seed_is_refused(session: AsyncSession) -> None:
@@ -74,3 +74,32 @@ async def test_extending_an_older_seed_adds_orgs_around_real_residents(
         )
     )
     assert (await session.execute(stmt)).scalar_one() == 0
+
+
+async def test_extending_an_older_seed_adds_the_expo_org_once(
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as patch:
+        patch.setattr(Seeder, "expo", _skip)
+        assert await seed(session, _demo(session), FILES, NOW)
+    stmt = select(houses_table.c.id, houses_table.c.org_id)
+    houses = dict((await session.execute(stmt)).tuples().all())
+    assert await OrgsRepo(session).get_by_inn(EXPO_PROFILE.inn) is None
+
+    assert await extend(session, _demo(session), FILES, NOW)
+
+    org = await OrgsRepo(session).get_by_inn(EXPO_PROFILE.inn)
+    assert org is not None
+    taken = await HousesRepo(session).list_for_org(org.id)
+    assert len(taken) == EXPO_PROFILE.houses
+    after = dict((await session.execute(stmt)).tuples().all())
+    assert {house_id: after[house_id] for house_id in houses} == houses
+    assert after.keys() - houses.keys() == {house.id for house in taken}
+    before = await _counts(session)
+    assert await extend(session, _demo(session), FILES, NOW)
+    assert await _counts(session) == before
+
+
+async def _skip(_seeder: Seeder) -> None:
+    return None

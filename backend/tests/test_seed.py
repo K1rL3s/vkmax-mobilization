@@ -117,6 +117,7 @@ from zheka.seed.demo import (
     ADDED_PROFILES,
     ANNOUNCEMENTS,
     BACKGROUND_PROFILES,
+    EXPO_PROFILE,
     HOUSE_DOCUMENTS,
     MAP_STATES,
     POLL_RESULTS,
@@ -218,7 +219,7 @@ async def test_every_enterable_demo_org_shows_where_its_residents_came_from(
     db: AsyncSession,
 ) -> None:
     service = analytics_service(db)
-    for profile in PROFILES:
+    for profile in (*PROFILES, EXPO_PROFILE):
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
 
@@ -255,7 +256,7 @@ async def test_every_seeded_user_is_unreachable(db: AsyncSession) -> None:
 
 def test_every_fictional_inn_fails_the_checksum() -> None:
     weights = (2, 4, 10, 3, 5, 9, 4, 6, 8)
-    for profile in (*PROFILES, *BACKGROUND_PROFILES, *ADDED_PROFILES):
+    for profile in (*PROFILES, *BACKGROUND_PROFILES, *ADDED_PROFILES, EXPO_PROFILE):
         digits = [int(char) for char in profile.inn]
         checksum = sum(w * d for w, d in zip(weights, digits, strict=False)) % 11 % 10
         assert checksum != digits[9], profile.inn
@@ -379,7 +380,7 @@ async def test_no_seeded_request_waits_on_review(db: AsyncSession) -> None:
 
 
 async def test_every_demo_window_is_open_all_month(db: AsyncSession) -> None:
-    for profile in PROFILES:
+    for profile in (*PROFILES, EXPO_PROFILE):
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
         settings = await OrgsRepo(db).get_settings(org.id)
@@ -597,7 +598,7 @@ async def test_every_demo_organization_shows_its_own_stats(db: AsyncSession) -> 
 async def test_every_enterable_demo_org_has_twelve_houses_in_one_city(
     db: AsyncSession,
 ) -> None:
-    for profile in PROFILES:
+    for profile in (*PROFILES, EXPO_PROFILE):
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
         houses = await HousesRepo(db).list_for_org(org.id)
@@ -623,7 +624,7 @@ async def test_each_big_city_has_five_demo_orgs_and_its_own_cut(
 
 
 async def test_every_enterable_demo_org_shows_every_map_state(db: AsyncSession) -> None:
-    for profile in PROFILES:
+    for profile in (*PROFILES, EXPO_PROFILE):
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
         houses = await HousesRepo(db).list_for_org(org.id)
@@ -647,7 +648,7 @@ async def test_every_enterable_demo_org_shows_every_map_state(db: AsyncSession) 
 async def test_every_enterable_demo_org_has_a_fresh_urgent_notice_and_a_poll(
     db: AsyncSession,
 ) -> None:
-    for profile in PROFILES:
+    for profile in (*PROFILES, EXPO_PROFILE):
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
         urgent = select(announcements_table.c.created_at).where(
@@ -708,8 +709,14 @@ async def test_every_demo_organization_is_a_compact_territory(
     for org_id, lat, lon in (await db.execute(stmt)).tuples():
         points.setdefault(org_id, []).append((float(lat), float(lon)))
 
-    assert len(points) == len(PROFILES) + len(BACKGROUND_PROFILES) + len(
-        ADDED_PROFILES,
+    assert (
+        len(points)
+        == len(PROFILES)
+        + len(BACKGROUND_PROFILES)
+        + len(
+            ADDED_PROFILES,
+        )
+        + 1
     )
     for territory in points.values():
         lats = [lat for lat, _lon in territory]
@@ -838,7 +845,7 @@ async def test_every_seeded_announcement_has_a_register_matching_its_counts(
 async def test_the_first_house_of_every_demo_org_has_water_works_under_way(
     db: AsyncSession,
 ) -> None:
-    for profile in (*PROFILES, *BACKGROUND_PROFILES, *ADDED_PROFILES):
+    for profile in (*PROFILES, *BACKGROUND_PROFILES, *ADDED_PROFILES, EXPO_PROFILE):
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
         [first, *_others] = await HousesRepo(db).list_for_org(org.id)
@@ -930,11 +937,15 @@ async def test_the_passport_migration_fills_every_directory_house_as_the_seed(
         .order_by(houses_table.c.id)
         .limit(1)
     )
-    stmt = select(
-        houses_table.c.added_by_resident,
-        houses_table.c.cadastral_no,
-        houses_table.c.passport,
-    ).order_by(houses_table.c.id)
+    stmt = (
+        select(
+            houses_table.c.added_by_resident,
+            houses_table.c.cadastral_no,
+            houses_table.c.passport,
+        )
+        .where(houses_table.c.city != EXPO_PROFILE.city)
+        .order_by(houses_table.c.id)
+    )
     savepoint = await seeded.begin_nested()
     house = (await seeded.execute(first)).one()
     await seeded.execute(
@@ -1201,3 +1212,34 @@ async def test_extending_gives_demo_houses_their_documents_once(
     assert await extend(db, _demo(db), FILES, NOW)
 
     assert await _counts(db) == before
+
+
+async def test_the_expo_demo_org_is_a_fictional_quarter_by_the_venue(
+    db: AsyncSession,
+) -> None:
+    with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
+        registry = {
+            (row["city"], row["street"], row["building"])
+            for row in csv.DictReader(file)
+        }
+    user_id = await _positive_user(db)
+
+    org, residency = await _demo(db).settle(user_id, len(DEMO_INNS))
+
+    assert org.inn == EXPO_PROFILE.inn
+    houses = await HousesRepo(db).list_for_org(org.id)
+    assert residency.house.id == houses[0].id
+    assert not {(house.city, house.street, house.building) for house in houses} & (
+        registry
+    )
+    scale = cos(radians(EXPO_VENUE[0]))
+    for house in houses:
+        assert house.lat is not None
+        assert house.lon is not None
+        north = (float(house.lat) - EXPO_VENUE[0]) * KM_PER_DEGREE
+        east = (float(house.lon) - EXPO_VENUE[1]) * KM_PER_DEGREE * scale
+        assert (north**2 + east**2) ** 0.5 < EXPO_RADIUS_KM, house.address
+
+
+EXPO_VENUE = (55.61472, 49.293394)
+EXPO_RADIUS_KM = 1.2

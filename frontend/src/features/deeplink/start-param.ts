@@ -100,7 +100,7 @@ const codeStartParamSchema = <Kind extends string>(
     code: raw.slice(prefix.length + 1),
   }));
 
-const demoStartParamPattern = /^demo_(admin|staff|resident)_([1-5])$/;
+const demoStartParamPattern = /^demo_(admin|staff|resident)_([1-6])$/;
 
 const demoStartParamSchema = startParam(demoStartParamPattern).transform(
   (raw) => {
