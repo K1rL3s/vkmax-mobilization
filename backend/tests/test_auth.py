@@ -318,3 +318,17 @@ def test_an_unsigned_ip_is_dropped() -> None:
 
     assert init_data.user.id == 42
     assert init_data.ip is None
+
+
+def test_init_data_without_a_chat_passes() -> None:
+    fields = {key: value for key, value in DESKTOP_FIELDS.items() if key != "chat"}
+    check = "\n".join(f"{key}={value}" for key, value in sorted(fields.items()))
+    secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
+    signature = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+
+    init_data = parse_init_data(
+        TOKEN,
+        f"{urllib.parse.urlencode(fields)}&hash={signature}",
+    )
+
+    assert init_data.user.id == 42

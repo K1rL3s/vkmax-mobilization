@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 import logging
 import urllib.parse
 from dataclasses import replace
@@ -25,6 +26,7 @@ from zheka.core.ids import API_CHECKER_MAX_USER_ID
 logger = logging.getLogger(__name__)
 
 WITHOUT_IP = frozenset("DEF")
+WITHOUT_CHAT = json.dumps({"id": 0, "type": "DIALOG"})
 
 API_CHECKER = WebAppInitData(
     chat=WebAppChat(id=API_CHECKER_MAX_USER_ID, type="DIALOG"),
@@ -90,6 +92,8 @@ def _signed_init_data(token: str, raw: str) -> WebAppInitData:
     variant = signature_variant(token, raw)
     if variant is None:
         raise InvalidWebAppInitDataError("Invalid init data signature")
+    if "chat" not in dict(urllib.parse.parse_qsl(raw)):
+        raw = f"{raw}&{urllib.parse.urlencode({'chat': WITHOUT_CHAT})}"
     init_data = parse_webapp_init_data(raw)
     if variant == "A":
         return init_data
