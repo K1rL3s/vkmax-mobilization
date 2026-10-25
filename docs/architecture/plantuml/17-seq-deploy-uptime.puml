@@ -13,7 +13,7 @@ Dev -> GH : push в master
 GH -> GH : проверка заморозки сдачи
 GH -> V : SSH deploy.sh
 V -> V : git fetch, merge --ff-only, BUILD_COMMIT
-V -> C : compose up -d --build, restart nginx
+V -> C : build, run migrations, замена api и web, up -d, nginx reload
 loop uptime.yml по расписанию
   GH -> S : GET /api/healthcheck, ждет ok и commit
   GH -> S : GET /

@@ -24,6 +24,7 @@ Keep `just check` and `just test` green (tests need Docker: testcontainers). For
 - Repos: every statement is a named `stmt`, executed on the next line; no `session.get(Model, id)`
 - Every foreign key column leads a non-partial index, PK or unique constraint (`tests/test_schema.py`): `index=True` on the column, an explicit name when a partial index already took the conventional one; no two indexes share a name (alembic would compare only one of them)
 - Alembic: English messages and names, a new revision per schema change. A Postgres enum value is `ALTER TYPE ... ADD VALUE` (allowed in the migration transaction on PG 16, unusable until commit); its downgrade recreates the type without it
+- Expand-contract: a deploy applies migrations while the old api still serves, then swaps it (`docs/architecture.md`, «Деплой без простоя»). A migration only adds what the running code can ignore: tables, nullable or defaulted columns, enum values, indexes. Renaming or dropping takes two deploys: first the code stops reading it, then a migration drops it
 - Fractions are scaled ints with one explicit rounding, never `Decimal`/`float`: kopecks; tariff 1/10000 rouble per unit (both `BigInteger`); area 1/100 m2; volume, readings 1/1000 m3 or kWh; percent 1/100 (50% = `5000`). Only coordinates are `Numeric(9, 6)`. The unit goes in the Russian `Field(description=...)`, not the name
 
 ## Transactions and access

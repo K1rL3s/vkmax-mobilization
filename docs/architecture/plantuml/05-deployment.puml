@@ -33,7 +33,7 @@ Deployment_Node(vps, "VPS", "Linux, Docker Engine") {
 }
 
 Rel(deploy, script, "SSH")
-Rel(script, net, "git merge --ff-only, compose up --build")
+Rel(script, net, "git merge --ff-only, миграции, замена api и web без простоя")
 Rel(uptime, hostnginx, "healthcheck и коммит, главная, вебхук без секрета = 403")
 Rel(uptime, max, "при сбое POST /messages капитану", $tags="optional")
 Rel(max, hostnginx, "мини-приложение, /api, /files, /webhook", "HTTPS 443")

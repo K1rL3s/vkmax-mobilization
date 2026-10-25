@@ -32,7 +32,6 @@ x-app-env: &app-env
 
 services:
   web:
-    container_name: zheka-web
     restart: unless-stopped
     build:
       context: ./frontend
@@ -42,18 +41,19 @@ services:
 
   api:
     <<: [ *image, *common, *after-migrations ]
-    container_name: zheka-api
     environment:
       <<: *app-env
     volumes:
       - ./backend/content:/data/files
     command: [ "gunicorn", "-c", "gunicorn.conf.py", "zheka.api.asgi:app" ]
+    stop_grace_period: 30s
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:7001/api/healthcheck')\"" ]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+      start_interval: 1s
 
   nginx:
     container_name: zheka-nginx

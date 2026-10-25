@@ -414,7 +414,7 @@ flowchart TB
 
     repo -- "push" --> deploy
     deploy -- "SSH" --> script
-    script -- "git merge --ff-only,<br/>compose up --build" --> net
+    script -- "git merge --ff-only, миграции,<br/>замена api и web без простоя" --> net
     uptime -- "healthcheck и коммит, главная,<br/>вебхук без секрета = 403" --> hostnginx
     uptime -. "при сбое POST /messages" .-> maxcloud
     maxcloud -- "443" --> hostnginx
@@ -444,11 +444,28 @@ PlantUML: [`05-deployment.puml`](architecture/plantuml/05-deployment.puml)
 | Путь | Куда | Особенности |
 |------|------|-------------|
 | `/` | `web:80` | статика SPA, фолбэк на `index.html` |
+| `/assets/` | `web:80` | при 404 пробует вторую реплику `web` во время деплоя |
 | `= /api/files` | `api:7001` | `client_max_body_size 60m`: видео до 50 МБ |
 | `/api/` | `api:7001` | `client_max_body_size 15m`, `/api` и `/api/` уводят на `/api/docs` |
 | `/files/` | `api:7001` | файлы по подписанной ссылке, `X-Content-Type-Options: nosniff` |
 | `/tiles/ofm/`, `/tiles/osm/` | OpenFreeMap, OSM | кэш в томе `zheka-tiles` до 2 ГБ, stale при ошибках источника |
 | `= /webhook` | `api:7001` | таймауты 35 с, MAX ждет ответа 30 с |
+
+### Деплой без простоя
+
+Ключ деплоя в `authorized_keys` VPS запускает только `deploy.sh` в корне проекта на стенде, вне git: `git fetch`, `git merge --ff-only origin/master` и `exec .github/workflows/deploy.sh`. Так правка скрипта в репозитории действует с того же деплоя. Скрипт:
+
+1. собирает образы, пока работают старые контейнеры;
+2. накатывает миграции одноразовым `docker compose run --rm migrations`. Старый api в это время работает на новой схеме, поэтому миграции только расширяют ее (expand-contract, правило в `backend/AGENTS.md`);
+3. меняет `api`, затем `web`: поднимает рядом вторую реплику (`up --scale --no-recreate --wait`), ждет ее healthcheck и только потом останавливает старую. Если новая не поднялась, скрипт удаляет ее и падает, старая продолжает работать;
+4. обновляет остальное через `docker compose up -d`: worker перезапускается, задачи ждут в Redis;
+5. перечитывает конфиг nginx (`nginx -s reload`). Рестарт только при новом `nginx/nginx.conf`: он смонтирован файлом, и версию из git контейнер видит только после рестарта
+
+Поэтому у `api` и `web` нет `container_name`: compose нумерует реплики, команды идут через `docker compose exec api`
+
+nginx в compose находит `api` и `web` через DNS Docker (`resolver valid=1s`) и при двух репликах ходит в обе. Отказ или таймаут соединения (2 с) переводит запрос на соседнюю реплику: во время замены запрос может задержаться до 2 с, но не падает. Ассеты при 404 тоже пробуют соседнюю реплику, так страница старой сборки догружает свои чанки, пока старый `web` жив. Остановка api ждет до 30 с (`stop_grace_period`), пока gunicorn дописывает начатые ответы. Узкое окно остается: запрос, который ядро успело принять в очередь старого api в момент SIGTERM, сбрасывается, и nginx повторяет его только для идемпотентных методов
+
+Бот работает вебхуком внутри api, поэтому две реплики ему не мешают: апдейт обрабатывает та, куда его отправил nginx, состояние диалогов в Redis, `set_webhook` новой реплики идемпотентен, остановка подписку не снимает. Worker с расписанием taskiq остается одним контейнером, его замена - обычный рестарт без дублей
 
 ## Стек
 
@@ -928,7 +945,7 @@ sequenceDiagram
     GH->>GH: проверка заморозки сдачи
     GH->>V: SSH deploy.sh
     V->>V: git fetch, merge --ff-only, BUILD_COMMIT
-    V->>C: compose up -d --build, restart nginx
+    V->>C: build, run migrations, замена api и web, up -d, nginx reload
     loop uptime.yml по расписанию
         GH->>S: GET /api/healthcheck, ждет ok и commit
         GH->>S: GET /
