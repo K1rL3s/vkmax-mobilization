@@ -74,9 +74,10 @@ async def get_current_user(
         return parse_init_data(config.max.token, raw_init_data)
     except (InvalidWebAppInitDataError, ValueError) as error:
         logger.warning(
-            "Невалидная initData: %s, User-Agent %s",
+            "Невалидная initData: %s, User-Agent %s, WebAppData %s",
             init_data_shape(raw_init_data),
             request.headers.get("user-agent"),
+            raw_init_data,
         )
         raise Unauthorized("Невалидная initData") from error
 
@@ -93,7 +94,7 @@ def _signed_init_data(token: str, raw: str) -> WebAppInitData:
     init_data = parse_webapp_init_data(raw)
     if variant == "A":
         return init_data
-    logger.info("initData подошла по варианту подписи %s", variant)
+    logger.info("initData подошла по варианту подписи %s, WebAppData %s", variant, raw)
     return replace(init_data, ip=None) if variant in WITHOUT_IP else init_data
 
 

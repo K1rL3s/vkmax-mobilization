@@ -231,16 +231,12 @@ async def test_the_wildcard_origin_carries_no_credentials() -> None:
     assert "access-control-allow-credentials" not in response.headers
 
 
-async def test_rejected_init_data_is_logged_by_shape_only(
+async def test_rejected_init_data_is_logged_raw(
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(app_module, "setup_logger", lambda _: None)
-    photo = "https://i.example/a+b&fn=Секрет"
-    raw = signed_init_data(datetime.now(UTC), photo_url=photo).replace(
-        "hash=",
-        "hash=0",
-    )
+    raw = signed_init_data(datetime.now(UTC)).replace("hash=", "hash=0")
 
     async with AsyncClient(
         transport=ASGITransport(app=_app(None)),
@@ -259,10 +255,7 @@ async def test_rejected_init_data_is_logged_by_shape_only(
     assert response.status_code == 401
     assert "'hash'" in message
     assert "MAX-mac" in message
-    assert all(
-        value not in message
-        for value in ("Жека", "Секрет", "i.example", raw.partition("hash=")[2])
-    )
+    assert raw in message
 
 
 DESKTOP_FIELDS = {
