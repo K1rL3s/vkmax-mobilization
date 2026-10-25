@@ -22,6 +22,7 @@ from sqlalchemy import (
     func,
     insert,
     select,
+    text,
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
@@ -159,6 +160,7 @@ async def seeded(engine: AsyncEngine) -> AsyncGenerator[AsyncConnection]:
         ) as session:
             assert await seed(session, _demo(session), FILES, NOW)
             await session.commit()
+        await conn.execute(text("analyze"))
         yield conn
         await transaction.rollback()
 
@@ -604,7 +606,10 @@ async def test_every_enterable_demo_org_has_twelve_houses_in_one_city(
         assert all(house.lat is not None and house.lon is not None for house in houses)
 
 
-async def test_each_city_has_at_least_five_demo_orgs(db: AsyncSession) -> None:
+async def test_each_big_city_has_five_demo_orgs_and_its_own_cut(
+    db: AsyncSession,
+) -> None:
+    big = {"Москва", "Санкт-Петербург", "Казань"}
     rows = await db.execute(
         select(houses_table.c.city, func.count(func.distinct(houses_table.c.org_id)))
         .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
@@ -612,8 +617,9 @@ async def test_each_city_has_at_least_five_demo_orgs(db: AsyncSession) -> None:
         .group_by(houses_table.c.city),
     )
     counts = dict(rows.tuples().all())
-    assert counts.keys() == {"Москва", "Санкт-Петербург", "Казань"}
-    assert all(count >= 5 for count in counts.values())
+    assert all(counts.get(city, 0) >= 5 for city in big)
+    benchmark = await analytics_service(db).benchmark(await _demo_org(db), NOW)
+    assert big <= {row.city for row in benchmark.regions}
 
 
 async def test_every_enterable_demo_org_shows_every_map_state(db: AsyncSession) -> None:
