@@ -6788,6 +6788,16 @@ paths:
       security:
       - ApiTestToken: []
       parameters:
+      - name: archived
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: 'true - архив: старше 30 дней, кроме неоконченных плановых работ; false - остальные; не задан - все'
+          title: Archived
+        description: 'true - архив: старше 30 дней, кроме неоконченных плановых работ; false - остальные; не задан - все'
       - name: limit
         in: query
         required: false
@@ -6831,7 +6841,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page_AnnouncementItem_'
+                $ref: '#/components/schemas/AnnouncementPage'
         '400':
           description: Некорректный запрос
           content:
@@ -10724,6 +10734,16 @@ paths:
           - type: integer
           - type: 'null'
           title: Poll Id
+      - name: archived
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: 'true - архив: старше 30 дней, кроме неоконченных плановых работ; false - остальные; не задан - все'
+          title: Archived
+        description: 'true - архив: старше 30 дней, кроме неоконченных плановых работ; false - остальные; не задан - все'
       - name: limit
         in: query
         required: false
@@ -10767,7 +10787,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Page_AnnouncementItem_'
+                $ref: '#/components/schemas/AnnouncementPage'
         '400':
           description: Некорректный запрос
           content:
@@ -13950,6 +13970,26 @@ components:
       - channels
       - delivered_count
       title: AnnouncementItem
+    AnnouncementPage:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AnnouncementItem'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        archive_total:
+          type: integer
+          title: Archive Total
+          description: Сколько объявлений в архиве при тех же фильтрах
+      type: object
+      required:
+      - items
+      - total
+      - archive_total
+      title: AnnouncementPage
     AnnouncementPreviewResponse:
       properties:
         message:
@@ -17152,21 +17192,6 @@ components:
       - items
       - total
       title: Page[AdminRequestListItem]
-    Page_AnnouncementItem_:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/AnnouncementItem'
-          type: array
-          title: Items
-        total:
-          type: integer
-          title: Total
-      type: object
-      required:
-      - items
-      - total
-      title: Page[AnnouncementItem]
     Page_ChargeListItem_:
       properties:
         items:

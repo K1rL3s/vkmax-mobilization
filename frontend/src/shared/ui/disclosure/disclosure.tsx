@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Typography } from "@maxhub/max-ui";
 
 import { Chevron } from "@/shared/ui/chevron";
@@ -11,20 +11,27 @@ export const Disclosure = ({
 }: {
   title: string;
   children: ReactNode;
-}) => (
-  <details className={styles.Disclosure}>
-    <summary className={styles.Title}>
-      <Typography.Text
-        className={styles.Grow}
-        variant="body-strong"
-        color="primary"
-      >
-        {title}
-      </Typography.Text>
-      <span className={styles.Chevron}>
-        <Chevron />
-      </span>
-    </summary>
-    {children}
-  </details>
-);
+}) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <details
+      className={styles.Disclosure}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className={styles.Title}>
+        <Typography.Text
+          className={styles.Grow}
+          variant="body-strong"
+          color="primary"
+        >
+          {title}
+        </Typography.Text>
+        <span className={styles.Chevron}>
+          <Chevron />
+        </span>
+      </summary>
+      {open && children}
+    </details>
+  );
+};

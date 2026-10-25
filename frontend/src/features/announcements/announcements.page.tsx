@@ -8,7 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { entrancesLabel } from "./scope";
 import { useAnnouncements } from "./use-announcements";
-import { announcementWhen, isArchived } from "./when";
+import { announcementWhen } from "./when";
 import { WorksDetails } from "./works";
 
 import styles from "./announcements.module.css";
@@ -63,9 +63,55 @@ const AnnouncementCard = ({ item }: { item: Announcement }) => (
   </Card>
 );
 
+const MoreButton = ({
+  loading,
+  onClick,
+}: {
+  loading: boolean;
+  onClick: () => void;
+}) => (
+  <Button
+    size="medium"
+    variant="secondary"
+    stretched
+    loading={loading}
+    onClick={onClick}
+  >
+    Показать ещё
+  </Button>
+);
+
+const ArchivedAnnouncements = () => {
+  const archive = useAnnouncements(true);
+
+  if (archive.isPending) {
+    return <LoadingState title="Загружаем архив" />;
+  }
+
+  if (archive.isError) {
+    return <ErrorState error={archive.error} onRetry={archive.retry} />;
+  }
+
+  return (
+    <Flex align="stretch" direction="column" gap={8}>
+      {archive.items.map((item) => (
+        <AnnouncementCard key={item.id} item={item} />
+      ))}
+
+      {archive.hasMore && (
+        <MoreButton
+          loading={archive.isLoadingMore}
+          onClick={archive.loadMore}
+        />
+      )}
+    </Flex>
+  );
+};
+
 const AnnouncementsPage = () => {
   const {
     items,
+    archiveTotal,
     isPending,
     isError,
     error,
@@ -73,7 +119,7 @@ const AnnouncementsPage = () => {
     isLoadingMore,
     retry,
     loadMore,
-  } = useAnnouncements();
+  } = useAnnouncements(false);
 
   const content = () => {
     if (isPending) {
@@ -84,7 +130,7 @@ const AnnouncementsPage = () => {
       return <ErrorState error={error} fill onRetry={retry} />;
     }
 
-    if (items.length === 0) {
+    if (items.length === 0 && archiveTotal === 0) {
       return (
         <EmptyState
           fill
@@ -95,35 +141,18 @@ const AnnouncementsPage = () => {
       );
     }
 
-    const recent = items.filter((item) => !isArchived(item));
-    const archived = items.filter((item) => isArchived(item));
-
     return (
       <>
-        {recent.map((item) => (
+        {items.map((item) => (
           <AnnouncementCard key={item.id} item={item} />
         ))}
 
-        {archived.length > 0 && (
-          <Disclosure title={`Архив (${archived.length})`}>
-            <Flex align="stretch" direction="column" gap={8}>
-              {archived.map((item) => (
-                <AnnouncementCard key={item.id} item={item} />
-              ))}
-            </Flex>
-          </Disclosure>
-        )}
+        {hasMore && <MoreButton loading={isLoadingMore} onClick={loadMore} />}
 
-        {hasMore && (
-          <Button
-            size="medium"
-            variant="secondary"
-            stretched
-            loading={isLoadingMore}
-            onClick={loadMore}
-          >
-            Показать ещё
-          </Button>
+        {archiveTotal > 0 && (
+          <Disclosure title={`Архив (${archiveTotal})`}>
+            <ArchivedAnnouncements />
+          </Disclosure>
         )}
       </>
     );

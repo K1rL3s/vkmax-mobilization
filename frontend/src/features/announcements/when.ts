@@ -2,7 +2,6 @@ import type { components } from "@/shared/api/schema/generated";
 import { formatDay, formatTime } from "@/shared/lib/format";
 
 type Works = components["schemas"]["AnnouncementWorks"];
-type Announcement = components["schemas"]["AnnouncementItem"];
 
 const isSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
@@ -33,20 +32,6 @@ export const worksState = ({ starts_at: startsAt, ends_at: endsAt }: Works) => {
   }
 
   return now < Date.parse(endsAt) ? "going" : "done";
-};
-
-const ARCHIVE_WINDOW_DAYS = 30;
-
-export const isArchived = ({
-  created_at: createdAt,
-  works,
-}: Pick<Announcement, "created_at" | "works">) => {
-  if (works && worksState(works) !== "done") {
-    return false;
-  }
-
-  const cutoff = Date.now() - ARCHIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  return Date.parse(createdAt) < cutoff;
 };
 
 export const worksPeriod = ({

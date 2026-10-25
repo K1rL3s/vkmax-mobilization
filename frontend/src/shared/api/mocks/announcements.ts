@@ -1,6 +1,6 @@
 import type { components } from "../schema/generated";
 
-import { endpoint, forbidden, houseOf, ok, page } from "./reply";
+import { announcementPage, endpoint, forbidden, houseOf, ok } from "./reply";
 import { findHouse, minutes } from "./state";
 
 type Schemas = components["schemas"];
@@ -171,7 +171,7 @@ export const announcementsConfigs = [
     };
 
     return ok(
-      page(
+      announcementPage(
         houseId === 1
           ? [
               works,
@@ -189,7 +189,7 @@ export const announcementsConfigs = [
             ]
           : [],
         request.query,
-      ) satisfies Schemas["Page_AnnouncementItem_"],
+      ),
     );
   }),
 ];

@@ -10,6 +10,8 @@ from sqlalchemy import (
     and_,
     cast,
     column,
+    func,
+    not_,
     or_,
     select,
     update,
@@ -82,9 +84,13 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         flat_id: FlatId | None,
         limit: int,
         offset: int,
-    ) -> tuple[Sequence[Announcement], int]:
+        *,
+        archived: bool | None,
+        archive_before: datetime,
+        now: datetime,
+    ) -> tuple[Sequence[Announcement], int, int]:
         stmt = select(Announcement).where(*_seen_in(house_id, entrance, flat_id))
-        return await self._newest_first(stmt, limit, offset)
+        return await self._split(stmt, limit, offset, archived, archive_before, now)
 
     async def list_for_house_since(
         self,
@@ -113,25 +119,44 @@ class AnnouncementsRepo(BaseAlchemyRepo):
         poll_id: PollId | None,
         limit: int,
         offset: int,
-    ) -> tuple[Sequence[Announcement], int]:
+        *,
+        archived: bool | None,
+        archive_before: datetime,
+        now: datetime,
+    ) -> tuple[Sequence[Announcement], int, int]:
         stmt = select(Announcement).where(announcements_table.c.org_id == org_id)
         if house_id is not None:
             stmt = stmt.where(announcements_table.c.house_ids.contains([house_id]))
         if poll_id is not None:
             stmt = stmt.where(announcements_table.c.poll_id == poll_id)
-        return await self._newest_first(stmt, limit, offset)
+        return await self._split(stmt, limit, offset, archived, archive_before, now)
 
-    async def _newest_first(
+    async def _split(
         self,
         stmt: Select[tuple[Announcement]],
         limit: int,
         offset: int,
-    ) -> tuple[Sequence[Announcement], int]:
+        archived: bool | None,
+        archive_before: datetime,
+        now: datetime,
+    ) -> tuple[Sequence[Announcement], int, int]:
+        archive = and_(
+            announcements_table.c.created_at < archive_before,
+            or_(
+                announcements_table.c.works_until.is_(None),
+                announcements_table.c.works_until <= now,
+            ),
+        )
+        archive_stmt = select(func.count()).select_from(stmt.where(archive).subquery())
+        archive_total = (await self._session.execute(archive_stmt)).scalar_one()
+        if archived is not None:
+            stmt = stmt.where(archive if archived else not_(archive))
         stmt = stmt.order_by(
             announcements_table.c.created_at.desc(),
             announcements_table.c.id.desc(),
         )
-        return await self._page(stmt, limit, offset)
+        items, total = await self._page(stmt, limit, offset)
+        return items, total, archive_total
 
     async def set_delivered(
         self,

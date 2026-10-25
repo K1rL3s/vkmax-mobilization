@@ -3152,6 +3152,18 @@ export interface components {
        */
       documents?: components["schemas"]["AnnouncementDocument"][];
     };
+    /** AnnouncementPage */
+    AnnouncementPage: {
+      /** Items */
+      items: components["schemas"]["AnnouncementItem"][];
+      /** Total */
+      total: number;
+      /**
+       * Archive Total
+       * @description Сколько объявлений в архиве при тех же фильтрах
+       */
+      archive_total: number;
+    };
     /** AnnouncementPreviewResponse */
     AnnouncementPreviewResponse: {
       /**
@@ -5081,13 +5093,6 @@ export interface components {
     Page_AdminRequestListItem_: {
       /** Items */
       items: components["schemas"]["AdminRequestListItem"][];
-      /** Total */
-      total: number;
-    };
-    /** Page[AnnouncementItem] */
-    Page_AnnouncementItem_: {
-      /** Items */
-      items: components["schemas"]["AnnouncementItem"][];
       /** Total */
       total: number;
     };
@@ -14149,6 +14154,8 @@ export interface operations {
   list_announcements: {
     parameters: {
       query?: {
+        /** @description true - архив: старше 30 дней, кроме неоконченных плановых работ; false - остальные; не задан - все */
+        archived?: boolean | null;
         /** @description Размер страницы */
         limit?: number;
         /** @description Сдвиг от начала списка */
@@ -14169,7 +14176,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["Page_AnnouncementItem_"];
+          "application/json": components["schemas"]["AnnouncementPage"];
         };
       };
       /** @description Некорректный запрос */
@@ -18195,6 +18202,8 @@ export interface operations {
       query?: {
         house_id?: number | null;
         poll_id?: number | null;
+        /** @description true - архив: старше 30 дней, кроме неоконченных плановых работ; false - остальные; не задан - все */
+        archived?: boolean | null;
         /** @description Размер страницы */
         limit?: number;
         /** @description Сдвиг от начала списка */
@@ -18215,7 +18224,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["Page_AnnouncementItem_"];
+          "application/json": components["schemas"]["AnnouncementPage"];
         };
       };
       /** @description Некорректный запрос */

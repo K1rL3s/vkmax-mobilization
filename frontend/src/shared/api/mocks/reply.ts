@@ -139,3 +139,22 @@ export const houseOf = (request: MockHttpRequest): number | null =>
 export const demoLocked = forbidden(
   "Демо-УК общая для всех проверяющих, это действие в ней отключено",
 );
+
+export const announcementPage = (
+  items: components["schemas"]["AnnouncementItem"][],
+  query: MockHttpRequest["query"],
+): components["schemas"]["AnnouncementPage"] => {
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const isArchived = (item: (typeof items)[number]) =>
+    Date.parse(item.created_at) < cutoff &&
+    (!item.works || Date.parse(item.works.ends_at) <= Date.now());
+  const archived = items.filter(isArchived);
+  const selected =
+    query.archived === undefined
+      ? items
+      : query.archived === "true"
+        ? archived
+        : items.filter((item) => !isArchived(item));
+
+  return { ...page(selected, query), archive_total: archived.length };
+};

@@ -1,8 +1,8 @@
+import type { ReactNode } from "react";
 import { Button, Flex, Panel, Typography } from "@maxhub/max-ui";
 import { Link } from "react-router-dom";
 
 import { useIsOrgAdmin } from "@/features/admin-reception";
-import { isArchived } from "@/features/announcements";
 import { Routes } from "@/shared/model/routes";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Disclosure } from "@/shared/ui/disclosure";
@@ -11,8 +11,10 @@ import { Icon, megaphoneIcon, plusIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import {
+  type Announcement,
   useAnnouncementList,
   useFinishWorks,
+  useOrgAnnouncements,
   useSentOutcome,
 } from "./model/use-announcements";
 import { AnnouncementRow } from "./ui/announcement-row";
@@ -25,6 +27,55 @@ const NewAnnouncementButton = () => (
     <Link to={Routes.ADMIN_ANNOUNCEMENT_NEW}>Новое объявление</Link>
   </Button>
 );
+
+const MoreButton = ({
+  loading,
+  onClick,
+}: {
+  loading: boolean;
+  onClick: () => void;
+}) => (
+  <Button
+    size="medium"
+    variant="secondary"
+    stretched
+    loading={loading}
+    onClick={onClick}
+  >
+    Показать ещё
+  </Button>
+);
+
+const ArchivedAnnouncements = ({
+  houseId,
+  row,
+}: {
+  houseId: number | undefined;
+  row: (announcement: Announcement) => ReactNode;
+}) => {
+  const archive = useOrgAnnouncements(houseId, true);
+
+  if (archive.isPending) {
+    return <LoadingState title="Загружаем архив" />;
+  }
+
+  if (archive.isError) {
+    return <ErrorState error={archive.loadError} onRetry={archive.retry} />;
+  }
+
+  return (
+    <Flex align="stretch" direction="column" gap={8}>
+      {archive.items.map(row)}
+
+      {archive.hasMore && (
+        <MoreButton
+          loading={archive.isLoadingMore}
+          onClick={archive.loadMore}
+        />
+      )}
+    </Flex>
+  );
+};
 
 const AdminAnnouncementsPage = () => {
   const list = useAnnouncementList();
@@ -41,7 +92,7 @@ const AdminAnnouncementsPage = () => {
       return <ErrorState error={list.loadError} fill onRetry={list.retry} />;
     }
 
-    if (list.items.length === 0 && list.houseId) {
+    if (list.items.length === 0 && list.archiveTotal === 0 && list.houseId) {
       return (
         <EmptyState
           fill
@@ -52,7 +103,7 @@ const AdminAnnouncementsPage = () => {
       );
     }
 
-    if (list.items.length === 0) {
+    if (list.items.length === 0 && list.archiveTotal === 0) {
       return (
         <EmptyState
           fill
@@ -64,9 +115,7 @@ const AdminAnnouncementsPage = () => {
       );
     }
 
-    const recent = list.items.filter((item) => !isArchived(item));
-    const archived = list.items.filter((item) => isArchived(item));
-    const row = (announcement: (typeof list.items)[number]) => (
+    const row = (announcement: Announcement) => (
       <AnnouncementRow
         key={announcement.id}
         announcement={announcement}
@@ -81,27 +130,17 @@ const AdminAnnouncementsPage = () => {
         <NewAnnouncementButton />
 
         <Flex align="stretch" direction="column" gap={8}>
-          {recent.map(row)}
+          {list.items.map(row)}
         </Flex>
 
-        {archived.length > 0 && (
-          <Disclosure title={`Архив (${archived.length})`}>
-            <Flex align="stretch" direction="column" gap={8}>
-              {archived.map(row)}
-            </Flex>
-          </Disclosure>
+        {list.hasMore && (
+          <MoreButton loading={list.isLoadingMore} onClick={list.loadMore} />
         )}
 
-        {list.hasMore && (
-          <Button
-            size="medium"
-            variant="secondary"
-            stretched
-            loading={list.isLoadingMore}
-            onClick={list.loadMore}
-          >
-            Показать ещё
-          </Button>
+        {list.archiveTotal > 0 && (
+          <Disclosure title={`Архив (${list.archiveTotal})`}>
+            <ArchivedAnnouncements houseId={list.houseId} row={row} />
+          </Disclosure>
         )}
       </>
     );

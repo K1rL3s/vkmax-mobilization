@@ -1,6 +1,6 @@
 from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from html import unescape
 
 from zheka.base import ZhekaType
@@ -67,6 +67,7 @@ WORKS_END_BEFORE_START = "Работы должны закончиться по�
 WORKS_ALREADY_OVER = "Срок работ уже прошел"
 DOCUMENT_NOT_FOUND = "Документ не найден, загрузите его заново"
 WORKS_NOT_GOING = "Работы сейчас не идут"
+ARCHIVE_AFTER = timedelta(days=30)
 
 
 class AnnouncementData(ZhekaType):
@@ -433,16 +434,22 @@ class AnnouncementsService:
         verified: bool,
         limit: int,
         offset: int,
-    ) -> tuple[list[AnnouncementData], int]:
+        *,
+        archived: bool | None = None,
+    ) -> tuple[list[AnnouncementData], int, int]:
+        now = datetime.now(UTC)
         entrance, own_flat_id = await self._audience(flat_id, verified)
-        announcements, total = await self._announcements.list_for_house(
+        announcements, total, archive_total = await self._announcements.list_for_house(
             house_id,
             entrance,
             own_flat_id,
             limit,
             offset,
+            archived=archived,
+            archive_before=now - ARCHIVE_AFTER,
+            now=now,
         )
-        return await self._with_org_names(announcements), total
+        return await self._with_org_names(announcements), total, archive_total
 
     async def list_for_org(
         self,
@@ -451,20 +458,26 @@ class AnnouncementsService:
         poll_id: PollId | None,
         limit: int,
         offset: int,
-    ) -> tuple[list[AnnouncementData], int]:
+        *,
+        archived: bool | None = None,
+    ) -> tuple[list[AnnouncementData], int, int]:
         if (
             house_id is not None
             and await self._houses.get_for_org(house_id, org_id) is None
         ):
             raise EntityNotFound(HOUSE_NOT_FOUND)
-        announcements, total = await self._announcements.list_for_org(
+        now = datetime.now(UTC)
+        announcements, total, archive_total = await self._announcements.list_for_org(
             org_id,
             house_id,
             poll_id,
             limit,
             offset,
+            archived=archived,
+            archive_before=now - ARCHIVE_AFTER,
+            now=now,
         )
-        return await self._with_org_names(announcements), total
+        return await self._with_org_names(announcements), total, archive_total
 
     async def _with_org_names(
         self,

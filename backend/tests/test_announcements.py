@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import (
@@ -50,6 +50,7 @@ from zheka.core.ids import FlatId, HouseId, MaxChatId, MaxUserId, UserId
 from zheka.core.services.announcements import (
     ANNOUNCEMENT_NOT_FOUND,
     ANNOUNCEMENT_TEXT_LIMIT,
+    ARCHIVE_AFTER,
     EMPTY_TEXT,
     ENTRANCES_OR_FLATS,
     FLATS_NOT_IN_CHAT,
@@ -321,7 +322,7 @@ async def test_resident_sees_only_announcements_of_own_house(
     await _create(service, mine)
     await _create(service, other, text="Чужое объявление")
 
-    items, total = await service.list_for_resident(mine.house_id, None, False, 20, 0)
+    items, total, _ = await service.list_for_resident(mine.house_id, None, False, 20, 0)
 
     assert total == 1
     assert items[0].announcement.text == TEXT
@@ -337,7 +338,13 @@ async def test_org_list_filters_by_house_of_the_same_org(
     service = _service(session)
     await _create(service, mine)
 
-    items, total = await service.list_for_org(mine.org_id, mine.house_id, None, 20, 0)
+    items, total, _ = await service.list_for_org(
+        mine.org_id,
+        mine.house_id,
+        None,
+        20,
+        0,
+    )
     assert total == 1
     assert items[0].announcement.text == TEXT
 
@@ -364,7 +371,7 @@ async def test_urgent_mark_reaches_the_feed_and_the_message(
     await _create(service, data, urgent=urgent)
 
     await publisher.flush()
-    items, _ = await service.list_for_resident(data.house_id, None, False, 20, 0)
+    items, _, _ = await service.list_for_resident(data.house_id, None, False, 20, 0)
     assert items[0].announcement.urgent is urgent
     assert broker.enqueued(TaskName.BROADCAST_TO_CHATS)[0]["text"].startswith(heading)
 
@@ -511,9 +518,9 @@ async def test_an_entrance_announcement_reaches_and_shows_only_that_entrance(
     assert enqueued["user_ids"] == [neighbour]
     assert "\n📍 Подъезд 2\n" in enqueued["text"]
     assert created.announcement.recipients_count == 1
-    _, seen = await service.list_for_resident(data.house_id, second, False, 20, 0)
-    _, unseen = await service.list_for_resident(data.house_id, first, False, 20, 0)
-    _, no_flat = await service.list_for_resident(data.house_id, None, False, 20, 0)
+    _, seen, _ = await service.list_for_resident(data.house_id, second, False, 20, 0)
+    _, unseen, _ = await service.list_for_resident(data.house_id, first, False, 20, 0)
+    _, no_flat, _ = await service.list_for_resident(data.house_id, None, False, 20, 0)
     assert (seen, unseen, no_flat) == (1, 0, 0)
 
 
@@ -543,9 +550,9 @@ async def test_a_flat_announcement_reaches_only_verified_residents_of_the_flat(
     [enqueued] = broker.enqueued(TaskName.BROADCAST_TO_USERS)
     assert enqueued["user_ids"] == [verified]
     assert "\n📍 Для вашей квартиры\n" in enqueued["text"]
-    _, seen = await service.list_for_resident(data.house_id, first, True, 20, 0)
-    _, claimed = await service.list_for_resident(data.house_id, first, False, 20, 0)
-    _, other = await service.list_for_resident(data.house_id, second, True, 20, 0)
+    _, seen, _ = await service.list_for_resident(data.house_id, first, True, 20, 0)
+    _, claimed, _ = await service.list_for_resident(data.house_id, first, False, 20, 0)
+    _, other, _ = await service.list_for_resident(data.house_id, second, True, 20, 0)
     assert (seen, claimed, other) == (1, 0, 0)
 
 
@@ -899,7 +906,7 @@ async def test_a_poll_notice_goes_to_residents_with_a_vote_button(
     )
     assert created.announcement.poll_id == poll.id
     assert created.announcement.channels == [AnnouncementChannel.DIRECT.value]
-    items, total = await service.list_for_org(data.org_id, None, poll.id, 20, 0)
+    items, total, _ = await service.list_for_org(data.org_id, None, poll.id, 20, 0)
     assert (total, items[0].announcement.id) == (1, created.announcement.id)
 
 
@@ -1170,3 +1177,66 @@ async def test_the_register_pdf_lists_the_flats_the_screen_shows(
         ("3", "-", "собственник, не подтвержден", pending, "-"),
     ]
     assert drawn == [unmarked if unmarked_only else [delivered, *unmarked]]
+
+
+async def test_the_archive_holds_old_announcements_except_unfinished_works(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    service = _service(session)
+    now = datetime.now(UTC)
+    old = now - ARCHIVE_AFTER - timedelta(hours=1)
+    ages = {
+        "fresh": (now, None),
+        "old": (old, None),
+        "old works going": (old, now + timedelta(days=1)),
+        "old works over": (old, now - timedelta(days=1)),
+        "edge": (now - ARCHIVE_AFTER + timedelta(minutes=5), None),
+    }
+    for text, (created_at, works_until) in ages.items():
+        created = await _create(service, data, text=text)
+        await session.execute(
+            update(announcements_table)
+            .where(announcements_table.c.id == created.announcement.id)
+            .values(
+                created_at=created_at,
+                works_from=None if works_until is None else old,
+                works_until=works_until,
+            ),
+        )
+    foreign = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    stranger = await _create(service, foreign, text="foreign old")
+    await session.execute(
+        update(announcements_table)
+        .where(announcements_table.c.id == stranger.announcement.id)
+        .values(created_at=old),
+    )
+
+    for archived, expected in (
+        (False, {"fresh", "old works going", "edge"}),
+        (True, {"old", "old works over"}),
+        (None, set(ages)),
+    ):
+        feed, feed_total, feed_archive = await service.list_for_resident(
+            data.house_id,
+            None,
+            False,
+            20,
+            0,
+            archived=archived,
+        )
+        org, org_total, org_archive = await service.list_for_org(
+            data.org_id,
+            None,
+            None,
+            20,
+            0,
+            archived=archived,
+        )
+        for items, total, archive_total in (
+            (feed, feed_total, feed_archive),
+            (org, org_total, org_archive),
+        ):
+            assert {item.announcement.text for item in items} == expected
+            assert (total, archive_total) == (len(expected), 2)

@@ -5,11 +5,13 @@ from fastapi import APIRouter
 from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep, IdempotencyDep
 from zheka.api.schemas.announcements import (
     AnnouncementItem,
+    AnnouncementPage,
     AnnouncementPreviewResponse,
+    ArchivedFilter,
     CreateAnnouncementRequest,
     NoticeRegister,
 )
-from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
+from zheka.api.schemas.base import Limit, Offset, OkResponse
 from zheka.core.ids import AnnouncementId, HouseId, PollId
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.files import FilesService
@@ -24,19 +26,22 @@ async def list_org_announcements(
     files_service: FromDishka[FilesService],
     house_id: HouseId | None = None,
     poll_id: PollId | None = None,
+    archived: ArchivedFilter = None,
     limit: Limit = 20,
     offset: Offset = 0,
-) -> Page[AnnouncementItem]:
-    items, total = await announcements_service.list_for_org(
+) -> AnnouncementPage:
+    items, total, archive_total = await announcements_service.list_for_org(
         current_org.org_id,
         house_id,
         poll_id,
         limit,
         offset,
+        archived=archived,
     )
-    return Page(
+    return AnnouncementPage(
         items=[AnnouncementItem.of(item, files_service) for item in items],
         total=total,
+        archive_total=archive_total,
     )
 
 

@@ -8,7 +8,7 @@ import {
   notFound,
   number,
   ok,
-  page,
+  announcementPage,
 } from "./reply";
 import {
   ZHILSERVIS,
@@ -141,7 +141,7 @@ const announcements: Item[] = [
   ),
   item(
     1,
-    20 * 24,
+    40 * 24,
     [1, 2, 3],
     ["chat"],
     "Изменились часы приёма УК: вторник и четверг с 15:00 до 19:00",
@@ -183,7 +183,7 @@ const refusal = (body: Partial<Schemas["CreateAnnouncementRequest"]>) => {
 export const adminAnnouncementsConfigs = [
   endpoint("get", "/admin/announcements", (request) => {
     const houseId = number(request.query.house_id);
-    const found = page(
+    const found = announcementPage(
       announcements.filter(
         (announcement) =>
           houseId === null || announcement.house_ids.includes(houseId),
@@ -193,7 +193,7 @@ export const adminAnnouncementsConfigs = [
 
     return houseId !== null && !(houseId in ORG_HOUSES)
       ? notFound("Дом не найден")
-      : ok(found satisfies Schemas["Page_AnnouncementItem_"]);
+      : ok(found);
   }),
   endpoint("post", "/admin/announcements", (request) => {
     const body = request.body as Partial<Schemas["CreateAnnouncementRequest"]>;

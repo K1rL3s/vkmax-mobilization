@@ -1,10 +1,11 @@
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Self
+from typing import Annotated, Self
 
+from fastapi import Query
 from pydantic import Field
 
-from zheka.api.schemas.base import BaseSchema
+from zheka.api.schemas.base import BaseSchema, Page
 from zheka.core.enums import (
     AnnouncementChannel,
     NoticeStatus,
@@ -15,6 +16,7 @@ from zheka.core.ids import AnnouncementId, FlatId, HouseId, PollId
 from zheka.core.models import Announcement, NoticeDelivery
 from zheka.core.services.announcements import (
     ANNOUNCEMENT_TEXT_LIMIT,
+    ARCHIVE_AFTER,
     ActiveWorks,
     AnnouncementData,
     AnnouncementPreview,
@@ -350,3 +352,21 @@ class AnnouncementPreviewResponse(BaseSchema):
             houses_without_chat=list(preview.houses_without_chat),
             is_demo=preview.is_demo,
         )
+
+
+ArchivedFilter = Annotated[
+    bool | None,
+    Query(
+        description=(
+            f"true - архив: старше {ARCHIVE_AFTER.days} дней, кроме неоконченных "
+            "плановых работ; "
+            "false - остальные; не задан - все"
+        ),
+    ),
+]
+
+
+class AnnouncementPage(Page[AnnouncementItem]):
+    archive_total: int = Field(
+        description="Сколько объявлений в архиве при тех же фильтрах",
+    )

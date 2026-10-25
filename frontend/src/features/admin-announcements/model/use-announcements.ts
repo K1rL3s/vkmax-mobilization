@@ -34,18 +34,6 @@ export const useAnnouncementList = () => {
     searchParams.get("house") ?? undefined,
   );
   const houses = useOrgHouses();
-  const announcements = rqClient.useInfiniteQuery(
-    "get",
-    "/api/admin/announcements",
-    { params: { ...orgParams(), query: { limit: 20, house_id: houseId } } },
-    {
-      pageParamName: "offset",
-      initialPageParam: 0,
-      getNextPageParam: nextOffset,
-      refetchInterval: (query) =>
-        query.state.data?.pages[0]?.items.some(isSending) ? 3000 : false,
-    },
-  );
 
   return {
     houseId,
@@ -53,14 +41,7 @@ export const useAnnouncementList = () => {
       ?.address,
     clearHouse: () => setSearchParams({}, { replace: true }),
     houses: houses.data?.items ?? [],
-    items: announcements.data?.pages.flatMap((page) => page.items) ?? [],
-    isPending: announcements.isPending,
-    isError: announcements.isError,
-    loadError: announcements.error,
-    retry: () => void announcements.refetch(),
-    hasMore: announcements.hasNextPage,
-    isLoadingMore: announcements.isFetchingNextPage,
-    loadMore: () => void announcements.fetchNextPage(),
+    ...useOrgAnnouncements(houseId, false),
   };
 };
 
@@ -130,5 +111,40 @@ export const useFinishWorks = () => {
         confirm.dismiss();
       }
     },
+  };
+};
+
+export const useOrgAnnouncements = (
+  houseId: number | undefined,
+  archived: boolean,
+) => {
+  const announcements = rqClient.useInfiniteQuery(
+    "get",
+    "/api/admin/announcements",
+    {
+      params: {
+        ...orgParams(),
+        query: { limit: 20, house_id: houseId, archived },
+      },
+    },
+    {
+      pageParamName: "offset",
+      initialPageParam: 0,
+      getNextPageParam: nextOffset,
+      refetchInterval: (query) =>
+        query.state.data?.pages[0]?.items.some(isSending) ? 3000 : false,
+    },
+  );
+
+  return {
+    items: announcements.data?.pages.flatMap((page) => page.items) ?? [],
+    archiveTotal: announcements.data?.pages[0]?.archive_total ?? 0,
+    isPending: announcements.isPending,
+    isError: announcements.isError,
+    loadError: announcements.error,
+    retry: () => void announcements.refetch(),
+    hasMore: announcements.hasNextPage,
+    isLoadingMore: announcements.isFetchingNextPage,
+    loadMore: () => void announcements.fetchNextPage(),
   };
 };
