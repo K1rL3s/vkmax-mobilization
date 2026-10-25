@@ -1,10 +1,11 @@
 import hmac
+import logging
 import urllib.parse
 from typing import Annotated
 
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from maxo.errors import InvalidWebAppInitDataError
 from maxo.utils.webapp import (
@@ -17,6 +18,8 @@ from maxo.utils.webapp import (
 from zheka.config import Config
 from zheka.core.errors import Unauthorized
 from zheka.core.ids import API_CHECKER_MAX_USER_ID
+
+logger = logging.getLogger(__name__)
 
 API_CHECKER = WebAppInitData(
     chat=WebAppChat(id=API_CHECKER_MAX_USER_ID, type="DIALOG"),
@@ -45,6 +48,7 @@ def parse_init_data(token: str, raw: str) -> WebAppInitData:
 @inject
 async def get_current_user(
     *,
+    request: Request,
     config: FromDishka[Config],
     raw_init_data: Annotated[str | None, Header(alias="WebAppData")] = None,
     bearer: Annotated[
@@ -64,6 +68,11 @@ async def get_current_user(
     try:
         return parse_init_data(config.max.token, raw_init_data)
     except (InvalidWebAppInitDataError, ValueError) as error:
+        logger.warning(
+            "Невалидная initData: %s, User-Agent %s",
+            init_data_shape(raw_init_data),
+            request.headers.get("user-agent"),
+        )
         raise Unauthorized("Невалидная initData") from error
 
 
@@ -74,3 +83,13 @@ def _signed_init_data(token: str, raw: str) -> WebAppInitData:
     if any("\n" in key + value for key, value in urllib.parse.parse_qsl(raw)):
         raise InvalidWebAppInitDataError("Перевод строки в initData")
     return safe_parse_webapp_init_data(token, raw)
+
+
+def init_data_shape(raw: str) -> str:
+    names = [name for name, _ in urllib.parse.parse_qsl(raw, keep_blank_values=True)]
+    keys = [name for name in names if name.isascii() and name.isidentifier()]
+    marks = {mark: mark in raw for mark in ("{", "%25", "+", "%7B")}
+    return (
+        f"ключи {sorted(keys)}, прочих частей {len(names) - len(keys)}, "
+        f"hash {'hash' in keys}, длина {len(raw)}, есть {marks}"
+    )

@@ -13,6 +13,7 @@ from tests.conftest import (
     signed_init_data,
 )
 
+from zheka.api import app as app_module
 from zheka.api.app import app_factory
 from zheka.api.dependencies.current_user import parse_init_data
 from zheka.config import ApiConfig, DbConfig
@@ -221,3 +222,37 @@ async def test_the_wildcard_origin_carries_no_credentials() -> None:
 
     assert response.headers["access-control-allow-origin"] == "*"
     assert "access-control-allow-credentials" not in response.headers
+
+
+async def test_rejected_init_data_is_logged_by_shape_only(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app_module, "setup_logger", lambda _: None)
+    photo = "https://i.example/a+b&fn=Секрет"
+    raw = signed_init_data(datetime.now(UTC), photo_url=photo).replace(
+        "hash=",
+        "hash=0",
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=_app(None)),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/api/me",
+            headers={"WebAppData": raw, "User-Agent": "MAX-mac"},
+        )
+
+    [message] = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "zheka.api.dependencies.current_user"
+    ]
+    assert response.status_code == 401
+    assert "'hash'" in message
+    assert "MAX-mac" in message
+    assert all(
+        value not in message
+        for value in ("Жека", "Секрет", "i.example", raw.partition("hash=")[2])
+    )
