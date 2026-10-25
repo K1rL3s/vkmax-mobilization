@@ -136,3 +136,13 @@ def charge_app_path(charge_id: ChargeId) -> str:
 
 def flat_confirmation_app_path(resident_id: ResidentId) -> str:
     return f"/residencies/{resident_id}/confirm"
+
+
+class HouseScreen(StrEnum):
+    REQUEST = "request"
+    CONTACTS = "contacts"
+    EMERGENCY = "emergency"
+
+
+def house_screen_payload(house_id: HouseId, screen: HouseScreen) -> str:
+    return f"{DeeplinkKind.HOUSE}_{house_id}_{screen}"

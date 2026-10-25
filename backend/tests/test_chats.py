@@ -26,8 +26,13 @@ from zheka.core.enums import (
     ResidentRole,
     ResidentStatus,
 )
-from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
-from zheka.core.ids import MaxChatId, MaxUserId
+from zheka.core.errors import (
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
+from zheka.core.ids import MaxChatId, MaxUserId, OrgId
 from zheka.core.models import BotRights
 from zheka.core.services.chats import (
     ADMIN_BACK,
@@ -36,6 +41,7 @@ from zheka.core.services.chats import (
     CHAT_TAKEN,
     MESSAGE_TEXT_LIMIT,
     NO_CHAT_TO_JOIN,
+    NO_MENU_CHAT,
     PINS_ALLOWED,
     PINS_ERASED,
     PINS_FULL,
@@ -529,7 +535,12 @@ async def test_the_list_takes_a_pin_while_it_fits_one_max_message(
         text="😀",
         pinned_by=data.user_id,
     )
-    room = MESSAGE_TEXT_LIMIT - _utf16_units(pins_text(chat_id, [first, second]))
+    house = await HousesRepo(session).get(data.house_id)
+    assert house is not None
+    address = house.address
+    room = MESSAGE_TEXT_LIMIT - _utf16_units(
+        pins_text(chat_id, address, [first, second]),
+    )
     second_ref = MessageRef(mid="m-2", seq=2)
 
     await repo.set_pin_text(first, "в" * (room + 2))
@@ -547,7 +558,7 @@ async def test_the_list_takes_a_pin_while_it_fits_one_max_message(
 
     pins = await repo.list_pins(chat_id)
     assert [pin.text for pin in pins] == ["в" * (room + 1), "вв"]
-    assert _utf16_units(pins_text(chat_id, pins)) == MESSAGE_TEXT_LIMIT
+    assert _utf16_units(pins_text(chat_id, address, pins)) == MESSAGE_TEXT_LIMIT
 
 
 async def test_unpin_by_number_or_by_reply_and_the_numbers_close_up(
@@ -663,7 +674,7 @@ def _utf16_units(text: str) -> int:
     return len(text.encode("utf-16-le")) // 2
 
 
-async def test_repin_resends_a_list_that_has_items(
+async def test_repin_resends_the_menu_with_or_without_items(
     session: AsyncSession,
     make_org_house_flat_user: Fixture,
     broker: RecordingBroker,
@@ -673,17 +684,14 @@ async def test_repin_resends_a_list_that_has_items(
     chat_id = await _pinning_chat(session, data)
     service = _service(session, publisher)
 
-    with pytest.raises(InvalidRequest, match=re.escape(PIN_HINT)):
-        await service.repin(data.user_id, chat_id)
+    await service.repin(data.user_id, chat_id)
     await service.pin(data.user_id, chat_id, REPLY, None)
     await service.repin(data.user_id, chat_id)
 
     await publisher.flush()
-    assert broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
-        "chat_id": chat_id,
-        "notify": False,
-        "resend": True,
-    }
+    resent = {"chat_id": chat_id, "notify": False, "resend": True}
+    syncs = broker.enqueued(TaskName.SYNC_CHAT_PINS)
+    assert [syncs[0], syncs[-1]] == [resent, resent]
 
 
 async def _pin_three(
@@ -863,6 +871,13 @@ async def test_the_chat_hears_when_the_bot_gains_or_loses_the_pin_right(
     assert [task["can_pin"] for task in welcomes] == [False]
     texts = [task["text"] for task in broker.enqueued(TaskName.BROADCAST_TO_CHATS)]
     assert texts == [PINS_ALLOWED, PINS_REVOKED, PINS_ALLOWED, PINS_REVOKED]
+    assert (
+        broker.enqueued(TaskName.SYNC_CHAT_PINS)
+        == [
+            {"chat_id": chat_id, "notify": False, "resend": False},
+        ]
+        * 2
+    )
     assert (await _chat(session, chat_id)).bot_can_pin is False
     assert broker.enqueued(TaskName.ASK_CHAT_RIGHTS) == [{"chat_id": chat_id}]
 
@@ -920,3 +935,30 @@ def test_a_pin_without_a_caption_takes_the_first_line_of_the_message(
     caption: str,
 ) -> None:
     assert pin_caption(text) == caption
+
+
+async def test_the_cabinet_resends_the_menu_only_where_the_bot_can_pin(
+    session: AsyncSession,
+    make_org_house_flat_user: Fixture,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+) -> None:
+    data = await make_org_house_flat_user(org_role=OrgRole.ADMIN)
+    chat_id = await _added(session)
+    service = _service(session, publisher)
+    await service.bind(data.user_id, chat_id, data.house_id)
+    await service.set_admin(chat_id, BotRights(is_admin=True, can_pin=False))
+
+    with pytest.raises(InvalidState, match=re.escape(NO_MENU_CHAT)):
+        await service.refresh_menu(data.org_id, data.house_id)
+    await service.set_admin(chat_id, ADMIN)
+    with pytest.raises(EntityNotFound):
+        await service.refresh_menu(OrgId(data.org_id + 1), data.house_id)
+    await service.refresh_menu(data.org_id, data.house_id)
+
+    await publisher.flush()
+    assert broker.enqueued(TaskName.SYNC_CHAT_PINS)[-1] == {
+        "chat_id": chat_id,
+        "notify": False,
+        "resend": True,
+    }

@@ -17,7 +17,12 @@ from zheka.bot.cards import VotePayload, app_link
 from zheka.bot.dialog_data import ChatBindingData
 from zheka.bot.states import ChatBinding
 from zheka.broker.task_names import TaskName
-from zheka.core.deeplinks import house_category_payload, house_payload
+from zheka.core.deeplinks import (
+    HouseScreen,
+    house_category_payload,
+    house_payload,
+    house_screen_payload,
+)
 from zheka.core.enums import ChatCardKind, ChatStatus
 from zheka.core.errors import ZhekaError
 from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
@@ -56,6 +61,9 @@ WELCOME_MEMBER_TEXT = (
     "личке со мной. Нажмите «Присоединиться к дому», чтобы начать"
 )
 JOIN_HOUSE = "🏠 Присоединиться к дому"
+MENU_REQUEST = "📝 Подать заявку"
+MENU_CONTACTS = "📞 Куда звонить"
+MENU_EMERGENCY = "🚨 Авария"
 OPEN_CHAT = "💬 Открыть чат"
 JOINED_TEXT = "✅ Добавил вас в чат «{title}»"
 ALREADY_JOINED_TEXT = "😊 Вы уже в чате «{title}»"
@@ -149,7 +157,11 @@ async def welcome_chat(
         text,
         chat_id=chat_id,
         notify=False,
-        keyboard=_join_keyboard(bot, house_id),
+        keyboard=(
+            _menu_keyboard(bot, house_id)
+            if can_pin is False
+            else _join_keyboard(bot, house_id)
+        ),
     )
 
 
@@ -202,16 +214,11 @@ async def sync_chat_pins(
         return
     chat = listed.chat
     mid = chat.pins_mid
-    if not listed.pins:
-        if mid is None:
-            return
-        await chats_repo.set_pins_mid(chat, None)
-        if not await sender.delete_message(chat_id, mid):
-            await recheck_chat_rights(chat_id, bot, chats_service)
+    if mid is None and not chat.bot_can_pin:
         return
 
-    text = pins_text(chat_id, listed.pins)
-    keyboard = _join_keyboard(bot, listed.house_id)
+    text = pins_text(chat_id, listed.address, listed.pins)
+    keyboard = _menu_keyboard(bot, listed.house_id)
     if (
         mid is not None
         and not resend
@@ -343,3 +350,18 @@ async def ask_chat_rights(
         stack_id=chat_stack(chat_id),
         show_mode=ShowMode.SEND,
     )
+
+
+def _menu_keyboard(bot: Bot, house_id: HouseId) -> list[list[LinkButton]]:
+    def button(text: str, screen: HouseScreen) -> LinkButton:
+        payload = house_screen_payload(house_id, screen)
+        return LinkButton(text=text, url=create_startapp_link(bot, payload))
+
+    return [
+        [button(MENU_REQUEST, HouseScreen.REQUEST)],
+        [
+            button(MENU_CONTACTS, HouseScreen.CONTACTS),
+            button(MENU_EMERGENCY, HouseScreen.EMERGENCY),
+        ],
+        *_join_keyboard(bot, house_id),
+    ]

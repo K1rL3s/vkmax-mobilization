@@ -1,6 +1,7 @@
 import { Button, Flex, IconButton, Typography } from "@maxhub/max-ui";
 import { useCopy } from "@siberiacancode/reactuse";
 
+import { errorMessage } from "@/shared/api/errors";
 import { rqClient } from "@/shared/api/instance";
 import { invalidatePaths } from "@/shared/api/query-client";
 import type { components } from "@/shared/api/schema/generated";
@@ -20,29 +21,69 @@ import styles from "./chat-section.module.css";
 
 type HouseCard = components["schemas"]["AdminHouseCard"];
 
-const Bound = ({ house }: { house: HouseCard }) => (
-  <Card>
-    <Flex align="center" gap={12}>
-      {house.chat_bot_is_admin ? (
-        <IconTile icon={checkIcon} tone="positive" />
-      ) : (
-        <IconTile icon={lockIcon} tone="negative" />
-      )}
+const Bound = ({ house }: { house: HouseCard }) => {
+  const menu = rqClient.useMutation(
+    "post",
+    "/api/admin/houses/{house_id}/chat-menu",
+  );
 
-      <Flex className={styles.Grow} align="stretch" direction="column" gapY={2}>
-        <Typography.Text variant="body-strong" color="primary">
-          {house.chat_title ?? "Чат без названия"}
-        </Typography.Text>
+  return (
+    <Card>
+      <Flex align="center" gap={12}>
+        {house.chat_bot_is_admin ? (
+          <IconTile icon={checkIcon} tone="positive" />
+        ) : (
+          <IconTile icon={lockIcon} tone="negative" />
+        )}
 
-        <Typography.Text variant="description" color="secondary">
-          {house.chat_bot_is_admin
-            ? "Чат привязан: сюда бот присылает объявления УК для этого дома"
-            : "У бота нет прав администратора в чате, поэтому объявления УК туда не уходят. Сделайте бота администратором с правом закреплять сообщения"}
-        </Typography.Text>
+        <Flex
+          className={styles.Grow}
+          align="stretch"
+          direction="column"
+          gapY={2}
+        >
+          <Typography.Text variant="body-strong" color="primary">
+            {house.chat_title ?? "Чат без названия"}
+          </Typography.Text>
+
+          <Typography.Text variant="description" color="secondary">
+            {house.chat_bot_is_admin
+              ? "Чат привязан: сюда бот присылает объявления УК для этого дома"
+              : "У бота нет прав администратора в чате, поэтому объявления УК туда не уходят. Сделайте бота администратором с правом закреплять сообщения"}
+          </Typography.Text>
+        </Flex>
       </Flex>
-    </Flex>
-  </Card>
-);
+
+      {house.chat_bot_can_pin && (
+        <>
+          <Button
+            size="medium"
+            variant="secondary"
+            loading={menu.isPending}
+            onClick={() =>
+              menu.mutate({
+                params: { ...orgParams(), path: { house_id: house.id } },
+              })
+            }
+          >
+            Обновить меню
+          </Button>
+
+          <Typography.Text variant="description" color="secondary">
+            {menu.isError
+              ? errorMessage(
+                  menu.error,
+                  "Не получилось обновить меню. Проверьте связь и попробуйте ещё раз",
+                )
+              : menu.isSuccess
+                ? "Бот отправит меню дома в чат заново и закрепит его"
+                : "Меню дома закреплено в чате. Если его удалили или открепили, бот отправит и закрепит его заново"}
+          </Typography.Text>
+        </>
+      )}
+    </Card>
+  );
+};
 
 const Unbound = ({ house }: { house: HouseCard }) => {
   const code = useCopy(2000);

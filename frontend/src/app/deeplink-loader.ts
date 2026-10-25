@@ -83,6 +83,16 @@ export const deeplinkLoader = async (): Promise<DeeplinkPageState> => {
     throw replace(newRequestRoute(command.category));
   }
 
+  if (command.kind === "house" && command.screen !== null) {
+    throw replace(
+      {
+        request: Routes.REQUEST_NEW,
+        contacts: Routes.HOUSE_CARD,
+        emergency: Routes.EMERGENCY,
+      }[command.screen],
+    );
+  }
+
   if (command.kind === "obj") {
     throw replace(newRequestRoute(command.category, command.entrance));
   }

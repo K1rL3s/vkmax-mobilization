@@ -294,6 +294,7 @@ export const adminHousesConfigs = [
         list.find((resident) => resident.is_chairman)?.name ?? null,
       chat_title: item.chat_bound ? CHAT_TITLES[house.id] : null,
       chat_bot_is_admin: item.chat_bound,
+      chat_bot_can_pin: item.chat_bound,
     } satisfies Schemas["AdminHouseCard"]);
   }),
   endpoint("post", "/admin/houses/:house_id/binding-code", (request) => {
@@ -506,4 +507,19 @@ export const adminHousesConfigs = [
       return ok({ ok: true } satisfies Schemas["OkResponse"]);
     },
   ),
+  endpoint("post", "/admin/houses/:house_id/chat-menu", (request) => {
+    const item = orgHouse(request);
+
+    if (!item) {
+      return notFound("Дом не найден");
+    }
+
+    if (!item.chat_bound) {
+      return conflict(
+        "Меню закрепляется в привязанном чате, где бот администратор с правом закреплять сообщения",
+      );
+    }
+
+    return ok({ ok: true } satisfies Schemas["OkResponse"]);
+  }),
 ];

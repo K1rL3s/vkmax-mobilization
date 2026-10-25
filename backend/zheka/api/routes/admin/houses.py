@@ -33,6 +33,7 @@ from zheka.core.ids import (
     ResidentId,
     VerificationRequestId,
 )
+from zheka.core.services.chats import ChatsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
 from zheka.core.services.house_documents import HouseDocumentsService
@@ -305,4 +306,17 @@ async def delete_house_document(
     documents_service: FromDishka[HouseDocumentsService],
 ) -> OkResponse:
     await documents_service.delete(current_org.org_id, house_id, document_id)
+    return OkResponse()
+
+
+@router.post(
+    "/admin/houses/{house_id}/chat-menu",
+    summary="Заново отправить и закрепить меню в чате дома",
+)
+async def refresh_house_chat_menu(
+    house_id: HouseId,
+    current_org: AdminOrgDep,
+    chats_service: FromDishka[ChatsService],
+) -> OkResponse:
+    await chats_service.refresh_menu(current_org.org_id, house_id)
     return OkResponse()

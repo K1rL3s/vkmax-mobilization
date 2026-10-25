@@ -923,6 +923,7 @@ async def test_the_admin_card_tells_whether_the_bot_runs_the_chat(
             title="Дом",
             bound_at=datetime.now(UTC),
             bot_is_admin=bot_is_admin,
+            bot_can_pin=bot_is_admin,
             status=status,
         ),
     )
@@ -931,6 +932,7 @@ async def test_the_admin_card_tells_whether_the_bot_runs_the_chat(
     card = await _make_service(session).admin_card(data.org_id, data.house_id)
 
     assert AdminHouseCard.of(card, []).chat_bot_is_admin is shown
+    assert AdminHouseCard.of(card, []).chat_bot_can_pin is shown
 
 
 async def test_cities_with_more_houses_come_first(

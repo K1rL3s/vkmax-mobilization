@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from zheka.core.enums import RequestStatus
 from zheka.core.errors import EntityNotFound
 from zheka.core.ids import FlatId, HouseDocumentId, HouseId, OrgId, UserId
+from zheka.core.models import BotRights
 from zheka.infra.database.models import (
     DemandSignal,
     Flat,
@@ -390,16 +391,14 @@ class HousesRepo(BaseAlchemyRepo):
         stmt = select(func.pg_advisory_xact_lock(ADD_HOUSE_LOCK))
         await self._session.execute(stmt)
 
-    async def has_admin_bot_chat(self, house_id: HouseId) -> bool:
+    async def bot_chat_rights(self, house_id: HouseId) -> BotRights:
         stmt = select(
-            exists().where(
-                chats_table.c.house_id == house_id,
-                BOUND_CHAT,
-                chats_table.c.bot_is_admin.is_(True),
-            ),
-        )
+            func.coalesce(func.bool_or(chats_table.c.bot_is_admin), False),
+            func.coalesce(func.bool_or(chats_table.c.bot_can_pin), False),
+        ).where(chats_table.c.house_id == house_id, BOUND_CHAT)
         result = await self._session.execute(stmt)
-        return result.scalar_one()
+        is_admin, can_pin = result.one()
+        return BotRights(is_admin=is_admin, can_pin=can_pin)
 
     async def list_documents(self, house_id: HouseId) -> Sequence[HouseDocument]:
         stmt = (

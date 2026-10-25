@@ -16,12 +16,15 @@ const houseStartParamPattern = /^house_([1-9]\d*)(?:_([a-z_]+))?$/;
 
 const houseStartParamSchema = startParam(houseStartParamPattern).transform(
   (raw, context) => {
-    const [, id = "", rawCategory] = houseStartParamPattern.exec(raw) ?? [];
+    const [, id = "", rawTarget] = houseStartParamPattern.exec(raw) ?? [];
     const houseId = positiveInteger(id);
+    const screen =
+      z.enum(["request", "contacts", "emergency"]).safeParse(rawTarget).data ??
+      null;
     const category =
-      rawCategory === undefined
+      rawTarget === undefined || screen !== null
         ? null
-        : (requestCategorySchema.safeParse(rawCategory).data ?? undefined);
+        : (requestCategorySchema.safeParse(rawTarget).data ?? undefined);
 
     if (houseId === null || category === undefined) {
       context.addIssue({
@@ -31,7 +34,7 @@ const houseStartParamSchema = startParam(houseStartParamPattern).transform(
       return z.NEVER;
     }
 
-    return { kind: "house", houseId, category } as const;
+    return { kind: "house", houseId, category, screen } as const;
   },
 );
 

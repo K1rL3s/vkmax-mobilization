@@ -125,7 +125,8 @@ const executeHouseDeeplink = async (
 ): Promise<DeeplinkExecution> => {
   const existing =
     command.kind === "obj" ||
-    (command.kind === "house" && command.category !== null)
+    (command.kind === "house" &&
+      (command.category !== null || command.screen !== null))
       ? await residencyIn(command.houseId)
       : undefined;
 

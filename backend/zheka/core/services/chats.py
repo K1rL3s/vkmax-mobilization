@@ -12,8 +12,14 @@ from zheka.core.enums import (
     ResidentStatus,
     UnpinMethod,
 )
-from zheka.core.errors import InvalidRequest, InvalidState, NotEnoughRights
-from zheka.core.ids import HouseId, MaxChatId, MaxUserId, UserId
+from zheka.core.errors import (
+    HOUSE_NOT_FOUND,
+    EntityNotFound,
+    InvalidRequest,
+    InvalidState,
+    NotEnoughRights,
+)
+from zheka.core.ids import HouseId, MaxChatId, MaxUserId, OrgId, UserId
 from zheka.core.models import BotRights, Chat, ChatPin, House, User
 from zheka.core.services.events import EventsService
 from zheka.core.services.notifications import NotificationsService
@@ -32,9 +38,14 @@ NO_CHAT_TO_JOIN = (
     "председатель привязали чат и сделали бота администратором"
 )
 ALREADY_JOINED = "Вы уже в чате дома"
+NO_MENU_CHAT = (
+    "Меню закрепляется в привязанном чате, где бот администратор с правом "
+    "закреплять сообщения"
+)
 PIN_TEXT_LIMIT = 50
 MESSAGE_TEXT_LIMIT = 4000
 PINS_TITLE = "📌 Закреплено в чате:"
+MENU_TITLE = "🏠 {address} - Жэка Коммуналкин"
 PIN_DENIED = "🚫 Закреплять в этом чате могут председатель и сотрудники УК"
 PIN_NEEDS_RIGHTS = (
     "🔐 Чтобы закреплять сообщения, сделайте бота администратором чата с правом "
@@ -72,7 +83,8 @@ UNPIN_THE_LIST = (
 )
 PINS_ERASED = (
     "🗑 Сообщение со списком закрепленных удалили, и я очистил список. "
-    "Закрепить заново можно командой /pin в ответ на нужное сообщение"
+    "Закрепить заново можно командой /pin в ответ на нужное сообщение, "
+    "вернуть меню дома - командой /repin"
 )
 PIN_WITHOUT_TEXT = "Сообщение без текста"
 ADMIN_BACK = (
@@ -107,6 +119,7 @@ class ChatJoining(ZhekaType):
 class PinList(ZhekaType):
     chat: Chat
     house_id: HouseId
+    address: str
     pins: Sequence[ChatPin]
 
 
@@ -226,6 +239,8 @@ class ChatsService:
         elif chat.bot_can_pin != could_pin:
             text = PINS_ALLOWED if chat.bot_can_pin else PINS_REVOKED
             self._notifications.notify_chats([chat_id], text)
+        if chat.bot_can_pin and not could_pin:
+            self._notifications.sync_chat_pins(chat_id, notify=False)
         if lost:
             self._notifications.ask_chat_rights(chat_id)
         return chat
@@ -391,7 +406,7 @@ class ChatsService:
         shown = [pin if old is listed else old for old in pins]
         if listed is None:
             shown.append(pin)
-        rendered = pins_text(chat_id, shown)
+        rendered = pins_text(chat_id, await self._address(house_id), shown)
         if len(rendered.encode("utf-16-le")) // 2 > MESSAGE_TEXT_LIMIT:
             raise InvalidRequest(PINS_FULL)
         if listed is not None:
@@ -475,6 +490,7 @@ class ChatsService:
         return PinList(
             chat=chat,
             house_id=house_id,
+            address=await self._address(house_id),
             pins=await self._chats.list_pins(chat_id),
         )
 
@@ -508,13 +524,28 @@ class ChatsService:
             return
         chat, house_id = bound
         await self._pinner(user_id, chat, house_id)
-        if not await self._chats.list_pins(chat_id):
-            raise InvalidRequest(PIN_HINT)
         self._notifications.sync_chat_pins(chat_id, notify=False, resend=True)
 
+    async def refresh_menu(self, org_id: OrgId, house_id: HouseId) -> None:
+        if await self._houses.get_for_org(house_id, org_id) is None:
+            raise EntityNotFound(HOUSE_NOT_FOUND)
+        chats = await self._chats.list_for_houses([house_id])
+        pinning = [chat.chat_id for chat in chats if chat.bot_can_pin]
+        if not pinning:
+            raise InvalidState(NO_MENU_CHAT)
+        for chat_id in pinning:
+            self._notifications.sync_chat_pins(chat_id, notify=False, resend=True)
 
-def pins_text(chat_id: MaxChatId, pins: Sequence[ChatPin]) -> str:
-    lines = [PINS_TITLE]
+    async def _address(self, house_id: HouseId) -> str:
+        house = await self._houses.get(house_id)
+        return "" if house is None else house.address
+
+
+def pins_text(chat_id: MaxChatId, address: str, pins: Sequence[ChatPin]) -> str:
+    menu = MENU_TITLE.format(address=escape(address))
+    if not pins:
+        return menu
+    lines = [menu, "", PINS_TITLE]
     for number, pin in enumerate(pins, start=1):
         url = id_to_message_url(pin.seq, chat_id)
         link = url if pin.text is None else f'<a href="{url}">{escape(pin.text)}</a>'

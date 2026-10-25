@@ -503,6 +503,13 @@ class AdminHouseCard(BaseSchema):
             "и опросы в чат не уходят"
         ),
     )
+    chat_bot_can_pin: bool = Field(
+        default=False,
+        description=(
+            "Бот может закреплять сообщения в привязанном чате: держит там меню "
+            "дома, его можно обновить"
+        ),
+    )
 
     @classmethod
     def of(
@@ -536,6 +543,7 @@ class AdminHouseCard(BaseSchema):
             chairman_name=card.chairman_name,
             chat_title=card.chat_title,
             chat_bot_is_admin=card.chat_bot_is_admin,
+            chat_bot_can_pin=card.chat_bot_can_pin,
         )
 
 

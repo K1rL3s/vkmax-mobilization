@@ -231,6 +231,9 @@ from zheka.broker.tasks.chats import (
     JOIN_HOUSE,
     JOIN_PRIVACY_TEXT,
     LEFT_TEXT,
+    MENU_CONTACTS,
+    MENU_EMERGENCY,
+    MENU_REQUEST,
     OPEN_CHAT,
     PINS_HERE,
     WELCOME_MEMBER_TEXT,
@@ -264,9 +267,11 @@ from zheka.core import texts
 from zheka.core.consent import CONSENT_TEXT, CONSENT_VERSION
 from zheka.core.deeplinks import (
     DeeplinkKind,
+    HouseScreen,
     chairman_payload,
     entrance_qr_payload,
     house_payload,
+    house_screen_payload,
     neighbour_invite_payload,
     org_invite_payload,
 )
@@ -317,6 +322,7 @@ from zheka.core.services.chairman import NOT_A_NEIGHBOUR
 from zheka.core.services.chats import (
     CHAT_NOT_BOUND,
     CHAT_TAKEN,
+    MENU_TITLE,
     PINS_ALLOWED,
     PINS_NOT_ALLOWED,
     PINS_REVOKED,
@@ -2730,7 +2736,7 @@ async def _pins_mid(session: AsyncSession, chat_id: MaxChatId) -> str | None:
     return chat.pins_mid
 
 
-async def test_the_pin_list_is_sent_with_the_house_button_and_pinned_silently(
+async def test_the_pin_list_is_sent_with_the_house_menu_and_pinned_silently(
     client: BotClient,
     task_broker: InMemoryBroker,
     pin_api: _PinApi,
@@ -2743,25 +2749,32 @@ async def test_the_pin_list_is_sent_with_the_house_button_and_pinned_silently(
 
     [sent] = pin_api.sent
     first, second = id_to_message_url(1, chat_id), id_to_message_url(2, chat_id)
+    menu = await _menu_title(bot_session, house_id)
     assert sent["text"] == (
-        f'{PINS_TITLE}\n1. <a href="{first}">Вода &lt;10:00&gt;</a>\n2. {second}'
+        f"{menu}\n\n{PINS_TITLE}\n"
+        f'1. <a href="{first}">Вода &lt;10:00&gt;</a>\n2. {second}'
     )
     assert sent["notify"] is False
     [attachment] = sent["attachments"]
-    assert attachment.payload.buttons == _join_house(fake_bot, house_id)
+    assert attachment.payload.buttons == _house_menu(fake_bot, house_id)
     assert pin_api.pinned == [
         {"chat_id": chat_id, "message_id": "list-1", "notify": False},
     ]
     assert await _pins_mid(bot_session, chat_id) == "list-1"
 
 
-async def test_the_pin_list_edits_its_message_keeps_the_button_and_the_pin(
+async def test_the_pin_list_edits_its_message_keeps_the_menu_and_the_pin(
     client: BotClient,
     task_broker: InMemoryBroker,
     pin_api: _PinApi,
     bot_session: AsyncSession,
 ) -> None:
-    chat_id, _ = await _listed_chat(bot_session, client, "Вода", pins_mid="list-7")
+    chat_id, house_id = await _listed_chat(
+        bot_session,
+        client,
+        "Вода",
+        pins_mid="list-7",
+    )
     pin_api.current = "list-7"
 
     await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
@@ -2770,29 +2783,34 @@ async def test_the_pin_list_edits_its_message_keeps_the_button_and_the_pin(
     [edited] = pin_api.edited
     assert edited["message_id"] == "list-7"
     url = id_to_message_url(1, chat_id)
-    assert edited["text"] == f'{PINS_TITLE}\n1. <a href="{url}">Вода</a>'
+    menu = await _menu_title(bot_session, house_id)
+    assert edited["text"] == f'{menu}\n\n{PINS_TITLE}\n1. <a href="{url}">Вода</a>'
     assert edited["notify"] is False
     [attachment] = edited["attachments"]
     assert [[button.text for button in row] for row in attachment.payload.buttons] == [
+        [MENU_REQUEST],
+        [MENU_CONTACTS, MENU_EMERGENCY],
         [JOIN_HOUSE],
     ]
     assert pin_api.pinned == []
 
 
-async def test_an_emptied_list_is_deleted_and_forgotten(
+async def test_an_emptied_list_shrinks_to_the_house_menu(
     client: BotClient,
     task_broker: InMemoryBroker,
     pin_api: _PinApi,
     bot_session: AsyncSession,
 ) -> None:
-    chat_id, _ = await _listed_chat(bot_session, client, pins_mid="list-7")
+    chat_id, house_id = await _listed_chat(bot_session, client, pins_mid="list-7")
+    pin_api.current = "list-7"
 
     await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
 
-    assert pin_api.deleted == ["list-7"]
+    [edited] = pin_api.edited
+    assert edited["text"] == await _menu_title(bot_session, house_id)
+    assert pin_api.deleted == []
     assert pin_api.sent == []
-    assert pin_api.pinned == []
-    assert await _pins_mid(bot_session, chat_id) is None
+    assert await _pins_mid(bot_session, chat_id) == "list-7"
 
 
 @pytest.mark.parametrize(
@@ -2800,7 +2818,7 @@ async def test_an_emptied_list_is_deleted_and_forgotten(
     [
         ("send_message", ("Вода",), None),
         ("pin_message", ("Вода",), None),
-        ("delete_message", (), "list-7"),
+        ("send_message", (), None),
     ],
 )
 async def test_a_list_the_bot_cannot_post_asks_the_binder_for_the_rights(
@@ -7788,3 +7806,67 @@ async def test_a_verified_tenant_has_no_bill_button_and_is_sent_to_the_owner(
     await client.send("почему так много")
 
     assert _text(message_manager) == BILL_TENANT
+
+
+async def _menu_title(session: AsyncSession, house_id: HouseId) -> str:
+    house = await HousesRepo(session).get(house_id)
+    assert house is not None
+    return MENU_TITLE.format(address=escape(house.address))
+
+
+def _house_menu(bot: FakeBot, house_id: HouseId) -> list[list[LinkButton]]:
+    def button(text: str, screen: HouseScreen) -> LinkButton:
+        url = create_startapp_link(bot, house_screen_payload(house_id, screen))
+        return LinkButton(text=text, url=url)
+
+    return [
+        [button(MENU_REQUEST, HouseScreen.REQUEST)],
+        [
+            button(MENU_CONTACTS, HouseScreen.CONTACTS),
+            button(MENU_EMERGENCY, HouseScreen.EMERGENCY),
+        ],
+        *_join_house(bot, house_id),
+    ]
+
+
+async def test_a_chat_without_the_pin_right_gets_no_menu_message(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    pin_api: _PinApi,
+    bot_session: AsyncSession,
+) -> None:
+    chat_id, _ = await _listed_chat(bot_session, client)
+    chat = await ChatsRepo(bot_session).get(chat_id)
+    assert chat is not None
+    chat.bot_can_pin = False
+    await bot_session.commit()
+
+    await _run(task_broker, sync_chat_pins, chat_id=chat_id, notify=False)
+
+    assert pin_api.sent == []
+    assert pin_api.pinned == []
+
+
+async def test_a_welcome_without_the_pin_right_carries_the_house_menu(
+    task_broker: InMemoryBroker,
+    fake_bot: FakeBot,
+    pin_api: _PinApi,
+) -> None:
+    house_id = HouseId(secrets.randbits(20))
+
+    await _run(
+        task_broker,
+        welcome_chat,
+        chat_id=_chat_id(),
+        house_id=house_id,
+        can_pin=False,
+    )
+
+    [message] = pin_api.sent
+    [attachment] = message["attachments"]
+    assert attachment.payload.buttons == _house_menu(fake_bot, house_id)
+
+
+def test_house_screens_never_read_as_request_categories() -> None:
+    screens = {screen.value for screen in HouseScreen}
+    assert screens.isdisjoint(category.value for category in RequestCategory)

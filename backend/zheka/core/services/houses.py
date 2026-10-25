@@ -130,6 +130,7 @@ class AdminHouseCardData(ZhekaType):
     chat_title: str | None
     chairman_name: str | None
     chat_bot_is_admin: bool
+    chat_bot_can_pin: bool
 
 
 class HousesService:
@@ -511,6 +512,7 @@ class HousesService:
         counts = await self._houses.count_flats_by_house([house_id])
         residents = await self._residents.count_by_house([house_id])
         open_requests = await self._houses.count_open_requests_by_house([house_id])
+        rights = await self._houses.bot_chat_rights(house_id)
         return AdminHouseCardData(
             house=house,
             flats_count=counts.get(house_id, 0),
@@ -523,7 +525,8 @@ class HousesService:
             chat_bound=house_id in chats,
             chat_title=chats.get(house_id),
             chairman_name=None if chairman_user is None else chairman_user.name,
-            chat_bot_is_admin=await self._houses.has_admin_bot_chat(house_id),
+            chat_bot_is_admin=rights.is_admin,
+            chat_bot_can_pin=rights.can_pin,
         )
 
     async def rotate_binding_code(self, org_id: OrgId, house_id: HouseId) -> House:
