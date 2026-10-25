@@ -129,6 +129,12 @@ from zheka.bot.handlers.executor.windows import (
 )
 from zheka.bot.handlers.fallback import NOT_UNDERSTOOD
 from zheka.bot.handlers.forget.handlers import FORGOTTEN_TEXT
+from zheka.bot.handlers.menu.handlers import (
+    OWNER_HINT,
+    SPOTS_TEXT,
+    UTILITY_NO_PHONE,
+    VERDICT_TITLES,
+)
 from zheka.bot.handlers.menu.windows import (
     CALL_NOTE_TEXT,
     CONTACTS_BUTTON,
@@ -141,6 +147,8 @@ from zheka.bot.handlers.menu.windows import (
     HOUSE_MENU_TEXT,
     MENU_TEXT,
     STAFF_TEXT,
+    SUBJECT_TEXT,
+    WHO_BUTTON,
 )
 from zheka.bot.handlers.meter_photo.handlers import ANOMALY_TEXT
 from zheka.bot.handlers.meter_photo.windows import (
@@ -293,6 +301,7 @@ from zheka.core.ids import (
     UserId,
 )
 from zheka.core.models import ChairmanHandover, User
+from zheka.core.responsibility import LEAVES, SPOTS, Leaf, Spot, Verdict
 from zheka.core.services.access import SLOT_FULL
 from zheka.core.services.admin_requests import NO_DEMO_REQUEST
 from zheka.core.services.chairman import NOT_A_NEIGHBOUR
@@ -3719,6 +3728,7 @@ async def test_the_menu_shows_the_house_and_the_cabinet_to_staff(
     assert _button_texts(message_manager.last_message()) == [
         "🚨 Авария",
         "📝 Подать заявку",
+        WHO_BUTTON,
         CONTACTS_BUTTON,
         DIGEST_BUTTON,
         "📱 Открыть приложение",
@@ -7220,3 +7230,106 @@ async def test_problem_remains_a_week_after_the_auto_close_files_nothing(
     ]
     assert REJECTION_TEXT not in _text(message_manager)
     assert await _repeats_of(bot_session, request_id) == []
+
+
+WHO = InlineButtonTextLocator(re.escape(WHO_BUTTON))
+
+
+async def _verdict(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    leaf: Leaf,
+) -> str:
+    await client.send("/start")
+    await client.click(message_manager.last_message(), WHO)
+    assert _text(message_manager) == SPOTS_TEXT
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator(re.escape(SPOTS[leaf.spot])),
+    )
+    assert _text(message_manager) == SUBJECT_TEXT.format(spot=SPOTS[leaf.spot])
+    await client.click(
+        message_manager.last_message(),
+        InlineButtonTextLocator(leaf.label),
+    )
+    return _text(message_manager)
+
+
+async def test_who_answers_files_a_request_of_the_leaf_category(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    leaf = LEAVES["riser_leak"]
+    rule = CATEGORY_RULES[RequestCategory.LEAK]
+
+    assert await _verdict(client, message_manager, leaf) == "\n\n".join(
+        [
+            VERDICT_TITLES[Verdict.MANAGEMENT],
+            leaf.label,
+            f"⚖️ {leaf.basis}",
+            (
+                f"⏳ Локализовать аварию - {rule.react_text}\n"
+                f"⏰ Срок - {rule.deadline_text}\n📜 {rule.basis}"
+            ),
+        ],
+    )
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    assert _text(message_manager) == f"ℹ️ {rule.owner_zone}\n\n{DESCRIPTION_TEXT}"
+    await client.send("Течет стояк в ванной")
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["house_id"] == int(house_id)
+    assert enqueued["category"] == RequestCategory.LEAK
+    assert enqueued["place"] == RequestPlace.FLAT
+
+
+async def test_who_answers_names_the_city_utility_by_the_house(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    await _consented(client, message_manager)
+    house_id, _ = await _bot_house(
+        bot_session,
+        region="Республика Татарстан",
+        city="Казань",
+        org_id=await _org(bot_session),
+    )
+    await _linked(bot_session, client, house_id, datetime.now(UTC))
+
+    verdict = await _verdict(client, message_manager, LEAVES["water_main"])
+
+    assert verdict.startswith(VERDICT_TITLES[Verdict.UTILITY])
+    assert verdict.endswith("📞 <b>МУП «Водоканал»</b> - +7 (843) 231-62-60")
+    assert _button_texts(message_manager.last_message()) == ["↩️ Назад", "🏠 Меню"]
+    await client.click(message_manager.last_message(), BACK_BUTTON)
+    assert _text(message_manager) == SUBJECT_TEXT.format(spot=SPOTS[Spot.STREET])
+
+
+async def test_who_answers_without_a_house(
+    client: BotClient,
+    message_manager: MockMessageManager,
+) -> None:
+    await _consented(client, message_manager)
+
+    assert (await _verdict(client, message_manager, LEAVES["blackout"])).endswith(
+        UTILITY_NO_PHONE,
+    )
+    assert (await _verdict(client, message_manager, LEAVES["socket"])).endswith(
+        OWNER_HINT,
+    )
+    assert (await _verdict(client, message_manager, LEAVES["danger"])).endswith(
+        "📞 <b>Экстренные службы</b> - 112",
+    )
+    await _verdict(client, message_manager, LEAVES["elevator"])
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    assert _text(message_manager) == NO_HOUSE_TEXT

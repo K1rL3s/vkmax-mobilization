@@ -3,7 +3,10 @@ from maxo.dialogs import Dialog, Window
 from maxo.dialogs.widgets.input import MessageInput
 from maxo.dialogs.widgets.kbd import (
     Button,
+    Column,
     CopyText,
+    Row,
+    Select,
     Start,
     SwitchTo,
     Url,
@@ -12,15 +15,22 @@ from maxo.dialogs.widgets.kbd import (
 from maxo.dialogs.widgets.text import Const, Format, Multi
 from maxo.enums import AttachmentType
 
-from zheka.bot.cards import EMERGENCY, TO_MENU, app_payload
+from zheka.bot.cards import BACK, EMERGENCY, TO_MENU, app_payload
 from zheka.bot.handlers.fallback import on_free_text
 from zheka.bot.handlers.menu.handlers import (
+    SPOTS_TEXT,
+    SPOT_ITEMS,
     get_contacts,
     get_digest,
     get_emergency,
     get_menu,
+    get_subjects,
+    get_verdict,
     on_digest_subscribe,
     on_join_chat,
+    on_responsibility_request,
+    on_spot,
+    on_subject,
 )
 from zheka.bot.handlers.meter_photo.handlers import on_meter_photo
 from zheka.bot.states import Menu, NewRequest, Onboarding
@@ -67,6 +77,8 @@ CALL_NOTE_TEXT = (
 )
 CONTACTS_BUTTON = "📞 Куда звонить"
 CONTACTS_TEXT = "📞 <b>Куда звонить</b>\n\n🏢 {address}\n\n{contacts}"
+WHO_BUTTON = "🔎 Кто отвечает?"
+SUBJECT_TEXT = "{spot}\n\n🔎 Что сломалось?"
 
 menu_dialog = Dialog(
     Window(
@@ -86,6 +98,7 @@ menu_dialog = Dialog(
             when=~F["address"],
         ),
         Start(Const("📝 Подать заявку"), id="new_request", state=NewRequest.category),
+        SwitchTo(Const(WHO_BUTTON), id="who", state=Menu.who_spot),
         SwitchTo(
             Const(CONTACTS_BUTTON),
             id="contacts",
@@ -188,5 +201,50 @@ menu_dialog = Dialog(
         TO_MENU,
         state=Menu.contacts,
         getter=get_contacts,
+    ),
+    Window(
+        Const(SPOTS_TEXT),
+        MessageInput(on_free_text),
+        Column(
+            Select(
+                Format("{item[label]}"),
+                id="who_spot",
+                item_id_getter=lambda spot: spot["id"],
+                items="spots",
+                on_click=on_spot,
+            ),
+        ),
+        TO_MENU,
+        state=Menu.who_spot,
+        getter=SPOT_ITEMS,
+    ),
+    Window(
+        Format(SUBJECT_TEXT),
+        MessageInput(on_free_text),
+        Column(
+            Select(
+                Format("{item[label]}"),
+                id="who_subject",
+                item_id_getter=lambda subject: subject["id"],
+                items="subjects",
+                on_click=on_subject,
+            ),
+        ),
+        Row(SwitchTo(BACK, id="who_subject_back", state=Menu.who_spot), TO_MENU),
+        state=Menu.who_subject,
+        getter=get_subjects,
+    ),
+    Window(
+        Format("{verdict}"),
+        MessageInput(on_free_text),
+        Button(
+            Const("📝 Подать заявку"),
+            id="who_request",
+            on_click=on_responsibility_request,
+            when=F["category"],
+        ),
+        Row(SwitchTo(BACK, id="who_verdict_back", state=Menu.who_subject), TO_MENU),
+        state=Menu.who_verdict,
+        getter=get_verdict,
     ),
 )

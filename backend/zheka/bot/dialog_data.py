@@ -11,6 +11,7 @@ from maxo.types import AudioAttachment, MessageBody, PhotoAttachment, VideoAttac
 from zheka.base import ZhekaMutableType, ZhekaType
 from zheka.core.enums import EventSource, RequestCategory, RequestPlace
 from zheka.core.ids import HouseId
+from zheka.core.responsibility import LEAVES, Leaf, Spot
 from zheka.core.services.requests import MAX_ATTACHMENTS, MAX_VIDEOS, TOO_MANY_VIDEOS
 
 MIN_REQUEST_TEXT = 15
@@ -193,3 +194,12 @@ def voice_url(body: MessageBody) -> str | None:
 
 class QuestionData(BaseDialogData):
     request_id: int
+
+
+class ResponsibilityData(BaseDialogData):
+    spot: Spot | None = None
+    leaf: str | None = None
+
+    @property
+    def chosen(self) -> Leaf | None:
+        return None if self.leaf is None else LEAVES.get(self.leaf)
