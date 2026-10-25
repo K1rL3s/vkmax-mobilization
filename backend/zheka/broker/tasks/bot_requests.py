@@ -29,7 +29,7 @@ from zheka.core.enums import (
     RequestPlace,
 )
 from zheka.core.errors import InvalidRequest, ZhekaError
-from zheka.core.ids import FlatId, HouseId, RequestId, UserId
+from zheka.core.ids import FlatId, HouseId, RequestGroupId, RequestId, UserId
 from zheka.core.models import User
 from zheka.core.services.files import FilesService
 from zheka.core.services.notifications import NotificationsService
@@ -121,6 +121,7 @@ async def create_bot_request(
     sender: FromDishka[MaxSender],
     video_tokens: Sequence[str] = (),
     place: str | None = None,
+    group_id: int | None = None,
 ) -> int | None:
     user = await users_repo.get_by_id(user_id)
     try:
@@ -135,6 +136,7 @@ async def create_bot_request(
                 flat_id=flat_id,
                 attachments=attachments,
                 place=None if place is None else RequestPlace(place),
+                group_id=None if group_id is None else RequestGroupId(group_id),
             ),
             RequestChannel(channel),
         )
@@ -151,6 +153,7 @@ async def create_bot_request(
     outcome = NewRequestData(
         request_id=request_id,
         deadline=deadline_lines(card.request, card.house),
+        group_id=group_id,
     )
     await _show_outcome(sender, user, stack_id, outcome)
     return request_id

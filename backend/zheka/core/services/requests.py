@@ -70,6 +70,7 @@ from zheka.core.services.request_groups import (
     GroupingRules,
     GroupingService,
     HouseProblems,
+    NeighboursOffer,
     SimilarRequests,
     problems_of,
     rules_of,
@@ -1112,6 +1113,22 @@ class RequestsService:
         if amount == 0:
             return None
         return Recalculation(hours_over=hours_over, amount=amount)
+
+    async def neighbours(
+        self,
+        user_id: UserId,
+        house_id: HouseId,
+        category: RequestCategory,
+    ) -> NeighboursOffer | None:
+        resident = await self._active_resident(user_id, house_id)
+        return await self._grouping.offer(
+            house_id,
+            category,
+            await self._rules(await self._get_house(house_id)),
+            datetime.now(UTC),
+            None if resident.verified_at is None else resident.flat_id,
+            user_id,
+        )
 
 
 async def build_rows(

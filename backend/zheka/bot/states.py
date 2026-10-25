@@ -37,6 +37,7 @@ class NewRequest(StatesGroup):
     sent = State()
     cancel = State()
     place = State()
+    neighbours = State()
 
 
 class ExecutorCard(StatesGroup):

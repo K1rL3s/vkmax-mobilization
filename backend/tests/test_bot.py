@@ -171,6 +171,7 @@ from zheka.bot.handlers.onboarding.windows import (
 from zheka.bot.handlers.question.handlers import ANSWER_SENT
 from zheka.bot.handlers.question.windows import ANSWER, ANSWER_TEXT
 from zheka.bot.handlers.requests.handlers import (
+    NEIGHBOURS_TEXT,
     NOT_CREATED,
     NOT_CREATED_UNEXPECTED,
     SENT_TEXT,
@@ -185,8 +186,10 @@ from zheka.bot.handlers.requests.windows import (
     DESCRIPTION_TEXT,
     IN_FLAT,
     IN_HOUSE,
+    JOINED_REQUEST_TEXT,
     NOT_CONNECTED_TEXT,
     NO_HOUSE_TEXT,
+    OTHER_PROBLEM,
     PLACE_TEXT,
     PROBLEM_TEXT,
     WORKS_TEXT,
@@ -7333,3 +7336,273 @@ async def test_who_answers_without_a_house(
     await _verdict(client, message_manager, LEAVES["elevator"])
     await client.click(message_manager.last_message(), NEW_REQUEST)
     assert _text(message_manager) == NO_HOUSE_TEXT
+
+
+ME_TOO_BUTTON = InlineButtonTextLocator(ME_TOO)
+OTHER_PROBLEM_BUTTON = InlineButtonTextLocator(OTHER_PROBLEM)
+METER_ERROR = InlineButtonTextLocator(
+    CATEGORY_RULES[RequestCategory.METER_ERROR].caption,
+)
+LEAK = InlineButtonTextLocator(CATEGORY_RULES[RequestCategory.LEAK].caption)
+LIFT_PROBLEM = "Не работает лифт во втором подъезде"
+
+
+async def _neighbour_request(
+    session: AsyncSession,
+    house_id: HouseId,
+    category: RequestCategory,
+    place: RequestPlace,
+    *,
+    grouped: bool = False,
+    flat_id: FlatId | None = None,
+) -> RequestGroupId | None:
+    if flat_id is None:
+        flat = Flat(house_id=house_id, number=secrets.token_hex(2))
+        session.add(flat)
+        await session.flush()
+        flat_id = flat.id
+    group_id = (
+        (
+            await RequestsRepo(session).create_group(
+                house_id,
+                category,
+                datetime.now(UTC),
+            )
+        ).id
+        if grouped
+        else None
+    )
+    session.add(
+        Request(
+            house_id=house_id,
+            flat_id=flat_id,
+            category=category,
+            description="Та же беда",
+            status=RequestStatus.ACCEPTED,
+            channel=RequestChannel.MINIAPP,
+            deadline_at=datetime.now(UTC) + timedelta(days=1),
+            group_id=group_id,
+            place=place,
+        ),
+    )
+    await session.commit()
+    return group_id
+
+
+async def _my_request(session: AsyncSession, client: BotClient) -> Request:
+    user = await _user(session, client)
+    stmt = select(Request).where(requests_table.c.author_user_id == user.id)
+    return (await session.execute(stmt)).scalar_one()
+
+
+async def test_me_too_files_the_free_text_into_the_neighbours_group(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    group_id = await _neighbour_request(
+        bot_session,
+        house_id,
+        RequestCategory.ELEVATOR,
+        RequestPlace.HOUSE,
+        grouped=True,
+    )
+    await client.send(LIFT_PROBLEM)
+    await client.click(message_manager.last_message(), LIFT)
+
+    assert _text(message_manager) == NEIGHBOURS_TEXT.format(
+        category=CATEGORY_RULES[RequestCategory.ELEVATOR].caption,
+        flats="1 квартира",
+        status="принята",
+    )
+    await client.click(message_manager.last_message(), ME_TOO_BUTTON)
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["group_id"] == group_id
+    assert enqueued["description"] == LIFT_PROBLEM
+    await _run(task_broker, create_bot_request, **enqueued)
+
+    request = await _my_request(bot_session, client)
+    assert request.group_id == group_id
+    assert _text(message_manager) == JOINED_REQUEST_TEXT.format(request_id=request.id)
+
+
+async def test_me_too_without_a_group_files_a_house_request_of_the_category(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await _neighbour_request(
+        bot_session,
+        house_id,
+        RequestCategory.LEAK,
+        RequestPlace.HOUSE,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), LEAK)
+    await client.click(message_manager.last_message(), ME_TOO_BUTTON)
+
+    enqueued = bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]
+    assert enqueued["group_id"] is None
+    assert enqueued["place"] == RequestPlace.HOUSE
+    assert enqueued["description"] == "Та же проблема: протечка"
+
+
+async def test_another_problem_goes_on_with_the_draft(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await _neighbour_request(
+        bot_session,
+        house_id,
+        RequestCategory.ELEVATOR,
+        RequestPlace.HOUSE,
+        grouped=True,
+    )
+    await client.send(LIFT_PROBLEM)
+    await client.click(message_manager.last_message(), LIFT)
+    await client.click(message_manager.last_message(), OTHER_PROBLEM_BUTTON)
+
+    assert _text(message_manager) == ATTACHMENTS_TEXT.format(attachments=0)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+    assert bot_broker.enqueued(TaskName.CREATE_BOT_REQUEST)[-1]["group_id"] is None
+
+
+async def test_a_neighbours_personal_request_is_not_offered(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await _neighbour_request(
+        bot_session,
+        house_id,
+        RequestCategory.LEAK,
+        RequestPlace.FLAT,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), LEAK)
+
+    assert _text(message_manager) == PLACE_TEXT
+
+
+async def test_a_group_of_one_flats_bill_is_not_offered(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await _neighbour_request(
+        bot_session,
+        house_id,
+        RequestCategory.METER_ERROR,
+        RequestPlace.FLAT,
+        grouped=True,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), METER_ERROR)
+
+    assert DESCRIPTION_TEXT in _text(message_manager)
+
+
+@pytest.mark.parametrize("verified", [True, False])
+async def test_a_request_from_the_own_flat_is_not_offered_once_verified(
+    client: BotClient,
+    message_manager: MockMessageManager,
+    bot_session: AsyncSession,
+    verified: bool,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    flat = Flat(house_id=house_id, number="12")
+    bot_session.add(flat)
+    await bot_session.flush()
+    flat_id = flat.id
+    stmt = (
+        update(residents_table)
+        .where(residents_table.c.house_id == house_id)
+        .values(flat_id=flat_id, verified_at=datetime.now(UTC) if verified else None)
+    )
+    await bot_session.execute(stmt)
+    await bot_session.commit()
+    await _neighbour_request(
+        bot_session,
+        house_id,
+        RequestCategory.ELEVATOR,
+        RequestPlace.HOUSE,
+        flat_id=flat_id,
+    )
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), LIFT)
+
+    assert (DESCRIPTION_TEXT in _text(message_manager)) is verified
+
+
+async def test_another_problem_described_by_voice_is_not_a_join(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    message_manager: MockMessageManager,
+    fake_bot: FakeBot,
+    monkeypatch: pytest.MonkeyPatch,
+    bot_session: AsyncSession,
+    bot_broker: RecordingBroker,
+) -> None:
+    house_id, _ = await _resident_of_a_connected_house(
+        bot_session,
+        client,
+        message_manager,
+    )
+    await _neighbour_request(
+        bot_session,
+        house_id,
+        RequestCategory.ELEVATOR,
+        RequestPlace.HOUSE,
+        grouped=True,
+    )
+    _speechkit(fake_bot, monkeypatch)
+    await client.send("/start")
+    await client.click(message_manager.last_message(), NEW_REQUEST)
+    await client.click(message_manager.last_message(), LIFT)
+    await client.click(message_manager.last_message(), OTHER_PROBLEM_BUTTON)
+    await _send(client, _voice())
+    queued = bot_broker.enqueued(TaskName.TRANSCRIBE_VOICE)[-1]
+    await _run(task_broker, transcribe_voice, **queued)
+    await client.click(message_manager.last_message(), NEXT)
+    await client.click(message_manager.last_message(), SEND)
+
+    assert _text(message_manager) == SENT_TEXT

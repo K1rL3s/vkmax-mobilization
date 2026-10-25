@@ -21,6 +21,7 @@ from zheka.bot.handlers.requests.handlers import (
     get_category,
     get_description,
     get_draft,
+    get_neighbours,
     get_sent,
     on_attachment,
     on_cancel_reason,
@@ -29,6 +30,8 @@ from zheka.bot.handlers.requests.handlers import (
     on_description_attachment,
     on_description_back,
     on_description_voice,
+    on_me_too,
+    on_other,
     on_place,
     on_send,
     on_start,
@@ -36,7 +39,7 @@ from zheka.bot.handlers.requests.handlers import (
 from zheka.bot.states import Menu, NewRequest, Onboarding
 from zheka.bot.voice import VOICE_FAILED, VOICE_PENDING
 from zheka.core.enums import RequestPlace
-from zheka.core.texts import DANGER_REQUEST_NOTE, OPEN_REQUEST
+from zheka.core.texts import DANGER_REQUEST_NOTE, ME_TOO, OPEN_REQUEST
 
 NO_HOUSE_TEXT = "🏠 Сначала найдите свой дом, тогда будет кому передать заявку"
 CATEGORY_TEXT = "🏢 {address}\n\n🛠 Что случилось?"
@@ -71,6 +74,8 @@ CANCEL_TEXT = (
 PLACE_TEXT = "📍 Где проблема?"
 IN_FLAT = "🏠 В моей квартире"
 IN_HOUSE = "🏢 В доме: подъезд, двор, общее имущество"
+JOINED_REQUEST_TEXT = "✋ Добавили вас к заявке №{request_id}, сообщим о ходе работ"
+OTHER_PROBLEM = "➡️ Нет, у меня другое"
 
 request_dialog = Dialog(
     Window(
@@ -153,7 +158,8 @@ request_dialog = Dialog(
     Window(
         Multi(
             Const(SENT_TEXT, when=~F["request_id"] & ~F["error"]),
-            Format(CREATED_TEXT, when=F["request_id"]),
+            Format(CREATED_TEXT, when=F["request_id"] & ~F["joined"]),
+            Format(JOINED_REQUEST_TEXT, when=F["joined"]),
             Format("{error}", when=F["error"]),
         ),
         WebApp(
@@ -196,6 +202,14 @@ request_dialog = Dialog(
         ),
         Row(SwitchTo(BACK, id="place_back", state=NewRequest.category), TO_MENU),
         state=NewRequest.place,
+    ),
+    Window(
+        Format("{neighbours}"),
+        Button(Const(ME_TOO), id="me_too", on_click=on_me_too),
+        Button(Const(OTHER_PROBLEM), id="other_problem", on_click=on_other),
+        Row(SwitchTo(BACK, id="neighbours_back", state=NewRequest.category), TO_MENU),
+        state=NewRequest.neighbours,
+        getter=get_neighbours,
     ),
     on_start=on_start,
 )

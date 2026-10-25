@@ -167,6 +167,46 @@ class GroupingService:
         )
         self._notifications.sync_chat_card(ChatCardKind.GROUP, group_id, post=True)
 
+    async def offer(
+        self,
+        house_id: HouseId,
+        category: RequestCategory,
+        rules: GroupingRules,
+        now: datetime,
+        exclude_flat_id: FlatId | None,
+        exclude_user_id: UserId,
+    ) -> "NeighboursOffer | None":
+        if category in PRIVATE_CATEGORIES:
+            return None
+        since = now - timedelta(hours=rules.window_hours)
+        group = await self._requests.find_open_group(house_id, category, since)
+        group_id = None if group is None else group.id
+        shared = [
+            request
+            for request in await self._requests.list_open_in_window(
+                house_id,
+                category,
+                since,
+            )
+            if request.place is RequestPlace.HOUSE
+            or (group_id is not None and request.group_id == group_id)
+        ]
+        sources = complaint_sources(shared) - {
+            ("flat", exclude_flat_id),
+            ("user", exclude_user_id),
+        }
+        if not sources:
+            return None
+        return NeighboursOffer(
+            category=category,
+            flats_count=len(sources),
+            status=min(
+                (request.status for request in shared),
+                key=list(RequestStatus).index,
+            ),
+            group_id=group_id,
+        )
+
 
 class OpenProblem(ZhekaType):
     category: RequestCategory
@@ -249,3 +289,10 @@ def problems_of(
         resolved=resolved[:RESOLVED_SHOWN],
         resolved_total=len(resolved),
     )
+
+
+class NeighboursOffer(ZhekaType):
+    category: RequestCategory
+    flats_count: int
+    status: RequestStatus
+    group_id: RequestGroupId | None

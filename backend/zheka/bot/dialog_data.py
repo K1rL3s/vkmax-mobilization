@@ -95,6 +95,8 @@ class NewRequestData(BaseDialogData):
     voice_pending: bool = False
     voice_failed: bool = False
     place: RequestPlace | None = None
+    group_id: int | None = None
+    neighbours: str | None = None
 
     def attach_attachments(self, body: MessageBody) -> None:
         self.error = None
