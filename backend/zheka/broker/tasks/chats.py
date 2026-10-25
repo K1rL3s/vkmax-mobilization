@@ -62,7 +62,7 @@ WELCOME_MEMBER_TEXT = (
 )
 JOIN_HOUSE = "🏠 Присоединиться к дому"
 MENU_REQUEST = "📝 Подать заявку"
-MENU_CONTACTS = "📞 Куда звонить"
+MENU_CONTACTS = "📞 Куда звонить?"
 MENU_EMERGENCY = "🚨 Авария"
 OPEN_CHAT = "💬 Открыть чат"
 JOINED_TEXT = "✅ Добавил вас в чат «{title}»"
