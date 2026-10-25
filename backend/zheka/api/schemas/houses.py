@@ -5,7 +5,6 @@ from pydantic import Field
 
 from zheka.api.dependencies import CurrentOrg
 from zheka.api.schemas.base import BaseSchema, FreeText
-from zheka.api.schemas.files import FileRef
 from zheka.core.enums import (
     CityServiceKind,
     EventSource,
@@ -16,9 +15,17 @@ from zheka.core.enums import (
     ServiceType,
     VerificationStatus,
 )
-from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
-from zheka.core.models import ChairmanHandover, Flat
+from zheka.core.ids import (
+    FlatId,
+    HouseDocumentId,
+    HouseId,
+    OrgId,
+    ResidentId,
+    UserId,
+)
+from zheka.core.models import ChairmanHandover, Flat, HouseDocument
 from zheka.core.services.chats import ChatJoinOffer
+from zheka.core.services.files import FilesService
 from zheka.core.services.house_point import HouseAtPoint
 from zheka.core.services.houses import (
     AdminHouseCardData,
@@ -230,6 +237,16 @@ class HouseChatJoin(BaseSchema):
     )
 
 
+class HouseDocumentItem(BaseSchema):
+    id: HouseDocumentId
+    title: str
+    url: str
+
+    @classmethod
+    def signed(cls, document: HouseDocument, files: FilesService) -> Self:
+        return cls(id=document.id, title=document.title, url=files.sign(document.name))
+
+
 class HouseCard(BaseSchema):
     id: HouseId
     address: str
@@ -263,7 +280,10 @@ class HouseCard(BaseSchema):
         ),
     )
     overhaul: HouseOverhaul | None = None
-    documents: list[FileRef]
+    documents: list[HouseDocumentItem] | None = Field(
+        default=None,
+        description="PDF от УК жителям этого дома; null - не житель или заблокирован",
+    )
     org_stats: OrgPublicStats | None = Field(
         default=None,
         description="Показатели УК за 90 дней, нет при малом числе заявок",
@@ -290,7 +310,7 @@ class HouseCard(BaseSchema):
     def of(
         cls,
         card: HouseCardData,
-        documents: list[FileRef],
+        documents: list[HouseDocumentItem] | None,
         chat_join: ChatJoinOffer | None = None,
     ) -> Self:
         house = card.house

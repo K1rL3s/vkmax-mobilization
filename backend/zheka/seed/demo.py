@@ -7,7 +7,7 @@ from math import ceil
 from pathlib import Path
 from random import Random
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, insert, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from zheka.base import ZhekaType
@@ -81,7 +81,12 @@ from zheka.core.services.demo import (
 from zheka.core.services.readings import current_period
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
-from zheka.infra.database.tables.houses import flats_table
+from zheka.infra.database.tables.houses import (
+    flats_table,
+    house_documents_table,
+    houses_table,
+)
+from zheka.infra.database.tables.organizations import organizations_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import (
     demand_signals_table,
@@ -98,9 +103,9 @@ from zheka.seed.directory import (
 logger = logging.getLogger(__name__)
 
 FILES_DIR = DATA_DIR / "files"
-DOCUMENTS = (
-    "5e4d464bd16d444f8024c2cfd616c0e2.png",
-    "9f63808559da4ca9a4ace56a7ddf160a.png",
+HOUSE_DOCUMENTS = (
+    ("e6bb7a5197a7497d972822b68cfe2f59.pdf", "Правила проживания"),
+    ("cd63fb4cf3ef4352ae71f8568f96a170.pdf", "Памятка жителя"),
 )
 RESULT_PHOTOS = {
     "fa678cbaf3614e0a95540b46f24227db.png": frozenset(
@@ -542,13 +547,14 @@ async def seed(
     _copy_files(files_dir)
     directory = await load_directory(session)
     await Seeder(session, demo, now).run(directory)
+    await _house_documents(session)
     logger.info("Сид готов: домов в справочнике %s", len(directory))
     return True
 
 
 def _copy_files(files_dir: Path) -> None:
     files_dir.mkdir(parents=True, exist_ok=True)
-    for name in (*DOCUMENTS, *RESULT_PHOTOS, WORKS_ORDER):
+    for name in (*dict(HOUSE_DOCUMENTS), *RESULT_PHOTOS, WORKS_ORDER):
         target = files_dir / name
         if not target.exists():
             shutil.copyfile(FILES_DIR / name, target)
@@ -765,7 +771,6 @@ class Seeder:
                 },
             ],
         }
-        house.documents = list(DOCUMENTS)
 
         rng = Random(f"demo:{house.city}:{house.street}:{house.building}")
         shuffled = rng.sample(list(flats), len(flats))
@@ -1719,6 +1724,7 @@ async def extend(
             missing,
         )
     await _water_outages(session, demo, now)
+    await _house_documents(session)
     logger.info("Сид дополнен: домов в справочнике %s", len(directory))
     return True
 
@@ -1900,3 +1906,21 @@ async def _water_outages(
         house = await houses.get(house_id)
         if house is not None:
             await demo.water_outage(house, flat_id, user_id, now)
+
+
+async def _house_documents(session: AsyncSession) -> None:
+    for name, title in HOUSE_DOCUMENTS:
+        known = exists().where(
+            house_documents_table.c.house_id == houses_table.c.id,
+            house_documents_table.c.name == name,
+        )
+        stmt = insert(house_documents_table).from_select(
+            ["house_id", "name", "title"],
+            select(houses_table.c.id, literal(name), literal(title))
+            .join(
+                organizations_table,
+                organizations_table.c.id == houses_table.c.org_id,
+            )
+            .where(organizations_table.c.is_demo, ~known),
+        )
+        await session.execute(stmt)

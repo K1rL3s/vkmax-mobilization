@@ -353,25 +353,31 @@ const Overhaul = ({ overhaul }: { overhaul: HouseCard["overhaul"] }) => {
   );
 };
 
-const Documents = ({ house }: { house: HouseCard }) =>
-  house.documents.length === 0 ? (
+const Documents = ({
+  documents,
+  isConnected,
+}: {
+  documents: NonNullable<HouseCard["documents"]>;
+  isConnected: boolean;
+}) =>
+  documents.length === 0 ? (
     <EmptyState
       icon={documentIcon}
       title="Документов пока нет"
       description={
-        house.is_connected
-          ? "УК ещё не выложила документы дома: договор управления, отчёты, решения собраний"
+        isConnected
+          ? "УК ещё не выложила документы для жителей: правила проживания, памятки, отчёты"
           : "Документы дома выкладывает УК, когда подключает дом к сервису"
       }
     />
   ) : (
     <div className={styles.Panel}>
-      {house.documents.map((document, index) => (
+      {documents.map((document, index) => (
         <CellSimple
-          key={document.url}
+          key={document.id}
           separator={index > 0}
           before={<Icon src={documentIcon} className={styles.CellIcon} />}
-          title={document.name}
+          title={document.title}
           showChevron
           asChild
         >
@@ -498,9 +504,14 @@ const HouseCardPage = () => {
         <Overhaul overhaul={house.overhaul} />
       </Section>
 
-      <Section title="Документы">
-        <Documents house={house} />
-      </Section>
+      {house.documents && (
+        <Section title="Документы">
+          <Documents
+            documents={house.documents}
+            isConnected={house.is_connected}
+          />
+        </Section>
+      )}
 
       <Flex align="center" gap={12} className={styles.Note}>
         <Icon src={infoIcon} size={20} className={styles.NoteIcon} />

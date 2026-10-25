@@ -21,7 +21,14 @@ from zheka.core.errors import (
     NotEnoughRights,
 )
 from zheka.core.ids import FlatId, HouseId, OrgId, ResidentId, UserId
-from zheka.core.models import Flat, House, Organization, Resident, User
+from zheka.core.models import (
+    Flat,
+    House,
+    HouseDocument,
+    Organization,
+    Resident,
+    User,
+)
 from zheka.core.outages import OutageView, demo_outages
 from zheka.core.services.events import EventsService
 from zheka.core.services.house_health import (
@@ -95,6 +102,7 @@ class HouseCardData(ZhekaType):
     reception_hours: str | None = None
     outages: Sequence[OutageView] = ()
     services: Sequence[CityService] = ()
+    documents: Sequence[HouseDocument] | None = None
 
 
 class HouseResidentView(ZhekaType):
@@ -283,6 +291,11 @@ class HousesService:
             ),
             outages=demo_outages(house, now),
             services=city_services(house.region, house.city),
+            documents=(
+                None
+                if resident is None or resident.status is ResidentStatus.BLOCKED
+                else await self._houses.list_documents(house_id)
+            ),
         )
 
     async def link(

@@ -39,3 +39,5 @@ API_CHECKER_MAX_USER_ID = MaxUserId(-(10**18))
 TenancyId = NewType("TenancyId", int)
 
 DEMO_TENANT_MAX_ID_BASE = MaxUserId(-(10**17))
+
+HouseDocumentId = NewType("HouseDocumentId", int)

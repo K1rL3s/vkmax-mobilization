@@ -39,10 +39,12 @@ from zheka.core.enums import (
 )
 from zheka.core.errors import NotEnoughRights
 from zheka.core.ids import API_CHECKER_MAX_USER_ID
+from zheka.core.models import HouseDocument
 from zheka.core.services.files import FilesService
 from zheka.core.services.profile import CHECKER_CANNOT_FORGET, CREATOR_CANNOT_FORGET
 from zheka.core.services.retention import ATTACHMENT_TTL, RetentionService
 from zheka.infra.database.repos.files import FilesRepo
+from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.idempotency import IdempotencyRepo
 from zheka.infra.database.repos.meters import MetersRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
@@ -51,7 +53,6 @@ from zheka.infra.database.repos.reception import ReceptionRepo
 from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
 from zheka.infra.database.repos.users import FORGOTTEN_NAME, UsersRepo
-from zheka.infra.database.tables.houses import houses_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.max import MaxSender
 
@@ -223,12 +224,9 @@ async def test_the_purge_keeps_documents_recent_readings_and_foreign_files(
     tariff_document = _file(tmp_path, old)
     reading_photo = _file(tmp_path, old)
     foreign = _file(tmp_path, old, "notes.txt")
-    stmt = (
-        update(houses_table)
-        .where(houses_table.c.id == own.house_id)
-        .values(documents=[house_document])
+    await HousesRepo(session).add_document(
+        HouseDocument(house_id=own.house_id, name=house_document, title="Памятка"),
     )
-    await session.execute(stmt)
     tariff = await add_tariff(session, own.house_id, 100_000)
     tariff.document_url = tariff_document
     reading = await MetersRepo(session).add_reading(

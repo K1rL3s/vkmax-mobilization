@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.charges import tariffs_table
-from zheka.infra.database.tables.houses import houses_table
+from zheka.infra.database.tables.houses import house_documents_table
 from zheka.infra.database.tables.meters import readings_table
 from zheka.infra.database.tables.requests import (
     request_attachments_table,
@@ -19,7 +19,7 @@ class FilesRepo(BaseAlchemyRepo):
         stmt = union(
             select(request_attachments_table.c.path),
             select(func.jsonb_array_elements_text(readings_table.c.photo_paths)),
-            select(func.jsonb_array_elements_text(houses_table.c.documents)),
+            select(house_documents_table.c.name),
             select(
                 func.jsonb_array_elements(
                     announcements_table.c.documents,

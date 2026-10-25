@@ -90,7 +90,11 @@ from zheka.infra.database.tables.announcements import (
 )
 from zheka.infra.database.tables.base import metadata
 from zheka.infra.database.tables.charges import charges_table
-from zheka.infra.database.tables.houses import flats_table, houses_table
+from zheka.infra.database.tables.houses import (
+    flats_table,
+    house_documents_table,
+    houses_table,
+)
 from zheka.infra.database.tables.meters import meters_table, readings_table
 from zheka.infra.database.tables.organizations import (
     org_members_table,
@@ -112,6 +116,7 @@ from zheka.seed.demo import (
     ADDED_PROFILES,
     ANNOUNCEMENTS,
     BACKGROUND_PROFILES,
+    HOUSE_DOCUMENTS,
     MAP_STATES,
     POLL_RESULTS,
     PROFILES,
@@ -1158,3 +1163,35 @@ async def test_extending_gives_an_older_reviewer_flat_its_water_outage_once(
     assert added["requests"] == before["requests"] + 1
     assert added["request_status_log"] == before["request_status_log"] + 5
     assert await _counts(db) == added
+
+
+async def test_every_demo_house_has_the_rules_and_the_memo(db: AsyncSession) -> None:
+    stmt = (
+        select(
+            houses_table.c.id,
+            func.array_agg(house_documents_table.c.title),
+        )
+        .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
+        .outerjoin(
+            house_documents_table,
+            house_documents_table.c.house_id == houses_table.c.id,
+        )
+        .where(organizations_table.c.is_demo)
+        .group_by(houses_table.c.id)
+    )
+    titles = {tuple(sorted(row)) for _, row in (await db.execute(stmt)).tuples()}
+
+    assert titles == {("Памятка жителя", "Правила проживания")}
+    for name, _title in HOUSE_DOCUMENTS:
+        assert (FILES / name).read_bytes().startswith(b"%PDF-")
+
+
+async def test_extending_gives_demo_houses_their_documents_once(
+    db: AsyncSession,
+) -> None:
+    before = await _counts(db)
+    await db.execute(delete(house_documents_table))
+
+    assert await extend(db, _demo(db), FILES, NOW)
+
+    assert await _counts(db) == before

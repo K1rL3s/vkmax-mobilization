@@ -1,0 +1,28 @@
+.Title {
+  margin: 0;
+}
+
+.Panel {
+  overflow: hidden;
+  border-radius: 16px;
+  background-color: var(--background-card);
+}
+
+.Row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding-right: 12px;
+}
+
+.Row + .Row {
+  border-top: 1px solid var(--divider-primary);
+}
+
+.CellIcon {
+  color: var(--icon-primary);
+}
+
+.Error {
+  color: var(--text-negative);
+}

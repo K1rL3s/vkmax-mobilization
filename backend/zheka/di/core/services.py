@@ -17,6 +17,7 @@ from zheka.core.services.digest import DigestService
 from zheka.core.services.events import EventsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
+from zheka.core.services.house_documents import HouseDocumentsService
 from zheka.core.services.house_point import HousePointService
 from zheka.core.services.houses import HousesService
 from zheka.core.services.map import MapService
@@ -82,6 +83,7 @@ class ServicesProvider(Provider):
         RetentionService,
         MapService,
         HousePointService,
+        HouseDocumentsService,
         AdminMapService,
         NeighbourInviteService,
     )

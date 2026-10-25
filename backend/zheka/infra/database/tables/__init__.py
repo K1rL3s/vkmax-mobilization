@@ -16,7 +16,11 @@ from zheka.infra.database.tables.chats import (
     chats_table,
 )
 from zheka.infra.database.tables.events import events_table
-from zheka.infra.database.tables.houses import flats_table, houses_table
+from zheka.infra.database.tables.houses import (
+    flats_table,
+    house_documents_table,
+    houses_table,
+)
 from zheka.infra.database.tables.idempotency import idempotency_keys_table
 from zheka.infra.database.tables.invites import flat_invites_table, org_invites_table
 from zheka.infra.database.tables.meters import meters_table, readings_table
@@ -103,3 +107,4 @@ mapper_registry.map_imperatively(
 mapper_registry.map_imperatively(models.ChairmanHandover, chairman_handovers_table)
 mapper_registry.map_imperatively(models.NoticeDelivery, notice_deliveries_table)
 mapper_registry.map_imperatively(models.Tenancy, tenancies_table)
+mapper_registry.map_imperatively(models.HouseDocument, house_documents_table)

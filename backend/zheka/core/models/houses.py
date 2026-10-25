@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from zheka.base import UNSET, ZhekaMutableType, Zoned
-from zheka.core.ids import FlatId, HouseId, OrgId
+from zheka.core.ids import FlatId, HouseDocumentId, HouseId, OrgId
 
 
 class House(ZhekaMutableType, Zoned):
@@ -24,7 +24,6 @@ class House(ZhekaMutableType, Zoned):
     lon: Decimal | None = None
     chat_binding_code: str
     overhaul: Any = field(default_factory=dict)
-    documents: Any = field(default_factory=list)
     timezone: str
     added_by_resident: bool = False
     digest_sent_on: date | None = None
@@ -46,3 +45,11 @@ class Flat(ZhekaMutableType):
     entrance: int | None = None
     area: int | None = None
     account_no: str | None = None
+
+
+class HouseDocument(ZhekaMutableType):
+    id: HouseDocumentId = UNSET
+    created_at: datetime = UNSET
+    house_id: HouseId
+    name: str
+    title: str

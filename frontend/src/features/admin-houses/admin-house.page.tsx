@@ -18,6 +18,7 @@ import { clockIcon, homeIcon, Icon, qrIcon, usersIcon } from "@/shared/ui/icon";
 import { EmptyState, ErrorState, LoadingState } from "@/shared/ui/state";
 
 import { ChatSection } from "./ui/chat-section";
+import { DocumentsSection } from "./ui/documents-section";
 import { ReadingsSection } from "./ui/readings-section";
 import { ResidentsSection } from "./ui/residents-section";
 
@@ -220,6 +221,8 @@ const AdminHousePage = () => {
       </div>
 
       <ChatSection house={house} />
+
+      <DocumentsSection houseId={house.id} />
 
       <ResidentsSection
         houseId={house.id}

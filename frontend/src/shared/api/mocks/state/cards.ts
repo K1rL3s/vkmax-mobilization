@@ -58,7 +58,7 @@ export const houseCard = (house: MockHouse): Schemas["HouseCard"] => {
           }
         : null,
     overhaul: null,
-    documents: [],
+    documents: residency ? (houseDocuments.get(house.id) ?? []) : null,
     health: house.is_connected
       ? (
           [
@@ -180,3 +180,5 @@ export const flatCard = (
     verification_status: latestVerification(flat.id)?.status ?? null,
   };
 };
+
+export const houseDocuments = new Map<number, Schemas["HouseDocumentItem"][]>();

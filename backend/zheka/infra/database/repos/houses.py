@@ -3,18 +3,28 @@ from collections.abc import Collection, Sequence
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, exists, func, or_, select
+from sqlalchemy import ColumnElement, delete, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from zheka.core.enums import RequestStatus
 from zheka.core.errors import EntityNotFound
-from zheka.core.ids import FlatId, HouseId, OrgId, UserId
-from zheka.infra.database.models import DemandSignal, Flat, House, OrgSettings
+from zheka.core.ids import FlatId, HouseDocumentId, HouseId, OrgId, UserId
+from zheka.infra.database.models import (
+    DemandSignal,
+    Flat,
+    House,
+    HouseDocument,
+    OrgSettings,
+)
 from zheka.infra.database.repos.base import BaseAlchemyRepo
 from zheka.infra.database.repos.chats import BOUND_CHAT
 from zheka.infra.database.repos.scopes import scoped_to_org
 from zheka.infra.database.tables.chats import chats_table
-from zheka.infra.database.tables.houses import flats_table, houses_table
+from zheka.infra.database.tables.houses import (
+    flats_table,
+    house_documents_table,
+    houses_table,
+)
 from zheka.infra.database.tables.organizations import org_settings_table
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import demand_signals_table
@@ -390,6 +400,36 @@ class HousesRepo(BaseAlchemyRepo):
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
+
+    async def list_documents(self, house_id: HouseId) -> Sequence[HouseDocument]:
+        stmt = (
+            select(HouseDocument)
+            .where(house_documents_table.c.house_id == house_id)
+            .order_by(house_documents_table.c.id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalars().all()
+
+    async def add_document(self, document: HouseDocument) -> HouseDocument:
+        self._session.add(document)
+        await self._session.flush()
+        return document
+
+    async def delete_document(
+        self,
+        house_id: HouseId,
+        document_id: HouseDocumentId,
+    ) -> bool:
+        stmt = (
+            delete(house_documents_table)
+            .where(
+                house_documents_table.c.id == document_id,
+                house_documents_table.c.house_id == house_id,
+            )
+            .returning(house_documents_table.c.id)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none() is not None
 
 
 def address_matches(query: str) -> list[ColumnElement[bool]]:

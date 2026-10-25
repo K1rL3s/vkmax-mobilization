@@ -9,7 +9,15 @@ import {
   page,
   type MockHttpRequest,
 } from "./reply";
-import { addressOf, days, findHouse, houseFlats, period } from "./state";
+import {
+  addressOf,
+  days,
+  fileUrl,
+  findHouse,
+  houseDocuments,
+  houseFlats,
+  period,
+} from "./state";
 
 type Schemas = components["schemas"];
 
@@ -441,4 +449,61 @@ export const adminHousesConfigs = [
 
     return ok(resident);
   }),
+  endpoint("get", "/admin/houses/:house_id/documents", (request) => {
+    const item = orgHouse(request);
+
+    if (!item) {
+      return notFound("Дом не найден");
+    }
+
+    return ok(
+      (houseDocuments.get(item.id) ??
+        []) satisfies Schemas["HouseDocumentItem"][],
+    );
+  }),
+  endpoint("post", "/admin/houses/:house_id/documents", (request) => {
+    const item = orgHouse(request);
+
+    if (!item) {
+      return notFound("Дом не найден");
+    }
+
+    const url = fileUrl(String(request.body.name));
+
+    if (!url) {
+      return notFound("Документ не найден, загрузите его заново");
+    }
+
+    const document = {
+      id: Date.now(),
+      title: String(request.body.title).trim(),
+      url,
+    } satisfies Schemas["HouseDocumentItem"];
+    houseDocuments.set(item.id, [
+      ...(houseDocuments.get(item.id) ?? []),
+      document,
+    ]);
+
+    return ok(document);
+  }),
+  endpoint(
+    "delete",
+    "/admin/houses/:house_id/documents/:document_id",
+    (request) => {
+      const item = orgHouse(request);
+      const documents = item ? (houseDocuments.get(item.id) ?? []) : [];
+      const id = Number(request.params.document_id);
+
+      if (!item || !documents.some((document) => document.id === id)) {
+        return notFound("Документ не найден, загрузите его заново");
+      }
+
+      houseDocuments.set(
+        item.id,
+        documents.filter((document) => document.id !== id),
+      );
+
+      return ok({ ok: true } satisfies Schemas["OkResponse"]);
+    },
+  ),
 ];

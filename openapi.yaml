@@ -9416,6 +9416,261 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/houses/{house_id}/documents:
+    get:
+      tags:
+      - 'Админка: дома'
+      summary: Документы дома для жителей
+      operationId: list_house_documents
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HouseDocumentItem'
+                title: Response List House Documents
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+    post:
+      tags:
+      - 'Админка: дома'
+      summary: Добавить документ дома
+      description: PDF из upload_document. Жители дома откроют его из карточки дома
+      operationId: add_house_document
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HouseDocumentItem'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+  /api/admin/houses/{house_id}/documents/{document_id}:
+    delete:
+      tags:
+      - 'Админка: дома'
+      summary: Удалить документ дома
+      operationId: delete_house_document
+      security:
+      - ApiTestToken: []
+      parameters:
+      - name: house_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: House Id
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Document Id
+      - name: X-Org-Id
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: X-Org-Id
+      - name: WebAppData
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webappdata
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        '400':
+          description: Некорректный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '404':
+          description: Сущность не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
+        default:
+          description: Любая другая ошибка, конверт тот же
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError_BaseError_'
   /api/admin/map/houses:
     get:
       tags:
@@ -15754,10 +16009,13 @@ components:
           - $ref: '#/components/schemas/HouseOverhaul'
           - type: 'null'
         documents:
-          items:
-            $ref: '#/components/schemas/FileRef'
-          type: array
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/HouseDocumentItem'
+            type: array
+          - type: 'null'
           title: Documents
+          description: PDF от УК жителям этого дома; null - не житель или заблокирован
         org_stats:
           anyOf:
           - $ref: '#/components/schemas/OrgPublicStats'
@@ -15801,7 +16059,6 @@ components:
       - is_connected
       - demand_count
       - demand_sent
-      - documents
       - outages
       - services
       title: HouseCard
@@ -15826,6 +16083,23 @@ components:
       - title
       - joined
       title: HouseChatJoin
+    HouseDocumentItem:
+      properties:
+        id:
+          type: integer
+          title: Id
+        title:
+          type: string
+          title: Title
+        url:
+          type: string
+          title: Url
+      type: object
+      required:
+      - id
+      - title
+      - url
+      title: HouseDocumentItem
     HouseListItem:
       properties:
         id:

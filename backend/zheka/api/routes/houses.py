@@ -9,7 +9,6 @@ from maxo.utils.deeplink import create_start_link
 
 from zheka.api.dependencies import RequireConsentDep, ResidencyForHouseDep
 from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
-from zheka.api.schemas.files import FileRef
 from zheka.api.schemas.houses import (
     AddHouseRequest,
     ChairmanHandoverItem,
@@ -18,6 +17,7 @@ from zheka.api.schemas.houses import (
     FlatListItem,
     HouseAtPointResponse,
     HouseCard,
+    HouseDocumentItem,
     HouseListItem,
     LinkHouseRequest,
     NeighbourInviteResponse,
@@ -131,7 +131,14 @@ async def get_house_card(
         current_account.user_id,
         datetime.now(UTC),
     )
-    documents = [FileRef.signed(name, files_service) for name in card.house.documents]
+    documents = (
+        None
+        if card.documents is None
+        else [
+            HouseDocumentItem.signed(document, files_service)
+            for document in card.documents
+        ]
+    )
     chat_join = await chats_service.join_offer(current_account.user_id, house_id)
     return HouseCard.of(card, documents, chat_join)
 

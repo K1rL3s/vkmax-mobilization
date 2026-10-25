@@ -43,7 +43,6 @@ houses_table = Table(
     Column("lon", Numeric(9, 6), nullable=True),
     Column("chat_binding_code", String(8), nullable=False, unique=True),
     Column("overhaul", JSONB, default=dict, nullable=False),
-    Column("documents", JSONB, default=list, nullable=False),
     Column("timezone", String, nullable=False),
     Column(
         "added_by_resident",
@@ -74,4 +73,20 @@ flats_table = Table(
     Column("area", Integer, nullable=True),
     Column("account_no", String(32), nullable=True),
     UniqueConstraint("house_id", "number"),
+)
+
+house_documents_table = Table(
+    "house_documents",
+    metadata,
+    id_column(),
+    created_at_column(),
+    Column(
+        "house_id",
+        BigInteger,
+        ForeignKey("houses.id"),
+        nullable=False,
+        index=True,
+    ),
+    Column("name", String, nullable=False),
+    Column("title", String, nullable=False),
 )

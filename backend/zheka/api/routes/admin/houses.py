@@ -5,7 +5,8 @@ from maxo import Bot
 from maxo.utils.deeplink import create_start_link, create_startapp_link
 
 from zheka.api.dependencies import AdminOrgDep, CurrentOrgDep
-from zheka.api.schemas.base import Limit, Offset, Page
+from zheka.api.schemas.announcements import DocumentInput
+from zheka.api.schemas.base import Limit, Offset, OkResponse, Page
 from zheka.api.schemas.flats import RejectVerificationRequest, VerificationRequestItem
 from zheka.api.schemas.houses import (
     AdminHouseCard,
@@ -13,6 +14,7 @@ from zheka.api.schemas.houses import (
     BindingCodeResponse,
     BlockResidentRequest,
     EntranceQr,
+    HouseDocumentItem,
     HouseResidentItem,
     ObjectQr,
     RevokeVerificationRequest,
@@ -25,8 +27,15 @@ from zheka.core.deeplinks import (
     object_qr_payload,
 )
 from zheka.core.enums import VerificationStatus
-from zheka.core.ids import HouseId, ResidentId, VerificationRequestId
+from zheka.core.ids import (
+    HouseDocumentId,
+    HouseId,
+    ResidentId,
+    VerificationRequestId,
+)
+from zheka.core.services.files import FilesService
 from zheka.core.services.flats import FlatsService
+from zheka.core.services.house_documents import HouseDocumentsService
 from zheka.core.services.houses import HousesService
 from zheka.core.services.moderation import ModerationService
 
@@ -251,3 +260,49 @@ async def reject_verification_request(
         body.reason,
     )
     return VerificationRequestItem.of(view)
+
+
+@router.get("/admin/houses/{house_id}/documents", summary="Документы дома для жителей")
+async def list_house_documents(
+    house_id: HouseId,
+    current_org: AdminOrgDep,
+    documents_service: FromDishka[HouseDocumentsService],
+    files_service: FromDishka[FilesService],
+) -> list[HouseDocumentItem]:
+    documents = await documents_service.list(current_org.org_id, house_id)
+    return [HouseDocumentItem.signed(document, files_service) for document in documents]
+
+
+@router.post(
+    "/admin/houses/{house_id}/documents",
+    summary="Добавить документ дома",
+    description="PDF из upload_document. Жители дома откроют его из карточки дома",
+)
+async def add_house_document(
+    house_id: HouseId,
+    current_org: AdminOrgDep,
+    documents_service: FromDishka[HouseDocumentsService],
+    files_service: FromDishka[FilesService],
+    body: DocumentInput,
+) -> HouseDocumentItem:
+    document = await documents_service.add(
+        current_org.org_id,
+        house_id,
+        body.name,
+        body.title,
+    )
+    return HouseDocumentItem.signed(document, files_service)
+
+
+@router.delete(
+    "/admin/houses/{house_id}/documents/{document_id}",
+    summary="Удалить документ дома",
+)
+async def delete_house_document(
+    house_id: HouseId,
+    document_id: HouseDocumentId,
+    current_org: AdminOrgDep,
+    documents_service: FromDishka[HouseDocumentsService],
+) -> OkResponse:
+    await documents_service.delete(current_org.org_id, house_id, document_id)
+    return OkResponse()
