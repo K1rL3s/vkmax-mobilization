@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { errorMessage } from "@/shared/api/errors";
 import { authParams, rqClient } from "@/shared/api/instance";
+import { haptic } from "@/shared/lib/max";
 
 import { gisAppealFormConstraints } from "../domain/gis-appeal-form-constraints";
 import { refetchRequests } from "./use-repeat-request";
@@ -24,7 +25,12 @@ export const useGisAppeal = (requestId: number) => {
   const save = rqClient.useMutation(
     "post",
     "/api/requests/{request_id}/gis-appeal",
-    { onSuccess: refetchRequests },
+    {
+      onSuccess: async () => {
+        haptic.success();
+        await refetchRequests();
+      },
+    },
   );
 
   return {

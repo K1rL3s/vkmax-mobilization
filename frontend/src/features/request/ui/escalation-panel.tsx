@@ -127,23 +127,18 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
         </ul>
       </Flex>
 
-      <Flex align="stretch" direction="column" gapY={8}>
-        <Typography.Text variant="description" color="secondary">
-          Номер обращения в ГИС ЖКХ (необязательно)
-        </Typography.Text>
-
-        {request.gis_appeal_number ? (
-          <Typography.Text variant="body-strong" color="primary">
-            № {request.gis_appeal_number}
+      {!request.gis_appeal_number && (
+        <Flex align="stretch" direction="column" gapY={8}>
+          <Typography.Text variant="description" color="secondary">
+            Номер обращения в ГИС ЖКХ (необязательно)
           </Typography.Text>
-        ) : (
           <form
             className={styles.GisAppeal}
             noValidate
             onSubmit={gisAppeal.submit}
           >
             <Input
-              className={styles.Grow}
+              innerClassNames={{ container: styles.Grow }}
               placeholder="Например, 123456"
               aria-label="Номер обращения в ГИС ЖКХ"
               maxLength={gisAppealFormConstraints.number}
@@ -153,13 +148,13 @@ export const EscalationPanel = ({ request }: { request: RequestCard }) => {
               Сохранить
             </Button>
           </form>
-        )}
-        <FieldError
-          message={
-            gisAppeal.form.formState.errors.number?.message ?? gisAppeal.error
-          }
-        />
-      </Flex>
+          <FieldError
+            message={
+              gisAppeal.form.formState.errors.number?.message ?? gisAppeal.error
+            }
+          />
+        </Flex>
+      )}
 
       {text && (
         <>

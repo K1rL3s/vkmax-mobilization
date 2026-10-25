@@ -121,6 +121,12 @@ const RequestPage = () => {
             Сейчас: {actor}
           </Typography.Text>
         )}
+
+        {request.gis_appeal_number && (
+          <Typography.Text variant="description" color="secondary">
+            Обращение в ГИС ЖКХ № {request.gis_appeal_number}
+          </Typography.Text>
+        )}
       </Flex>
 
       {request.question_asked_at && <QuestionPanel request={request} />}

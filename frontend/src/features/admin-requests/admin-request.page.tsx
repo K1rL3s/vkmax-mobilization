@@ -178,6 +178,11 @@ const AdminRequestPage = () => {
             <Fact label="Исполнитель">{request.executor_name}</Fact>
           )}
           {visit && <Fact label="Визит">{visit}</Fact>}
+          {request.gis_appeal_number && (
+            <Fact label="Обращение в ГИС ЖКХ">
+              № {request.gis_appeal_number}
+            </Fact>
+          )}
         </dl>
         <VisitActions request={request} />
       </Card>
