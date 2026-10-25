@@ -60,6 +60,7 @@ export const useAdminRequestList = () => {
           house_id: filters.house,
           place: filters.place,
           sort: filters.sort,
+          danger: filters.filter === "danger",
         },
       },
     },

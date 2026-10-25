@@ -42,13 +42,7 @@ export const matchesFilter = (
   request: AdminRequestItem,
   filter: FilterId,
 ): boolean => {
-  if (filter === "all") return true;
-  if (filter === "danger")
-    return (
-      !!request.danger &&
-      !isFinished(request.status) &&
-      !isOnReview(request.status)
-    );
+  if (filter === "all" || filter === "danger") return true;
   if (filter === "overdue") return overdueNote(request) !== null;
   if (filter === "question") return !!request.question_asked_at;
   if (filter === "answered") return !!request.resident_answered_at;

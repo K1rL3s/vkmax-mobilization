@@ -664,7 +664,7 @@ class RequestsRepo(BaseAlchemyRepo):
             select(requests_table.c.group_id, func.min(requests_table.c.danger))
             .where(
                 requests_table.c.group_id.in_(group_ids),
-                requests_table.c.danger.is_not(None),
+                open_danger(requests_table),
             )
             .group_by(requests_table.c.group_id)
         )

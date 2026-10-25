@@ -40,6 +40,7 @@ from zheka.core import texts
 from zheka.core.enums import (
     CATEGORY_RULES,
     CancelReason,
+    DangerKind,
     EventType,
     OrgRole,
     RequestActorRole,
@@ -202,10 +203,10 @@ async def test_danger_filter_isolates_open_dangerous_requests(
         0,
     )
 
-    assert {row.request.id for row in rows} == {
-        calm.id,
-        danger_card.request.id,
-        closed.request.id,
+    assert {row.request.id: row.danger for row in rows} == {
+        calm.id: None,
+        danger_card.request.id: DangerKind.GAS,
+        closed.request.id: None,
     }
     assert total == 1
     assert [row.request.id for row in only_danger] == [danger_card.request.id]
@@ -1498,3 +1499,29 @@ async def test_chosen_sort_puts_finished_requests_after_open_ones(
     rows, _ = await service.inbox(own.org_id, RequestFilters(sort=sort), 20, 0)
 
     assert [row.request.id for row in rows] == [open_request.id, done.id]
+
+
+async def test_group_danger_counts_only_open_members(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+) -> None:
+    members, _ = await _group_of_three(session, own)
+    members[0].danger = DangerKind.GAS
+    members[0].status = RequestStatus.DONE
+    await session.flush()
+    service = admin_requests_service(session)
+    grouped = RequestFilters(grouped=True)
+    grouped_danger = RequestFilters(grouped=True, danger=True)
+
+    calm_rows, _ = await service.inbox(own.org_id, grouped, 20, 0)
+    calm_danger, calm_total = await service.inbox(own.org_id, grouped_danger, 20, 0)
+    members[2].danger = DangerKind.FIRE
+    await session.flush()
+    rows, _ = await service.inbox(own.org_id, grouped, 20, 0)
+    danger_rows, total = await service.inbox(own.org_id, grouped_danger, 20, 0)
+
+    assert [row.danger for row in calm_rows] == [None]
+    assert (calm_danger, calm_total) == ([], 0)
+    assert [row.danger for row in rows] == [DangerKind.FIRE]
+    assert total == 1
+    assert [row.request.id for row in danger_rows] == [members[0].id]

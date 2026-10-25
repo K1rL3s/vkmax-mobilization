@@ -507,7 +507,11 @@ class AdminRequestsService:
                     else group_escalations.get(row.request.group_id)
                 ),
                 danger=(
-                    row.request.danger
+                    (
+                        row.request.danger
+                        if row.request.status in OPEN_STATUSES
+                        else None
+                    )
                     if group_dangers is None or row.request.group_id is None
                     else group_dangers.get(row.request.group_id)
                 ),
