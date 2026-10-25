@@ -1,7 +1,7 @@
 from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, case, exists, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select, update
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.expression import FromClause
 
@@ -10,6 +10,7 @@ from zheka.core.danger import detect_danger
 from zheka.core.enums import (
     CATEGORY_RULES,
     DangerKind,
+    NoticeStatus,
     RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
@@ -27,6 +28,7 @@ from zheka.core.ids import (
     OrgId,
     RequestGroupId,
     RequestId,
+    RequestMessageId,
     UserId,
 )
 from zheka.core.models.requests import WARN_MAX, WARN_MIN, WARN_SHARE
@@ -247,17 +249,19 @@ class RequestsRepo(BaseAlchemyRepo):
         text: str,
         *,
         is_internal: bool = False,
-    ) -> None:
-        self._session.add(
-            RequestMessage(
-                request_id=request_id,
-                author_user_id=author_user_id,
-                author_role=author_role,
-                text=text,
-                is_internal=is_internal,
-            ),
+        delivery: NoticeStatus | None = None,
+    ) -> RequestMessageId:
+        message = RequestMessage(
+            request_id=request_id,
+            author_user_id=author_user_id,
+            author_role=author_role,
+            text=text,
+            is_internal=is_internal,
+            delivery=delivery,
         )
+        self._session.add(message)
         await self._session.flush()
+        return message.id
 
     async def list_messages(self, request_id: RequestId) -> Sequence[RequestMessage]:
         stmt = (
@@ -785,6 +789,22 @@ class RequestsRepo(BaseAlchemyRepo):
     async def set_gis_appeal_number(self, request: Request, number: str) -> None:
         request.gis_appeal_number = number
         await self._session.flush()
+
+    async def mark_seen(self, request: Request, at: datetime) -> None:
+        request.author_seen_at = at
+        await self._session.flush()
+
+    async def set_delivery(
+        self,
+        message_id: RequestMessageId,
+        delivery: NoticeStatus,
+    ) -> None:
+        stmt = (
+            update(request_messages_table)
+            .where(request_messages_table.c.id == message_id)
+            .values(delivery=delivery)
+        )
+        await self._session.execute(stmt)
 
 
 def escalation_active(now: datetime, table: FromClause) -> ColumnElement[bool]:

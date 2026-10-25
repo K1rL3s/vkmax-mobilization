@@ -578,7 +578,7 @@ async def test_a_user_without_a_live_private_chat_gets_no_window(
         user.max_chat_id = MaxChatId(42)
         user.bot_stopped_at = datetime.now(UTC)
 
-    await sender.start_dialog(Menu.main, user, notify=False)
+    assert await sender.start_dialog(Menu.main, user, notify=False) is False
 
     assert probe.notify is None
 
@@ -7911,3 +7911,92 @@ async def test_the_neighbour_act_task_sends_the_act_file_to_its_author(
         "📝 Впишите замеры, распечатайте и подпишите с двумя соседями и "
         "председателем совета дома"
     )
+
+
+async def test_a_staff_message_records_how_its_notice_reached_the_author(
+    client: BotClient,
+    task_broker: InMemoryBroker,
+    bot_session: AsyncSession,
+    notices: _RecordingBot,  # noqa: ARG001
+) -> None:
+    request_id = await _questioned(
+        bot_session,
+        client,
+        "Мастер придет завтра",
+        RequestStatus.ACCEPTED,
+    )
+    [message] = await RequestsRepo(bot_session).list_messages(request_id)
+    message_id = message.id
+    author_id = (await _status(bot_session, request_id)).author_user_id
+    assert author_id is not None
+    stopped = User(
+        max_user_id=_max_id(),
+        max_chat_id=MaxChatId(secrets.randbits(40)),
+        name="Остановил бота",
+        bot_stopped_at=datetime.now(UTC),
+    )
+    seeded = User(max_user_id=MaxUserId(-secrets.randbits(40)), name="Модельный")
+    bot_session.add_all([stopped, seeded])
+    await bot_session.flush()
+    stopped_id, seeded_id = stopped.id, seeded.id
+    await bot_session.commit()
+
+    async def delivered_to(author: UserId | None) -> list[NoticeStatus | None]:
+        if author is not None:
+            stmt = (
+                update(requests_table)
+                .where(requests_table.c.id == request_id)
+                .values(author_user_id=author)
+            )
+            await bot_session.execute(stmt)
+            await bot_session.commit()
+        user_id = (await _status(bot_session, request_id)).author_user_id
+        found: list[NoticeStatus | None] = []
+        for task, kwargs in (
+            (send_question_card, {"request_id": request_id}),
+            (
+                send_to_user,
+                {
+                    "user_id": user_id,
+                    "text": "💬 Проба",
+                    "category": NotificationCategory.REQUESTS.value,
+                    "mandatory": True,
+                },
+            ),
+        ):
+            await _run(task_broker, task, message_id=message_id, **kwargs)
+            bot_session.expire_all()
+            [stored] = await RequestsRepo(bot_session).list_messages(request_id)
+            found.append(stored.delivery)
+        return found
+
+    assert await delivered_to(None) == [NoticeStatus.DELIVERED] * 2
+    await NotificationsRepo(bot_session).set_level(
+        author_id,
+        NotificationCategory.REQUESTS,
+        NotificationLevel.OFF,
+    )
+    await bot_session.commit()
+    assert await delivered_to(None) == [NoticeStatus.DELIVERED] * 2
+    assert await delivered_to(stopped_id) == [NoticeStatus.BOT_STOPPED] * 2
+    assert await delivered_to(seeded_id) == [NoticeStatus.FAILED] * 2
+
+
+class _RefusedProbe(_NotifyProbe):
+    async def start(self, *_: Any, **__: Any) -> None:
+        await _forbidden()
+
+
+@pytest.mark.parametrize("refused", [False, True])
+async def test_start_dialog_tells_whether_max_took_the_window(
+    fake_bot: FakeBot,
+    refused: bool,
+) -> None:
+    probe = _RefusedProbe() if refused else _NotifyProbe()
+    sender = MaxSender(fake_bot, cast(BgManagerFactory, probe))
+    user = User(id=UserId(1), max_user_id=_max_id(), name="Житель")
+    user.max_chat_id = MaxChatId(_max_id())
+
+    started = await sender.start_dialog(Menu.main, user, notify=False)
+
+    assert started is not refused

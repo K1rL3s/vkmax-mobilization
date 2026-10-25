@@ -15,6 +15,7 @@ from sqlalchemy import (
 
 from zheka.core.enums import (
     DangerKind,
+    NoticeStatus,
     RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
@@ -93,6 +94,7 @@ requests_table = Table(
     Column("place", pg_enum(RequestPlace, "request_place"), nullable=False),
     Column("gis_appeal_number", String, nullable=True),
     Column("entrance", Integer, nullable=True),
+    Column("author_seen_at", DateTime(timezone=True), nullable=True),
     Index(None, "house_id", "status"),
     Index(None, "group_id"),
     Index(None, "executor_user_id", "status"),
@@ -187,4 +189,5 @@ request_messages_table = Table(
         server_default=false(),
         nullable=False,
     ),
+    Column("delivery", pg_enum(NoticeStatus, "notice_status"), nullable=True),
 )

@@ -29,11 +29,17 @@ from tests.test_requests import (
     _neighbour,
 )
 
+from zheka.api.dependencies.current_account import CurrentAccount
 from zheka.api.dependencies.current_org import CurrentOrg, require_admin_org
 from zheka.api.dependencies.current_user import API_CHECKER
 from zheka.api.routes.admin.orgs import router as admin_orgs_router
 from zheka.api.routes.admin.requests import change_request_status
-from zheka.api.schemas.requests import AdminRequestCard, ChangeRequestStatusRequest
+from zheka.api.routes.requests import get_request
+from zheka.api.schemas.requests import (
+    AdminRequestCard,
+    ChangeRequestStatusRequest,
+    RequestMessageItem,
+)
 from zheka.broker.publisher import TaskPublisher
 from zheka.broker.task_names import TaskName
 from zheka.core import texts
@@ -42,6 +48,7 @@ from zheka.core.enums import (
     CancelReason,
     DangerKind,
     EventType,
+    NoticeStatus,
     OrgRole,
     RequestActorRole,
     RequestCategory,
@@ -60,7 +67,7 @@ from zheka.core.errors import (
     InvalidState,
     NotEnoughRights,
 )
-from zheka.core.ids import RequestId, ResidentId, UserId
+from zheka.core.ids import MaxUserId, RequestId, ResidentId, UserId
 from zheka.core.services.admin_requests import (
     GROUP_ALREADY_THERE,
     RESIDENT_BLOCKED,
@@ -72,6 +79,7 @@ from zheka.infra.database.models import Flat, Request
 from zheka.infra.database.repos.orgs import OrgsRepo
 from zheka.infra.database.repos.requests import RequestFilters, RequestsRepo
 from zheka.infra.database.repos.residents import ResidentsRepo
+from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.database.tables.requests import (
     request_status_log_table,
     requests_table,
@@ -1361,8 +1369,12 @@ async def test_a_question_waits_for_the_author_and_opens_the_question_card(
         staff,
         {"request_id": request.id, "by_role": "staff", "question": True},
     )
+    [view] = card.card.messages
+    assert view.message.delivery is NoticeStatus.PENDING
     await publisher.flush()
-    assert broker.enqueued(TaskName.SEND_QUESTION_CARD) == [{"request_id": request.id}]
+    assert broker.enqueued(TaskName.SEND_QUESTION_CARD) == [
+        {"request_id": request.id, "message_id": view.message.id},
+    ]
     assert broker.enqueued(TaskName.SEND_TO_USER) == []
 
 
@@ -1393,6 +1405,9 @@ async def test_a_plain_reply_keeps_the_question_and_clears_the_answer_mark(
     [notice] = broker.enqueued(TaskName.SEND_TO_USER)
     assert notice["user_id"] == own.user_id
     assert notice["text"].endswith("\n\n📱 Ответить можно в приложении")
+    [view] = card.card.messages
+    assert view.message.delivery is NoticeStatus.PENDING
+    assert notice["message_id"] == view.message.id
 
 
 async def test_a_question_rereads_a_request_closed_meanwhile_and_writes_nothing(
@@ -1438,9 +1453,9 @@ async def test_a_question_on_a_request_without_an_author_stays_a_note(
     )
 
     assert card.card.request.question_asked_at is None
-    assert [view.message.text for view in card.card.messages] == [
-        "Перезвонить в 18:00",
-    ]
+    assert [
+        (view.message.text, view.message.delivery) for view in card.card.messages
+    ] == [("Перезвонить в 18:00", None)]
     await publisher.flush()
     assert broker.enqueued(TaskName.SEND_QUESTION_CARD) == []
 
@@ -1525,3 +1540,64 @@ async def test_group_danger_counts_only_open_members(
     assert [row.danger for row in rows] == [DangerKind.FIRE]
     assert total == 1
     assert [row.request.id for row in danger_rows] == [members[0].id]
+
+
+async def test_a_reply_reads_as_read_once_the_author_opens_the_request_in_the_app(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    publisher: TaskPublisher,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request = await _complain(session, own.user_id, own.house_id)
+    card = await admin_requests_service(session, publisher).reply(
+        own.org_id,
+        request.id,
+        "Мастер придет завтра",
+        staff,
+    )
+    [view] = card.card.messages
+    residents = requests_service(session, publisher)
+
+    await residents.get_card(own.user_id, request.id)
+    assert not RequestMessageItem.of(view, request.author_seen_at).read
+
+    opened = await get_request(
+        request.id,
+        CurrentAccount(user_id=own.user_id, consent_at=datetime.now(UTC)),
+        residents,
+        FilesService(make_config().files, "test-token"),
+    )
+    assert [message.read for message in opened.messages] == [True]
+    earlier = view.message.created_at - timedelta(seconds=1)
+    assert not RequestMessageItem.of(view, earlier).read
+
+
+@pytest.mark.parametrize("question", [False, True])
+async def test_a_reply_to_a_resident_without_max_tracks_no_delivery(
+    session: AsyncSession,
+    own: OrgHouseFlatUser,
+    broker: RecordingBroker,
+    publisher: TaskPublisher,
+    question: bool,
+) -> None:
+    staff = await _member(session, own.org_id, OrgRole.EMPLOYEE)
+    request = await _complain(session, own.user_id, own.house_id)
+    author = await UsersRepo(session).get_by_id(own.user_id)
+    assert author is not None
+    author.max_user_id = MaxUserId(-author.max_user_id)
+    await session.flush()
+
+    card = await admin_requests_service(session, publisher).reply(
+        own.org_id,
+        request.id,
+        "Мастер придет завтра",
+        staff,
+        question=question,
+    )
+
+    [view] = card.card.messages
+    assert view.message.delivery is None
+    await publisher.flush()
+    task = TaskName.SEND_QUESTION_CARD if question else TaskName.SEND_TO_USER
+    [notice] = broker.enqueued(task)
+    assert "message_id" not in notice

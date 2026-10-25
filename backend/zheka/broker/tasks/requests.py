@@ -20,12 +20,13 @@ from zheka.broker.task_names import TaskName
 from zheka.broker.tasks.bot_requests import save_photos
 from zheka.core import texts
 from zheka.core.enums import (
+    NoticeStatus,
     NotificationCategory,
     RequestCompletionReason,
     RequestStatus,
 )
 from zheka.core.errors import ZhekaError
-from zheka.core.ids import AccessRequestId, RequestId, UserId
+from zheka.core.ids import AccessRequestId, RequestId, RequestMessageId, UserId
 from zheka.core.services.admin_requests import AdminRequestsService
 from zheka.core.services.files import FilesService
 from zheka.core.services.notifications import NotificationsService
@@ -153,13 +154,15 @@ async def open_card(
     stack_id: str,
     data: Data,
     show_mode: ShowMode | None,
-) -> None:
+) -> NoticeStatus:
     user = await users_repo.get_by_id(user_id)
     if user is None:
-        return
+        return NoticeStatus.FAILED
+    if user.bot_stopped_at is not None:
+        return NoticeStatus.BOT_STOPPED
     levels = await notifications_service.levels(user_id)
     notify = bool(levels[NotificationCategory.REQUESTS].resolve_notify(mandatory=True))
-    await sender.start_dialog(
+    started = await sender.start_dialog(
         state,
         user,
         notify=notify,
@@ -167,6 +170,7 @@ async def open_card(
         stack_id=stack_id,
         show_mode=show_mode,
     )
+    return NoticeStatus.DELIVERED if started else NoticeStatus.FAILED
 
 
 @async_shared_broker.task(
@@ -188,11 +192,12 @@ async def send_question_card(
     users_repo: FromDishka[UsersRepo],
     notifications_service: FromDishka[NotificationsService],
     sender: FromDishka[MaxSender],
+    message_id: RequestMessageId | None = None,
 ) -> None:
     request = await requests_repo.get(request_id)
     if request is None or request.author_user_id is None:
         return
-    await open_card(
+    delivery = await open_card(
         users_repo,
         notifications_service,
         sender,
@@ -202,6 +207,8 @@ async def send_question_card(
         QuestionData(request_id=request_id).to_data(),
         ShowMode.SEND,
     )
+    if message_id is not None:
+        await requests_repo.set_delivery(message_id, delivery)
 
 
 @async_shared_broker.task(task_name=TaskName.SEND_VISIT_CARD.value)

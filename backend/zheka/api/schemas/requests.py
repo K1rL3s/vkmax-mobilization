@@ -15,6 +15,7 @@ from zheka.core.enums import (
     CancelReason,
     CategoryRule,
     DangerKind,
+    NoticeStatus,
     RequestCategory,
     RequestChannel,
     RequestCompletionReason,
@@ -202,15 +203,31 @@ class RequestMessageItem(BaseSchema):
         default=False,
         description="Заметка только для УК, например причина отказа исполнителя",
     )
+    delivery: NoticeStatus | None = Field(
+        default=None,
+        description=(
+            "Доставка уведомления о сообщении УК автору в MAX; пусто - "
+            "уведомление не отправлялось"
+        ),
+    )
+    read: bool = Field(
+        default=False,
+        description="Автор открыл заявку в приложении после этого сообщения УК",
+    )
 
     @classmethod
-    def of(cls, view: RequestMessageView) -> Self:
+    def of(cls, view: RequestMessageView, seen_at: datetime | None) -> Self:
+        message = view.message
         return cls(
-            created_at=view.message.created_at,
-            author_role=view.message.author_role,
+            created_at=message.created_at,
+            author_role=message.author_role,
             author_name=UNKNOWN_AUTHOR if view.author is None else view.author.name,
-            text=view.message.text,
-            is_internal=view.message.is_internal,
+            text=message.text,
+            is_internal=message.is_internal,
+            delivery=message.delivery,
+            read=message.delivery is not None
+            and seen_at is not None
+            and seen_at >= message.created_at,
         )
 
 
@@ -325,7 +342,10 @@ class RequestCard(RequestListItem):
             react_deadline_at=request.react_deadline_at,
             photos=attachments,
             result_photos=result_attachments,
-            messages=[RequestMessageItem.of(view) for view in card.messages],
+            messages=[
+                RequestMessageItem.of(view, request.author_seen_at)
+                for view in card.messages
+            ],
             timeline=[
                 RequestStatusLogItem.model_validate(log) for log in card.timeline
             ],

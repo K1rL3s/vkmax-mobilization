@@ -8,6 +8,7 @@ from zheka.core.enums import (
     ChatCardKind,
     DangerKind,
     EventType,
+    NoticeStatus,
     NotificationCategory,
     OrgRole,
     RequestActorRole,
@@ -217,12 +218,20 @@ class AdminRequestsService:
         if asks and request.status is RequestStatus.DONE:
             raise InvalidState(QUESTION_CLOSED)
 
-        await self._requests.add_message(
+        author = (
+            None
+            if request.author_user_id is None
+            else await self._users.get_by_id(request.author_user_id)
+        )
+        tracked = author is not None and author.max_user_id >= 0
+        message_id = await self._requests.add_message(
             request.id,
             actor,
             RequestActorRole.STAFF.value,
             reply,
+            delivery=NoticeStatus.PENDING if tracked else None,
         )
+        notice = message_id if tracked else None
         await self._requests.stamp_thread(
             request,
             question_asked_at=(
@@ -238,11 +247,12 @@ class AdminRequestsService:
             question=asks,
         )
         if asks:
-            self._notifications.open_question_card(request.id)
+            self._notifications.open_question_card(request.id, notice)
         else:
             self._notifications.notify_author(
                 request,
                 texts.request_reply(request.id, request.category, reply),
+                message_id=notice,
             )
         return await self._card(request)
 

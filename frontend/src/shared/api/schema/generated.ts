@@ -649,7 +649,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Карточка заявки */
+    /**
+     * Карточка заявки
+     * @description Открытие карточки отмечает для УК прочтение ее сообщений
+     */
     get: operations["get_request"];
     put?: never;
     post?: never;
@@ -6128,6 +6131,14 @@ export interface components {
        * @default false
        */
       is_internal: boolean;
+      /** @description Доставка уведомления о сообщении УК автору в MAX; пусто - уведомление не отправлялось */
+      delivery?: components["schemas"]["NoticeStatus"] | null;
+      /**
+       * Read
+       * @description Автор открыл заявку в приложении после этого сообщения УК
+       * @default false
+       */
+      read: boolean;
     };
     /**
      * RequestPlace

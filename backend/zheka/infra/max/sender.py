@@ -126,13 +126,13 @@ class MaxSender:
         data: Data = None,
         stack_id: str | None = None,
         show_mode: ShowMode | None = None,
-    ) -> None:
+    ) -> bool:
         if user.max_chat_id is None or user.bot_stopped_at is not None:
             logger.info(
                 "У пользователя %s нет живого личного чата с ботом, окно не открыто",
                 user.id,
             )
-            return
+            return False
 
         manager = self._dialogs.bg(
             bot=self._bot,
@@ -142,6 +142,7 @@ class MaxSender:
             chat_type=ChatType.DIALOG,
         )
         token = dialog_notify.set(notify)
+        started = False
         try:
             with _undelivered():
                 async with (
@@ -155,8 +156,10 @@ class MaxSender:
                         mode=StartMode.RESET_STACK,
                         show_mode=show_mode,
                     )
+                    started = True
         finally:
             dialog_notify.reset(token)
+        return started
 
     async def edit_message(
         self,

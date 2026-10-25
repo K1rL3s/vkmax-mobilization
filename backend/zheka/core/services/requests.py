@@ -525,9 +525,17 @@ class RequestsService:
             accepted=completion_reason is RequestCompletionReason.RESIDENT_ACCEPTED,
         )
 
-    async def get_card(self, user_id: UserId, request_id: RequestId) -> RequestCardData:
+    async def get_card(
+        self,
+        user_id: UserId,
+        request_id: RequestId,
+        *,
+        opened: bool = False,
+    ) -> RequestCardData:
         request = await self._own_request(user_id, request_id)
         house = await self._get_house(request.house_id)
+        if opened:
+            await self._requests.mark_seen(request, datetime.now(UTC))
         return await self._built_card(request, house)
 
     async def list_mine(

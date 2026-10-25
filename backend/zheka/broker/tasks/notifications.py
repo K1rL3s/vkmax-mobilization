@@ -15,7 +15,14 @@ from zheka.broker.tasks.chats import recheck_chat_rights
 from zheka.core import texts
 from zheka.core.deeplinks import neighbour_invite_payload
 from zheka.core.enums import ChatCardKind, NoticeStatus, NotificationCategory
-from zheka.core.ids import AnnouncementId, HouseId, MaxChatId, OrgId, UserId
+from zheka.core.ids import (
+    AnnouncementId,
+    HouseId,
+    MaxChatId,
+    OrgId,
+    RequestMessageId,
+    UserId,
+)
 from zheka.core.services.announcements import AnnouncementsService
 from zheka.core.services.chats import ChatsService
 from zheka.core.services.neighbour_invite import NeighbourInviteService
@@ -23,6 +30,7 @@ from zheka.infra.database.repos.announcements import AnnouncementsRepo
 from zheka.infra.database.repos.chats import ChatsRepo
 from zheka.infra.database.repos.notifications import NotificationsRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.repos.requests import RequestsRepo
 from zheka.infra.database.repos.users import UsersRepo
 from zheka.infra.max import MaxSender
 from zheka.infra.pdf import NeighbourLeaflet, NoticeRegisterPdf
@@ -81,8 +89,10 @@ async def send_to_user(
     sender: FromDishka[MaxSender],
     repo: FromDishka[NotificationsRepo],
     bot: FromDishka[Bot],
+    requests_repo: FromDishka[RequestsRepo],
     app_button: str | None = None,
     app_path: str | None = None,
+    message_id: RequestMessageId | None = None,
 ) -> int:
     keyboard = None if app_button is None else open_app(bot, app_button, app_path)
     results = await _fan_out(
@@ -94,6 +104,8 @@ async def send_to_user(
         mandatory,
         keyboard,
     )
+    if message_id is not None:
+        await requests_repo.set_delivery(message_id, results[user_id][0])
     return _delivered(results)
 
 

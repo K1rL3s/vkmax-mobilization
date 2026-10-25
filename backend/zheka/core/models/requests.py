@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from zheka.base import UNSET, ZhekaMutableType
 from zheka.core.enums import (
     DangerKind,
+    NoticeStatus,
     RequestAttachmentKind,
     RequestCategory,
     RequestChannel,
@@ -60,6 +61,7 @@ class Request(ZhekaMutableType):
     place: RequestPlace = RequestPlace.FLAT
     gis_appeal_number: str | None = None
     entrance: int | None = None
+    author_seen_at: datetime | None = None
 
     @property
     def warn_at(self) -> datetime:
@@ -107,3 +109,4 @@ class RequestMessage(ZhekaMutableType):
     author_role: str
     text: str
     is_internal: bool = False
+    delivery: NoticeStatus | None = None

@@ -37,6 +37,8 @@ type MockRequest = {
     author_role?: string;
     author_name?: string;
     is_internal?: boolean;
+    delivery?: Schemas["NoticeStatus"];
+    read?: boolean;
   }[];
   place?: Schemas["RequestPlace"];
   entrance?: number | null;
@@ -92,6 +94,8 @@ const requests: MockRequest[] = [
       {
         after_minutes: 26,
         text: "Авария на водоводе, работы ведёт Водоканал. Передали вашу заявку, следим за сроками.",
+        delivery: "delivered",
+        read: true,
       },
       {
         after_minutes: 26 * 60,
@@ -102,6 +106,7 @@ const requests: MockRequest[] = [
       {
         after_minutes: 27 * 60,
         text: "Уточните, пожалуйста: воды нет только на кухне или во всей квартире?",
+        delivery: "delivered",
       },
     ],
     question_asked_at: minutes(-21 * 60),
@@ -121,6 +126,7 @@ const requests: MockRequest[] = [
       {
         after_minutes: 18,
         text: "Заявку приняли, передаём сантехнику. Напишем, когда назначим время.",
+        delivery: "bot_stopped",
       },
       {
         after_minutes: 62,
@@ -456,6 +462,8 @@ export const requestMessages = (
     author_name: message.author_name ?? "Диспетчер УК",
     text: message.text,
     is_internal: message.is_internal ?? false,
+    delivery: message.delivery ?? null,
+    read: message.read ?? false,
   }));
 
 export const requestCard = (item: MockRequest): Schemas["RequestCard"] => {

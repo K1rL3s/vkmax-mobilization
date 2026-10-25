@@ -51,6 +51,8 @@ export const useRequestReplyForm = (requestId: number) => {
                       author_name: session?.name ?? "Вы",
                       text: body.text,
                       is_internal: false,
+                      delivery: card.author_name == null ? null : "pending",
+                      read: false,
                     },
                   ],
                 },

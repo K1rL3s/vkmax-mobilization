@@ -164,14 +164,22 @@ async def create_request(
     return response
 
 
-@router.get("/requests/{request_id}", summary="Карточка заявки")
+@router.get(
+    "/requests/{request_id}",
+    summary="Карточка заявки",
+    description="Открытие карточки отмечает для УК прочтение ее сообщений",
+)
 async def get_request(
     request_id: RequestId,
     current_account: RequireConsentDep,
     requests_service: FromDishka[RequestsService],
     files_service: FromDishka[FilesService],
 ) -> RequestCard:
-    card = await requests_service.get_card(current_account.user_id, request_id)
+    card = await requests_service.get_card(
+        current_account.user_id,
+        request_id,
+        opened=True,
+    )
     return _card(card, files_service)
 
 

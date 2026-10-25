@@ -27,7 +27,7 @@ export const RequestConversation = ({ request }: { request: AdminRequest }) => {
           <h2>Переписка с жителем</h2>
         </Typography.Text>
 
-        <MessageThread messages={request.messages} />
+        <MessageThread messages={request.messages} showDelivery />
 
         <Flex asChild align="stretch" direction="column" gap={8}>
           <form className={styles.Reply} onSubmit={model.submit} noValidate>

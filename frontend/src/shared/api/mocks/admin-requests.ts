@@ -278,6 +278,7 @@ const changeStatus = (
       author_name: user.name,
       text: comment.trim(),
       is_internal: false,
+      read: false,
     });
 };
 
@@ -360,6 +361,8 @@ export const adminRequestsConfigs = [
       author_name: user.name,
       text,
       is_internal: false,
+      delivery: item.author_name == null ? null : "delivered",
+      read: false,
     });
     if (request.body.question === true && item.author_name != null)
       item.question_asked_at = new Date().toISOString();
@@ -383,6 +386,7 @@ export const adminRequestsConfigs = [
       author_name: user.name,
       text: "Предлагаем время визита. Выберите удобное окно на карточке заявки",
       is_internal: false,
+      read: false,
     });
     return ok(item);
   }),

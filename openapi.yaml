@@ -3493,6 +3493,7 @@ paths:
       tags:
       - Заявки
       summary: Карточка заявки
+      description: Открытие карточки отмечает для УК прочтение ее сообщений
       operationId: get_request
       security:
       - ApiTestToken: []
@@ -19060,6 +19061,16 @@ components:
           type: boolean
           title: Is Internal
           description: Заметка только для УК, например причина отказа исполнителя
+          default: false
+        delivery:
+          anyOf:
+          - $ref: '#/components/schemas/NoticeStatus'
+          - type: 'null'
+          description: Доставка уведомления о сообщении УК автору в MAX; пусто - уведомление не отправлялось
+        read:
+          type: boolean
+          title: Read
+          description: Автор открыл заявку в приложении после этого сообщения УК
           default: false
       type: object
       required:

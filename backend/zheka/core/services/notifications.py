@@ -18,6 +18,7 @@ from zheka.core.ids import (
     MaxChatId,
     OrgId,
     RequestId,
+    RequestMessageId,
     UserId,
 )
 from zheka.core.models import Request
@@ -98,6 +99,7 @@ class NotificationsService:
         mandatory: bool,
         app_button: str | None = None,
         app_path: str | None = None,
+        message_id: RequestMessageId | None = None,
     ) -> None:
         self._publisher.publish(
             TaskName.SEND_TO_USER,
@@ -107,6 +109,7 @@ class NotificationsService:
             mandatory=mandatory,
             app_button=app_button,
             app_path=app_path,
+            **({} if message_id is None else {"message_id": message_id}),
         )
 
     def notify_users(
@@ -237,7 +240,13 @@ class NotificationsService:
             post=post,
         )
 
-    def notify_author(self, request: Request, text: str) -> None:
+    def notify_author(
+        self,
+        request: Request,
+        text: str,
+        *,
+        message_id: RequestMessageId | None = None,
+    ) -> None:
         if request.author_user_id is not None:
             self.notify_user(
                 request.author_user_id,
@@ -246,10 +255,19 @@ class NotificationsService:
                 mandatory=True,
                 app_button=texts.OPEN_REQUEST,
                 app_path=request_app_path(request.id),
+                message_id=message_id,
             )
 
-    def open_question_card(self, request_id: RequestId) -> None:
-        self._publisher.publish(TaskName.SEND_QUESTION_CARD, request_id=request_id)
+    def open_question_card(
+        self,
+        request_id: RequestId,
+        message_id: RequestMessageId | None = None,
+    ) -> None:
+        self._publisher.publish(
+            TaskName.SEND_QUESTION_CARD,
+            request_id=request_id,
+            **({} if message_id is None else {"message_id": message_id}),
+        )
 
     def send_gji_pdf(self, user_id: UserId, request_id: RequestId) -> None:
         self._publisher.publish(

@@ -78,3 +78,24 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.Delivery {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sent {
+  flex-shrink: 0;
+  color: var(--icon-tertiary);
+}
+
+.read {
+  flex-shrink: 0;
+  color: var(--icon-positive);
+}
+
+.failed {
+  flex-shrink: 0;
+  color: var(--icon-negative);
+}

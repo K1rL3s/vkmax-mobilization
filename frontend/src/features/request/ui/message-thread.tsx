@@ -3,13 +3,18 @@ import { Flex, Typography } from "@maxhub/max-ui";
 import { cn } from "@/shared/lib/css";
 import { formatTime } from "@/shared/lib/format";
 import {
+  alertIcon,
   buildingIcon,
+  checkIcon,
+  clockIcon,
   Icon,
+  infoIcon,
   lockIcon,
   userIcon,
   wrenchIcon,
 } from "@/shared/ui/icon";
 
+import { deliveryMark } from "../domain/delivery";
 import { groupMessagesByDay } from "../domain/messages";
 import type { RequestMessage } from "../domain/types";
 
@@ -20,12 +25,35 @@ const AUTHOR_ROLE: Record<string, { icon: string; tone: string }> = {
   staff: { icon: buildingIcon, tone: styles.staff },
 };
 
+const DELIVERY: Record<
+  NonNullable<ReturnType<typeof deliveryMark>>,
+  { icon: string; tone: string; text: string }
+> = {
+  read: { icon: checkIcon, tone: styles.read, text: "Прочитано" },
+  pending: { icon: clockIcon, tone: styles.sent, text: "Отправляем в MAX" },
+  unknown: { icon: infoIcon, tone: styles.sent, text: "Нет данных о доставке" },
+  delivered: { icon: checkIcon, tone: styles.sent, text: "Отправлено в MAX" },
+  failed: { icon: alertIcon, tone: styles.failed, text: "Не доставлено в MAX" },
+  muted: {
+    icon: alertIcon,
+    tone: styles.failed,
+    text: "Не доставлено: житель отключил уведомления",
+  },
+  bot_stopped: {
+    icon: alertIcon,
+    tone: styles.failed,
+    text: "Не доставлено: житель остановил бота",
+  },
+};
+
 export const MessageThread = ({
   messages,
   ownRole,
+  showDelivery = false,
 }: {
   messages: RequestMessage[];
   ownRole?: string;
+  showDelivery?: boolean;
 }) => {
   if (messages.length === 0) return null;
 
@@ -47,6 +75,8 @@ export const MessageThread = ({
               icon: userIcon,
               tone: styles.resident,
             };
+            const mark = showDelivery ? deliveryMark(message) : null;
+            const delivery = mark && DELIVERY[mark];
 
             return (
               <div
@@ -90,6 +120,20 @@ export const MessageThread = ({
                 >
                   {message.text}
                 </Typography.Text>
+                {delivery && (
+                  <Typography.Text
+                    className={styles.Delivery}
+                    variant="description"
+                    color="secondary"
+                  >
+                    <Icon
+                      className={delivery.tone}
+                      src={delivery.icon}
+                      size={14}
+                    />
+                    {delivery.text}
+                  </Typography.Text>
+                )}
               </div>
             );
           })}
