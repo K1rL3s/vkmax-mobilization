@@ -18,6 +18,6 @@
 8. [Сводный список требований и критериев](08-requirements-checklist.md) (наш, со статусом проекта)
 9. [Общий FAQ](09-faq.md) (не из PDF)
 
-Вебинары: расшифровки [вводного](web-01-transcription.md), [«Dive, Create, Impact»](web-02-transcription.md), [«Как создавать продукты, которые решают реальные задачи»](web-03-transcription.md), [«Питчинг»](web-04-transcription.md), [выжимка по трем](web-summary.md).
+Вебинары: расшифровки [вводного](web-01-transcription.md), [«Dive, Create, Impact»](web-02-transcription.md), [«Как создавать продукты, которые решают реальные задачи»](web-03-transcription.md), [«Питчинг»](web-04-transcription.md), [выжимка по четырем](web-summary.md).
 
 Разделы 1-7 и аннотация - расшифровка `Умный-город.pdf` из этой папки.
