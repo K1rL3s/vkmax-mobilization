@@ -173,7 +173,7 @@ include = 'zheka/.*\.py$|migrations/.*\.py$|tests/.*\.py$'
 
 [tool.codespell]
 ignore-words-list = "dependant,selectin,ba,asend"
-skip = "*.pdf"
+skip = "*.pdf,*.csv"
 
 [tool.bandit]
 skips = ["B311"]
