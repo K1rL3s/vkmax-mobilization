@@ -136,7 +136,7 @@ FILES = Path(tempfile.gettempdir()) / "zheka-test-seed-files"
 MAP_HOURS = (0, 6, 12, 24, 48, 71)
 URGENT_ACTIVE = timedelta(days=3)
 KM_PER_DEGREE = 111.2
-TERRITORY_KM = 1.5
+TERRITORY_KM = 2
 
 
 def _demo(session: AsyncSession) -> DemoService:
