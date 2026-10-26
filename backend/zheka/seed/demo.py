@@ -162,6 +162,9 @@ class OrgProfile(ZhekaType):
     ratings: tuple[int, ...]
     overdue: int
     requests_per_week: int = REQUESTS_PER_WEEK
+    team: tuple[str, ...] = ()
+    email: str | None = None
+    site: str | None = None
 
 
 PROFILES = (
@@ -635,8 +638,8 @@ class Seeder:
             is_demo=True,
             timezone=office.timezone,
             emergency_phone=f"+7 (000) 000-01-{number:02d}",
-            email=f"priem-{number}@demo-uk.example.com",
-            site=f"https://demo-uk-{number}.example.com",
+            email=profile.email or f"priem-{number}@demo-uk.example.com",
+            site=profile.site or f"https://demo-uk-{number}.example.com",
         )
         self._session.add(org)
         await self._session.flush()
@@ -664,10 +667,12 @@ class Seeder:
     async def _staff(self, org: Organization, profile: OrgProfile) -> Staff:
         admin = await self._user()
         roles = [(admin, OrgRole.CREATOR)]
-        if profile.inn == DEMO_INN:
+        if profile.inn == DEMO_INN or profile.team:
             roles.append((await self._user(), OrgRole.EMPLOYEE))
         executors = [await self._user(), await self._user()]
         roles.extend((executor, OrgRole.EXECUTOR) for executor in executors)
+        for (user, _role), name in zip(roles, profile.team, strict=False):
+            user.name = name
         self._session.add_all(
             OrgMember(org_id=org.id, user_id=user.id, role=role) for user, role in roles
         )
@@ -2056,7 +2061,7 @@ async def _house_documents(session: AsyncSession) -> None:
 
 
 EXPO_PROFILE = OrgProfile(
-    name="Демо-УК «Выставочный квартал»",
+    name="УК «Мобилизация»",
     inn=DEMO_INNS[5],
     city="Большие Кабаны",
     houses=12,
@@ -2067,28 +2072,82 @@ EXPO_PROFILE = OrgProfile(
     auto_close_percent=8,
     ratings=(5, 5, 4, 5, 4),
     overdue=1,
+    team=("Кирилл Л.", "Даниил Н.", "Артаган М.", "Даниил К."),
+    email="mobilizaciya@k1rles.ru",
+    site="https://vkmax.k1rles.ru",
 )
 EXPO_NUMBER = 99
 EXPO_REGION = "Республика Татарстан"
 EXPO_HOUSES = (
-    ("улица Павильонная", "1", "55.620700", "49.290500", 17, 4, 240, 2019),
-    ("улица Павильонная", "3", "55.620700", "49.293000", 9, 3, 108, 2018),
-    ("улица Павильонная", "5", "55.620700", "49.295500", 9, 4, 144, 2018),
-    ("улица Павильонная", "7", "55.621900", "49.288000", 12, 2, 96, 2020),
-    ("улица Павильонная", "9", "55.621900", "49.290500", 16, 3, 189, 2020),
-    ("улица Павильонная", "11", "55.621900", "49.293000", 5, 4, 80, 2017),
-    ("улица Ярмарочная", "2", "55.621900", "49.295500", 10, 3, 120, 2021),
-    ("улица Ярмарочная", "4", "55.623100", "49.288000", 14, 2, 112, 2021),
-    ("улица Ярмарочная", "6", "55.623100", "49.290500", 9, 6, 216, 2022),
-    ("улица Ярмарочная", "8", "55.623100", "49.293000", 12, 3, 144, 2022),
-    ("улица Ярмарочная", "10", "55.623100", "49.295500", 17, 1, 68, 2023),
-    ("улица Ярмарочная", "12", "55.620700", "49.288000", 5, 6, 90, 2017),
+    (
+        "Большие Кабаны",
+        "Выставочная улица",
+        "1",
+        "55.614279",
+        "49.295538",
+        17,
+        4,
+        240,
+        2019,
+    ),
+    (
+        "Большие Кабаны",
+        "Выставочная улица",
+        "3",
+        "55.609515",
+        "49.303127",
+        9,
+        3,
+        108,
+        2018,
+    ),
+    (
+        "Казань",
+        "проспект Ибрагимова",
+        "56А",
+        "55.820601",
+        "49.095491",
+        9,
+        4,
+        144,
+        2018,
+    ),
+    ("Казань", "улица Декабристов", "81А", "55.817986", "49.092357", 12, 2, 96, 2020),
+    ("Казань", "проспект Ибрагимова", "58", "55.820122", "49.095743", 16, 3, 189, 2020),
+    (
+        "Большие Кабаны",
+        "Выставочная улица",
+        "1А",
+        "55.614944",
+        "49.291868",
+        5,
+        4,
+        80,
+        2017,
+    ),
+    (
+        "Казань",
+        "улица Декабристов",
+        "79",
+        "55.817460",
+        "49.093503",
+        10,
+        3,
+        120,
+        2021,
+    ),
+    ("Казань", "улица Декабристов", "85Б", "55.819272", "49.091627", 14, 2, 112, 2021),
+    ("Казань", "улица Декабристов", "81Б", "55.818356", "49.092138", 9, 6, 216, 2022),
+    ("Казань", "улица Декабристов", "81", "55.818495", "49.092456", 12, 3, 144, 2022),
+    ("Казань", "улица Декабристов", "85В", "55.819794", "49.090609", 17, 1, 68, 2023),
+    ("Казань", "улица Декабристов", "81В", "55.818846", "49.093586", 5, 6, 90, 2017),
 )
 EXPO_FLAT_AREA = 5_200
 EXPO_OVERHAUL_RATE = 101_600
 
 
 def _expo_house(
+    city: str,
     street: str,
     building: str,
     lat: str,
@@ -2101,7 +2160,7 @@ def _expo_house(
     return DirectoryHouse(
         house=House(
             region=EXPO_REGION,
-            city=EXPO_PROFILE.city,
+            city=city,
             street=street,
             building=building,
             built_year=built_year,

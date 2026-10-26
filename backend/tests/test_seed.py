@@ -75,7 +75,7 @@ from zheka.core.services.houses import PUBLIC_STATS_MIN_CLOSED, PUBLIC_STATS_PER
 from zheka.core.services.meter_access import MeterAccess
 from zheka.core.services.readings import ReadingsService, current_period
 from zheka.core.services.requests import DEMO_NEIGHBOURS, RequestDraft
-from zheka.infra.database.models import Charge, User
+from zheka.infra.database.models import Charge, House, User
 from zheka.infra.database.repos.analytics import AnalyticsRepo
 from zheka.infra.database.repos.charges import ChargesRepo
 from zheka.infra.database.repos.events import EventsRepo
@@ -598,7 +598,7 @@ async def test_every_demo_organization_shows_its_own_stats(db: AsyncSession) -> 
 async def test_every_enterable_demo_org_has_twelve_houses_in_one_city(
     db: AsyncSession,
 ) -> None:
-    for profile in (*PROFILES, EXPO_PROFILE):
+    for profile in PROFILES:
         org = await OrgsRepo(db).get_by_inn(profile.inn)
         assert org is not None
         houses = await HousesRepo(db).list_for_org(org.id)
@@ -703,20 +703,17 @@ async def test_every_demo_organization_is_a_compact_territory(
     stmt = (
         select(houses_table.c.org_id, houses_table.c.lat, houses_table.c.lon)
         .join(organizations_table, organizations_table.c.id == houses_table.c.org_id)
-        .where(organizations_table.c.is_demo)
+        .where(
+            organizations_table.c.is_demo,
+            organizations_table.c.inn != EXPO_PROFILE.inn,
+        )
     )
     points: dict[OrgId, list[tuple[float, float]]] = {}
     for org_id, lat, lon in (await db.execute(stmt)).tuples():
         points.setdefault(org_id, []).append((float(lat), float(lon)))
 
-    assert (
-        len(points)
-        == len(PROFILES)
-        + len(BACKGROUND_PROFILES)
-        + len(
-            ADDED_PROFILES,
-        )
-        + 1
+    assert len(points) == len(PROFILES) + len(BACKGROUND_PROFILES) + len(
+        ADDED_PROFILES,
     )
     for territory in points.values():
         lats = [lat for lat, _lon in territory]
@@ -943,7 +940,16 @@ async def test_the_passport_migration_fills_every_directory_house_as_the_seed(
             houses_table.c.cadastral_no,
             houses_table.c.passport,
         )
-        .where(houses_table.c.city != EXPO_PROFILE.city)
+        .where(
+            houses_table.c.id.not_in(
+                select(houses_table.c.id)
+                .join(
+                    organizations_table,
+                    organizations_table.c.id == houses_table.c.org_id,
+                )
+                .where(organizations_table.c.inn == EXPO_PROFILE.inn),
+            ),
+        )
         .order_by(houses_table.c.id)
     )
     savepoint = await seeded.begin_nested()
@@ -1214,7 +1220,7 @@ async def test_extending_gives_demo_houses_their_documents_once(
     assert await _counts(db) == before
 
 
-async def test_the_expo_demo_org_is_a_fictional_quarter_by_the_venue(
+async def test_the_expo_demo_org_sits_by_the_venue_and_the_hotel(
     db: AsyncSession,
 ) -> None:
     with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
@@ -1228,18 +1234,34 @@ async def test_the_expo_demo_org_is_a_fictional_quarter_by_the_venue(
 
     assert org.inn == EXPO_PROFILE.inn
     houses = await HousesRepo(db).list_for_org(org.id)
+    assert len(houses) == EXPO_PROFILE.houses
     assert residency.house.id == houses[0].id
     assert not {(house.city, house.street, house.building) for house in houses} & (
         registry
     )
-    scale = cos(radians(EXPO_VENUE[0]))
+    assert _km(houses[0], EXPO_VENUE) < EXPO_HOUSE_KM
+    assert any(_km(house, EXPO_HOTEL) < EXPO_HOUSE_KM for house in houses)
     for house in houses:
-        assert house.lat is not None
-        assert house.lon is not None
-        north = (float(house.lat) - EXPO_VENUE[0]) * KM_PER_DEGREE
-        east = (float(house.lon) - EXPO_VENUE[1]) * KM_PER_DEGREE * scale
-        assert (north**2 + east**2) ** 0.5 < EXPO_RADIUS_KM, house.address
+        assert min(_km(house, EXPO_VENUE), _km(house, EXPO_HOTEL)) < EXPO_RADIUS_KM, (
+            house.address
+        )
+    stmt = (
+        select(users_table.c.name)
+        .join(org_members_table, org_members_table.c.user_id == users_table.c.id)
+        .where(org_members_table.c.org_id == org.id)
+    )
+    assert set(EXPO_PROFILE.team) <= set((await db.execute(stmt)).scalars())
 
 
-EXPO_VENUE = (55.61472, 49.293394)
+EXPO_VENUE = (55.614279, 49.295538)
+EXPO_HOTEL = (55.819098, 49.091550)
+EXPO_HOUSE_KM = 0.1
 EXPO_RADIUS_KM = 1.2
+
+
+def _km(house: House, point: tuple[float, float]) -> float:
+    assert house.lat is not None
+    assert house.lon is not None
+    north = (float(house.lat) - point[0]) * KM_PER_DEGREE
+    east = (float(house.lon) - point[1]) * KM_PER_DEGREE * cos(radians(point[0]))
+    return float((north**2 + east**2) ** 0.5)
