@@ -1271,7 +1271,7 @@ async def test_the_expo_demo_org_sits_by_the_venue_and_the_hotels(
     assert set(EXPO_PROFILE.team) <= set((await db.execute(stmt)).scalars())
 
 
-EXPO_VENUE = (55.780524, 49.133442)
+EXPO_VENUE = (55.780739, 49.127575)
 EXPO_HOTELS = (
     (55.819098, 49.091550),
     (55.795894, 49.126703),
