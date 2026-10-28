@@ -3,6 +3,7 @@ import logging
 import secrets
 import shutil
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from math import ceil
@@ -83,12 +84,16 @@ from zheka.core.services.demo import (
 from zheka.core.services.readings import current_period
 from zheka.infra.database.repos.houses import HousesRepo
 from zheka.infra.database.repos.orgs import OrgsRepo
+from zheka.infra.database.tables.announcements import announcements_table
 from zheka.infra.database.tables.houses import (
     flats_table,
     house_documents_table,
     houses_table,
 )
-from zheka.infra.database.tables.organizations import organizations_table
+from zheka.infra.database.tables.organizations import (
+    org_members_table,
+    organizations_table,
+)
 from zheka.infra.database.tables.requests import requests_table
 from zheka.infra.database.tables.residents import (
     demand_signals_table,
@@ -551,7 +556,9 @@ async def seed(
         return False
     _copy_files(files_dir)
     directory = await load_directory(session)
-    await Seeder(session, demo, now).run(directory)
+    seeder = Seeder(session, demo, now)
+    await seeder.run(directory)
+    await seeder.busier()
     await _house_documents(session)
     logger.info("Сид готов: домов в справочнике %s", len(directory))
     return True
@@ -1014,9 +1021,11 @@ class Seeder:
         demo: bool,
         overdue_count: int,
         pinned: str | None,
+        layer: int = 0,
     ) -> None:
-        rng = Random(f"requests:{house.city}:{house.street}:{house.building}")
-        until = self._now - (CLOSED_BEFORE if pinned else timedelta(hours=2))
+        label = f"{house.city}:{house.street}:{house.building}"
+        rng = Random(f"requests:{label}" if layer == 0 else f"requests{layer}:{label}")
+        until = self._now - (CLOSED_BEFORE if pinned or layer else timedelta(hours=2))
         moments = []
         moment = self._now - HISTORY
         step = timedelta(days=7) / profile.requests_per_week
@@ -1712,6 +1721,105 @@ class Seeder:
         await self._session.flush()
         await self._occupy(EXPO_NUMBER, EXPO_PROFILE, items)
 
+    async def busier(self) -> None:
+        profiles = {
+            profile.inn: profile
+            for profile in (
+                *PROFILES,
+                *BACKGROUND_PROFILES,
+                *ADDED_PROFILES,
+                EXPO_PROFILE,
+            )
+        }
+        stmt = (
+            select(Organization)
+            .where(
+                organizations_table.c.is_demo,
+                organizations_table.c.inn.in_(profiles),
+                ~exists().where(
+                    announcements_table.c.org_id == organizations_table.c.id,
+                    announcements_table.c.text == BUSY_SUMMARY,
+                ),
+            )
+            .order_by(organizations_table.c.id)
+        )
+        for org in (await self._session.execute(stmt)).scalars().all():
+            profile = profiles[org.inn]
+            self._texts = TEXTS.get(org.inn, DEFAULT_TEXTS)
+            await self._busier_org(
+                org,
+                replace(
+                    profile,
+                    requests_per_week=profile.requests_per_week
+                    * BUSY_RATES.get(org.inn, 1),
+                ),
+            )
+
+    async def _busier_org(
+        self,
+        org: Organization,
+        profile: OrgProfile,
+    ) -> None:
+        stmt = (
+            select(org_members_table.c.user_id, org_members_table.c.role)
+            .join(users_table, users_table.c.id == org_members_table.c.user_id)
+            .where(
+                org_members_table.c.org_id == org.id,
+                users_table.c.max_user_id < 0,
+                org_members_table.c.role.in_((OrgRole.CREATOR, OrgRole.EXECUTOR)),
+            )
+            .order_by(org_members_table.c.user_id)
+        )
+        members = (await self._session.execute(stmt)).tuples().all()
+        staff = Staff(
+            admin=next(
+                UserId(user) for user, role in members if role == OrgRole.CREATOR
+            ),
+            executors=tuple(
+                UserId(user) for user, role in members if role == OrgRole.EXECUTOR
+            ),
+        )
+        houses = await HousesRepo(self._session).list_for_org(org.id)
+        everyone: list[Resident] = []
+        for house in houses:
+            stmt = (
+                select(Resident)
+                .join(users_table, users_table.c.id == residents_table.c.user_id)
+                .where(
+                    residents_table.c.house_id == house.id,
+                    residents_table.c.role == ResidentRole.OWNER,
+                    residents_table.c.flat_id.is_not(None),
+                    users_table.c.max_user_id < 0,
+                    users_table.c.max_user_id > DEMO_TENANT_MAX_ID_BASE,
+                )
+                .order_by(residents_table.c.id)
+            )
+            residents = list((await self._session.execute(stmt)).scalars().all())
+            everyone.extend(residents)
+            authors = [
+                Author(user_id=resident.user_id, flat_id=resident.flat_id)
+                for resident in residents[:DEMO_AUTHORS]
+                if resident.flat_id is not None
+            ]
+            if authors and staff.executors:
+                await self._requests(
+                    house,
+                    profile,
+                    staff,
+                    authors,
+                    demo=False,
+                    overdue_count=0,
+                    pinned=None,
+                    layer=1,
+                )
+        await self._announcements(
+            org,
+            staff,
+            [house.id for house in houses],
+            everyone,
+            [(BUSY_SUMMARY_AGE, BUSY_SUMMARY, False)],
+        )
+
 
 COMMON_DESCRIPTIONS = frozenset(
     {
@@ -1751,6 +1859,7 @@ async def extend(
         await seeder.add(directory, missing)
     if await orgs.get_by_inn(EXPO_PROFILE.inn) is None:
         await seeder.expo()
+    await seeder.busier()
     await _water_outages(session, demo, now)
     await _house_documents(session)
     logger.info("Сид дополнен: домов в справочнике %s", len(directory))
@@ -2338,3 +2447,6 @@ EXPO_TEXTS = SeedTexts(
     ),
 )
 TEXTS = {EXPO_PROFILE.inn: EXPO_TEXTS}
+BUSY_RATES = {EXPO_PROFILE.inn: 3}
+BUSY_SUMMARY = "Итоги полугодия: история заявок и оценки по дому - в разделе «Заявки»"
+BUSY_SUMMARY_AGE = timedelta(days=1)

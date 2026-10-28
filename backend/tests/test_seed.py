@@ -116,6 +116,7 @@ from zheka.infra.database.tables.users import users_table
 from zheka.seed.demo import (
     ADDED_PROFILES,
     BACKGROUND_PROFILES,
+    BUSY_SUMMARY,
     DEFAULT_TEXTS,
     EXPO_PROFILE,
     HOUSE_DOCUMENTS,
@@ -1286,3 +1287,28 @@ def _km(house: House, point: tuple[float, float]) -> float:
     north = (float(house.lat) - point[0]) * KM_PER_DEGREE
     east = (float(house.lon) - point[1]) * KM_PER_DEGREE * cos(radians(point[0]))
     return float((north**2 + east**2) ** 0.5)
+
+
+async def test_extending_gives_a_demo_org_without_the_summary_a_busier_history(
+    db: AsyncSession,
+) -> None:
+    org = await OrgsRepo(db).get_by_inn(EXPO_PROFILE.inn)
+    assert org is not None
+    requests = (
+        select(func.count())
+        .select_from(requests_table)
+        .join(houses_table, houses_table.c.id == requests_table.c.house_id)
+        .where(houses_table.c.org_id == org.id)
+    )
+    summary = (
+        announcements_table.c.org_id == org.id,
+        announcements_table.c.text == BUSY_SUMMARY,
+    )
+    before = (await db.execute(requests)).scalar_one()
+    await db.execute(update(announcements_table).where(*summary).values(text="-"))
+
+    assert await extend(db, _demo(db), FILES, NOW)
+
+    assert (await db.execute(requests)).scalar_one() > before
+    stmt = select(func.count()).select_from(announcements_table).where(*summary)
+    assert (await db.execute(stmt)).scalar_one() == 1
