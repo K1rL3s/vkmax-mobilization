@@ -1220,7 +1220,7 @@ async def test_extending_gives_demo_houses_their_documents_once(
     assert await _counts(db) == before
 
 
-async def test_the_expo_demo_org_sits_by_the_venue_and_the_hotel(
+async def test_the_expo_demo_org_sits_by_the_venue_and_the_hotels(
     db: AsyncSession,
 ) -> None:
     with (DATA_DIR / "houses.csv").open(encoding="utf-8") as file:
@@ -1240,11 +1240,13 @@ async def test_the_expo_demo_org_sits_by_the_venue_and_the_hotel(
         registry
     )
     assert _km(houses[0], EXPO_VENUE) < EXPO_HOUSE_KM
-    assert any(_km(house, EXPO_HOTEL) < EXPO_HOUSE_KM for house in houses)
+    for hotel in EXPO_HOTELS:
+        assert any(_km(house, hotel) < EXPO_HOUSE_KM for house in houses), hotel
     for house in houses:
-        assert min(_km(house, EXPO_VENUE), _km(house, EXPO_HOTEL)) < EXPO_RADIUS_KM, (
-            house.address
-        )
+        assert (
+            min(_km(house, point) for point in (EXPO_VENUE, *EXPO_HOTELS))
+            < EXPO_RADIUS_KM
+        ), house.address
     stmt = (
         select(users_table.c.name)
         .join(org_members_table, org_members_table.c.user_id == users_table.c.id)
@@ -1253,8 +1255,12 @@ async def test_the_expo_demo_org_sits_by_the_venue_and_the_hotel(
     assert set(EXPO_PROFILE.team) <= set((await db.execute(stmt)).scalars())
 
 
-EXPO_VENUE = (55.614279, 49.295538)
-EXPO_HOTEL = (55.819098, 49.091550)
+EXPO_VENUE = (55.780524, 49.133442)
+EXPO_HOTELS = (
+    (55.819098, 49.091550),
+    (55.795894, 49.126703),
+    (55.771070, 49.138710),
+)
 EXPO_HOUSE_KM = 0.1
 EXPO_RADIUS_KM = 1.2
 
