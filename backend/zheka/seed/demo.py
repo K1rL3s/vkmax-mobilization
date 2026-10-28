@@ -2,7 +2,7 @@ import itertools
 import logging
 import secrets
 import shutil
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from math import ceil
@@ -591,6 +591,7 @@ class Seeder:
         "_now",
         "_seeded_at",
         "_session",
+        "_texts",
         "_today",
     )
 
@@ -608,6 +609,7 @@ class Seeder:
         self._seeded_at = now
         self._max_ids: Iterator[int] = itertools.count(max_id, -1)
         self._names = Random("names")
+        self._texts = DEFAULT_TEXTS
 
     async def run(self, directory: Sequence[DirectoryHouse]) -> None:
         voters, taken = await self._territories(
@@ -819,7 +821,7 @@ class Seeder:
             staff,
             [house.id],
             [*(resident for _user, resident in owners), tenant],
-            [POLL_RESULTS],
+            [self._texts.poll_results],
         )
         await self._meters(house, owners[len(main) :])
         return owners
@@ -866,7 +868,9 @@ class Seeder:
             voters = rng.sample(voters, len(voters) * rng.randint(20, 70) // 100)
         else:
             starts_at = ends_at - timedelta(days=14)
-        title, description = ACTIVE_POLL if is_active else CLOSED_POLL
+        title, description = (
+            self._texts.active_poll if is_active else self._texts.closed_poll
+        )
         poll = Poll(
             house_id=house.id,
             org_id=org.id,
@@ -1312,7 +1316,7 @@ class Seeder:
             created,
             house.zone,
         )
-        description = rng.choice(DESCRIPTIONS[category])
+        description = rng.choice(self._texts.descriptions[category])
         danger = detect_danger(description)
         request = Request(
             created_at=created,
@@ -1327,7 +1331,7 @@ class Seeder:
             place=CATEGORY_PLACES.get(
                 category,
                 RequestPlace.HOUSE
-                if description in COMMON_DESCRIPTIONS
+                if description in self._texts.common
                 else RequestPlace.FLAT,
             ),
             status=steps[-1].status,
@@ -1344,7 +1348,7 @@ class Seeder:
                 )
             ),
             caller_name=(
-                f"{rng.choice(FIRST_NAMES)} {rng.choice(INITIALS)}."
+                f"{rng.choice(self._texts.first_names)} {rng.choice(INITIALS)}."
                 if author is None
                 else None
             ),
@@ -1426,7 +1430,7 @@ class Seeder:
             staff,
             [house.id for house, _owners in booked],
             [resident for _house, owners in booked for _user, resident in owners],
-            ANNOUNCEMENTS,
+            self._texts.announcements,
         )
         if is_enterable:
             await self._reception(org, booked)
@@ -1466,10 +1470,11 @@ class Seeder:
 
     async def _users(self, count: int) -> list[User]:
         names = self._names
+        first_names = self._texts.first_names
         users = [
             User(
                 max_user_id=MaxUserId(next(self._max_ids)),
-                name=f"{names.choice(FIRST_NAMES)} {names.choice(INITIALS)}.",
+                name=f"{names.choice(first_names)} {names.choice(INITIALS)}.",
             )
             for _ in range(count)
         ]
@@ -1571,11 +1576,11 @@ class Seeder:
         urgent = None
         if pinned == "emergency":
             posted = self._seeded_at - timedelta(minutes=rng.randint(10, 50))
-            urgent = (self._now - posted, URGENT_ANNOUNCEMENTS[0], True)
+            urgent = (self._now - posted, self._texts.urgent[0], True)
         elif rng.randrange(URGENT_EVERY) == 0:
             urgent = (
                 timedelta(days=rng.randint(1, 2)),
-                rng.choice(URGENT_ANNOUNCEMENTS),
+                rng.choice(self._texts.urgent),
                 True,
             )
         if urgent is not None:
@@ -1619,7 +1624,7 @@ class Seeder:
             staff,
             [house.id],
             [resident for _user, resident in owners],
-            [(timedelta(days=3), PLANNED_WORKS, False)],
+            [(timedelta(days=3), self._texts.planned_works, False)],
         )
         works.works_category = RequestCategory.WATER_SUPPLY
         works.works_from = datetime.combine(
@@ -1688,6 +1693,7 @@ class Seeder:
         profile: OrgProfile,
         items: Sequence[DirectoryHouse],
     ) -> list[User]:
+        self._texts = TEXTS.get(profile.inn, DEFAULT_TEXTS)
         org = await self._org(profile, number, items[0].house)
         staff = await self._staff(org, profile)
         for item in items:
@@ -2176,3 +2182,159 @@ def _expo_house(
         living_area=flats * EXPO_FLAT_AREA,
         overhaul_rate=EXPO_OVERHAUL_RATE,
     )
+
+
+class SeedTexts(ZhekaType):
+    descriptions: Mapping[RequestCategory, tuple[str, ...]]
+    common: frozenset[str]
+    first_names: tuple[str, ...]
+    announcements: tuple[tuple[timedelta, str, bool], ...]
+    poll_results: tuple[timedelta, str, bool]
+    urgent: tuple[str, ...]
+    closed_poll: tuple[str, str]
+    active_poll: tuple[str, str]
+    planned_works: str
+
+
+DEFAULT_TEXTS = SeedTexts(
+    descriptions=DESCRIPTIONS,
+    common=COMMON_DESCRIPTIONS,
+    first_names=FIRST_NAMES,
+    announcements=ANNOUNCEMENTS,
+    poll_results=POLL_RESULTS,
+    urgent=URGENT_ANNOUNCEMENTS,
+    closed_poll=CLOSED_POLL,
+    active_poll=ACTIVE_POLL,
+    planned_works=PLANNED_WORKS,
+)
+EXPO_TEXTS = SeedTexts(
+    descriptions={
+        RequestCategory.LEAK: (
+            (
+                "Течет стояк в санузле. Сосед сверху уверяет, что это не потоп, "
+                "а прямой эфир"
+            ),
+            (
+                "Протечка с потолка на кухне после дождя, кот уже завел в MAX канал "
+                "«Капель»"
+            ),
+        ),
+        RequestCategory.ELEVATOR: (
+            "Лифт застревает между этажами, пока ждал мастера, написал бота для MAX",
+            (
+                "Кнопка вызова лифта на первом этаже срабатывает только после третьего "
+                "лайка"
+            ),
+        ),
+        RequestCategory.GARBAGE: (
+            (
+                "Не вывезли мусор с площадки, контейнер забит коробками от хакатонной "
+                "пиццы"
+            ),
+            (
+                "Переполнены контейнеры у подъезда, бэклог растет быстрее, чем у нас "
+                "в трекере"
+            ),
+        ),
+        RequestCategory.HEATING: (
+            "Холодные батареи в комнате, греемся ноутбуком, пока собирается фронт",
+            (
+                "Шумит стояк отопления, как вентилятор ноутбука на деплое в пятницу "
+                "вечером"
+            ),
+        ),
+        RequestCategory.WATER_SUPPLY: (
+            "Слабый напор холодной воды, примерно как интернет в лифте",
+            "Ржавая горячая вода",
+        ),
+        RequestCategory.ELECTRICITY: (
+            "Не горит свет на лестничной площадке, ищем квартиру по свету экрана",
+            "Искрит розетка в щитке на этаже. Это не фича, это баг",
+        ),
+        RequestCategory.ENTRANCE: (
+            "Сломан доводчик входной двери, хлопает громче уведомлений рабочего чата",
+            "Разбито окно между этажами",
+        ),
+        RequestCategory.YARD: (
+            "Яма на проезде во дворе размером с наш бэклог, объезжаем по газону",
+            "Сломана скамейка на детской площадке, созвоны теперь только стоя",
+        ),
+        RequestCategory.OTHER: (
+            "Не работает домофон, гости звонят по видеосвязи в MAX",
+            "Нужна справка о составе семьи: я, кот и три пет-проекта",
+        ),
+    },
+    common=frozenset(
+        {
+            (
+                "Шумит стояк отопления, как вентилятор ноутбука на деплое в пятницу "
+                "вечером"
+            ),
+            "Не горит свет на лестничной площадке, ищем квартиру по свету экрана",
+            "Искрит розетка в щитке на этаже. Это не фича, это баг",
+            "Не работает домофон, гости звонят по видеосвязи в MAX",
+        },
+    ),
+    first_names=(
+        "Максим",
+        "Максимилиана",
+        "Макс",
+        "Вика",
+        "Лайкослава",
+        "Репостина",
+        "Стикерина",
+        "Эмодзилия",
+        "Ботислав",
+        "Коммитрий",
+        "Деплоид",
+        "Мерджан",
+        "Фронтислав",
+        "Бэкендий",
+        "Хакатолий",
+        "Тимлидий",
+    ),
+    announcements=(
+        (
+            timedelta(days=40),
+            (
+                "Плановое отключение горячей воды с 10:00 до 18:00, работы на "
+                "теплотрассе. Душ после хакатона переносим на вечер"
+            ),
+            True,
+        ),
+        ANNOUNCEMENTS[1],
+    ),
+    poll_results=POLL_RESULTS,
+    urgent=(
+        (
+            "Аварийное отключение холодной воды, бригада уже на месте. Сантехники "
+            "мобилизованы за 15 минут"
+        ),
+        (
+            "Прорыв трубы отопления в подвале, возможны перебои до вечера. Худи "
+            "с хакатона - лучшая тыловая экипировка"
+        ),
+        (
+            "Не работает лифт во втором подъезде, специалисты приедут сегодня. "
+            "Лестница - бесплатное кардио"
+        ),
+    ),
+    closed_poll=(
+        "Установка шлагбаума во дворе",
+        (
+            "Шлагбаум на въезде за счет собственников, открывается кнопкой в MAX. "
+            "Без пароля из трех стикеров"
+        ),
+    ),
+    active_poll=(
+        "Набор в совет дома",
+        "Ищем добровольцев в совет дома. Не штурм",
+    ),
+    planned_works=(
+        "Опрессовка системы водоснабжения\n"
+        "Возможны перепады давления и кратковременные отключения холодной воды "
+        "днем. Мобилизация сантехников объявлена. Приказ о проведении работ "
+        "приложен"
+    ),
+)
+TEXTS = {EXPO_PROFILE.inn: EXPO_TEXTS}

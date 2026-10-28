@@ -115,14 +115,15 @@ from zheka.infra.database.tables.residents import (
 from zheka.infra.database.tables.users import users_table
 from zheka.seed.demo import (
     ADDED_PROFILES,
-    ANNOUNCEMENTS,
     BACKGROUND_PROFILES,
+    DEFAULT_TEXTS,
     EXPO_PROFILE,
     HOUSE_DOCUMENTS,
     MAP_STATES,
     POLL_RESULTS,
     PROFILES,
     RESULT_PHOTOS,
+    TEXTS,
     WORKS_ORDER,
     WORKS_ORDER_TITLE,
     extend,
@@ -673,17 +674,20 @@ async def test_every_enterable_demo_org_has_a_fresh_urgent_notice_and_a_poll(
 async def test_an_announcement_reaches_only_the_houses_it_is_about(
     db: AsyncSession,
 ) -> None:
-    orgs = select(organizations_table.c.id).where(organizations_table.c.is_demo)
-    for org_id in (await db.execute(orgs)).scalars().all():
+    orgs = select(organizations_table.c.id, organizations_table.c.inn).where(
+        organizations_table.c.is_demo,
+    )
+    for org_id, inn in (await db.execute(orgs)).tuples().all():
+        announcements = TEXTS.get(inn, DEFAULT_TEXTS).announcements
         houses = {house.id for house in await HousesRepo(db).list_for_org(org_id)}
         stmt = select(
             announcements_table.c.text,
             announcements_table.c.house_ids,
         ).where(announcements_table.c.org_id == org_id)
         rows = (await db.execute(stmt)).all()
-        texts = {text for _age, text, _urgent in ANNOUNCEMENTS}
+        texts = {text for _age, text, _urgent in announcements}
         shared = [row for row in rows if row.text in texts]
-        assert len(shared) == len(ANNOUNCEMENTS)
+        assert len(shared) == len(announcements)
         assert all(set(row.house_ids) == houses for row in shared)
 
     stmt = select(announcements_table.c.house_ids).where(
@@ -1080,8 +1084,19 @@ async def test_the_place_migration_gives_seeded_requests_their_seeded_place(
             migration.module.downgrade()
             migration.module.upgrade()
 
-    stmt = select(requests_table.c.id, requests_table.c.place).order_by(
-        requests_table.c.id,
+    stmt = (
+        select(requests_table.c.id, requests_table.c.place)
+        .where(
+            requests_table.c.house_id.not_in(
+                select(houses_table.c.id)
+                .join(
+                    organizations_table,
+                    organizations_table.c.id == houses_table.c.org_id,
+                )
+                .where(organizations_table.c.inn == EXPO_PROFILE.inn),
+            ),
+        )
+        .order_by(requests_table.c.id)
     )
     seeded_places = (await seeded.execute(stmt)).tuples().all()
     savepoint = await seeded.begin_nested()
