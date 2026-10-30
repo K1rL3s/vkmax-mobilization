@@ -11,6 +11,7 @@ name = "zheka"
 version = "0.1.0"
 description = "Трек «Умный город» в хакатоне по чат-ботам или мини-приложениям для мессенджера MAX"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "Kirill Lesovoi", email = "kirill.lesovoi@mail.ru" },
 ]
